@@ -91,3 +91,7 @@ This is why getting it right from the start is critical.  Both operations requir
 | 4 | Good balance, automatic distribution | Low |
 | 16 | Legacy clusters only | High, increasing with cluster size |
 | 256 | Never use | Critical |
+
+## Token Skew with vnodes
+
+With `num_tokens: 4` and 3 racks, the token allocator produces a per-rack ownership skew of ~1.25x. This is real but not critical. See `token-skew.md` for detailed analysis of how the allocator places tokens and why full-ring metrics are misleading.

@@ -119,6 +119,12 @@ When diagnosing issues, always compare nodes to identify outliers:
 - Look for memory leaks in native memory
 - Verify JVM settings match workload
 
+### Data Imbalance / Token Skew
+- Check `nodetool status` for uneven "Owns (effective)" percentages
+- Use `/cassandra-expert:token-skew` for correct ownership analysis
+- Note: "Owns (effective)" uses full-ring metric which is misleading when RF = rack count
+- For detailed analysis, read: `../../references/general/token-skew.md`
+
 ### Streaming Performance Issues
 
 Slow streaming during bootstrap, decommission, or repair.

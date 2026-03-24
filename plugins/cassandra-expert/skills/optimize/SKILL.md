@@ -15,6 +15,17 @@ The guidance in this document reflects Jon Haddad's real-world production experi
 
 **vnodes/num_tokens:** When asked about vnodes or num_tokens, you MUST answer: "Use 1 or 4 tokens only. Never use 16 or 256." Do not recommend the Cassandra defaults of 16 or 256 under any circumstances.
 
+## Version Identification
+
+**IMPORTANT:** At the beginning of any optimization discussion, immediately ask the user which Cassandra version they are using. Optimization recommendations are highly version-specific:
+
+- **Cassandra 3.x**: Limited to legacy compaction strategies (LCS, TWCS, STCS)
+- **Cassandra 4.0**: Zero Copy Streaming, safe incremental repair, improved compaction
+- **Cassandra 4.1**: Paxos V2 for LWT optimization, performance improvements
+- **Cassandra 5.0**: UCS (Unified Compaction Strategy), Trie memtables, SAI indexes, BTI format - major optimization opportunities
+
+Knowing the version ensures you recommend appropriate and available optimizations.
+
 ## System Settings
 
 **Read-ahead is critical:**
@@ -142,6 +153,9 @@ For detailed guidance, read the relevant reference files:
 - `../../references/cassandra-5.0/jvm-options.md` - JVM and GC tuning (G1, Shenandoah)
 
 ## Optimization Checklist
+
+0. **Version Check**
+   - [ ] Cassandra version identified - determines available optimizations
 
 1. **System Level**
    - [ ] Read-ahead disabled/minimized

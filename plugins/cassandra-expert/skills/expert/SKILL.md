@@ -15,6 +15,17 @@ The guidance in this document reflects Jon Haddad's real-world production experi
 
 **vnodes/num_tokens:** When asked about vnodes or num_tokens, you MUST answer: "Use 1 or 4 tokens only. Never use 16 or 256." Do not recommend the Cassandra defaults of 16 or 256 under any circumstances.
 
+## Version Identification
+
+**IMPORTANT:** At the beginning of any technical discussion, immediately ask the user which Cassandra version they are using. Many features, configurations, and recommendations are version-specific:
+
+- **Cassandra 3.x**: Materialized views, SASI indexes
+- **Cassandra 4.0**: Virtual tables, audit logging, full query logging, Zero Copy Streaming, safe incremental repair
+- **Cassandra 4.1**: Paxos V2, incremental improvements
+- **Cassandra 5.0**: Storage-attached indexes (SAI), vector search, unified compaction strategy (UCS), trie-based indexes and memtables
+
+Asking for the version upfront ensures all guidance is accurate and grounded in the correct context.
+
 ## CQL Query Analysis
 
 When reviewing CQL queries, check for:
@@ -70,16 +81,6 @@ For detailed guidance, read: `../../references/general/vnodes.md`
 - Using IN clauses with large value lists
 - Batch statements across multiple partitions
 
-## Version Awareness
-
-Be aware of feature availability across Cassandra versions:
-
-- **Cassandra 3.x**: Materialized views, SASI indexes
-- **Cassandra 4.0**: Virtual tables, audit logging, full query logging, Zero Copy Streaming
-- **Cassandra 4.1**: Incremental improvements
-- **Cassandra 5.0**: Storage-attached indexes (SAI), vector search, unified compaction strategy (UCS), trie-based indexes and memtables
-
-When providing guidance, ask about the Cassandra version if relevant features are version-dependent.
 
 ## Cluster Operations Overview
 
@@ -122,7 +123,7 @@ For deeper assistance, use these specialized skills:
 ## Guidelines
 
 When answering questions:
-1. Ask about Cassandra version if relevant
+1. **Always ask about Cassandra version first** - this grounds all subsequent recommendations
 2. Consider the scale and workload characteristics
 3. Explain the "why" behind recommendations
 4. Point to specialized skills for deep dives

@@ -36,21 +36,197 @@ When reviewing CQL queries, check for:
 - **Large IN clauses** - Each value is a separate internal query
 - **SELECT *** - Retrieve only needed columns
 
-### Best Practices
-- Use prepared statements for repeated queries
+### Prepared Statements
+
+**Always use prepared statements for queries executed more than once.** Prepared statements are critical for both performance and security.
+
+**Why prepared statements matter:**
+- **Performance:** Query is parsed and planned once, then reused with different parameters
+- **Efficiency:** Reduces CPU load on Cassandra cluster from parsing
+- **Security:** Prevents CQL injection attacks
+- **Network:** Uses binary protocol with parameter binding, less data over wire
+
+**Language-specific behavior:**
+
+| Language/Driver | Auto-Prepare? | Notes |
+|----------------|---------------|-------|
+| **Go (gocql)** | Yes | Automatically prepares queries on first execution |
+| **Java** | No | Must explicitly call `session.prepare()` |
+| **Python** | No | Must explicitly call `session.prepare()` |
+| **Node.js** | No | Must explicitly prepare statements |
+| **C#** | No | Must explicitly call `Prepare()` |
+
+**Examples:**
+
+```python
+# Python - WRONG (not prepared, parsed every time)
+for user_id in user_ids:
+    session.execute(f"SELECT * FROM users WHERE user_id = {user_id}")
+
+# Python - CORRECT (prepared once, executed many times)
+prepared = session.prepare("SELECT * FROM users WHERE user_id = ?")
+for user_id in user_ids:
+    session.execute(prepared, [user_id])
+```
+
+```java
+// Java - WRONG (not prepared)
+for (UUID userId : userIds) {
+    session.execute("SELECT * FROM users WHERE user_id = " + userId);
+}
+
+// Java - CORRECT (prepared statement)
+PreparedStatement prepared = session.prepare(
+    "SELECT * FROM users WHERE user_id = ?"
+);
+for (UUID userId : userIds) {
+    session.execute(prepared.bind(userId));
+}
+```
+
+```go
+// Go - Automatically prepared on first execution
+for _, userId := range userIds {
+    // gocql automatically prepares this query
+    session.Query("SELECT * FROM users WHERE user_id = ?", userId).Exec()
+}
+```
+
+**Common mistakes:**
+- Not preparing queries that execute repeatedly in loops
+- Concatenating values into query strings instead of using parameters
+- Preparing inside loops (prepare once outside the loop, execute inside)
+- Using prepared statements for one-off queries (adds overhead)
+
+**Best practices:**
+- Prepare statements at application startup for common queries
+- Cache prepared statements and reuse them
+- Use parameter binding (`?` placeholders), never string concatenation
+- Only prepare queries that will be executed multiple times
+
+### General Best Practices
 - Include partition key in WHERE clause
 - Use appropriate consistency levels
 - Avoid multi-partition batches
 
 ### Batch Statement Guidelines
-- **Logged batches**: Only for atomicity within same partition
-- **Unlogged batches**: Same partition, no atomicity guarantee needed
-- **Never**: Batch across multiple partitions for "performance"
+
+Batches in Cassandra are primarily for ensuring all writes eventually succeed, not for performance or atomicity/isolation.
+
+- **LOGGED batches**: For writing to multiple tables, ensures all writes eventually go through
+  - Use when writing denormalized data across multiple tables
+  - Cassandra will replay the batch if any part fails
+  - **Important**: Despite documentation saying "atomic," batches do NOT provide isolation
+  - Readers can see partial batch results due to pagination and lack of isolation levels
+  - Adds performance overhead - only use when you need the eventual guarantee
+
+- **UNLOGGED batches**: For same-partition writes when you want to group statements
+  - Lower overhead than logged batches
+  - No guarantee all writes succeed
+  - Use for convenience of grouping, not for reliability
+
+- **Never**: Use batches across multiple partitions for "performance"
+  - Batches are not a performance optimization
+  - Batching unrelated writes can actually hurt performance
+  - Let the driver handle efficient multi-statement execution
 
 ### Lightweight Transactions (LWT)
 - Use sparingly - significantly slower than regular writes
 - Good for: conditional inserts, compare-and-set
 - Avoid for: high-throughput paths
+
+## Consistency Levels
+
+Consistency levels control how many replicas must respond before a read or write operation is considered successful. Understanding the relationship between consistency level (CL) and replication factor (RF) is critical for achieving the right balance between performance, availability, and consistency.
+
+### Consistency Level and Replication Factor
+
+**Key Formula:** Read CL + Write CL > RF = Strong Consistency
+
+For strong consistency (guaranteed to read your writes):
+- **RF=3, QUORUM reads + QUORUM writes**: Most common pattern
+  - Write succeeds when 2 of 3 replicas acknowledge
+  - Read queries 2 of 3 replicas and returns most recent
+  - Guarantees consistency because at least one replica will have the latest write
+- **RF=3, ALL reads + ONE writes**: Read-heavy optimization (risky)
+- **RF=3, ONE reads + ALL writes**: Write-heavy optimization (risky)
+
+### Common Consistency Levels
+
+| Level | Replicas Required | Use Case | Trade-offs |
+|-------|------------------|----------|------------|
+| **ONE** | 1 replica | Maximum performance, can tolerate stale reads | Lowest consistency, fastest performance |
+| **QUORUM** | RF/2 + 1 replicas | Strong consistency, single DC | Balanced consistency and availability |
+| **LOCAL_QUORUM** | Majority in local DC | Strong consistency, multi-DC (recommended) | DC-local latency, survives remote DC failure |
+| **EACH_QUORUM** | Majority in each DC | Strong consistency across all DCs | Slowest, requires all DCs available |
+| **ALL** | All replicas | Maximum consistency | Any replica down = operation fails |
+| **LOCAL_ONE** | 1 replica in local DC | Fast local reads, can tolerate stale data | Lowest consistency in multi-DC |
+
+### Multi-Datacenter Recommendations
+
+**Best practice for multi-DC clusters:**
+- **Writes:** `LOCAL_QUORUM` - Fast, consistent within DC, async replication to other DCs
+- **Reads:** `LOCAL_QUORUM` - Fast, consistent, survives remote DC failures
+
+**Why LOCAL_QUORUM for multi-DC:**
+- Provides strong consistency within the local datacenter
+- Low latency (doesn't wait for remote DCs)
+- Survives complete failure of remote datacenters
+- Asynchronous replication to other DCs happens in background
+
+**Avoid EACH_QUORUM unless:**
+- You absolutely need synchronous cross-DC consistency
+- You can tolerate operation failures when any DC is unavailable
+- You can accept the latency penalty of waiting for remote DC responses
+
+### Common Patterns
+
+**Strong consistency (most common):**
+```
+RF=3
+Write CL = QUORUM (or LOCAL_QUORUM for multi-DC)
+Read CL = QUORUM (or LOCAL_QUORUM for multi-DC)
+```
+
+**Eventual consistency (high availability):**
+```
+RF=3
+Write CL = ONE
+Read CL = ONE
+Use read repair to converge replicas over time
+```
+
+**Write-heavy workload with strong consistency:**
+```
+RF=3
+Write CL = QUORUM
+Read CL = ONE + read repair probability
+Trades read consistency for write throughput
+```
+
+### Availability vs Consistency Trade-offs
+
+**Higher consistency level = Lower availability:**
+- `ALL` requires all replicas up → any node failure blocks operations
+- `QUORUM` tolerates minority of replicas down → survives (RF-QUORUM) failures
+- `ONE` tolerates all but one replica down → maximum availability
+
+**Application considerations:**
+- Financial transactions: Use QUORUM/QUORUM for strong consistency
+- User profiles: Often acceptable with ONE/ONE + eventual consistency
+- Session data: LOCAL_QUORUM/LOCAL_QUORUM for multi-DC deployments
+- Analytics: ONE/ONE acceptable, prioritize availability
+
+### Tunable Consistency
+
+Cassandra's consistency is **tunable per operation:**
+```python
+# Different operations can use different consistency levels
+session.execute(write_query, consistency_level=ConsistencyLevel.LOCAL_QUORUM)
+session.execute(read_query, consistency_level=ConsistencyLevel.ONE)
+```
+
+This flexibility allows you to optimize per query pattern rather than choosing cluster-wide settings.
 
 ## Virtual Nodes (vnodes) Recommendation
 

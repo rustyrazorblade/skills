@@ -12,31 +12,116 @@ These three values are independent. A cluster can have allocator hint=3, keyspac
 
 ## Allocator Code Path
 
-### Selection Logic
+### Selection Logic (Cassandra 5.0)
 
-Cassandra's `TokenAllocation.createStrategy()` selects between two allocator implementations based on whether the **allocator hint** equals the **rack count**:
+The allocator selection happens across multiple classes. The code path below is traced from `cassandra-5.0` branch with source links.
+
+**Step 1** — [`BootStrapper.getBootstrapTokens()`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/BootStrapper.java#L157-L180) reads the allocator hint from cassandra.yaml and dispatches:
 
 ```java
-// TokenAllocation.createStrategy() — from cassandra-all 5.0.2:
-if (numRacks == allocator_hint) {
-    return createStrategy(snitch, dc, joiningNodeRack, replicas=1, groupByRack=false);
-    // Creates NoReplicationTokenAllocator
-    // Filters the ring to same-rack tokens only
-    // Places new tokens to balance gaps within that rack
-} else {
-    // Creates ReplicationAwareTokenAllocator
-    // Sees ALL tokens across all racks
-    // Optimizes for full-ring primary range balance
+Integer allocationLocalRf = DatabaseDescriptor.getAllocateTokensForLocalRf();
+// reads allocate_tokens_for_local_replication_factor from cassandra.yaml
+
+if (initialTokens.size() > 0)
+    return getSpecifiedTokens(...);           // user-provided tokens, skip allocator
+if (allocationKeyspace != null)
+    return allocateTokens(metadata, address, allocationKeyspace, ...);  // keyspace-based
+if (allocationLocalRf != null)
+    return allocateTokens(metadata, address, allocationLocalRf, ...);   // hint-based path
+```
+
+With `allocate_tokens_for_local_replication_factor: 3`, this calls `allocateTokens(metadata, address, 3, ...)`.
+
+**Step 2** — [`BootStrapper.allocateTokens(metadata, address, rf=3, ...)`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/BootStrapper.java#L227-L240) passes the integer straight through:
+
+```java
+Collection<Token> tokens = TokenAllocation.allocateTokens(metadata, rf, address, numTokens);
+```
+
+**Step 3** — [`TokenAllocation.create(snitch, tokenMetadata, replicas=3, numTokens)`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocation.java#L68-L74) creates a **fake NTS strategy** from the hint value. No real keyspace is consulted:
+
+```java
+HashMap<String, String> options = new HashMap<>();
+options.put(snitch.getLocalDatacenter(), Integer.toString(replicas)); // "3"
+NetworkTopologyStrategy fakeReplicationStrategy =
+    new NetworkTopologyStrategy(null, tokenMetadata, snitch, options);
+```
+
+**Step 4** — [`TokenAllocation.createStrategy(tokenMetadata, NTS, dc, rack)`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocation.java#L192-L222) compares the hint (via the fake NTS) against the actual rack count and creates a `StrategyAdapter`:
+
+```java
+int replicas = strategy.getReplicationFactor(dc).allReplicas; // 3 (from fake NTS = the hint)
+int racks = topology.getDatacenterRacks().get(dc).asMap().size(); // 3 (actual topology)
+
+if (replicas <= 1) {
+    return createStrategy(snitch, dc, null, 1, false);
+}
+else if (racks == replicas) {      // 3 == 3 → TRUE
+    // Per-rack allocation ring, replicas set to 1
+    return createStrategy(snitch, dc, rack, 1, false);
+}
+else if (racks > replicas) {
+    // Full DC ring, grouped by rack
+    return createStrategy(snitch, dc, null, replicas, true);
 }
 ```
 
-The keyspace RF plays no role in this selection. A node being bootstrapped does not consult any keyspace to decide where to place its tokens.
+The `racks == replicas` branch creates a [`StrategyAdapter`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocation.java#L225-L244) where:
+- `replicas()` returns **1** (not the original hint value)
+- `inAllocationRing(other)` returns true only if `other` is in **the same rack** as the joining node
+- `getGroup(unit)` returns the unit itself (no rack grouping — each node is independent)
 
-Source files:
-- `org.apache.cassandra.dht.tokenallocator.TokenAllocation` — allocator selection
-- `org.apache.cassandra.dht.tokenallocator.NoReplicationTokenAllocator` — per-rack balancing
-- `org.apache.cassandra.dht.tokenallocator.ReplicationAwareTokenAllocator` — full-ring balancing
-- `org.apache.cassandra.locator.NetworkTopologyStrategy` — replica placement (walks clockwise, picks one node per rack)
+**Step 5** — [`StrategyAdapter.createAllocator()`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocation.java#L131-L140) builds the token map, filtering by `inAllocationRing()`:
+
+```java
+NavigableMap<Token, InetAddressAndPort> sortedTokens = new TreeMap<>();
+for (Map.Entry<Token, InetAddressAndPort> en :
+     tokenMetadata.getNormalAndBootstrappingTokenToEndpointMap().entrySet())
+{
+    if (inAllocationRing(en.getValue()))    // only same-rack nodes pass
+        sortedTokens.put(en.getKey(), en.getValue());
+}
+return TokenAllocatorFactory.createTokenAllocator(sortedTokens, this, ...);
+```
+
+**Step 6** — [`TokenAllocatorFactory.createTokenAllocator()`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocatorFactory.java#L36-L50) selects the allocator implementation based on the adapter:
+
+```java
+if (strategy.replicas() == 1)    // TRUE — set to 1 in Step 4
+    return new NoReplicationTokenAllocator<>(sortedTokens, strategy, partitioner);
+else
+    return new ReplicationAwareTokenAllocator<>(sortedTokens, strategy, partitioner);
+```
+
+The factory has no knowledge of the allocator hint or rack count. It only sees the pre-processed adapter from Step 4.
+
+**Summary of the code path:**
+
+| Step | Class | What happens |
+|---|---|---|
+| 1 | `BootStrapper` | Reads `allocate_tokens_for_local_replication_factor: 3` from yaml |
+| 2 | `BootStrapper` | Passes `rf=3` to `TokenAllocation` |
+| 3 | `TokenAllocation` | Creates fake NTS with RF=3 in local DC (no real keyspace involved) |
+| 4 | `TokenAllocation` | `racks(3) == replicas(3)` → adapter with `replicas()=1`, rack-scoped |
+| 5 | `StrategyAdapter` | Filters token map to same-rack tokens only |
+| 6 | `TokenAllocatorFactory` | `replicas()==1` → `NoReplicationTokenAllocator` on rack-scoped ring |
+
+**End result by allocator hint vs rack count (for NTS):**
+
+| Condition | Step 4 branch | Adapter | Allocator | Scope |
+|---|---|---|---|---|
+| hint == racks | `racks == replicas` | `replicas=1`, rack-scoped | `NoReplicationTokenAllocator` | Same-rack only |
+| hint < racks | `racks > replicas` | `replicas=hint`, groupByRack | `ReplicationAwareTokenAllocator` | Full DC |
+| hint > racks | none | Error | — | — |
+
+The keyspace RF plays no role anywhere in this path. The fake NTS in Step 3 is built solely from the allocator hint.
+
+Source files (all `cassandra-5.0` branch):
+- [`o.a.c.dht.BootStrapper`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/BootStrapper.java) — entry point, reads config
+- [`o.a.c.dht.tokenallocator.TokenAllocation`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocation.java) — fake NTS, hint/rack comparison, adapter creation
+- [`o.a.c.dht.tokenallocator.TokenAllocatorFactory`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/TokenAllocatorFactory.java) — allocator instantiation
+- [`o.a.c.dht.tokenallocator.NoReplicationTokenAllocator`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/NoReplicationTokenAllocator.java) — per-rack balancing
+- [`o.a.c.dht.tokenallocator.ReplicationAwareTokenAllocator`](https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/dht/tokenallocator/ReplicationAwareTokenAllocator.java) — full-ring balancing
 
 ### NoReplicationTokenAllocator Behavior
 

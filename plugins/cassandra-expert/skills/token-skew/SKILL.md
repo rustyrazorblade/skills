@@ -160,14 +160,25 @@ A topology change to eliminate moderate skew that isn't causing problems is not 
 
 ## Allocator selection logic
 
+The selection spans two classes. `TokenAllocation.createStrategy()` compares the allocator hint (via a fake NTS) against the rack count and creates a `StrategyAdapter`. `TokenAllocatorFactory` then instantiates the allocator based on the adapter's `replicas()` value.
+
 ```java
-// TokenAllocation.createStrategy():
-if (numRacks == allocator_hint) {
-    // NoReplicationTokenAllocator — balances within each rack
-} else {
-    // ReplicationAwareTokenAllocator — optimizes full-ring balance
+// TokenAllocation.createStrategy() — Step 4 in the code path
+// 'replicas' here is the allocator hint (from a fake NTS, not a real keyspace)
+// 'racks' is the actual rack count from topology
+
+if (racks == replicas) {
+    // Creates adapter: replicas()=1, scoped to joining node's rack only
+    // TokenAllocatorFactory sees replicas==1 → NoReplicationTokenAllocator
+    // Allocator only sees same-rack tokens
+} else if (racks > replicas) {
+    // Creates adapter: replicas()=hint, full DC scope, groupByRack=true
+    // TokenAllocatorFactory sees replicas>1 → ReplicationAwareTokenAllocator
+    // Allocator sees all tokens, groups by rack
 }
 ```
+
+See `../../references/general/token-skew.md` for the full 6-step code path with source links.
 
 ## References
 

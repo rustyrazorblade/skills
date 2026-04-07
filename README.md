@@ -26,6 +26,7 @@ Expert guidance for Apache Cassandra development and operations.
 | `/cassandra-expert:optimize` | Performance tuning, configuration analysis, JVM settings, compaction strategies |
 | `/cassandra-expert:data-model` | Schema design, partition keys, time-series modeling, query patterns |
 | `/cassandra-expert:expert` | General Cassandra questions, CQL analysis, best practices |
+| `/cassandra-expert:token-skew` | Token ownership skew analysis using correct per-rack metric |
 
 #### Usage Examples
 
@@ -45,6 +46,12 @@ Expert guidance for Apache Cassandra development and operations.
 ```
 /cassandra-expert:data-model Design schema for user activity tracking
 /cassandra-expert:data-model How should I model time-series data with 90-day retention?
+```
+
+**Token Skew - Ownership Analysis**
+```
+/cassandra-expert:token-skew Analyze this nodetool ring output for data imbalance
+/cassandra-expert:token-skew nodetool status shows uneven Owns percentages — is this real?
 ```
 
 **Expert - General Questions**

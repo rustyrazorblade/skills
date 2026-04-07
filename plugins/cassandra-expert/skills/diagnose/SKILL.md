@@ -130,6 +130,15 @@ When diagnosing issues, always compare nodes to identify outliers:
 - Look for memory leaks in native memory
 - Verify JVM settings match workload
 
+### Data Imbalance / Token Skew
+- Check `nodetool status` Load column for uneven disk usage across nodes
+- Do NOT rely on "Owns (effective)" — it shows full-ring primary range, which is misleading when `allocate_tokens_for_local_replication_factor` (allocator hint) == rack count
+- Use `/cassandra-expert:token-skew` for correct two-phase analysis:
+  - Phase 1: Token distribution quality (per-rack ownership, based on allocator hint vs rack count)
+  - Phase 2: Data distribution skew (based on keyspace RF, validated against disk Load)
+- Key distinction: the allocator hint (cassandra.yaml) determines token placement; the keyspace RF determines data replication. These are independent settings — do not conflate them.
+- For detailed analysis, read: `../../references/general/token-skew.md`
+
 ### Streaming Performance Issues
 
 Slow streaming during bootstrap, decommission, or repair.

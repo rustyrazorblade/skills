@@ -36,9 +36,61 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          prompt: |
+            Review pull request ${{ github.repository }}#${{ github.event.pull_request.number }}.
+
+            ## Repo context
+
+            This is a Claude Code plugin marketplace. It contains **almost no application code** — the contents are written material that instructs Claude how to behave or teaches a reader. Specifically:
+
+            - **Skills** (`plugins/*/skills/*/SKILL.md`) — user-invocable skill definitions: YAML frontmatter (`name`, `description`, `argument-hint`, `user-invocable`) followed by a prompt body that tells Claude how to behave when the skill is invoked.
+            - **Reference material** (`plugins/*/references/**/*.md`) — authoritative documentation that skills load on demand (e.g. `references/general/streaming.md`, `references/cassandra-5.0/cassandra-yaml.md`).
+            - **Training material** (`plugins/*/skills/training/sessions/*` backed by `plugins/*/references/training/<session>/*`) — pedagogical, session-based topics that teach a reader from the ground up. Read in session order.
+            - **Plugin manifests** (`.claude-plugin/`, `plugins/*/.claude-plugin/`).
+
+            Do **not** review this repo as if it were an application. Do not ask for unit tests, type hints, error handling, try/except blocks, refactoring into helpers, dependency injection, or defensive programming. The "product" is the written content and the prompts it produces. Style-nit drive-bys are not useful here.
+
+            ## What to look for
+
+            ### All markdown content
+            - **Factual accuracy** — flag anything that looks wrong, outdated, or that contradicts other material in the repo. Jon's opinionated recommendations (e.g. `num_tokens` ≤ 4, never STCS, UCS on Cassandra 5.0+, disable read-ahead, partitions under 10MB, row cache off) are load-bearing. Flag changes that soften or contradict them unless the PR is explicitly revising them — and say so.
+            - **Version specificity** — Cassandra behavior differs sharply across 3.x / 4.0 / 4.1 / 5.0. Any version-specific claim should say which version it applies to.
+            - **Clarity and concision** — prefer direct writing. Flag filler, throat-clearing, or vague hedges, but do not rewrite prose that is already clear.
+            - **Broken links** — relative links between reference/training files should resolve against the repo layout; external links should look plausible.
+            - **Code blocks** — CQL, YAML, and shell snippets should be syntactically valid and runnable as written.
+
+            ### Skill files (`SKILL.md`)
+            - **Frontmatter correctness** — required fields present and well-formed. User-invocable skills need `user-invocable: true` and a useful `argument-hint`.
+            - **Description quality** — the `description` field is what Claude uses to decide *when* to load the skill. It must be specific about triggers ("Use when..."), not a generic summary. Flag vague descriptions.
+            - **Prompt body voice** — should read as instructions *to Claude* (second-person: "You are...", "When the user asks..."), not as user-facing documentation.
+            - **Scope** — a skill should do one thing. Flag scope creep.
+
+            ### Reference material
+            - **Self-contained** — a reference file must make sense when loaded on its own, because Claude may pull it in without surrounding context. Flag references that assume context from another file without linking to it.
+            - **Cross-linking** — when a reference file discusses a concept that has its own reference file, it should link to it, ideally in a `## See Also` section at the bottom (matching the existing convention in `references/general/streaming.md`).
+
+            ### Training material — HIGHEST SCRUTINY
+            Training PRs are the most important ones to get right. Apply these two rules rigorously:
+
+            1. **Concept ordering — no forward references.** Training material is read in session order. A topic must not use a term or concept before that term has been introduced — either earlier in the same file, earlier in the session (in a prior topic), or via an explicit link to a prerequisite reference/topic. Walk the new or changed topic top to bottom and **list every term that appears without having first been defined or linked**. This is the single most important thing to check on training PRs. Examples of the kinds of terms to watch for: "memtable", "SSTable", "tombstone", "hint", "compaction strategy", "coordinator", "replica", "consistency level", "partition key", "clustering key", "vnode", "token range", "repair", "Merkle tree" — none of these should appear in a topic file without a definition or link.
+            2. **`See Also` sections are required on every topic file.** Every topic must end with a `## See Also` section that links to:
+               - other training topics in the same session that are related, and
+               - the underlying reference file(s) under `references/` that back the topic.
+               Flag topics that introduce a concept already covered elsewhere in the repo without linking to it. Flag missing `See Also` sections.
+
+            Also for training material:
+            - **"Why" over "what"** — Jon's training philosophy is to emphasize *why* a recommendation exists, not just *what* it is. Flag training prose that states a rule without explaining the reasoning.
+            - **Session index consistency** — if a topic file is added, renamed, or removed, the corresponding session index under `skills/training/sessions/` must be updated to match. Flag mismatches.
+
+            ## Output format
+
+            Post a single review comment on the PR. Structure it as:
+
+            1. A one-line summary of what the PR changes.
+            2. Grouped findings under headers, in this order, including only headers that have findings:
+               `### Accuracy` ·  `### Pedagogy / concept ordering` ·  `### Cross-linking / See Also` ·  `### Skill metadata` ·  `### Nits`
+            3. For each finding, cite `file:line` and briefly quote the offending text so the author can find it.
+            4. If the PR is clean, say so in one sentence and stop. Do not invent problems to fill space.
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 

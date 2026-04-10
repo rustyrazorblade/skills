@@ -91,6 +91,9 @@ jobs:
                `### Accuracy` ·  `### Pedagogy / concept ordering` ·  `### Cross-linking / See Also` ·  `### Skill metadata` ·  `### Nits`
             3. For each finding, cite `file:line` and briefly quote the offending text so the author can find it.
             4. If the PR is clean, say so in one sentence and stop. Do not invent problems to fill space.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+          claude_args: '--allowed-tools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 

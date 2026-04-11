@@ -27,8 +27,41 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          fetch-depth: 1
+
+      - name: Compute Cassandra docs cache key
+        id: cassandra-docs-key
+        run: echo "key=cassandra-docs-$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Cassandra docs cache
+        id: cassandra-docs-cache
+        uses: actions/cache@v5
+        with:
+          path: cassandra-upstream
+          key: ${{ steps.cassandra-docs-key.outputs.key }}
+
+      - name: Fetch upstream Cassandra docs (5.0)
+        if: steps.cassandra-docs-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: apache/cassandra
+          ref: cassandra-5.0
+          sparse-checkout: doc/modules
+          sparse-checkout-cone-mode: false
+          path: cassandra-upstream/5.0
+          fetch-depth: 1
+
+      - name: Fetch upstream Cassandra docs (6.0 / trunk)
+        if: steps.cassandra-docs-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: apache/cassandra
+          ref: trunk
+          sparse-checkout: doc/modules
+          sparse-checkout-cone-mode: false
+          path: cassandra-upstream/6.0
           fetch-depth: 1
 
       - name: Run Claude Code Review
@@ -50,10 +83,26 @@ jobs:
 
             Do **not** review this repo as if it were an application. Do not ask for unit tests, type hints, error handling, try/except blocks, refactoring into helpers, dependency injection, or defensive programming. The "product" is the written content and the prompts it produces. Style-nit drive-bys are not useful here.
 
+            ## Upstream Cassandra documentation
+
+            This workflow fetches the official Apache Cassandra documentation alongside the repo, so you can cross-check claims against upstream. You have read access via the `Read`, `Glob`, and `Grep` tools.
+
+            - `cassandra-upstream/5.0/doc/modules/` — official docs for Cassandra **5.0** (from `apache/cassandra` branch `cassandra-5.0`)
+            - `cassandra-upstream/6.0/doc/modules/` — official docs for Cassandra **6.0** (from `apache/cassandra` branch `trunk`)
+
+            Treat these as the authoritative upstream reference for factual questions about Cassandra behavior, configuration, and defaults. When the PR touches a Cassandra topic, glob/grep the relevant version's `doc/modules` to find the matching upstream page, read it, and:
+
+            1. **Flag factual contradictions** between the PR's content and upstream. Cite both the PR `file:line` and the upstream `cassandra-upstream/<version>/doc/modules/...:line`.
+            2. **Suggest improvements** — if upstream documents a nuance, caveat, or configuration detail the PR omits that would materially improve the content, surface it. Quote the upstream passage so the author can verify.
+            3. **Respect Jon's opinionated recommendations.** Upstream docs describe defaults and general guidance; Jon's recommendations (e.g. `num_tokens` ≤ 4, never STCS, UCS on 5.0+, row cache off) are deliberate and often diverge from upstream defaults. Do **not** flag divergence from upstream as an error when it's one of Jon's known stances — only flag it if the PR makes a factual claim that upstream contradicts.
+            4. **Match version to content.** If the PR edits a file under `references/cassandra-5.0/`, check against `cassandra-upstream/5.0/`. If it's general/cross-version, consult both and note any version-specific differences upstream documents.
+
+            Do not treat upstream as gospel for opinions — treat it as gospel for facts (defaults, option names, syntax, behavior).
+
             ## What to look for
 
             ### All markdown content
-            - **Factual accuracy** — flag anything that looks wrong, outdated, or that contradicts other material in the repo. Jon's opinionated recommendations (e.g. `num_tokens` ≤ 4, never STCS, UCS on Cassandra 5.0+, disable read-ahead, partitions under 10MB, row cache off) are load-bearing. Flag changes that soften or contradict them unless the PR is explicitly revising them — and say so.
+            - **Factual accuracy** — flag anything that looks wrong, outdated, or that contradicts other material in the repo. Cross-check factual claims against the upstream docs under `cassandra-upstream/` (see the "Upstream Cassandra documentation" section above) whenever the PR touches Cassandra behavior, defaults, option names, or syntax. Jon's opinionated recommendations (e.g. `num_tokens` ≤ 4, never STCS, UCS on Cassandra 5.0+, disable read-ahead, partitions under 10MB, row cache off) are load-bearing. Flag changes that soften or contradict them unless the PR is explicitly revising them — and say so.
             - **Version specificity** — Cassandra behavior differs sharply across 3.x / 4.0 / 4.1 / 5.0. Any version-specific claim should say which version it applies to.
             - **Clarity and concision** — prefer direct writing. Flag filler, throat-clearing, or vague hedges, but do not rewrite prose that is already clear.
             - **Broken links** — relative links between reference/training files should resolve against the repo layout; external links should look plausible.
@@ -93,7 +142,7 @@ jobs:
             4. If the PR is clean, say so in one sentence and stop. Do not invent problems to fill space.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
-          claude_args: '--allowed-tools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+          claude_args: '--allowed-tools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 

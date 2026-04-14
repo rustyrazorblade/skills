@@ -1,5 +1,19 @@
 # Cassandra 5.0 Notable Features
 
+## Recommended Configuration Checklist
+
+Enable all of these on new Cassandra 5.0 clusters:
+
+- **UnifiedCompactionStrategy** — replace STCS, LCS, and TWCS for all workloads
+- **Trie memtables** — lower GC pressure, better write throughput
+- **BTI format** — unless using token range scans (see CASSANDRA-20976)
+- **Java 17 + Shenandoah GC** — ultra-low pause times at scale
+- **Off-heap memtables** — reduce heap pressure
+- **Compaction throughput** — 64 MiB/s default; tune toward 128 MiB/s for write-heavy clusters, avoid excessive values that cause GC pressure
+- **Zstd compression** — when compression ratio matters more than CPU overhead
+
+Details on each below.
+
 ## Unified Compaction Strategy (UCS)
 
 **Recommendation: Replace 100% of STCS workloads with UCS immediately.**
@@ -26,7 +40,7 @@ UCS produces smaller, bounded SSTables. This is critical because Zero-Copy Strea
 
 Combined with limited virtual nodes (1-4) and ZCS enabled, UCS maximizes streaming efficiency and enables denser nodes with reduced infrastructure costs.
 
-For details on Zero-Copy Streaming (introduced in 4.0), see `../cassandra-4.0/notable-features.md`.
+For details on Zero-Copy Streaming (introduced in 4.0), see [Cassandra 4.0 Notable Features](../cassandra-4.0/notable-features.md).
 
 ### Migration Configuration
 
@@ -103,9 +117,11 @@ Benefits:
 
 BTI (Big Trie-Indexed) is a new SSTable format that replaces the partition index with a trie-based structure.
 
-**Enable in cassandra.yaml:**
+**Enable in cassandra.yaml** (both settings are required — `storage_compatibility_mode: NONE` unlocks 5.0 features, `selected_format: bti` selects BTI as the active format):
 ```yaml
 storage_compatibility_mode: NONE
+sstable:
+  selected_format: bti
 ```
 
 Benefits:
@@ -168,4 +184,13 @@ Offline utility for identifying oversized partitions.
 ### Extended TTL Maximum
 Increased expiration date limits beyond the previous 20-year cap.
 
-Full changelog: [What's New in Cassandra 5.0](https://cassandra.apache.org/doc/latest/cassandra/new/index.html)
+## See Also
+
+- [cassandra.yaml](./cassandra-yaml.md)
+- [JVM Options](./jvm-options.md)
+- [Compaction](../general/compaction.md)
+- [Memtables](../general/memtables.md)
+- [BTI SSTable Format](../general/bti.md)
+- [SSTable Components](../general/sstable-components.md)
+- [Streaming](../general/streaming.md)
+- [What's New in Cassandra 5.0](https://cassandra.apache.org/doc/latest/cassandra/new/index.html)

@@ -27,6 +27,7 @@ Expert guidance for Apache Cassandra development and operations.
 | `/cassandra-expert:data-model` | Schema design, partition keys, time-series modeling, query patterns |
 | `/cassandra-expert:expert` | General Cassandra questions, CQL analysis, best practices |
 | `/cassandra-expert:token-skew` | Token ownership skew analysis using correct per-rack metric |
+| `/cassandra-expert:training` | Interactive, session-based Cassandra training from fundamentals to advanced topics |
 
 #### Usage Examples
 
@@ -60,12 +61,33 @@ Expert guidance for Apache Cassandra development and operations.
 /cassandra-expert:expert Review this CQL query for anti-patterns
 ```
 
+**Training - Interactive Learning**
+```
+/cassandra-expert:training
+/cassandra-expert:training Session 2: Query & Application Anti-Patterns
+/cassandra-expert:training LWT         # general topic — matches across sessions
+/cassandra-expert:training compaction  # multiple matches: the trainer offers options
+```
+
+For a general topic like `LWT` or `compaction`, the trainer lists every session/topic that matches and lets you pick one or say `all` to go through every match.
+
 #### Problem-Solving Methodology
 
 - **Double Loop Learning** - Goes beyond immediate fixes to identify root causes and prevent recurrence
 - **USE Method** - Systematically analyzes Utilization, Saturation, and Errors for CPU, memory, disk, network, storage, and thread pools
 - **Outlier Analysis** - Compares nodes to identify anomalies in latency, resource usage, and behavior
 - **Configuration Analysis** - Reviews system settings, cassandra.yaml, JVM settings, and per-table configurations
+
+#### Training Sessions
+
+Interactive, instructor-led Cassandra training with pulse checks after each topic:
+
+| Session | Topics |
+|---------|--------|
+| **Session 1: Fundamentals** | Data distribution, keyspaces, types, primary keys, partition storage, collections, UDTs, DML, read/write paths, tombstones, TTL, table options, table patterns (single-key, ordered-map, time-series), batches, LWT, compaction overview, denormalization, prepared statements, consistency levels |
+| **Session 2: Query & Application Anti-Patterns** | IN() queries, ALLOW FILTERING, token range queries, BATCH misuse, lightweight transactions, counters, in-memory joins, synchronous queries, excessive async, in-memory sorting, aggregations, triggers |
+| **Session 3: Schema Anti-Patterns** | Huge partitions, hot partitions, too many tables, too many columns, materialized views, unbounded collections, lists, secondary indexes, compaction strategy, large blobs |
+| **Session 4: SAI** | What SAI is and the partition key rule, creating and managing indexes, querying patterns, SAI vs. denormalization, SASI migration |
 
 #### Key Recommendations
 

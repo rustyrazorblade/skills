@@ -299,7 +299,14 @@ With `num_tokens: 4`, each node has 4 tokens around the ring. If one token lands
 - With `num_tokens: 4`: Bad placements are diluted. Per-rack skew stabilizes at 1.25x.
 - With `num_tokens: 16+`: More averaging, but the operational costs (streaming, neighbors) far outweigh the marginal balance improvement.
 
-## References
+## Partition Key Distribution vs Token Skew
 
+Token ownership skew and partition key distribution are different problems. Even with perfectly balanced tokens, a low-cardinality partition key (e.g., `country`) concentrates data into few partitions — creating hot spots regardless of token allocation. This is a data model problem, not a token problem. See `large-partitions.md` for partition key design guidance.
+
+## See Also
+
+- [Virtual Nodes (vnodes)](vnodes.md)
+- [Replication Strategies](replication.md)
+- [Cluster Topology and Snitches](topology.md)
+- [Large Partitions](large-partitions.md)
 - Cassandra source: `TokenAllocation.java`, `NoReplicationTokenAllocator.java`, `ReplicationAwareTokenAllocator.java`, `NetworkTopologyStrategy.java`
-- vnodes reference: `vnodes.md` (in this directory)

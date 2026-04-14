@@ -4,7 +4,7 @@
 
 Memtables are in-memory structures where Cassandra buffers writes before flushing to SSTables. In Cassandra 5.0+, Trie memtables provide significant performance improvements.
 
-Combined with offheap memtables I have seen a 250% improvement in write throughput when low latency is required. Your mileage may vary.
+Combined with offheap memtables, trie memtables can deliver significant write throughput improvements — up to ~250% in latency-sensitive workloads. Results vary by hardware and workload.
 
 ## Trie Memtables (Cassandra 5.0+)
 
@@ -92,7 +92,14 @@ With many tables (50+), memtable memory fragments across all active tables:
 
 ### With Off-Heap Storage
 
-Trie memtables work optimally with off-heap storage, reducing heap pressure further.
+Use `offheap_objects` for memtable allocation — reduces GC pressure and improves write throughput compared to `heap_buffers`.
+
+```yaml
+# cassandra.yaml
+memtable_allocation_type: offheap_objects
+```
+
+Trie memtables work optimally with off-heap storage, reducing heap pressure further. Account for off-heap memory in total memory planning — this memory comes from native memory, not JVM heap.
 
 ### With Compaction
 
@@ -105,6 +112,33 @@ Trie memtables significantly reduce allocation rate, which:
 - Reduces promotion to old gen
 - Shortens GC pause times
 
+## Blocked Flush Writers
+
+Blocked `MemtableFlushWriter` threads mean the node cannot flush memtables to disk fast enough. This is always a disk I/O problem.
+
+**Check:**
+```bash
+nodetool tpstats | grep MemtableFlushWriter
+# Non-zero "Blocked" count requires immediate investigation
+
+iostat -x 1
+# Look for %util near 100%, high await times on data drives
+```
+
+**Common causes:**
+- Disk I/O saturated — compaction competing with flushes
+- Slow or failing storage (check `dmesg | grep -i error` and `smartctl -a /dev/sdX`)
+- Network-attached storage with insufficient IOPS
+- Too many tables fragmenting flush I/O
+
+**Fixes:**
+1. Reduce compaction throughput to free I/O for flushes: lower `compaction_throughput_mb_per_sec`
+2. Place commit log on a separate disk from data directories
+3. Move to faster local NVMe storage
+4. Add nodes to reduce per-node write pressure
+
+Alert on any non-zero blocked flush writer count — it precedes write rejections and OOM conditions.
+
 ## Migration to Trie Memtables
 
 When upgrading to Cassandra 5.0+:
@@ -113,3 +147,12 @@ When upgrading to Cassandra 5.0+:
 2. Perform rolling restart
 3. Monitor GC behavior
 4. Monitor write latency and throughput
+
+## See Also
+
+- [Commit Log](commitlog.md)
+- [SSTable Components](sstable-components.md)
+- [Compaction](compaction.md)
+- [Tombstones](tombstones.md)
+- [JVM](jvm.md)
+- [Thread Pools](thread-pools.md)

@@ -83,6 +83,24 @@ Options for clusters stuck with high vnode counts:
 
 This is why getting it right from the start is critical.  Both operations require copying a lot of data, and the negative impacts of both moving data and high vnode counts have a bigger impact on bigger clusters.  Migrating data is an O(n) process relative to data.
 
+## Token Allocation Configuration
+
+### Cassandra 4.0+
+
+```yaml
+num_tokens: 4
+allocate_tokens_for_local_replication_factor: 3
+```
+
+### Cassandra 3.0–3.x
+
+```yaml
+num_tokens: 4
+allocate_tokens_for_keyspace: your_largest_keyspace
+```
+
+These allocation settings ensure tokens are distributed to minimize ownership imbalance. Without them, token placement is random and imbalance will be worse.
+
 ## Summary
 
 | num_tokens | Use Case | Risk Level |
@@ -95,3 +113,12 @@ This is why getting it right from the start is critical.  Both operations requir
 ## Token Skew with vnodes
 
 With `num_tokens: 4` and 3 racks, the token allocator produces a per-rack ownership skew of ~1.25x. This is real but not critical. See `token-skew.md` for detailed analysis of how the allocator places tokens and why full-ring metrics are misleading.
+
+## See Also
+
+- [Token Skew and Distribution](token-skew.md)
+- [Replication Strategies](replication.md)
+- [Cluster Topology and Snitches](topology.md)
+- [Streaming](streaming.md)
+- [Repair](repair.md)
+- [Seed Nodes](seed-nodes.md)

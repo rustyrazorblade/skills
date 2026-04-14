@@ -1,5 +1,7 @@
 # Cassandra 5.0 cassandra.yaml Recommendations
 
+This document is the set of **opinionated recommendations** that should be applied on top of the default Cassandra 5.0 config. The unmodified default config file that Cassandra 5.0 ships with is alongside this document as [`cassandra.yaml`](./cassandra.yaml) — use it to see every setting and its shipped default. The recommendations below intentionally override several of those shipped defaults (notably `num_tokens`, the UCS scaling parameters, `storage_compatibility_mode`, and `commitlog_sync_period`).
+
 ## Quick Start: cassandra_latest.yaml
 
 Cassandra 5.0 ships with `cassandra_latest.yaml` - a new config file with optimized defaults for new clusters.  This is a good reference to see the settings that enabled the newest features, all of which are opt-in.
@@ -23,17 +25,28 @@ For detailed explanation of why vnode count matters and the math behind neighbor
 ### Storage Compatibility Mode
 
 ```yaml
+# Set to NONE to enable all 5.0 features (BTI SSTable format, extended TTL
+# beyond 2038, UUID-based SSTable generation).
+#
+# CRITICAL: the out-of-box default is CASSANDRA_4, which triggers a data loss
+# bug with Cassandra Sidecar (CASSANDRA-21197:
+# https://issues.apache.org/jira/browse/CASSANDRA-21197). Explicitly set NONE
+# before running Sidecar against a 5.0 cluster — the default is not safe.
 storage_compatibility_mode: NONE
 ```
 
-Set to `NONE` to enable all 5.0 features including:
-- BTI SSTable format
-- Extended TTL (dates beyond 2038)
-- UUID-based SSTable generation
+### BTI
+
+```yaml
+sstable:
+  selected_format: bti
+```
+
+**Use the BTI (Big Trie-Indexed) SSTable format.** It replaces the legacy BIG format with a trie-based index that is more memory-efficient and performs better at scale. This is the recommended format for all new Cassandra 5.0 deployments — unless you rely on token range scans (see [CASSANDRA-20976](https://issues.apache.org/jira/browse/CASSANDRA-20976)).
 
 ### Memtable Configuration
 
-Trie memtables 
+Use trie memtables (Cassandra 5.0+) for lower GC pressure and better write throughput. Configure and set as default:
 
 ```yaml
 memtable:
@@ -89,14 +102,18 @@ Reference: [Compaction Throughput](https://rustyrazorblade.com/post/2025/04-comp
 default_compaction:
   class_name: UnifiedCompactionStrategy
   parameters:
-    scaling_parameters: T4
-    max_sstables_to_compact: 64
+    scaling_parameters: L10
+    max_sstables_to_compact: 10
     target_sstable_size: 1GiB
     sstable_growth: 0.3333333333333333
     min_sstable_size: 100MiB
 ```
 
-Sets UCS as the default for all new tables. The `T4` scaling parameter emulates STCS behavior while maintaining bounded SSTable sizes.
+Sets UCS as the default for all new tables.
+
+> **Note on the defaults (`L10` / `max_sstables_to_compact: 10`):** This is a deliberate, opinionated choice — **not** the Cassandra project defaults. `L10` configures UCS to behave like a Leveled strategy with a fan factor of 10, which keeps the number of SSTables consulted per read small and produces predictable read latency. `max_sstables_to_compact: 10` caps how many SSTables a single compaction operation will merge at once, preventing runaway compactions on dense nodes.
+>
+> The upstream project defaults (`T4` / `max_sstables_to_compact: 32`) emulate STCS-style tiering and are better suited to write-heavy workloads where read latency matters less than write amplification. If your cluster is overwhelmingly write-heavy, `T4` is a reasonable fallback — but for most workloads, the leveled-style defaults above are the right starting point.
 
 ### Concurrent Compactors
 
@@ -205,7 +222,7 @@ Never use `num_tokens` > 4. The historical default of 256 is harmful.
 
 ### Materialized Views
 
-Keep them disabled.  Materized views are a half baked feature that should never have been merged in.
+Keep them disabled.  Materialized views are a half-baked feature that should never have been merged in.
 
 ```
 materialized_views_enabled: false
@@ -217,8 +234,8 @@ materialized_views_enabled: false
 default_compaction:
   class_name: UnifiedCompactionStrategy
   parameters:
-    scaling_parameters: T4
-    max_sstables_to_compact: 64
+    scaling_parameters: L10 # or use T4 if you're using mostly write heavy tables
+    max_sstables_to_compact: 10
     target_sstable_size: 1GiB
     sstable_growth: 0.3333333333333333
     min_sstable_size: 100MiB
@@ -232,3 +249,13 @@ When upgrading from Cassandra 4.x:
 2. **Key cache**: Keep enabled until all SSTables are rewritten to BTI format
 3. **num_tokens**: Cannot be changed on existing clusters without full rebuild
 4. **Memtable settings**: Can be changed with rolling restart
+
+## See Also
+
+- [Cassandra 5.0 Notable Features](./notable-features.md)
+- [JVM Options (5.0-specific flags)](./jvm-options.md)
+- [Compaction](../general/compaction.md)
+- [Memtables](../general/memtables.md)
+- [Virtual Nodes (vnodes)](../general/vnodes.md)
+- [OS Settings](../general/os-settings.md)
+- [JVM (general heap & GC tuning)](../general/jvm.md)

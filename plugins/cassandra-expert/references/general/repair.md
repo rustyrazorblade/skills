@@ -6,7 +6,7 @@ Repair ensures data consistency across replicas. When nodes miss writes due to f
 
 ## Repair Methods
 
-### Incremental Repair (4.0+ Only)
+### Incremental Repair (Safe on 4.0+)
 
 Tracks which SSTables have been repaired. Subsequent repairs only validate new/modified data.
 
@@ -76,15 +76,43 @@ nodetool repair -st <start_token> -et <end_token>
 
 ## Relationship to gc_grace_seconds
 
-Repair must complete within `gc_grace_seconds` to prevent data resurrection:
+Tombstones are retained for `gc_grace_seconds` to ensure all replicas see the delete before compaction removes it. Repair must complete within this window — otherwise a replica that missed the delete can resurrect data after the tombstone is purged.
 
 ```
 gc_grace_seconds >= (max_node_outage + repair_interval)
 ```
 
-- Default gc_grace: 10 days (864000 seconds)
-- Repair should complete in less than gc_grace
-- If repair can't complete in time, increase gc_grace or fix repair
+**Default: 864000 seconds (10 days).** This works for most clusters. Lowering it is only safe when:
+- Repair runs more frequently than the new value
+- No node will be down longer than the new value
+- You accept that a node down + missed repair = data resurrection risk
+
+```cql
+-- Check current setting
+SELECT gc_grace_seconds FROM system_schema.tables
+WHERE keyspace_name = 'ks' AND table_name = 'tbl';
+
+-- Change (careful — lowering risks resurrection)
+ALTER TABLE ks.tbl WITH gc_grace_seconds = 864000;
+```
+
+**Immutable data with TTL and no explicit deletes** can safely use a lower gc_grace (e.g., 86400 / 1 day) since TTL expiration handles cleanup and there are no tombstones from DELETE operations to worry about.
+
+## Read Repair
+
+On Cassandra 4.0+ (including 5.0), **there is nothing to disable.** Background read repair — configured via the `read_repair_chance` and `dclocal_read_repair_chance` settings — was removed in 4.0 ([CASSANDRA-13910](https://issues.apache.org/jira/browse/CASSANDRA-13910)). Those settings no longer exist; `ALTER TABLE … WITH read_repair_chance = 0` will fail with an "unknown property" error. Rely on a regular incremental repair schedule instead.
+
+**If you are still on Cassandra 3.x**, disable both settings on every table:
+
+```cql
+ALTER TABLE ks.tbl
+WITH read_repair_chance = 0
+AND dclocal_read_repair_chance = 0;
+```
+
+`read_repair_chance` and `dclocal_read_repair_chance` drove a *probabilistic, background* repair: with some probability on each read, the coordinator would pull extra replicas and reconcile mismatches in the background. It was an early workaround for clusters without good repair tooling, and it is strictly inferior to modern incremental repair running on a regular schedule. Global `read_repair_chance` is especially expensive in multi-DC deployments — it triggers cross-DC coordination off the back of reads.
+
+The separate `read_repair` table option added in 4.0 (values `BLOCKING` / `NONE`) controls a different mechanism — the synchronous reconciliation that happens when the coordinator already sees a digest mismatch during a quorum read — and should generally be left at its default.
 
 ## Impact of vnodes
 
@@ -156,6 +184,10 @@ Track:
 
 CEP-37 (CASSANDRA-19918) incorporates repair into the Cassandra process, removing the need for external repair systems.
 
+### Mutation Tracking (CEP-45, future)
+
+Tables can opt out of repair entirely with mutation tracking — writes are tracked so the system knows which data has been replicated everywhere. When fully implemented, this eliminates periodic repair for participating tables.
+
 
 ## Common Issues
 
@@ -167,10 +199,12 @@ CEP-37 (CASSANDRA-19918) incorporates repair into the Cassandra process, removin
 - Increase parallelism carefully
 
 ### Repair Failures
-- Check logs for root cause
-- Verify network connectivity
-- Check disk space on all nodes
-- May need to restart and resume
+- **Never run `nodetool repair --full` on large datasets** — it fails often and blocks the cluster
+- Use Reaper or AxonOps with subrange repair instead — automatic retry, progress tracking, sequential execution
+- Check logs: `grep -i "repair" /var/log/cassandra/system.log | grep -i error`
+- Verify disk space — repair streaming requires temporary space
+- Verify network connectivity between nodes
+- Ensure only one node repairing at a time
 
 ### Data Resurrection
 
@@ -184,3 +218,12 @@ CEP-37 (CASSANDRA-19918) incorporates repair into the Cassandra process, removin
 - Never use incremental repair on pre-4.0
 - Automate with Reaper or similar
 - Monitor completion and failures
+
+## See Also
+
+- [Tombstones](tombstones.md)
+- [Hinted Handoff](hinted-handoff.md)
+- [Compaction](compaction.md)
+- [Virtual Nodes (vnodes)](vnodes.md)
+- [Consistency Levels](consistency-levels.md)
+- [Streaming](streaming.md)

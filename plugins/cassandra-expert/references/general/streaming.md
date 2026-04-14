@@ -113,6 +113,21 @@ Fast streaming enables:
 | STCS | Unbounded, can grow to 100s of GB | Low |
 | TWCS | One large SSTable per window | Low |
 
+## Throughput and Timeout Settings
+
+```yaml
+# cassandra.yaml (Cassandra 5.0)
+stream_throughput_outbound: 24MiB/s              # default — good for most clusters
+inter_dc_stream_throughput_outbound: 24MiB/s     # default — cross-DC throttle
+streaming_keep_alive_period: 300s                # default — leave alone
+```
+
+Note: in Cassandra 5.0 the setting was renamed from `stream_throughput_outbound_megabits_per_sec` to `stream_throughput_outbound`, and the unit changed from Mbps to MiB/s. The default of `24MiB/s` is equivalent to the historical 200 Mbps.
+
+**Throughput:** Keep the default `24MiB/s`. Increasing it can overwhelm target nodes and cause repair or bootstrap failures. If streaming is slow, the root cause is usually the slow fallback path (see above), not insufficient throughput.
+
+**Keep-alive period:** Keep the default `300s` (5 minutes). Stalled streams are detected within 10 minutes. Setting this to `0` disables stall detection — don't.
+
 ## Summary
 
 For optimal streaming performance:
@@ -124,4 +139,7 @@ For optimal streaming performance:
 
 ## See Also
 
-[How Cassandra Streaming, Performance, Node Density, and Cost Are All Related](https://rustyrazorblade.com/post/2025/03-streaming/)
+- [Virtual Nodes (vnodes)](./vnodes.md) — vnode count directly drives streaming parallelism
+- [Compaction](./compaction.md) — compaction strategy determines ZCS eligibility
+- [Repair](./repair.md) — repair streams data during reconciliation
+- [How Cassandra Streaming, Performance, Node Density, and Cost Are All Related](https://rustyrazorblade.com/post/2025/03-streaming/)

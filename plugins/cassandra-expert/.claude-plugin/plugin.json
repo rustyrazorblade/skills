@@ -1,11 +1,11 @@
 {
   "name": "cassandra-expert",
   "description": "Expert guidance for Apache Cassandra development, including schema design, query optimization, performance tuning, and operational best practices.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "Jon Haddad"
   },
   "repository": "https://github.com/rustyrazorblade/skills",
   "license": "Apache-2.0",
-  "keywords": ["cassandra", "database", "nosql", "cql", "schema", "performance", "token-skew"]
+  "keywords": ["cassandra", "database", "nosql", "cql", "schema", "performance", "token-skew", "training"]
 }

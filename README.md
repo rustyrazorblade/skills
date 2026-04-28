@@ -1,12 +1,20 @@
 # Rustyrazorblade Skills
 
-A Claude Code plugin marketplace by Jon Haddad.
+A plugin marketplace by Jon Haddad.
 
 ## Installation
 
+### Claude Code
 ```
 /plugin marketplace add rustyrazorblade/skills
 ```
+
+### Codex
+```
+codex plugin marketplace add rustyrazorblade/skills
+```
+
+Codex exposes skills through `$` mentions instead of slash commands.
 
 ## Available Plugins
 
@@ -14,8 +22,18 @@ A Claude Code plugin marketplace by Jon Haddad.
 
 Expert guidance for Apache Cassandra development and operations.
 
+Claude Code:
+
 ```
 /plugin install cassandra-expert@rustyrazorblade-plugins
+```
+
+Codex CLI:
+
+Install `cassandra-expert` from the plugins section:
+
+```
+/plugins
 ```
 
 #### Skills

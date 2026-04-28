@@ -1,0 +1,20 @@
+{
+  "name": "rustyrazorblade-plugins",
+  "interface": {
+    "displayName": "Rustyrazorblade Skills"
+  },
+  "plugins": [
+    {
+      "name": "cassandra-expert",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cassandra-expert"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

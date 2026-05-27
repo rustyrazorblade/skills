@@ -117,6 +117,53 @@ Opinionated guidance based on real-world experience:
 - **Partitions**: Keep under 10MB. No downside to smaller partitions.
 - **Row cache**: Keep disabled. Rarely beneficial.
 
+### easy-db-lab
+
+Provision and operate AWS lab environments with Cassandra, ClickHouse, Spark, OpenSearch, and installable kits.
+
+Claude Code:
+
+```
+/plugin install easy-db-lab@rustyrazorblade-plugins
+```
+
+Codex CLI:
+
+Install `easy-db-lab` from the plugins section:
+
+```
+/plugins
+```
+
+#### Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/easy-db-lab:explore` | **Start here** — interactive guided session that provisions an environment if needed, then helps you run tests and explore the cluster |
+| `/easy-db-lab:provision` | Provision single or multi-DC environments including VPC peering, security groups, and Cassandra seed coordination |
+| `/easy-db-lab:plan` | Interactively design a lab workflow and write it to `plan.md` |
+| `/easy-db-lab:install` | Install and operate kits (databases, analytics engines, query engines, apps) |
+| `/easy-db-lab:run` | Execute a `plan.md` step by step, confirming each step with the user and recording progress in `history.md` |
+
+#### Usage Examples
+
+```
+/easy-db-lab:explore
+/easy-db-lab:explore cassandra 5.0
+/easy-db-lab:explore clickhouse analytics
+/easy-db-lab:provision 3 node Cassandra cluster on m5.2xlarge
+/easy-db-lab:provision 2 DCs, 3 nodes each, multi-DC setup
+/easy-db-lab:plan benchmark Cassandra 5.0 vs 4.1
+/easy-db-lab:install list available kits
+```
+
+#### Notes
+
+- Skills must be run from a lab workspace directory (created by `easy-db-lab init`)
+- Each DC in a multi-DC setup has its own subdirectory with independent state
+- Session activity is tracked in `history.md` in the workspace directory
+- Plans are written to `plan.md`
+
 ## License
 
 Apache 2.0

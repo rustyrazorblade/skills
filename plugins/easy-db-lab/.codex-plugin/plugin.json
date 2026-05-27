@@ -1,0 +1,22 @@
+{
+  "name": "easy-db-lab",
+  "version": "0.1.0",
+  "description": "Guided workflow assistant for easy-db-lab — provision AWS lab environments, manage Cassandra and ClickHouse clusters, run stress tests, and operate observability tooling.",
+  "author": {
+    "name": "Jon Haddad"
+  },
+  "repository": "https://github.com/rustyrazorblade/skills",
+  "license": "Apache-2.0",
+  "keywords": ["easy-db-lab", "cassandra", "aws", "lab", "stress-testing", "clickhouse"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Easy DB Lab",
+    "shortDescription": "Provision and operate AWS lab environments with Cassandra, ClickHouse, and stress testing.",
+    "developerName": "Jon Haddad",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Bash"
+    ]
+  }
+}

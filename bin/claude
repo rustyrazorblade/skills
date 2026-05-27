@@ -1,5 +1,10 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_DIR="$SCRIPT_DIR/../plugins/cassandra-expert"
+PLUGINS_DIR="$SCRIPT_DIR/../plugins"
 
-exec claude --plugin-dir "$PLUGIN_DIR" "$@"
+PLUGIN_ARGS=()
+for dir in "$PLUGINS_DIR"/*/; do
+  PLUGIN_ARGS+=(--plugin-dir "$dir")
+done
+
+exec "${CLAUDE:-claude}" "${PLUGIN_ARGS[@]}" "$@"

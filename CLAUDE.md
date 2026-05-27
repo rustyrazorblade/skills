@@ -10,6 +10,22 @@ bin/claude
 
 This is required because there is no declarative way to register a local plugin directory in `.claude/settings.json`. The `--plugin-dir` flag is the only mechanism for local plugin testing.
 
+## Version Bumping
+
+When working on a branch or PR, ask if the user wants to bump the plugin version. Show the current version and ask for the new one before making any changes.
+
+Version is declared in two files per plugin — both must be updated together:
+- `plugins/<plugin>/.claude-plugin/plugin.json` — `version` field
+- `plugins/<plugin>/.codex-plugin/plugin.json` — `version` field
+
+Example:
+```
+Current version: 0.1.0
+What should the new version be?
+```
+
+Once confirmed, update both files. Do not bump the version without asking first.
+
 ## cassandra-expert Plugin
 
 ### Training Skill Architecture

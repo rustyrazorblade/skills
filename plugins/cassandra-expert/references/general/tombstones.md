@@ -14,6 +14,13 @@ Cassandra can't just remove data — other replicas may still have the original 
 - Replacing collection elements (old elements become tombstones)
 - Range deletes
 
+## Range Tombstones
+
+- Range deletes (`DELETE FROM t WHERE pk = ? AND ck > ?`) creates a range tombstone 
+- These can introduce subtle performance issues when they shadow a lot of data.
+- For example, if a `DELETE` affects hundreds of thousands of rows, the range tombstone can shadow all of them.  That can result in a lot of overhead during reads as the data may need to be read from disk and compared against the tombstone to determine if it's live or not.
+
+
 ## Performance Impact
 
 Every read must scan tombstones in the query range to determine which data is live. High tombstone counts cause:
@@ -70,7 +77,6 @@ This is the most efficient way to expire old data at scale.
 
 - Replacing entire collections (`UPDATE t SET list_col = [...]`) tombstones old elements
 - Setting columns to `null` creates a tombstone per column
-- Range deletes (`DELETE FROM t WHERE pk = ? AND ck > ?`) can create many tombstones
 
 ## See Also
 

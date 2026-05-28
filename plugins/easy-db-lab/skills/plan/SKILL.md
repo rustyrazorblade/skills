@@ -17,6 +17,17 @@ Load `../../references/environment.md` for details on the AWS environment, k3s, 
 
 Load `../../references/history.md` for instructions on maintaining `history.md`. Read `history.md` if it exists — past actions and observations should inform the plan.
 
+## Load Reference Files First — REQUIRED
+
+**Before asking any questions or writing any plan steps**, load the reference files for every database the user mentions or implies:
+
+- Cassandra (any mention of Cassandra, CQL, stress, nodetool, or multi-DC) → read `../../references/cassandra.md`
+- ClickHouse → read `../../references/clickhouse.md`
+- Spark → read `../../references/spark.md`
+- OpenSearch → read `../../references/opensearch.md`
+
+Do this immediately, in parallel with loading `environment.md`. These files contain mandatory constraints (e.g. never change the snitch, required multi-DC setup sequence, correct config paths) that must be known before planning begins. A plan written without reading the reference will contain errors.
+
 ## Discover the Command Surface First
 
 Before writing any plan step that uses `easy-db-lab`, run:
@@ -53,12 +64,6 @@ Based on the goal, determine which components are needed. Ask about each that's 
   - **io2** — high-IOPS SSD, for latency-sensitive workloads requiring provisioned IOPS
   Present these as a menu. If they choose io2, also ask for the IOPS value.
 - If the user doesn't specify an instance type, recommend `i4i.xlarge` for database nodes (local NVMe, no EBS needed).
-
-**Databases** — load the relevant reference file(s) for accurate command details:
-- Cassandra → `../../references/cassandra.md`
-- ClickHouse → `../../references/clickhouse.md`
-- Spark → `../../references/spark.md`
-- OpenSearch → `../../references/opensearch.md`
 
 **AWS credentials:**
 - Ask which `AWS_PROFILE` to use for any AWS CLI commands in this plan. Do not assume or encode a default — always ask.

@@ -119,73 +119,27 @@ For single DC, no `--cidr` is required and no subdirectory is needed unless the 
 
 ## Step 4 — VPC Peering (multi-DC only)
 
-Run `easy-db-lab status` in each DC directory — the output contains the VPC ID, node IPs, region, and everything else needed.
+Get VPC IDs and region from each DC directory:
 
 ```bash
 cd dc1 && easy-db-lab status && cd ..
 cd dc2 && easy-db-lab status && cd ..
 ```
 
-Create and accept the peering connection:
+Then run the peering script for each DC pair. The script discovers CIDRs from the AWS API, handles all route tables, and opens security groups — do not replicate this logic inline.
+
+The script lives at `references/scripts/vpc-peer.sh` relative to the plugin root. Use its absolute path:
 
 ```bash
-REGION=$(cd dc1 && easy-db-lab aws region)
+export AWS_PROFILE=<profile>
+export AWS_DEFAULT_REGION=$(cd dc1 && easy-db-lab aws region)
 
-PEER_ID=$(aws ec2 create-vpc-peering-connection \
-  --vpc-id <dc1-vpc-id> \
-  --peer-vpc-id <dc2-vpc-id> \
-  --region $REGION \
-  --query 'VpcPeeringConnection.VpcPeeringConnectionId' \
-  --output text)
-
-aws ec2 accept-vpc-peering-connection \
-  --vpc-peering-connection-id $PEER_ID \
-  --region $REGION
+bash <plugin-root>/references/scripts/vpc-peer.sh <dc1-vpc-id> <dc2-vpc-id>
 ```
 
-For 3+ DCs, peer each pair: dc1↔dc2, dc1↔dc3, dc2↔dc3, etc.
+For 3+ DCs, run the script once per pair: dc1↔dc2, dc1↔dc3, dc2↔dc3, etc.
 
-Add routes in each VPC's route tables:
-
-```bash
-aws ec2 create-route \
-  --route-table-id <dc1-route-table-id> \
-  --destination-cidr-block 10.1.0.0/16 \
-  --vpc-peering-connection-id $PEER_ID \
-  --region $REGION
-
-aws ec2 create-route \
-  --route-table-id <dc2-route-table-id> \
-  --destination-cidr-block 10.0.0.0/16 \
-  --vpc-peering-connection-id $PEER_ID \
-  --region $REGION
-```
-
-Use `aws ec2 describe-route-tables --filters "Name=vpc-id,Values=<vpc-id>"` to find route table IDs.
-
-## Step 5 — Update Security Groups (multi-DC only)
-
-```bash
-aws ec2 describe-security-groups \
-  --filters "Name=vpc-id,Values=<vpc-id>" \
-  --region $REGION
-
-aws ec2 authorize-security-group-ingress \
-  --group-id <dc1-sg-id> \
-  --protocol -1 \
-  --cidr 10.1.0.0/16 \
-  --region $REGION
-
-aws ec2 authorize-security-group-ingress \
-  --group-id <dc2-sg-id> \
-  --protocol -1 \
-  --cidr 10.0.0.0/16 \
-  --region $REGION
-```
-
-Repeat for each DC pair.
-
-## Step 6 — Verify
+## Step 5 — Verify
 
 Run `easy-db-lab status` from each DC directory and confirm all nodes are reachable:
 

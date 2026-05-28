@@ -45,6 +45,54 @@ easy-db-lab cassandra update-config my-patch.yaml --hosts db0,db1
 
 Config workflow: `download-config` → edit the YAML fragment → `update-config <file> [--restart]`
 
+## Multi-DC Plan Template
+
+When writing a `plan.md` for a multi-DC Cassandra cluster, use the following step structure exactly. Fill in the placeholders (`<version>`, `<cluster-name>`, `<dc1-db0-ip>`, `<dc2-db0-ip>`) from the user's choices and the provisioned node IPs.
+
+```markdown
+### N. Select Cassandra version on each DC
+\```bash
+cd dc1 && easy-db-lab cassandra use <version> && cd ..
+cd dc2 && easy-db-lab cassandra use <version> && cd ..
+\```
+
+### N+1. Set dc_suffix on each DC
+\```bash
+echo "dc_suffix=_dc1" > dc1/<version>/cassandra-rackdc.properties
+echo "dc_suffix=_dc2" > dc2/<version>/cassandra-rackdc.properties
+\```
+
+### N+2. Set shared cluster name and cross-DC seeds
+Edit dc1/cassandra.patch.yaml — merge in:
+\```yaml
+cluster_name: "<cluster-name>"
+seed_provider:
+  - class_name: org.apache.cassandra.locator.SimpleSeedProvider
+    parameters:
+      - seeds: "<dc1-db0-ip>,<dc2-db0-ip>"
+\```
+Do the same for dc2/cassandra.patch.yaml (same cluster_name, same seeds).
+
+### N+3. Push config to both DCs
+\```bash
+cd dc1 && easy-db-lab cassandra update-config cassandra.patch.yaml && cd ..
+cd dc2 && easy-db-lab cassandra update-config cassandra.patch.yaml && cd ..
+\```
+
+### N+4. Start Cassandra on both DCs
+\```bash
+(cd dc1 && easy-db-lab cassandra start) &
+(cd dc2 && easy-db-lab cassandra start) &
+wait
+\```
+
+### N+5. Verify the ring
+Expect all nodes from both DCs to appear, with DC names like `us-west-2_dc1` and `us-west-2_dc2`.
+\```bash
+cd dc1 && easy-db-lab cassandra nt status
+\```
+```
+
 ## Multi-DC Setup
 
 This is the only correct procedure for multi-DC Cassandra. Follow it exactly — do not deviate.

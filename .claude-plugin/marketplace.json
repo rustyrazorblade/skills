@@ -12,6 +12,12 @@
       "source": "./plugins/cassandra-expert",
       "description": "Expert guidance for Apache Cassandra development and operations",
       "category": "database"
+    },
+    {
+      "name": "easy-db-lab",
+      "source": "./plugins/easy-db-lab",
+      "description": "Provision and operate AWS lab environments with Cassandra, ClickHouse, and stress testing",
+      "category": "database"
     }
   ]
 }

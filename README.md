@@ -9,6 +9,13 @@ A plugin marketplace by Jon Haddad.
 /plugin marketplace add rustyrazorblade/skills
 ```
 
+Then install whichever plugins you want:
+
+```
+/plugin install cassandra-expert@rustyrazorblade-plugins
+/plugin install easy-db-lab@rustyrazorblade-plugins
+```
+
 ### Codex
 ```
 codex plugin marketplace add rustyrazorblade/skills

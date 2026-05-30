@@ -15,7 +15,11 @@ Load `../../references/environment.md` for details on the AWS environment, k3s, 
 
 ## Session Log
 
-Load `../../references/history.md` for instructions on maintaining `history.md`. Read `history.md` if it exists — past actions and observations should inform the plan.
+Load `../../references/history.md` for instructions on maintaining `docs/history.md`. Read `docs/history.md` if it exists — past actions and observations should inform the plan.
+
+## Issues Log
+
+Load `../../references/issues.md` for instructions on maintaining `docs/issues.md`. Read `docs/issues.md` if it exists — known friction or doc gaps should inform how you write the plan steps.
 
 ## Discover the Command Surface First
 
@@ -85,9 +89,11 @@ Once you have enough information, construct a step-by-step plan. Each step shoul
 4. Observe / collect results
 5. Tear down (if applicable)
 
-## Step 4 — Write plan.md
+## Step 4 — Write the Plan
 
-Write the plan to `plan.md` in the current directory. Format:
+Write the plan to `plan.md` in the **current directory** (wherever the user is running this skill — not necessarily a cluster directory). This is the working copy they'll refine before provisioning.
+
+Format:
 
 ```markdown
 # Lab Plan: <goal>
@@ -114,3 +120,7 @@ Write the plan to `plan.md` in the current directory. Format:
 ```
 
 Show the user the plan before writing it and ask for confirmation. After writing, tell them to run `/easy-db-lab:run` to execute it.
+
+## When a Cluster Directory Is Created
+
+When the plan includes an `easy-db-lab init` or `easy-db-lab up` step that creates a cluster directory, the run skill will set up `docs/` inside that directory and copy `plan.md` into it as `docs/plan.md`. The `docs/` directory is the canonical home for all lab documentation once a cluster exists. See the run skill for details.

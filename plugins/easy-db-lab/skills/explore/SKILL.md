@@ -15,7 +15,11 @@ Load `../../references/environment.md` for details on the AWS environment, k3s, 
 
 ## Session Log
 
-Load `../../references/history.md` for instructions on maintaining `history.md`. Read `history.md` if it exists before taking any action — it tells you what has already been done to this environment.
+Load `../../references/history.md` for instructions on maintaining `docs/history.md`. Read `docs/history.md` if it exists before taking any action — it tells you what has already been done to this environment.
+
+## Issues Log
+
+Load `../../references/issues.md` for instructions on maintaining `docs/issues.md`. Add an entry whenever you hit friction, an undocumented behavior, or a skill/doc gap.
 
 ## Step 1 — Check Environment State
 

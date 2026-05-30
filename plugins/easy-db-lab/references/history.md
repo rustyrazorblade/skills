@@ -1,10 +1,10 @@
 # history.md — Session Log
 
-`history.md` lives in the lab workspace directory and is a human-readable record of everything done to the environment. It is written for the operator and for clients reviewing the work later.
+`history.md` lives at `docs/history.md` inside the lab workspace directory. It is a human-readable record of everything done to the environment, written for the operator and for anyone reviewing the work later.
 
 ## Create It Immediately
 
-The very first thing you do in any skill is create `history.md` if it does not exist, then open a new session entry:
+The very first thing you do in any skill is create `docs/history.md` if it does not exist (creating `docs/` if needed), then open a new session entry:
 
 ```markdown
 # Lab History
@@ -59,4 +59,20 @@ op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
 <key output or metrics if relevant>
 ```
 
-If `history.md` already exists, read it first to understand the full context of what has been done to this environment before taking any action.
+If `docs/history.md` already exists, read it first to understand the full context of what has been done to this environment before taking any action.
+
+## Grafana Screenshots
+
+When observing performance results — stress test throughput, latency, compaction, anything you'd want to reference later — download a screenshot from Grafana and embed it in the history entry.
+
+Save screenshots to `docs/images/` and reference them inline:
+
+```markdown
+### 11:22 KeyValue baseline — 30m run complete
+op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
+
+![KeyValue baseline throughput](images/baseline-throughput.png)
+![KeyValue baseline latency](images/baseline-latency.png)
+```
+
+Name files descriptively — `<test-name>-<metric>.png` — so the images directory is navigable on its own.

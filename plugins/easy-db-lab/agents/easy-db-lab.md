@@ -1,6 +1,6 @@
 ---
 name: easy-db-lab
-description: easy-db-lab operator agent. Manages lab environments on AWS — provisioning, database setup, benchmarking, and teardown. Use for any easy-db-lab task including planning runs, executing plans, installing databases, and troubleshooting.
+description: Invoke this agent whenever you need to run the easy-db-lab binary, interact with a cluster workspace, or invoke any easy-db-lab skill (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). ALWAYS use this agent for skills — never run them directly.
 tools: Read, Bash
 ---
 

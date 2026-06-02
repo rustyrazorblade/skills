@@ -97,6 +97,8 @@ Read `<cluster-dir>/docs/plan.md` and display a numbered summary of all steps. I
 
 ## Execution Loop
 
+> **Non-negotiable rule: everything goes in `journal.md` — planned steps, debugging, investigation, retries, unplanned commands, and observations. Every command run and every finding, regardless of whether it was in the plan. Write each entry the moment the event occurs. Never batch. Never defer. An issue goes in `issues.md` the moment it is encountered. No exceptions.**
+
 Before executing any steps, build a checklist from the plan's `## Steps` section and display it:
 
 ```
@@ -117,27 +119,33 @@ For each step in the plan, in order:
 
 Display the full step text and ask: "Ready to execute this step?"
 
-Wait for the user to confirm before proceeding.
+Wait for the user to confirm before proceeding, unless the user has asked to skip confirmations.
 
-**2. Execute**
+**2. Write to `<cluster-dir>/docs/journal.md` — before running any commands**
+
+Immediately append a new entry: timestamp + step name + "starting". See `../../references/journal.md` for format.
+
+**This is not part of the confirmation flow. It is required whether or not the user skips confirmations. Do not run any commands until this entry is written.**
+
+**3. Execute**
 
 Run the required `$EDB` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
 
-**3. Verify**
+Every command you run — including any debugging, log inspection, status checks, or investigation not in the plan — must be appended to `<cluster-dir>/docs/journal.md` as it happens. Do not wait until the step is done. If you ran it, log it.
 
-After each step, confirm it succeeded. Always use `$EDB` (the full path wrapper), not the bare `easy-db-lab` binary:
+**Issues: write immediately.** The moment you encounter anything confusing, undocumented, or mismatched with the plan — stop and write an entry to `<cluster-dir>/docs/issues.md` before continuing. See `../../references/issues.md` for format. Do not finish the step first.
+
+**4. Verify**
+
+Confirm the step succeeded. Always use `$EDB` (the full path wrapper), not the bare `easy-db-lab` binary:
 - For `$EDB up`: check that nodes are reachable via `$EDB status`
 - For cassandra start: check cluster health via `$EDB cassandra status` or `$EDB cassandra nodetool status`
 - For other steps: use the most appropriate check given the operation
 - For multi-DC: run the check against each DC's wrapper (`$EDB_DC1`, `$EDB_DC2`, etc.)
 
-**4. Update `<cluster-dir>/docs/journal.md`**
+**5. Update `<cluster-dir>/docs/journal.md` with outcome**
 
-Record what was done, the outcome, and any relevant output. See `../../references/journal.md` for format. If the step produced performance results (throughput, latency, compaction), download a Grafana screenshot to `<cluster-dir>/docs/images/` and embed it inline.
-
-**5. Update `<cluster-dir>/docs/issues.md` if needed**
-
-If anything during the step was confusing, undocumented, or didn't match the plan, add an entry to `<cluster-dir>/docs/issues.md`. See `../../references/issues.md` for format.
+Update the journal entry with the final outcome and any relevant output. If the step produced performance results (throughput, latency, compaction), download a Grafana screenshot to `<cluster-dir>/docs/images/` and embed it inline.
 
 **6. Proceed**
 
@@ -163,11 +171,12 @@ When invoked again, read `<cluster-dir>/docs/journal.md` to determine where to r
 
 If a step fails:
 1. Show the error clearly.
-2. Do not proceed to the next step.
-3. Diagnose the failure — check logs, status, or node health as appropriate.
-4. Propose a fix and wait for user approval before retrying.
-5. Record the failure and resolution in `<cluster-dir>/docs/journal.md`.
-6. If the error message was unhelpful or the failure wasn't anticipated by the plan, add an entry to `<cluster-dir>/docs/issues.md`.
+2. Immediately write to `<cluster-dir>/docs/journal.md` — record the failure, the error output, and the timestamp. Do not wait.
+3. If the error was unhelpful, undocumented, or not anticipated by the plan, immediately write an entry to `<cluster-dir>/docs/issues.md`. Do not wait.
+4. Do not proceed to the next step.
+5. Diagnose the failure — check logs, status, or node health as appropriate. Every diagnostic command you run and every finding must be logged to `<cluster-dir>/docs/journal.md` as it happens, not summarized afterward.
+6. Propose a fix and wait for user approval before retrying.
+7. Update `<cluster-dir>/docs/journal.md` with the resolution once the fix is applied.
 
 ## Database Workflows
 

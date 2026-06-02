@@ -153,13 +153,29 @@ Ask: "Step N complete. Continue to step N+1?" before moving on.
 
 ## Completion
 
-When all steps are finished, run `make` in `<cluster-dir>/docs/` to build the mdbook:
+When all steps are finished:
+
+**1. Write `<cluster-dir>/docs/results.md`**
+
+Populate the summary with a concise distillation of the run — not a copy of the journal, but the highlights a reader needs to understand what was tested and what was learned:
+
+- **Goal** — what the lab set out to test or prove
+- **Results** — did it succeed? What was the outcome?
+- **Key Findings** — bullet points of the most important discoveries
+- **Performance Results** — if benchmarks were run, include throughput, latency percentiles, and any Grafana screenshots from `docs/images/`
+- **Configuration Notes** — any non-obvious settings that mattered to the outcome
+- **Issues Encountered** — a brief summary of friction; full details are in `issues.md`
+- **Recommendations** — what to use, what to avoid, what to test next
+
+**Cassandra performance tests:** If the lab involved Cassandra performance — memtable implementation, compaction strategy, read/write tuning, SAI, etc. — explicitly call out the winning configuration and why. Invoke the `cassandra-expert` agent to add any relevant expert context (e.g. why trie memtables outperform heap, when TWCS is appropriate, SAI vs 2i tradeoffs) directly in the Recommendations section. This makes the summary a standalone reference, not just a pointer to the journal.
+
+**2. Build the mdbook**
 
 ```bash
 make -C <cluster-dir>/docs
 ```
 
-This generates the browsable book from the journal, plan, and issues log.
+This generates the browsable book from the summary, journal, plan, and issues log.
 
 ## Pausing and Resuming
 

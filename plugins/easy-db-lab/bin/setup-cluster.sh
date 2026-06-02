@@ -116,6 +116,7 @@ cp "$SCAFFOLD/SUMMARY.md" "$DOCS/SUMMARY.md"
 cp "$SCAFFOLD/Makefile"    "$DOCS/Makefile"
 [[ -f "$DOCS/journal.md" ]] || cp "$SCAFFOLD/journal.md" "$DOCS/journal.md"
 [[ -f "$DOCS/issues.md"  ]] || cp "$SCAFFOLD/issues.md"  "$DOCS/issues.md"
+[[ -f "$DOCS/results.md" ]] || cp "$SCAFFOLD/results.md" "$DOCS/results.md"
 
 if [[ -n "$PLAN_FILE" ]]; then
   cp "$PLAN_FILE" "$DOCS/plan.md"

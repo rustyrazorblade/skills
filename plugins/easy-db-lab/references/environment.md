@@ -28,7 +28,7 @@ kubectl get pods -A
 
 ## Observability Stack
 
-Every environment ships a full observability stack. Components run on every cluster node (collectors) or on the control node only (backends).
+The full observability stack is deployed automatically when the cluster comes up — no manual setup step required. Components run on every cluster node (collectors) or on the control node only (backends).
 
 ### Collectors (every node)
 
@@ -60,7 +60,7 @@ Every environment ships a full observability stack. Components run on every clus
 
 The `easy-db-lab` CLI itself is auto-instrumented via the OpenTelemetry Java Agent, which captures HTTP client traces and JVM metrics without any manual instrumentation in the Kotlin code.
 
-Use `easy-db-lab grafana update-config` to apply or refresh the full observability stack. Use `easy-db-lab logs` and `easy-db-lab metrics` for querying. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
+`easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. Use `easy-db-lab logs` and `easy-db-lab metrics` for querying. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
 
 ## Cassandra
 
@@ -87,6 +87,18 @@ SSH access to all nodes is configured via **`sshConfig`** in the workspace direc
 ```bash
 ssh -F sshConfig db0
 ssh -F sshConfig app0
+```
+
+## Tailscale
+
+Tailscale is installed and active on every cluster, providing direct access to all node private IPs. This means services exposed by kits or databases are reachable directly — **do not use `kubectl port-forward`**. Use `easy-db-lab kit info <name>` to find which ports a kit exposes, then connect via the node's private IP.
+
+```bash
+# Start Tailscale on the control node (if not already running)
+easy-db-lab tailscale start --client-id <id> --client-secret <secret>
+
+# Check status
+easy-db-lab tailscale status
 ```
 
 ## Node Filesystem Layout
@@ -185,12 +197,3 @@ These are injected as `-javaagent:` args via `cassandra.in.sh` and expose Cassan
 | `/etc/cassandra_versions.yaml` | Source of truth for installed Cassandra versions and build URLs |
 | `/var/log/easydblab/tools/` | exec tool logs shipped to VictoriaLogs by OTel Collector |
 
-## After Running `up`
-
-After `easy-db-lab up` completes, always run:
-
-```bash
-source env.sh
-```
-
-This sets up local files including `sshConfig`. Without this step, SSH and other local tooling will not be configured correctly.

@@ -1,92 +1,115 @@
 ---
 name: run
-description: Execute a plan.md step by step in a lab workspace. Reads the plan, confirms with the user at each step, and updates history.md as work proceeds.
-argument-hint: "optional — step number to start from, e.g. 'start from step 3'"
+description: Executes a plan step by step in an explicit cluster workspace, confirming each step with the user and updating journal.md as work proceeds. Use when running or resuming a lab plan, benchmark, or database experiment.
+argument-hint: "<cluster directory> [step N]  OR  <plan.md path> <cluster directory> [--binary <path>] [--jdk <path>] [step N]"
 user-invocable: true
 ---
 
 # Easy DB Lab — Run Plan
 
-You execute a `plan.md` in the current lab workspace, one step at a time.
+You execute a plan step by step in an explicit cluster workspace, reading the plan from `<cluster-dir>/docs/plan.md`.
 
 ## Environment
 
-Load `../../references/environment.md` for details on the AWS environment, k3s, SSH access, and the `source env.sh` requirement after `up`.
+Load `../../references/environment.md` for details on the AWS environment, k3s, and SSH access.
 
 ## Session Log
 
-Load `../../references/history.md` for instructions on maintaining `docs/history.md`. Read `docs/history.md` if it exists before taking any action — it tells you what has already been done.
+Load `../../references/journal.md` for instructions on maintaining the journal. Once the cluster dir is established, read `<cluster-dir>/docs/journal.md` before taking any action — it tells you what has already been done.
 
 ## Issues Log
 
-Load `../../references/issues.md` for instructions on maintaining `docs/issues.md`. Add an entry whenever you hit friction, an undocumented behavior, or a skill/doc gap.
+Load `../../references/issues.md` for instructions on maintaining the issues file. Add an entry to `<cluster-dir>/docs/issues.md` whenever you hit friction, an undocumented behavior, or a skill/doc gap.
 
 ## Discover the Command Surface First
 
-Before executing any `easy-db-lab` command, run:
+After setting up `$EDB` in the Before Starting section, run:
 
 ```bash
-easy-db-lab commands
+$EDB commands
 ```
 
-Use this output as the authoritative source for flag names and available options. Never guess flags.
+Use this output as the authoritative source for flag names and available options. Never guess flags. If `$EDB` is not yet available, load `../../references/commands.md` as a fallback.
 
 ## Before Starting
 
-1. **Locate the plan file.** The user may invoke this skill from the cluster directory or from a parent directory where they drafted the plan. Check both locations:
+### 1. Determine the invocation mode
 
-   ```bash
-   ls docs/plan.md 2>/dev/null && echo CLUSTER || \
-     ls plan.md 2>/dev/null && echo PARENT || echo MISSING
-   ls state.json 2>/dev/null && echo EXISTS || echo EMPTY
-   ```
+The skill is invoked in one of two ways:
 
-   - **`docs/plan.md` exists** — already in the cluster directory. Proceed normally.
-   - **`plan.md` exists (no `docs/plan.md`)** — the plan was written before the cluster directory existed. Set up the `docs/` scaffold now and copy the plan in:
+**First run** — `<plan.md path> <cluster directory> [step N]`
+The cluster directory does not exist yet (or has no `docs/plan.md`). Full scaffolding is required.
 
-     ```bash
-     mkdir -p docs/images
-     cp plan.md docs/plan.md
-     ```
+**Resume** — `<cluster directory> [step N]`
+The cluster directory already exists and contains `docs/plan.md`. Skip scaffolding entirely.
 
-     Then create `docs/book.toml`, `docs/SUMMARY.md`, `docs/history.md`, and `docs/issues.md` as described below. All subsequent references use `docs/plan.md`.
+Detect which case applies by checking for `docs/plan.md` inside the provided directory. If the directory doesn't exist or has no `docs/plan.md`, treat it as a first run and require a plan path. If `docs/plan.md` exists, treat it as a resume.
 
-   - **Neither exists** — tell the user to create a plan with `/easy-db-lab:plan` first.
+If a required argument is missing, ask the user for it before continuing.
 
-   - If `state.json` exists, run `easy-db-lab status` to confirm the current cluster state.
+---
 
-2. **Set up `docs/` if it doesn't already exist.** The `docs/` directory is the canonical home for all lab documentation. Create it with this structure:
+### First run
 
-   **`docs/book.toml`** — use `src = "."` so markdown files live directly in `docs/`:
+**Read the plan.** Extract the cluster name and datacenter configuration directly from the plan file:
 
-   ```toml
-   [book]
-   title = "Lab: <goal from plan>"
-   src = "."
+- **Cluster name** — value under `## Cluster Name`
+- **Datacenters** — if `## Datacenters` is `single`, it is a single-DC cluster; otherwise each `- <dc>: <cidr>` line defines a DC name and CIDR
 
-   [build]
-   build-dir = "book"
-   ```
+**Ask the user only for anything missing:**
+- **`easy-db-lab` binary path** (`--binary`) — try `which easy-db-lab` first; only ask if not found.
+- **Java 21 JDK home** (`--jdk`) — leave blank to inherit the system default.
 
-   **`docs/SUMMARY.md`**:
+**Scaffold the cluster workspace:**
 
-   ```markdown
-   # Summary
+```bash
+# Single DC (DCS=single)
+setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.md path> [--jdk <path>]
 
-   - [Plan](plan.md)
-   - [History](history.md)
-   - [Issues](issues.md)
-   ```
+# Multi DC (DCS="dc1 dc2 ...")
+setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.md path> [--jdk <path>] --dc dc1 --dc dc2
+```
 
-   **`docs/history.md`** — initialize with a session header (see `../../references/history.md` for format).
+After scaffolding, set `$EDB` from the wrapper path(s) and use `<cluster-dir>/docs/plan.md` for all subsequent references — not the original plan file.
 
-   **`docs/issues.md`** — initialize with just a heading: `# Issues`
+---
 
-3. **Read `docs/plan.md`** — display a numbered summary of all steps to the user before executing anything.
+### Resume
 
-4. **If the user specified a starting step** (e.g. "start from step 3"), confirm which step that is and skip to it.
+The cluster dir is self-contained — plan, journal, and issues are all in `docs/`. The wrapper(s) already exist.
+
+**Detect layout and state:**
+
+```bash
+eval $(detect-cluster-layout.sh <cluster-dir>)
+# Sets: LAYOUT (single|multi), EDB or EDB_DC1/EDB_DC2/..., DCS, STATE (provisioned|unprovisioned)
+```
+
+If `STATE=provisioned`, run `$EDB status` to find the actual cluster state — it may still be running or may have been torn down externally.
+
+**Read `<cluster-dir>/docs/journal.md`** to determine what was last completed, then confirm the resume point with the user.
+
+---
+
+### Both modes
+
+Read `<cluster-dir>/docs/plan.md` and display a numbered summary of all steps. If the user specified a starting step, confirm which step that is and skip to it.
 
 ## Execution Loop
+
+Before executing any steps, build a checklist from the plan's `## Steps` section and display it:
+
+```
+Plan: <goal>
+
+Progress:
+- [ ] Step 1: <name>
+- [ ] Step 2: <name>
+- [ ] Step 3: <name>
+...
+```
+
+Check off each step as it completes. Re-display the checklist after each step so the user can see progress at a glance.
 
 For each step in the plan, in order:
 
@@ -98,32 +121,43 @@ Wait for the user to confirm before proceeding.
 
 **2. Execute**
 
-Run the required `easy-db-lab` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
+Run the required `$EDB` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
 
 **3. Verify**
 
-After each step, confirm it succeeded:
-- For `easy-db-lab up`: check that nodes are reachable via `easy-db-lab status`
-- For cassandra start: check cluster health via `easy-db-lab cassandra status` or `nodetool status`
+After each step, confirm it succeeded. Always use `$EDB` (the full path wrapper), not the bare `easy-db-lab` binary:
+- For `$EDB up`: check that nodes are reachable via `$EDB status`
+- For cassandra start: check cluster health via `$EDB cassandra status` or `$EDB cassandra nodetool status`
 - For other steps: use the most appropriate check given the operation
+- For multi-DC: run the check against each DC's wrapper (`$EDB_DC1`, `$EDB_DC2`, etc.)
 
-**4. Update `docs/history.md`**
+**4. Update `<cluster-dir>/docs/journal.md`**
 
-Record what was done, the outcome, and any relevant output. See `../../references/history.md` for format. If the step produced performance results (throughput, latency, compaction), download a Grafana screenshot to `docs/images/` and embed it inline.
+Record what was done, the outcome, and any relevant output. See `../../references/journal.md` for format. If the step produced performance results (throughput, latency, compaction), download a Grafana screenshot to `<cluster-dir>/docs/images/` and embed it inline.
 
-**5. Update `docs/issues.md` if needed**
+**5. Update `<cluster-dir>/docs/issues.md` if needed**
 
-If anything during the step was confusing, undocumented, or didn't match the plan, add an entry to `docs/issues.md`. See `../../references/issues.md` for format.
+If anything during the step was confusing, undocumented, or didn't match the plan, add an entry to `<cluster-dir>/docs/issues.md`. See `../../references/issues.md` for format.
 
 **6. Proceed**
 
 Ask: "Step N complete. Continue to step N+1?" before moving on.
 
+## Completion
+
+When all steps are finished, run `make` in `<cluster-dir>/docs/` to build the mdbook:
+
+```bash
+make -C <cluster-dir>/docs
+```
+
+This generates the browsable book from the journal, plan, and issues log.
+
 ## Pausing and Resuming
 
-If the user asks to stop, record progress in `docs/history.md` (last completed step + state) so the next session can resume cleanly.
+If the user asks to stop, record progress in `<cluster-dir>/docs/journal.md` (last completed step + state) so the next session can resume cleanly.
 
-When invoked again, read `docs/history.md` to determine where to resume, then confirm with the user before continuing.
+When invoked again, read `<cluster-dir>/docs/journal.md` to determine where to resume, then confirm with the user before continuing.
 
 ## Error Handling
 
@@ -132,8 +166,8 @@ If a step fails:
 2. Do not proceed to the next step.
 3. Diagnose the failure — check logs, status, or node health as appropriate.
 4. Propose a fix and wait for user approval before retrying.
-5. Record the failure and resolution in `docs/history.md`.
-6. If the error message was unhelpful or the failure wasn't anticipated by the plan, add an entry to `docs/issues.md`.
+5. Record the failure and resolution in `<cluster-dir>/docs/journal.md`.
+6. If the error message was unhelpful or the failure wasn't anticipated by the plan, add an entry to `<cluster-dir>/docs/issues.md`.
 
 ## Database Workflows
 
@@ -143,3 +177,14 @@ Load the relevant reference file when a step involves a specific database:
 - **ClickHouse** → `../../references/clickhouse.md`
 - **Spark** → `../../references/spark.md`
 - **OpenSearch** → `../../references/opensearch.md`
+
+## Cassandra Expert
+
+If Cassandra-related questions or issues arise during execution — errors, unexpected behavior, performance concerns, schema decisions — invoke the `cassandra-expert` agent. It has deep knowledge of Cassandra internals, CQL, and operational troubleshooting.
+
+- Operational issues (node failures, latency, repair, compaction) → `/cassandra-expert:diagnose`
+- Schema or data modeling questions → `/cassandra-expert:data-model`
+- Performance tuning → `/cassandra-expert:optimize`
+- General questions → invoke the `cassandra-expert` agent directly
+
+Record any Cassandra expert findings relevant to the run in `<cluster-dir>/docs/journal.md`.

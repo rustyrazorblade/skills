@@ -60,52 +60,23 @@ cd dc1 && easy-db-lab cassandra use 5.0 && cd ..
 cd dc2 && easy-db-lab cassandra use 5.0 && cd ..
 ```
 
-### Step 2 — Set dc_suffix on each DC
+### Step 2 & 3 — Set dc_suffix, cluster name, and cross-DC seeds
 
-easy-db-lab uses `Ec2Snitch`, which sets the DC name to the AWS region (e.g. `us-east-1`). The `dc_suffix` is appended to the region to produce the final DC name — so `dc_suffix=_dc1` in `us-east-1` gives `us-east-1_dc1`.
-
-Write a `cassandra-rackdc.properties` file in the version directory for each DC:
+Run `configure-multi-dc-seeds.sh` (available on PATH via the plugin's `bin/`). It writes `dc_suffix` to each DC's `cassandra-rackdc.properties`, gets seed IPs via `easy-db-lab ip db0`, merges `cluster_name` and `seed_provider` into each DC's `cassandra.patch.yaml`, and pushes the config:
 
 ```bash
-# In dc1/
-echo "dc_suffix=_dc1" > 5.0/cassandra-rackdc.properties
-
-# In dc2/
-echo "dc_suffix=_dc2" > 5.0/cassandra-rackdc.properties
+configure-multi-dc-seeds.sh <cluster-dir> --name <cluster-name> --dc dc1 --dc dc2
 ```
 
-**Never set `endpoint_snitch` or `dc` directly.** Ec2Snitch is already configured — changing it will break the cluster.
+Requires `easy-db-lab cassandra use <version>` to have been run in each DC first (creates `cassandra.patch.yaml`).
 
-### Step 3 — Configure cluster name and cross-DC seeds
-
-All DCs must share the same `cluster_name`. Seeds must include at least one node from each DC. The node IPs are available from `easy-db-lab status` output.
-
-**Read the existing `cassandra.patch.yaml` before editing it.** `easy-db-lab cassandra use <version>` generates this file with correct snitch and data directory settings. Merge new keys in — never replace the file.
-
-Merge the following into each DC's `cassandra.patch.yaml`:
-
-```yaml
-cluster_name: "<cluster-name>"
-seed_provider:
-  - class_name: org.apache.cassandra.locator.SimpleSeedProvider
-    parameters:
-      - seeds: "<dc1-db0-ip>,<dc2-db0-ip>"
-```
-
-**If this cluster will use bulk SSTable import (e.g. IAM Bulk Writer, Spark), also add:**
+**If this cluster will use bulk SSTable import (e.g. IAM Bulk Writer, Spark), also add manually:**
 
 ```yaml
 storage_compatibility_mode: NONE
 ```
 
 Without this setting the sidecar will create restore jobs and immediately mark them removed without importing any data. The symptom is `inflightJobsCount=0` and `SELECT COUNT(*)` returning 0 after a successful Spark job.
-
-Push to each DC:
-
-```bash
-cd dc1 && easy-db-lab cassandra update-config cassandra.patch.yaml && cd ..
-cd dc2 && easy-db-lab cassandra update-config cassandra.patch.yaml && cd ..
-```
 
 ### Step 4 — Start and verify
 
@@ -231,15 +202,15 @@ easy-db-lab cassandra stress fields
 easy-db-lab cassandra stress info KeyValue
 
 # Start a stress job (remaining args passed directly to cassandra-easy-stress)
-easy-db-lab cassandra stress start KeyValue -d 30m --threads 100
+easy-db-lab cassandra stress start -- KeyValue -d 30m --threads 100
 
 # Named job with custom metric tags
 easy-db-lab cassandra stress start --name my-test --tags "run=baseline,nodes=3" \
-  KeyValue -d 1h --threads 200
+  -- KeyValue -d 1h --threads 200
 
 # Use a custom image
 easy-db-lab cassandra stress start --image ghcr.io/apache/cassandra-easy-stress:latest \
-  KeyValue -d 1h
+  -- KeyValue -d 1h
 
 # Monitor running jobs
 easy-db-lab cassandra stress status

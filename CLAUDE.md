@@ -2,13 +2,7 @@
 
 ## Local Development
 
-To test plugin skills locally as slash commands, use `bin/claude` instead of `claude`. It passes `--plugin-dir` pointing at the local plugin directory:
-
-```bash
-bin/claude
-```
-
-This is required because there is no declarative way to register a local plugin directory in `.claude/settings.json`. The `--plugin-dir` flag is the only mechanism for local plugin testing.
+To test plugin skills locally as slash commands, install the local directory as a marketplace, then add all the plugins.
 
 ## Version Bumping
 
@@ -25,6 +19,22 @@ What should the new version be?
 ```
 
 Once confirmed, update both files. Do not bump the version without asking first.
+
+## easy-db-lab Plugin
+
+### Testing
+
+Local test runs live in `tests/` at the repo root — this directory is gitignored. Plans go under `tests/plans/` and cluster workspaces under `tests/clusters/`. For example:
+
+```
+tests/
+  plans/
+    single-node-cassandra.md
+  clusters/
+    20240530-143022/     ← cluster workspace created by setup-cluster.sh
+```
+
+Use this directory when running end-to-end tests of the plan → run flow locally.
 
 ## cassandra-expert Plugin
 

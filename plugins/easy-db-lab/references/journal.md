@@ -1,13 +1,13 @@
-# history.md — Session Log
+# journal.md — Lab Journal
 
-`history.md` lives at `docs/history.md` inside the lab workspace directory. It is a human-readable record of everything done to the environment, written for the operator and for anyone reviewing the work later.
+`journal.md` lives at `docs/journal.md` inside the lab workspace directory. It is a human-readable record of everything done to the environment, written for the operator and for anyone reviewing the work later.
 
 ## Create It Immediately
 
-The very first thing you do in any skill is create `docs/history.md` if it does not exist (creating `docs/` if needed), then open a new session entry:
+The very first thing you do in any skill is create `docs/journal.md` if it does not exist (creating `docs/` if needed), then open a new session entry:
 
 ```markdown
-# Lab History
+# Lab Journal
 
 ## 2026-05-23 — <brief description of what this session is doing>
 ```
@@ -29,7 +29,7 @@ Both DCs up. dc1: 3 nodes, dc2: 3 nodes. All UN.
 Set num_tokens: 4, enabled trie memtables. Pushed and restarted.
 
 ### 10:55 Started KeyValue stress test
-`cassandra stress start KeyValue -d 30m --threads 100 --name baseline`
+`cassandra stress start --name baseline -- KeyValue -d 30m --threads 100`
 op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
 ```
 
@@ -50,7 +50,7 @@ op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
 ## Format
 
 ```markdown
-# Lab History
+# Lab Journal
 
 ## <YYYY-MM-DD> — <session goal>
 
@@ -59,11 +59,11 @@ op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
 <key output or metrics if relevant>
 ```
 
-If `docs/history.md` already exists, read it first to understand the full context of what has been done to this environment before taking any action.
+If `docs/journal.md` already exists, read it first to understand the full context of what has been done to this environment before taking any action.
 
 ## Grafana Screenshots
 
-When observing performance results — stress test throughput, latency, compaction, anything you'd want to reference later — download a screenshot from Grafana and embed it in the history entry.
+When observing performance results — stress test throughput, latency, compaction, anything you'd want to reference later — download a screenshot from Grafana and embed it in the journal entry.
 
 Save screenshots to `docs/images/` and reference them inline:
 

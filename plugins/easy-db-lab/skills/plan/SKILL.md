@@ -1,7 +1,7 @@
 ---
 name: plan
-description: Help the user design a lab workflow — ask what they want to accomplish, work through the steps together, and write the result to plan.md.
-argument-hint: [what you want to accomplish — e.g. "benchmark Cassandra 5.0 vs 4.1", "test ClickHouse with S3 tiering"]
+description: Helps the user design a lab workflow by asking questions, working through steps together, and writing the result to a plan.md file. Use when planning a new lab run, benchmarking test, or database experiment.
+argument-hint: "[what you want to accomplish] [--binary <path>] [--output <path>] [--previous <cluster-dir>]"
 user-invocable: true
 ---
 
@@ -11,44 +11,70 @@ You are helping the user design a lab workflow. Your job is to ask the right que
 
 ## Environment
 
-Load `../../references/environment.md` for details on the AWS environment, k3s, observability stack, Cassandra config patches, SSH access, and the `source env.sh` requirement after `up`.
+Load `../../references/environment.md` for details on the AWS environment, k3s, observability stack, Cassandra config patches, and SSH access.
 
-## Session Log
+## Previous Run (optional)
 
-Load `../../references/history.md` for instructions on maintaining `docs/history.md`. Read `docs/history.md` if it exists — past actions and observations should inform the plan.
+If `--previous <cluster-dir>` was provided, read the following files before asking any planning questions:
 
-## Issues Log
+- `<cluster-dir>/docs/journal.md` — what was done, what was observed, what worked and what didn't
+- `<cluster-dir>/docs/issues.md` — friction, undocumented behavior, or gaps discovered during the run
 
-Load `../../references/issues.md` for instructions on maintaining `docs/issues.md`. Read `docs/issues.md` if it exists — known friction or doc gaps should inform how you write the plan steps.
+Use these to inform the new plan: incorporate steps that were added ad-hoc, avoid approaches that failed, and address known issues. Load `../../references/journal.md` and `../../references/issues.md` for the format these files follow.
 
-## Discover the Command Surface First
+## Discover Before You Plan
 
-Before writing any plan step that uses `easy-db-lab`, run:
+Before asking the user anything, run both of these:
 
 ```bash
-easy-db-lab commands
+# Authoritative flag and subcommand reference
+${BINARY:-easy-db-lab} commands
+
+# All installable software available in this environment
+${BINARY:-easy-db-lab} kit list
 ```
 
-Use this output as the authoritative source for flag names, subcommand structure, and available options. Never guess flags — if a flag isn't in the output of `easy-db-lab commands`, do not use it.
+Use `commands` output as the authoritative source for flag names and subcommands — never guess flags.
 
-## Step 1 — Understand the Goal
+Use `kit list` output as the authoritative list of installable software. Any database, tool, or app the plan needs to install must appear in this list. If the user asks for something not in the list, stop and ask them what they mean — do not guess, do not try alternatives, and never use `docker`.
 
-Ask the user what they want to accomplish. If they've provided an argument, use that as the starting point. Probe for:
+If the binary cannot be found, load `../../references/commands.md` as a fallback and warn the user to verify flags when running the plan.
 
-- **What are they testing or benchmarking?** (a specific database, a config change, a workload pattern)
-- **What does success look like?** (metrics, observations, a pass/fail condition)
-- **Are there constraints?** (time, cost, instance types, existing infrastructure)
+## Step 1 — Understand the Objective
 
-Ask one question at a time. Don't move on until you have a clear goal.
+Before asking about infrastructure or workloads, understand what the user is actually trying to learn. If they've provided an argument, use that as the starting point — but probe deeper.
 
-## Step 2 — Identify the Components
+**Ask one question at a time.** Do not move to Step 2 until you have a clear, specific objective.
 
-Based on the goal, determine which components are needed. Ask about each that's relevant:
+Work through these areas in order:
+
+1. **What question are you trying to answer?**
+   Get the research question in concrete terms. Examples: "Does TWCS reduce compaction overhead for our time-series write pattern?" or "What sustained throughput can a 3-node cluster handle at p99 < 5ms?" Push past vague goals like "test Cassandra performance" — the question should be specific enough that you'd know whether the test answered it.
+
+2. **What hypothesis or assumption is being tested?**
+   What do they expect to happen, and why? This shapes the workload, the config, and what to measure. If they don't have one, help them form one.
+
+3. **What does success look like?**
+   A specific metric, a threshold, a comparison, or an observation. "p99 write latency stays below 5ms at 10k ops/s" is a success criterion. "Performance looks good" is not.
+
+4. **What will they do with the results?**
+   Inform a production decision? Share with the team? Satisfy curiosity? This affects how rigorous the test needs to be and what to record.
+
+5. **Are there constraints?**
+   Time budget, AWS cost limits, specific instance types, existing infrastructure, or a deadline.
+
+Once the objective is clear and specific, move to Step 2 to design the test around it.
+
+## Step 2 — Design the Test
+
+With the objective in hand, determine what components and workload are needed to answer the research question. Don't ask about things the objective doesn't require. Ask one question at a time.
 
 **Infrastructure:**
+- What is the Cassandra cluster name? This is baked into the cluster configuration and shared across all nodes in all DCs.
 - How many db nodes? What instance type?
 - Are app/stress nodes needed? How many?
 - Any availability zone requirements?
+- Single DC or multi-DC? If multi-DC, what are the DC names and CIDR blocks? CIDRs must be non-overlapping and /20 or larger (e.g. dc1: `10.0.0.0/16`, dc2: `10.1.0.0/16`).
 
 **Instance type and storage — ask explicitly:**
 - If the user picks an instance type with local NVMe (e.g. `i4i.xlarge`, `im4gn.xlarge`), no EBS config is needed.
@@ -58,11 +84,16 @@ Based on the goal, determine which components are needed. Ask about each that's 
   Present these as a menu. If they choose io2, also ask for the IOPS value.
 - If the user doesn't specify an instance type, recommend `i4i.xlarge` for database nodes (local NVMe, no EBS needed).
 
-**Databases** — load the relevant reference file(s) for accurate command details:
-- Cassandra → `../../references/cassandra.md`
-- ClickHouse → `../../references/clickhouse.md`
-- Spark → `../../references/spark.md`
-- OpenSearch → `../../references/opensearch.md`
+**Software to install:**
+Identify every database, tool, or app the test requires. For each one:
+- Confirm the exact name from the `kit list` output obtained above
+- Run `${BINARY:-easy-db-lab} kit info <name>` to get the kit's available flags, options, and any install-time configuration — use this as the authoritative source for the `kit install` command in the plan. Do not invent flags.
+- Load the relevant reference file for accurate configuration details:
+  - Cassandra → `../../references/cassandra.md`
+  - ClickHouse → `../../references/clickhouse.md`
+  - Spark → `../../references/spark.md`
+  - OpenSearch → `../../references/opensearch.md`
+  - Anything else → `../../references/kits.md`
 
 **AWS credentials:**
 - Ask which `AWS_PROFILE` to use for any AWS CLI commands in this plan. Do not assume or encode a default — always ask.
@@ -71,7 +102,7 @@ Based on the goal, determine which components are needed. Ask about each that's 
 - If the plan involves bulk SSTable import (e.g. IAM Bulk Writer, Spark), ask whether a custom sidecar image is needed. If yes, get the full image URI now — it must be passed at `cassandra start` time via `--sidecar-image`.
 
 **Workload:**
-- What stress workload? (for Cassandra: `easy-db-lab cassandra stress list`)
+- What stress workload? (for Cassandra: `${BINARY:-easy-db-lab} cassandra stress list`)
 - How long should the test run? How many threads?
 - Any custom tags for metrics?
 
@@ -84,43 +115,22 @@ Based on the goal, determine which components are needed. Ask about each that's 
 Once you have enough information, construct a step-by-step plan. Each step should be a concrete action with the exact command to run. Group steps logically:
 
 1. Provision the environment
-2. Configure the database(s)
-3. Run the workload or test
-4. Observe / collect results
-5. Tear down (if applicable)
+2. Install software (specific `kit install <name>` commands, using exact names from `kit list`)
+3. Configure the database(s)
+4. Run the workload or test
+5. Observe / collect results
+6. Tear down (if applicable)
+
+**The run skill handles all workspace scaffolding** (cluster directory, wrapper, docs) before executing any plan step. The first step in the plan must be provisioning (`easy-db-lab init ... --up`). Never include wrapper creation, directory setup, or `EDB=` assignments — those are handled automatically and must not appear in the plan.
 
 ## Step 4 — Write the Plan
 
-Write the plan to `plan.md` in the **current directory** (wherever the user is running this skill — not necessarily a cluster directory). This is the working copy they'll refine before provisioning.
+Load `../../references/plan-template.md` and use it as the starting point. Fill in every section — do not leave any placeholder text in the output. Write the completed plan to the path specified by `--output`, if provided; otherwise default to `plan.md` in the current directory. Create any intermediate directories if needed.
 
-Format:
-
-```markdown
-# Lab Plan: <goal>
-
-## Goal
-<one or two sentences describing what this plan accomplishes and what success looks like>
-
-## Environment
-<summary of infrastructure: nodes, instance types, storage>
-
-## Steps
-
-### 1. <Step name>
-<brief description>
-\```bash
-<command>
-\```
-
-### 2. <Step name>
-...
-
-## Notes
-<any caveats, things to watch for, or follow-up ideas>
+**Multi-DC format for `## Datacenters`:**
+```
+- dc1: 10.0.0.0/16
+- dc2: 10.1.0.0/16
 ```
 
-Show the user the plan before writing it and ask for confirmation. After writing, tell them to run `/easy-db-lab:run` to execute it.
-
-## When a Cluster Directory Is Created
-
-When the plan includes an `easy-db-lab init` or `easy-db-lab up` step that creates a cluster directory, the run skill will set up `docs/` inside that directory and copy `plan.md` into it as `docs/plan.md`. The `docs/` directory is the canonical home for all lab documentation once a cluster exists. See the run skill for details.
+Show the user the completed plan before writing it and ask for confirmation. After writing, tell them to run `/easy-db-lab:run` to execute it.

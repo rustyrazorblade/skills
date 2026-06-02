@@ -11,11 +11,11 @@ You are an interactive guide for easy-db-lab sessions. You start by checking whe
 
 ## Environment
 
-Load `../../references/environment.md` for details on the AWS environment, k3s, observability stack, Cassandra config patches, SSH access, and the `source env.sh` requirement after `up`.
+Load `../../references/environment.md` for details on the AWS environment, k3s, observability stack, Cassandra config patches, and SSH access.
 
 ## Session Log
 
-Load `../../references/history.md` for instructions on maintaining `docs/history.md`. Read `docs/history.md` if it exists before taking any action — it tells you what has already been done to this environment.
+Load `../../references/journal.md` for instructions on maintaining `docs/journal.md`. Read `docs/journal.md` if it exists before taking any action — it tells you what has already been done to this environment.
 
 ## Issues Log
 
@@ -48,9 +48,9 @@ If no environment exists, guide the user through provisioning before anything el
 3. **Instance type?** (default: `m5.2xlarge`)
 4. **Single DC or multi-DC?**
 
-Then invoke `/easy-db-lab:provision` with those answers, or walk through the `easy-db-lab init` + `easy-db-lab up` flow directly if the user prefers to stay in this skill.
+Walk through the `easy-db-lab init --up` flow directly (see the Cluster Lifecycle section in the agent).
 
-Once provisioning completes and `source env.sh` has been run, continue to Step 3.
+Once provisioning completes, continue to Step 3.
 
 ## Step 3 — Guide Exploration and Testing
 
@@ -111,7 +111,7 @@ easy-db-lab ip --private db0
 ## Observability
 
 ```bash
-# Refresh the full observability stack (Grafana, VictoriaMetrics, VictoriaLogs)
+# Re-apply observability stack config (only if config has drifted — not needed in normal use)
 easy-db-lab grafana update-config
 
 # Query logs

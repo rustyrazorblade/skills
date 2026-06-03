@@ -31,6 +31,12 @@ $EDB commands
 
 Use this output as the authoritative source for flag names and available options. Never guess flags. If `$EDB` is not yet available, load `../../references/commands.md` as a fallback.
 
+**Kit commands are only visible after installation.** If you need to look up the commands, flags, or endpoints for a kit that is not yet installed, use `kit info` instead of relying on `commands`:
+
+```bash
+$EDB kit info <name>
+```
+
 ## Before Starting
 
 ### 1. Determine the invocation mode

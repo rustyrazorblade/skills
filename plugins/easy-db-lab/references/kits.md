@@ -52,6 +52,14 @@ You may add configuration between install and start if a test specifically requi
 
 Once a kit is installed, it provides its own subcommands under `easy-db-lab <kit-name>`. Run `easy-db-lab commands` after installation to see the full set of available subcommands for the installed kit.
 
+**Important:** Kit subcommands only appear in `easy-db-lab commands` after the kit is installed. If you need to discover what commands, flags, or endpoints a kit provides before (or instead of) installing it, always use `kit info`:
+
+```bash
+easy-db-lab kit info <name>
+```
+
+Never rely on `commands` output to discover what an uninstalled kit can do.
+
 ## Accessing Kit Services
 
 Tailscale is installed and active on every cluster. This gives direct access to private node IPs — no `kubectl port-forward` needed. Use `kit info` to find the ports a kit exposes, then connect directly via the node's private IP.

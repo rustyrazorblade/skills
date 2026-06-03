@@ -24,14 +24,21 @@ Use these to inform the new plan: incorporate steps that were added ad-hoc, avoi
 
 ## Discover Before You Plan
 
-Before asking the user anything, run both of these:
+Before asking the user anything, resolve the binary and run both discovery commands.
+
+**Resolve the binary** — in priority order:
+1. If `--binary <path>` was passed as an argument to this skill, use that path as `$EDB`
+2. If `bin/easy-db-lab` exists in the current directory, use `bin/easy-db-lab` as `$EDB`
+3. Otherwise use `easy-db-lab` as `$EDB`
+
+Use `$EDB` for all binary invocations in this skill.
 
 ```bash
 # Authoritative flag and subcommand reference
-${BINARY:-easy-db-lab} commands
+$EDB commands
 
 # All installable software available in this environment
-${BINARY:-easy-db-lab} kit list
+$EDB kit list
 ```
 
 Use `commands` output as the authoritative source for flag names and subcommands — never guess flags.
@@ -87,7 +94,7 @@ With the objective in hand, determine what components and workload are needed to
 **Software to install:**
 Identify every database, tool, or app the test requires. For each one:
 - Confirm the exact name from the `kit list` output obtained above
-- Run `${BINARY:-easy-db-lab} kit info <name>` to get the kit's available flags, options, and any install-time configuration — use this as the authoritative source for the `kit install` command in the plan. Do not invent flags.
+- Run `$EDB kit info <name>` to get the kit's available flags, options, and any install-time configuration — use this as the authoritative source for the `kit install` command in the plan. Do not invent flags.
 - Load the relevant reference file for accurate configuration details:
   - Cassandra → `../../references/cassandra.md`
   - ClickHouse → `../../references/clickhouse.md`
@@ -102,7 +109,7 @@ Identify every database, tool, or app the test requires. For each one:
 - If the plan involves bulk SSTable import (e.g. IAM Bulk Writer, Spark), ask whether a custom sidecar image is needed. If yes, get the full image URI now — it must be passed at `cassandra start` time via `--sidecar-image`.
 
 **Workload:**
-- What stress workload? (for Cassandra: `${BINARY:-easy-db-lab} cassandra stress list`)
+- What stress workload? (for Cassandra: `$EDB cassandra stress list`)
 - How long should the test run? How many threads?
 - Any custom tags for metrics?
 
@@ -133,4 +140,16 @@ Load `../../references/plan-template.md` and use it as the starting point. Fill 
 - dc2: 10.1.0.0/16
 ```
 
-Show the user the completed plan before writing it and ask for confirmation. After writing, tell them to run `/easy-db-lab:run` to execute it.
+Show the user the completed plan before writing it and ask for confirmation. After writing, move to Step 5.
+
+## Step 5 — Review the Plan
+
+Before finishing, review the written plan against the objective established in Step 1. Check:
+
+- **Answers the question** — do the steps actually produce the data needed to answer the research question? If not, what's missing?
+- **Success criteria are measurable** — is there a step that captures the specific metric or observation defined as success?
+- **Every command is concrete** — no vague steps like "configure Cassandra"; each step has an exact command
+- **No gaps in the sequence** — could someone follow this plan start to finish without needing to improvise?
+- **Cassandra-specific:** if the plan involves Cassandra performance, does it cover the right config knobs for the question being asked (memtable implementation, compaction strategy, num_tokens, etc.)? Invoke the `cassandra-expert` agent if there's any doubt about whether the configuration is appropriate for the workload.
+
+Present the review findings to the user as a short bulleted list — what looks good, and anything that should be changed. If changes are needed, update the plan file and confirm with the user. Once the plan passes review, tell them to run `/easy-db-lab:run` to execute it.

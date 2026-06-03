@@ -35,6 +35,19 @@ Before or after installing a kit, use `kit info` to see what it does, what ports
 easy-db-lab kit info <name>
 ```
 
+## Install → Start Is the Complete Flow
+
+The standard sequence for any kit is:
+
+```bash
+easy-db-lab kit install <name>
+easy-db-lab <name> start
+```
+
+**No manual configuration is needed between these two steps.** The platform always handles infrastructure setup automatically — PersistentVolumes, storage, and any other prerequisites are created by `start`, not by the operator.
+
+You may add configuration between install and start if a test specifically requires non-default settings (e.g. replica count, cache size, restore from backup). But do not add steps to manually provision infrastructure — that is always handled automatically.
+
 ## After Installation
 
 Once a kit is installed, it provides its own subcommands under `easy-db-lab <kit-name>`. Run `easy-db-lab commands` after installation to see the full set of available subcommands for the installed kit.

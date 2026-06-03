@@ -57,7 +57,7 @@ If a required argument is missing, ask the user for it before continuing.
 - **Datacenters** — if `## Datacenters` is `single`, it is a single-DC cluster; otherwise each `- <dc>: <cidr>` line defines a DC name and CIDR
 
 **Ask the user only for anything missing:**
-- **`easy-db-lab` binary path** (`--binary`) — try `which easy-db-lab` first; only ask if not found.
+- **`easy-db-lab` binary path** (`--binary`) — check for `bin/easy-db-lab` in the current directory first, then try `which easy-db-lab`; only ask if neither is found.
 - **Java 21 JDK home** (`--jdk`) — leave blank to inherit the system default.
 
 **Scaffold the cluster workspace:**

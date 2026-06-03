@@ -1,5 +1,5 @@
 ---
-name: easy-db-lab
+name: easy-db-lab operator
 description: Invoke this agent only when actively running easy-db-lab tools against a live cluster — provisioning, benchmarking, or operating clusters via the easy-db-lab binary or skills (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). Do NOT invoke for general software development, editing plugin source code, or working in the easy-db-lab repository itself.
 tools: Read, Bash
 ---

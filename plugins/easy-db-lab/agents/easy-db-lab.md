@@ -1,6 +1,6 @@
 ---
 name: easy-db-lab
-description: Invoke this agent whenever you need to run the easy-db-lab binary, interact with a cluster workspace, or invoke any easy-db-lab skill (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). ALWAYS use this agent for skills — never run them directly.
+description: Invoke this agent only when actively running easy-db-lab tools against a live cluster — provisioning, benchmarking, or operating clusters via the easy-db-lab binary or skills (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). Do NOT invoke for general software development, editing plugin source code, or working in the easy-db-lab repository itself.
 tools: Read, Bash
 ---
 

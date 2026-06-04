@@ -229,7 +229,17 @@ Plan complete. What would you like to do next?
 Enter 1 or 2 (default: 1):
 ```
 
-- **Option 1 (default):** Invoke `/easy-db-lab:explore` with the cluster directory. Pressing Enter without input counts as option 1.
+- **Option 1 (default):** Stay in this skill — do not hand off to `/easy-db-lab:explore`. Write a divider entry to `<cluster-dir>/docs/journal.md` marking the transition, then continue taking requests from the user, logging everything exactly as during plan execution.
+
+  Journal divider format:
+  ```
+  ## Exploration — <timestamp>
+
+  Plan complete. Continuing interactively.
+  ```
+
+  All subsequent commands, findings, and issues follow the same rules as during plan execution: log every command as it runs, write issues immediately to `issues.md`, never batch or defer.
+
 - **Option 2:** Run `$EDB down` and log the teardown in `<cluster-dir>/docs/journal.md`.
 
 If the user responds with something other than 1 or 2, ask them to clarify what they want before taking any action.

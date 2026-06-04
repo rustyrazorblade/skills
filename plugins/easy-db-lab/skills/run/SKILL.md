@@ -205,13 +205,13 @@ Populate the summary with a concise distillation of the run — not a copy of th
 
 **Cassandra performance tests:** If the lab involved Cassandra performance — memtable implementation, compaction strategy, read/write tuning, SAI, etc. — explicitly call out the winning configuration and why. Invoke the `cassandra-expert` agent to add any relevant expert context (e.g. why trie memtables outperform heap, when TWCS is appropriate, SAI vs 2i tradeoffs) directly in the Recommendations section. This makes the summary a standalone reference, not just a pointer to the journal.
 
-**2. Build the mdbook**
+**2. Build the lab report**
 
 ```bash
 make -C <cluster-dir>/docs
 ```
 
-This generates the browsable book from the summary, journal, plan, and issues log.
+This generates the browsable lab report from the summary, journal, plan, and issues log.
 
 **3. Decide what to do with the cluster**
 

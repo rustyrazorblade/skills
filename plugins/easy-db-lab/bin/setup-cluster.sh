@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up a cluster workspace: directory structure, easy-db-lab wrapper(s), and mdbook docs scaffold.
+# Sets up a cluster workspace: directory structure, easy-db-lab wrapper(s), and lab report scaffold.
 #
 # Usage: setup-cluster.sh <cluster-dir> <binary-path> --name <cluster-name> [--jdk <path>] [--dc <dc-dir>]... [--plan <path>]
 #
@@ -9,7 +9,7 @@
 #
 # Options:
 #   --name <name>     Cassandra cluster name. Shared across all nodes in all DCs. Also used
-#                     as the mdbook title.
+#                     as the lab report title.
 #   --jdk <path>      Java home directory. Bakes JAVA_HOME and PATH into every wrapper.
 #   --dc <dc-dir>     Datacenter directory name (e.g. dc1, us-east). Repeat for each DC.
 #                     When omitted, one wrapper is created at the cluster root (single DC).
@@ -19,8 +19,8 @@
 # Directory layout — single DC:
 #   <cluster-dir>/
 #     easy-db-lab       ← wrapper (cds into cluster-dir)
-#     docs/             ← mdbook source
-#       book.toml
+#     docs/             ← lab report source
+#       report.toml
 #       SUMMARY.md
 #       Makefile
 #       journal.md
@@ -34,7 +34,7 @@
 #     <dc2>/
 #       easy-db-lab
 #     docs/             ← shared across DCs; one environment, multiple datacenters
-#       book.toml
+#       report.toml
 #       SUMMARY.md
 #       Makefile
 #       journal.md
@@ -99,17 +99,17 @@ else
   done
 fi
 
-# --- mdbook docs scaffold (shared; always at cluster root) ---
+# --- lab report scaffold (shared; always at cluster root) ---
 DOCS="$CLUSTER_DIR/docs"
 mkdir -p "$DOCS/images"
 
-cat > "$DOCS/book.toml" <<EOF
+cat > "$DOCS/report.toml" <<EOF
 [book]
 title = "$CLUSTER_NAME"
 src = "."
 
 [build]
-build-dir = "book"
+build-dir = "report"
 EOF
 
 cp "$SCAFFOLD/SUMMARY.md" "$DOCS/SUMMARY.md"

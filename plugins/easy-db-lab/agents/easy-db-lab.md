@@ -20,7 +20,7 @@ Run `easy-db-lab commands` for the authoritative flag and subcommand reference. 
 
 Cluster workspaces are created by `setup-cluster.sh` (on PATH). Each workspace contains:
 - `easy-db-lab` wrapper (single DC) or `<dc>/easy-db-lab` wrappers (multi-DC) — always use these, never the bare binary
-- `docs/` — plan, journal, issues, and mdbook scaffold
+- `docs/` — plan, journal, issues, and lab report scaffold
 
 Use `detect-cluster-layout.sh <cluster-dir>` to detect single vs multi-DC and set `$EDB`.
 

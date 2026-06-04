@@ -16,6 +16,8 @@ Run `easy-db-lab commands` for the authoritative flag and subcommand reference. 
 
 ## Cluster Workspace
 
+> **STRICT RULE: NEVER create workspace files or directories manually. You MUST execute `setup-cluster.sh` as a script via bash. Do NOT read the script and perform its steps yourself — execute it. The tool depends on an exact directory structure that only the script produces correctly. Creating any part of it by hand will result in a broken workspace.**
+
 Cluster workspaces are created by `setup-cluster.sh` (on PATH). Each workspace contains:
 - `easy-db-lab` wrapper (single DC) or `<dc>/easy-db-lab` wrappers (multi-DC) — always use these, never the bare binary
 - `docs/` — plan, journal, issues, and mdbook scaffold

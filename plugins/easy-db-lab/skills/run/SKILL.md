@@ -66,7 +66,9 @@ If a required argument is missing, ask the user for it before continuing.
 - **`easy-db-lab` binary path** (`--binary`) — check for `bin/easy-db-lab` in the current directory first, then try `which easy-db-lab`; only ask if neither is found.
 - **Java 21 JDK home** (`--jdk`) — leave blank to inherit the system default.
 
-**Scaffold the cluster workspace:**
+**Scaffold the cluster workspace — run the script, never do this manually:**
+
+> **NEVER create workspace files or directories by hand, and NEVER read `setup-cluster.sh` and perform its steps yourself. You MUST execute it as a script via bash. The tool requires a strict directory structure that only the script produces correctly. Any manual recreation will produce a broken workspace.**
 
 ```bash
 # Single DC (DCS=single)
@@ -101,13 +103,41 @@ If `STATE=provisioned`, run `$EDB status` to find the actual cluster state — i
 
 Read `<cluster-dir>/docs/plan.md` and display a numbered summary of all steps. If the user specified a starting step, confirm which step that is and skip to it.
 
+**Set terminal context indicators.** After the cluster directory and layout are known, run these three commands to orient the user's terminal for the session:
+
+```bash
+# 1. Terminal tab title
+printf '\033]0;%s\007' "<cluster-name> [<db-count>db/<app-count>app]"
+
+# 2. iTerm2 badge (base64-encoded, two lines: name on top, counts below)
+printf '\e]1337;SetBadgeFormat=%s\a' \
+  "$(printf '%s\n%sdb / %sapp' '<cluster-name>' '<db-count>' '<app-count>' | base64)"
+
+# 3. Cluster summary header — printed to terminal output
+echo "╔══════════════════════════════════════╗"
+echo "  Cluster : <cluster-name>"
+echo "  Dir     : <cluster-dir>"
+echo "  Layout  : <single|multi-DC>"
+echo "  Nodes   : <db-count> db  /  <app-count> app"
+echo "╚══════════════════════════════════════╝"
+```
+
+Re-run all three after provisioning completes (when actual node counts are confirmed from `$EDB status`) so the badge and title reflect live state. Re-print the summary header each time the progress checklist is displayed.
+
 ## Execution Loop
 
 > **Non-negotiable rule: everything goes in `journal.md` — planned steps, debugging, investigation, retries, unplanned commands, and observations. Every command run and every finding, regardless of whether it was in the plan. Write each entry the moment the event occurs. Never batch. Never defer. An issue goes in `issues.md` the moment it is encountered. No exceptions.**
 
-Before executing any steps, build a checklist from the plan's `## Steps` section and display it:
+Before executing any steps, build a checklist from the plan's `## Steps` section and display it. Each time the checklist is shown, print the cluster summary header above it:
 
 ```
+╔══════════════════════════════════════╗
+  Cluster : <cluster-name>
+  Dir     : <cluster-dir>
+  Layout  : <single|multi-DC>
+  Nodes   : <db-count> db  /  <app-count> app
+╚══════════════════════════════════════╝
+
 Plan: <goal>
 
 Progress:
@@ -117,7 +147,7 @@ Progress:
 ...
 ```
 
-Check off each step as it completes. Re-display the checklist after each step so the user can see progress at a glance.
+Check off each step as it completes. Re-display the full block (header + checklist) after each step so the user can see progress at a glance.
 
 For each step in the plan, in order:
 
@@ -182,6 +212,27 @@ make -C <cluster-dir>/docs
 ```
 
 This generates the browsable book from the summary, journal, plan, and issues log.
+
+**3. Decide what to do with the cluster**
+
+If the user already stated their intent earlier in the session (e.g. "shut down when done", "tear it down after", "clean up automatically"), honor that instruction without prompting.
+
+Otherwise, present this menu and wait for the user to choose:
+
+```
+Plan complete. What would you like to do next?
+
+  1) Explore  [default] — keep the cluster running and investigate, run stress workloads, or try more tests
+  2) Shut down — destroy the cluster and release all AWS resources
+     ⚠ Reprovisioning may take hours. Only choose this if you are done with the cluster.
+
+Enter 1 or 2 (default: 1):
+```
+
+- **Option 1 (default):** Invoke `/easy-db-lab:explore` with the cluster directory. Pressing Enter without input counts as option 1.
+- **Option 2:** Run `$EDB down` and log the teardown in `<cluster-dir>/docs/journal.md`.
+
+If the user responds with something other than 1 or 2, ask them to clarify what they want before taking any action.
 
 ## Pausing and Resuming
 

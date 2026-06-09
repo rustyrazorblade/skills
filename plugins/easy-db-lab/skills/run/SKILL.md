@@ -270,13 +270,6 @@ Load the relevant reference file when a step involves a specific database:
 - **Spark** → `../../references/spark.md`
 - **OpenSearch** → `../../references/opensearch.md`
 
-## Cassandra Expert
+## Team Agents
 
-If Cassandra-related questions or issues arise during execution — errors, unexpected behavior, performance concerns, schema decisions — invoke the `cassandra-expert` agent. It has deep knowledge of Cassandra internals, CQL, and operational troubleshooting.
-
-- Operational issues (node failures, latency, repair, compaction) → `/cassandra-expert:diagnose`
-- Schema or data modeling questions → `/cassandra-expert:data-model`
-- Performance tuning → `/cassandra-expert:optimize`
-- General questions → invoke the `cassandra-expert` agent directly
-
-Record any Cassandra expert findings relevant to the run in `<cluster-dir>/docs/journal.md`.
+Follow the Team Agents guidance in the agent for when and how to invoke subject-matter experts. Record any agent findings relevant to the run in `<cluster-dir>/docs/journal.md`.

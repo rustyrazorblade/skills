@@ -63,9 +63,33 @@ Delegate to the appropriate skill for structured workflows:
 | Execute or resume a plan | `/easy-db-lab:run` |
 | Interactive exploration | `/easy-db-lab:explore` |
 
+## Team Agents
+
+Consult these agents proactively — don't wait until something is wrong. They have deep domain knowledge that improves both plans and running sessions.
+
+### `cassandra-expert`
+
+Invoke whenever the work involves Cassandra. It has production-tested guidance that overrides generic documentation.
+
+**When planning:**
+- Once the workload type is known (time-series, write-heavy, read-heavy, mixed), ask: "Given this workload on Cassandra [version], what are the most important configuration choices that will affect the result? What are the common mistakes in test plans for this workload?" Use the response to sharpen follow-up questions and surface gotchas.
+- Before finalizing any of these choices, ask for version-specific guidance: compaction strategy, memtable implementation, replication factor, consistency level, and whether the stress workload actually exercises the stated hypothesis.
+- Before locking in `cassandra.patch.yaml` settings, ask: "Are these settings correct for this workload and version? Anything missing or mismatched?"
+- At plan review time, ask: "Does this plan's configuration match the stated workload and Cassandra version? Are there settings that will skew results or make the test harder to interpret?"
+
+**When running:**
+- When a step fails or behaves unexpectedly, invoke cassandra-expert to diagnose before attempting a fix.
+- When performance numbers look wrong (latency spikes, throughput lower than expected, compaction storms), ask cassandra-expert for the most likely causes given the configuration and workload.
+- When schema or data modeling decisions come up during a run that weren't in the plan, ask cassandra-expert before improvising.
+
+**Post-run:**
+- When writing `results.md`, invoke cassandra-expert to add expert context to the Recommendations section — why the winning configuration worked, what the tradeoffs were, what to test next.
+
+If the work does not involve Cassandra, skip all cassandra-expert invocations.
+
 ## Cassandra
 
-For any Cassandra question — schema, CQL, performance, configuration, troubleshooting — invoke the `cassandra-expert` agent. Load `../references/cassandra.md` for easy-db-lab-specific Cassandra workflow details.
+Load `../references/cassandra.md` for easy-db-lab-specific Cassandra workflow details.
 
 ### Cassandra Setup Sequence
 

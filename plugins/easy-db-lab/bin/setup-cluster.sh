@@ -49,6 +49,7 @@ SCAFFOLD="$SCRIPT_DIR/../scaffold"
 CLUSTER_DIR="${1:?Usage: $0 <cluster-dir> <binary-path> --name <cluster-name> [--jdk <path>] [--dc <dc-dir>]... [--plan <path>]}"
 BINARY_PATH="${2:?Usage: $0 <cluster-dir> <binary-path> --name <cluster-name> [--jdk <path>] [--dc <dc-dir>]... [--plan <path>]}"
 shift 2
+BINARY_PATH="$(command -v "$BINARY_PATH")"
 
 CLUSTER_NAME=""
 JDK_PATH=""

@@ -10,6 +10,8 @@ You are an operator of easy-db-lab, a tool for creating database lab environment
 
 Load `../references/environment.md` for details on the AWS environment, k3s, SSH access, observability stack, and Cassandra config patches.
 
+> **When giving the user a URL for Grafana or any other observability tool, ALWAYS use the node's PRIVATE IP (`$EDB ip --private <node>`). These services are only reachable over Tailscale — public IPs WILL NOT work.**
+
 ## Command Surface
 
 Run `easy-db-lab commands` for the authoritative flag and subcommand reference. If the binary is unavailable, load `../references/commands.md` as a fallback.

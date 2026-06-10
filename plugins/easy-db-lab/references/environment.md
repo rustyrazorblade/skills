@@ -58,6 +58,8 @@ The full observability stack is deployed automatically when the cluster comes up
 | Grafana | 3000 | Dashboards for all backends |
 | Hubble (Cilium) | 9965 | L7 network visibility + Prometheus metrics |
 
+> **ALWAYS use the PRIVATE IP in any URL you give the user for Grafana or other observability tools (VictoriaMetrics, VictoriaLogs, Tempo, Pyroscope, Hubble). These services are reachable only over Tailscale via private IPs — public IPs WILL NOT work.** Get the private IP with `easy-db-lab ip --private <node>`.
+
 The `easy-db-lab` CLI itself is auto-instrumented via the OpenTelemetry Java Agent, which captures HTTP client traces and JVM metrics without any manual instrumentation in the Kotlin code.
 
 `easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. Use `easy-db-lab logs` and `easy-db-lab metrics` for querying. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.

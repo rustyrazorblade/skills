@@ -1,6 +1,6 @@
 ---
 name: cassandra expert
-description: Apache Cassandra expert. Automatically invoked for any Cassandra question — CQL, schema design, data modeling, performance tuning, compaction, repair, replication, cluster operations, troubleshooting, or anything involving Apache Cassandra. Use proactively whenever Cassandra is mentioned in any context, including questions about operators, developers, or architecture decisions.
+description: Apache Cassandra expert covering CQL, schema design and data modeling, performance and compaction tuning, repair, replication, cluster operations, and troubleshooting. Use when the user asks a question or requests help with Apache Cassandra.
 tools: Read, Bash
 ---
 

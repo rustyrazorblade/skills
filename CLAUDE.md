@@ -4,6 +4,10 @@
 
 To test plugin skills locally as slash commands, install the local directory as a marketplace, then add all the plugins.
 
+## Plugin settings.json — NEVER set a default `agent`
+
+Do NOT create a `settings.json` at a plugin root (e.g. `plugins/<plugin>/settings.json`) with an `"agent"` field. When a plugin ships `{"agent": "..."}`, Claude Code runs the **main thread as that agent** whenever the plugin is enabled — so it becomes the active agent at startup in *every* project, before the user types anything, not just relevant ones. This is almost never what we want. Agents should be available for explicit invocation, not hijack the main thread. If you find such a file, remove it.
+
 ## Version Bumping
 
 When working on a branch or PR, ask if the user wants to bump the plugin version. Show the current version and ask for the new one before making any changes.

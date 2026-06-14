@@ -49,7 +49,14 @@ SCAFFOLD="$SCRIPT_DIR/../scaffold"
 CLUSTER_DIR="${1:?Usage: $0 <cluster-dir> <binary-path> --name <cluster-name> [--jdk <path>] [--dc <dc-dir>]... [--plan <path>]}"
 BINARY_PATH="${2:?Usage: $0 <cluster-dir> <binary-path> --name <cluster-name> [--jdk <path>] [--dc <dc-dir>]... [--plan <path>]}"
 shift 2
-BINARY_PATH="$(command -v "$BINARY_PATH")"
+# The wrapper cd's into the cluster dir before exec'ing the binary, so the path baked
+# into it MUST be absolute. realpath absolutizes a relative path (e.g. bin/easy-db-lab);
+# command -v would leave a slash-containing relative path unchanged.
+BINARY_INPUT="$BINARY_PATH"
+if ! BINARY_PATH="$(realpath "$BINARY_INPUT" 2>/dev/null)" || [[ ! -x "$BINARY_PATH" ]]; then
+  echo "error: easy-db-lab binary not found or not executable: $BINARY_INPUT" >&2
+  exit 1
+fi
 
 CLUSTER_NAME=""
 JDK_PATH=""

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# Export metric series for a running scrape-type workload to metrics-catalog.json.
+#
+# Usage:
+#   bin/export-workload-metrics <workload-name>
+#
+# Queries VictoriaMetrics and writes <workload>/metrics-catalog.json.
+# Requires env.sh (for cluster context) and easy-db-lab in PATH.
+#
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage: bin/export-workload-metrics <workload-name>
+
+Queries VictoriaMetrics for all metric series with job="<workload>"
+and writes <workload>/metrics-catalog.json in the current cluster
+working directory.
+
+The workload must be running and its metrics must be flowing to
+VictoriaMetrics before running this script.
+EOF
+}
+
+if [ $# -eq 0 ]; then
+    echo "Error: workload name is required."
+    echo ""
+    usage
+    exit 1
+fi
+
+WORKLOAD="$1"
+
+if [ ! -f env.sh ]; then
+    echo "Error: env.sh not found in the current directory."
+    echo "Run this script from the cluster working directory (where kubeconfig and env.sh live)."
+    exit 1
+fi
+
+# shellcheck disable=SC1091
+source env.sh
+
+CONTROL_HOST_PRIVATE="${CONTROL_HOST_PRIVATE:-$(easy-db-lab ip control0 --private)}"
+
+VM_URL="http://${CONTROL_HOST_PRIVATE}:8428"
+OUTPUT_DIR="${WORKLOAD}"
+OUTPUT_FILE="${OUTPUT_DIR}/metrics-catalog.json"
+
+mkdir -p "$OUTPUT_DIR"
+
+echo "Querying VictoriaMetrics at ${VM_URL} for job=\"${WORKLOAD}\"..."
+
+RAW=$(curl -sf "${VM_URL}/api/v1/series" --data-urlencode "match[]={job=\"${WORKLOAD}\"}")
+
+STATUS=$(echo "$RAW" | jq -r '.status')
+if [ "$STATUS" != "success" ]; then
+    echo "Error: VictoriaMetrics returned status=${STATUS}"
+    echo "$RAW" | jq .
+    exit 1
+fi
+
+SERIES_COUNT=$(echo "$RAW" | jq '.data | length')
+if [ "$SERIES_COUNT" -eq 0 ]; then
+    echo "Warning: no series found for job=\"${WORKLOAD}\" — is the workload running and scraping?"
+    exit 1
+fi
+
+EXPORTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+echo "$RAW" | jq --arg workload "$WORKLOAD" --arg ts "$EXPORTED_AT" '{
+  workload: $workload,
+  exported_at: $ts,
+  series: [.data[] | {name: .__name__, labels: (del(.__name__))}]
+}' > "$OUTPUT_FILE"
+
+echo "Wrote ${SERIES_COUNT} series to ${OUTPUT_FILE}"

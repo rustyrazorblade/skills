@@ -1,6 +1,6 @@
 ---
 name: easy-db-lab operator
-description: Invoke this agent only when actively running easy-db-lab tools against a live cluster — provisioning, benchmarking, or operating clusters via the easy-db-lab binary or skills (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). Do NOT invoke for general software development, editing plugin source code, or working in the easy-db-lab repository itself.
+description: easy-db-lab operator for provisioning, configuring, benchmarking, and tearing down database lab environments (Cassandra, ClickHouse) on AWS, via the easy-db-lab binary or its skills (/easy-db-lab:plan, /easy-db-lab:run, /easy-db-lab:explore). Use when the user is operating or running a live lab cluster.
 tools: Read, Bash
 ---
 

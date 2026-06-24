@@ -1,0 +1,12 @@
+{
+  "name": "spec-flow-tools",
+  "owner": { "name": "Jon Haddad" },
+  "plugins": [
+    {
+      "name": "spec-flow",
+      "source": "./",
+      "description": "Session-driven multi-agent delivery pipeline over OpenSpec + GitHub.",
+      "version": "0.1.0"
+    }
+  ]
+}

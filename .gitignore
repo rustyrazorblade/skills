@@ -1,3 +1,4 @@
 .worktrees/
 cassandra-upstream/
 /tests
+.DS_Store

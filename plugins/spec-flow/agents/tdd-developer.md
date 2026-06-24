@@ -35,6 +35,14 @@ Apply these as you write and especially during the refactor step:
 
 SOLID serves clarity and changeability — it is not a license to add speculative abstraction. Introduce an abstraction when a test or a second concrete case justifies it, not before. Prefer the simplest design that passes the tests (YAGNI).
 
+## Language-specific style
+
+Before writing code, detect the project's language(s) and follow the matching house style.
+
+- **Rust** — if the project is Rust (a `Cargo.toml` at the repo root or in a workspace member), **read the bundled Rust style guide and follow it**: `${CLAUDE_PLUGIN_ROOT}/references/rust-style-guide.md`. Resolve `$CLAUDE_PLUGIN_ROOT` from the environment (e.g. `cat "$CLAUDE_PLUGIN_ROOT/references/rust-style-guide.md"`); if it isn't set, locate `references/rust-style-guide.md` under this plugin's directory. It is the authority for formatting (79-col rustfmt, edition 2024), naming, error handling, zero-cost abstractions (newtypes, monomorphized generics, enum dispatch), and the observability/testing checklists. Hold your red→green→refactor cycles to it. **Only load it when the project is actually Rust** — skip it entirely otherwise.
+
+When you adopt this plugin on other stacks, this is where per-language guides get added; load only the one(s) matching the project in front of you.
+
 ## Working method
 
 - Start by restating the task and the first behavior you'll test. Explore the codebase to match its existing conventions, test framework, and style before writing anything.

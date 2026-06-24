@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an approved issue — run the background subagent team (tdd-developer → 4-lens review panel → fix loop → build-engineer → docs polish) via a Workflow script in the issue's worktree, then push the branch and open a PR. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to multi-agent Workflow orchestration.
+description: Implement an approved issue — run the background subagent team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish) via a Workflow script in the issue's worktree, then push the branch and open a PR. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to multi-agent Workflow orchestration.
 ---
 
 # implement — build the approved spec, open a PR
@@ -55,10 +55,11 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    `buildSystem` is a hint for the build phase — the project's build tool (`cargo`, `gradle`,
    `npm`, `go`, `pytest`, …) or `"auto"` to let the build-engineer discover the real runner from
    the repo. It is NOT an exhaustive switch; the agents detect the actual commands.
-   The script: tdd-developer applies the OpenSpec tasks test-first → a **four-lens review panel**
+   The script: tdd-developer applies the OpenSpec tasks test-first → a **five-lens review panel**
    reviews the diff in parallel (spec-conformance + repo rules; the built-in `/code-review`
    correctness lens; the built-in `/security-review` lens, which self-gates to security-relevant
-   surfaces; the `test-rigor-reviewer` lens for antagonistic/regression-exposing test coverage) →
+   surfaces; the `test-rigor-reviewer` lens for antagonistic/regression-exposing test coverage; the
+   `observability-reviewer` lens for prod-diagnosability of new paths/failures, which self-gates) →
    fix loop until **every** lens approves with no blocker/major (bounded) → build-engineer gets the
    build clean (format/lint/build) → docs polish. It returns a summary (tests ran full/degraded,
    review verdict, residual findings). See `docs/workflow.md` ("Review panel") for the lens

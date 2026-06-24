@@ -15,7 +15,14 @@ refines. Stay in the foreground — no worktrees, no implementation.
    ask clarifying questions **one at a time** (the owner can't answer batches). Don't
    over-ask — prefer a sensible draft the owner edits.
 
-2. **Draft the issue body** with these sections:
+2. **Delegate the refinement to the `product-manager` agent.** Spawn the `product-manager`
+   subagent with the owner's raw idea and any clarifications. It returns a structured refinement —
+   problem statement, in/out scope, **testable WHEN/THEN acceptance criteria**, open questions, and
+   context (`file:line`, duplicates). Bring that refinement back to the owner, loop on their edits,
+   and treat the result as the source for the issue body. (You own the *what/why*; design — the
+   *how* — comes later, from the `architect` at `/spec-flow:activate`.)
+
+3. **Draft the issue body** from the refinement, with these sections:
    - **Scope** — what's in, and explicitly what's out.
    - **Acceptance criteria** — a checklist of observable outcomes (these become the spec's
      scenarios later, so make them testable).
@@ -23,17 +30,17 @@ refines. Stay in the foreground — no worktrees, no implementation.
    Keep it tight. The full spec comes later in `/spec-flow:activate`; this is the contract for *what*
    and *why*, not *how*.
 
-3. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
+4. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-4. **Create the issue:**
+5. **Create the issue:**
    ```bash
    gh issue create --title "<concise title>" --body "<the drafted body>" \
      --label "<P0|P1|P2|P3>" --label "status:ready"
    ```
 
-5. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
+6. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
    `status:ready`:
    ```bash
    gh issue view <N> --json number,title,labels

@@ -1,9 +1,9 @@
 export const meta = {
   name: 'flow-implement',
-  description: 'Implement an approved OpenSpec change in its worktree: tdd-developer applies tasks test-first, a four-lens review panel (spec, code-review, security-review, test-rigor) reviews in parallel, bounded fix loop, build-engineer gets the build clean, then docs polish.',
+  description: 'Implement an approved OpenSpec change in its worktree: tdd-developer applies tasks test-first, a five-lens review panel (spec, code-review, security-review, test-rigor, observability) reviews in parallel, bounded fix loop, build-engineer gets the build clean, then docs polish.',
   phases: [
     { title: 'Implement', detail: 'tdd-developer applies the OpenSpec tasks test-first' },
-    { title: 'Review', detail: 'four-lens panel (spec, code-review, security-review, test-rigor) checks the diff in parallel' },
+    { title: 'Review', detail: 'five-lens panel (spec, code-review, security-review, test-rigor, observability) checks the diff in parallel' },
     { title: 'Fix', detail: 'tdd-developer resolves reviewer findings (bounded loop)' },
     { title: 'Build', detail: 'build-engineer runs the format/lint/build gate' },
     { title: 'Polish', detail: 'docs + final tidy' },
@@ -85,7 +85,7 @@ let review = null
 let round = 0
 const residual = []
 
-// Review is a PANEL of FOUR lenses, run in parallel each round:
+// Review is a PANEL of FIVE lenses, run in parallel each round:
 //   1. spec            — the project reviewer (spec-conformance + the repo's documented rules +
 //                        scenario→test traceability).
 //   2. code-review     — correctness-bug hunt (logic errors, edge cases, panics, concurrency/error
@@ -97,7 +97,12 @@ const residual = []
 //                        observable side effects have ANTAGONISTIC, regression-exposing tests?
 //                        Happy-path-only / no side-effect assertion = a gap. No-ops off any public
 //                        surface or observable side effect.
-// Findings from all four merge; a fix round addresses blocker/major from ANY lens; approval requires
+//   5. observability   — OBSERVABILITY (observability-reviewer): are the diff's new code paths +
+//                        failure modes diagnosable in prod? Logging at the right level w/ structured
+//                        context, metrics on ops + errors (bounded label cardinality), tracing/spans
+//                        around new I/O, no silently-swallowed failures, no secrets in telemetry.
+//                        SELF-GATES (approve+empty) on changes introducing no new path/I/O/failure.
+// Findings from all five merge; a fix round addresses blocker/major from ANY lens; approval requires
 // every lens to approve with no must-fix findings. The merge/approval logic generalizes over N
 // lenses — adding or removing a lens needs NO change to the loop below.
 // The code-review/security-review lenses INVOKE the built-in skills, so they need Skill-tool access:
@@ -171,6 +176,26 @@ judged surface → state → side-effect. A happy-path-only surface, or one with
 assertion, is a "major" gap (withholds approval, feeds the fix loop). If the diff touches NO public
 surface or observable side effect, return approve=true with empty findings. Follow your output
 contract exactly (JSON only); leave spec_conformance/tests_ran "full" (the spec reviewer owns them).`,
+  },
+  {
+    label: 'observability',
+    agentType: 'observability-reviewer',
+    prompt: `Audit OBSERVABILITY for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
+First learn the repo's existing observability stack (its logging/metrics/tracing conventions) and
+judge against THAT, not a foreign one. Scope to the new code paths and failure modes the diff
+introduces — new operations, new I/O (network/DB/external calls), new error/Result/exception
+branches, new async/concurrent work. For each, judge whether an operator could SEE and DIAGNOSE it
+in production. Flag (rule "observability") any: significant path/transition with no log at an
+appropriate level; a log missing the structured context (id/operation/outcome) needed to act; a new
+failure branch that is swallowed/mapped-away with NO telemetry (a silent failure — lean blocker); a
+new SLI-relevant operation or failure class with no metric, or a metric with unbounded label
+cardinality (raw ids/user input/paths as labels); new I/O with no span/trace coverage or dropped
+context propagation across new async boundaries; and any secret/credential/PII emitted to
+logs/spans/metrics (blocker). A silently-swallowed failure or a logged secret is a "blocker"; a new
+operation/error path with no telemetry where the repo's conventions expect one is "major" (both
+withhold approval and feed the fix loop). If the diff introduces NO new code path, I/O, or failure
+mode, return approve=true with empty findings. Follow your output contract exactly (JSON only);
+leave spec_conformance/tests_ran "full" (the spec reviewer owns them).`,
   },
 ]
 

@@ -26,27 +26,35 @@ and confirm the choice with the owner.
    All spec work happens inside that worktree path from here on. (If `main` is not the repo's
    default branch, substitute it.)
 
-3. **Explore + propose, inside the worktree.** Run the OpenSpec flow for a change named
-   `<slug>` against the issue's scope and acceptance criteria:
+3. **Design first — delegate to the `architect` agent.** Before generating the proposal, spawn the
+   `architect` subagent with the issue's scope + acceptance criteria. It returns a design proposal —
+   approach, structure/boundaries (SOLID), data model, key interfaces, and **trade-offs framed as
+   owner decisions** (recommended option + alternatives + why). This design feeds the OpenSpec
+   proposal below. The architect **advises**; it never makes the call.
+
+4. **Explore + propose, inside the worktree.** Run the OpenSpec flow for a change named
+   `<slug>` against the issue's scope and acceptance criteria, folding in the architect's design:
    - Use `openspec-explore` to think through the change if it's non-trivial.
-   - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`.
+   - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`, carrying
+     the architect's recommended design (and the alternatives) into the proposal/design docs.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
 
-4. **Route architectural decisions to a domain expert — owner decides.** If the work touches a
-   significant architectural or data-model decision (new tables / partition or clustering keys /
-   indexes / schema changes / a new public interface / a concurrency model), consult a relevant
+5. **Route significant decisions to the owner — and to a domain expert for facts.** Every
+   consequential design / data-model choice the architect surfaced (new tables / partition or
+   clustering keys / indexes / schema changes / a new public interface / a concurrency model) is the
+   **owner's** to make. Where deeper domain facts are needed, also consult a relevant
    **domain-expert agent if one is available** (e.g. a database or domain expert configured in
-   the consuming repo) for facts and trade-offs, then **present the options to the owner and let
-   the owner choose**. Capture the owner's decision in the spec/design. The agent never makes the
-   architectural call — it advises only.
+   the consuming repo) for trade-offs. **Present the options to the owner and let the owner choose**;
+   capture the owner's decision in the spec/design. The agents never make the architectural call —
+   they advise only.
 
-5. **Commit the spec on the branch:**
+6. **Commit the spec on the branch:**
    ```bash
    git -C <worktree> add openspec/changes/<slug>
    git -C <worktree> commit -m "<slug>: spec (proposal/design/specs/tasks) for #<N>"
    ```
 
-6. **Render the spec INLINE for review, then mark spec-review and STOP.**
+7. **Render the spec INLINE for review, then mark spec-review and STOP.**
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
    ```

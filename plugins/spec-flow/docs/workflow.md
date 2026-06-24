@@ -6,9 +6,11 @@ the middle runs as a repeatable, agent-driven pipeline you invoke turn-by-turn f
 Claude session.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
-(`/spec-flow:groom|activate|implement|address|board|finalize`) plus a `reviewer` and a
-`test-rigor-reviewer` agent, with `tdd-developer` and `build-engineer` bundled as the
-implementation/build agents.
+(`/spec-flow:groom|activate|implement|address|board|finalize`) plus a roster of agents: a
+`project-manager` orchestrator you talk to directly; `product-manager` and `architect` at the front
+of the pipeline (refine → design → proposal); `tdd-developer` and `build-engineer` for
+implementation/build; and a review panel of `reviewer`, `test-rigor-reviewer`, and
+`observability-reviewer` (plus the built-in `/code-review` and `/security-review` skills).
 
 It rides on two backbones the consuming repo must provide: **OpenSpec** (the spec-approval seam,
 via the `openspec` CLI + the `/opsx:*` commands) and **GitHub** (`gh`-driven issues, labels, and
@@ -62,8 +64,11 @@ PRs).
 
 **Seam 1 — spec approval.** `/spec-flow:activate` stops after committing the spec. Nothing is
 implemented until you explicitly approve. This is also where *all significant design decisions are
-made*: a relevant **domain-expert agent (if one is available)** surfaces facts and trade-offs, and
-**you decide** — the agent never makes the call. Approving the spec = approving the design.
+made*: the **`architect` agent** designs the work and surfaces options + trade-offs (and a relevant
+**domain-expert agent**, if one is available, adds deeper facts), and **you decide** — the agents
+never make the call. Approving the spec = approving the design. (Upstream of this, at `groom`, the
+**`product-manager` agent** refines the raw idea into scope + testable acceptance criteria — the
+*what/why* — which the architect then designs the *how* for.)
 
 **Seam 2 — GitHub review + merge.** The pipeline only ever pushes the issue branch and opens a
 PR. It never merges and never pushes to `main`. You review in GitHub, optionally loop through
@@ -112,8 +117,8 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 
 | Skill | Phase | Does |
 |---|---|---|
-| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (title, scope, acceptance criteria, one `P0–P3` + `status:ready`). |
-| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → openspec explore+propose (domain expert advises) → commit spec → `status:spec-review`, then STOP for your approval. |
+| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (the `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`). |
+| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` designs it → openspec explore+propose (architect + domain expert advise) → commit spec → `status:spec-review`, then STOP for your approval. |
 | `/spec-flow:implement` | background | After your approval: a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish), pushes, opens a PR `Closes #N`, sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
@@ -121,26 +126,53 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 
 ## Agents
 
-- `reviewer` — reviews a branch diff against its committed spec and **the repo's own documented
-  conventions** (its CLAUDE.md / CONTRIBUTING / style guide — whatever the repo documents).
-  Complements, does not duplicate, the built-in `/code-review` skill. The review gate also
-  **enforces spec-scenario → test traceability**: every `#### Scenario:` in the change's
+**Orchestration**
+- `project-manager` — the agent you talk to directly. It knows the whole lifecycle, runs the board,
+  tracks work-in-progress across in-flight issues, decides what's next by priority + lifecycle, and
+  **delegates** every unit of work to the stage skills and the specialist agents. It coordinates; it
+  does not implement and never crosses your two seams. Wire it as a repo's **default agent** (in
+  that repo's `.claude/settings.json`) to make it your standing entry point. The plugin ships **no**
+  root `settings.json` with an `agent` field — opting your repos in is your choice, per repo, so the
+  plugin never hijacks the main thread of every project that installs it.
+
+**Front of pipeline (refine → design → proposal)**
+- `product-manager` — refines a rough idea into a tight problem statement, in/out scope, and
+  **testable WHEN/THEN acceptance criteria** (the *what/why*). Consulted during `/spec-flow:groom`;
+  the project-manager brings its draft back to you to edit. Owns the what/why, never the how.
+- `architect` — turns the refined idea into a **design** (approach, structure/boundaries to SOLID,
+  data model, key interfaces) with **trade-offs framed as owner decisions**. Consulted during
+  `/spec-flow:activate`, before `openspec-propose`; its design feeds the proposal. Advises only —
+  you decide at Seam 1.
+
+**Implementation & build**
+- `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the
+  plugin as canonical bases; see the README's "Extending the agents"). `tdd-developer` reads the
+  bundled `references/rust-style-guide.md` and holds itself to it **when the project is Rust**.
+
+**Review panel** (run in parallel during `/spec-flow:implement` — see the Review panel below)
+- `reviewer` — the authority on **does the implementation match the spec**: reviews the branch diff
+  against its committed spec and **the repo's own documented conventions** (its CLAUDE.md /
+  CONTRIBUTING / style guide). Complements, does not duplicate, the built-in `/code-review` skill.
+  Also **enforces spec-scenario → test traceability**: every `#### Scenario:` in the change's
   `specs/**/spec.md` must have a backing test, and an uncovered scenario is a `major` finding that
   withholds approval and feeds the bounded fix loop until a test is added.
 - `test-rigor-reviewer` — audits whether the change's public surface + observable side effects
-  have antagonistic, regression-exposing tests (see the Review panel below).
-- `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the
-  plugin as canonical bases; see the README's "Extending the agents").
+  have antagonistic, regression-exposing tests.
+- `observability-reviewer` — audits whether the change's new code paths + failure modes are
+  diagnosable in production (logging at the right level with structured context, metrics on
+  operations + errors with bounded label cardinality, tracing/spans around new I/O, no
+  silently-swallowed failures, no secrets/PII in telemetry). Self-gates when the diff adds no new
+  path/I/O/failure.
 
 > If the consuming repo defines its own agent with one of these names (project or user scope),
 > that one **overrides** the plugin's. Use that to specialize a reviewer for a repo's stack.
 
 ## Review panel (`/spec-flow:implement`)
 
-The review stage is not one reviewer — it is a **four-lens panel** (`reviewLenses` in
+The review stage is not one reviewer — it is a **five-lens panel** (`reviewLenses` in
 `skills/implement/implement.workflow.js`) run **in parallel** each round. Their findings **merge**
 into one set; a fix round addresses every `blocker`/`major` from **any** lens; **approval requires
-every lens to approve with no must-fix findings.** The four lenses:
+every lens to approve with no must-fix findings.** The five lenses:
 
 1. **spec** (`reviewer` agent) — spec-conformance + the repo's documented rules **and**
    spec-scenario → test traceability (every `#### Scenario:` must have a backing test, else a
@@ -160,6 +192,15 @@ every lens to approve with no must-fix findings.** The four lenses:
    happy-path-only surface, or one with no side-effect assertion, is a `major` gap. **No-ops** off
    any public surface or observable side effect. Also runnable **standalone** to audit the
    existing surface.
+5. **observability** (`observability-reviewer` agent) — audits whether the change's new code paths
+   and failure modes are **diagnosable in production**: logging at an appropriate level with the
+   **structured context** (id/operation/outcome) needed to act; **metrics** on new operations and
+   error classes with **bounded label cardinality**; **tracing/spans** around new I/O with context
+   propagated across new async boundaries; **no silently-swallowed failures**; and **no
+   secrets/PII** emitted to logs/spans/metrics. It judges against the repo's existing observability
+   stack, not a foreign one. A silent failure or a logged secret is a `blocker`; a new
+   operation/error path with no telemetry where conventions expect one is a `major`. It
+   **self-gates**: a diff introducing no new path/I/O/failure returns approve + empty findings.
 
 The code-review and security-review lenses invoke the built-in skills, so they run on a
 Skill-capable agent (`general-purpose`), not the `reviewer` agent. The merge/approval logic

@@ -76,7 +76,7 @@ ${testInstruction}
 Return a short summary of what you implemented and the test outcome.
 
 ${GUARDRAILS}`,
-  { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
+  { agentType: 'spec-flow:tdd-developer', label: `implement:${change}`, phase: 'Implement' },
 )
 
 // ── Phases: Review → Fix (bounded loop) ──────────────────────────────────────
@@ -110,7 +110,7 @@ const residual = []
 const reviewLenses = [
   {
     label: 'spec',
-    agentType: 'reviewer',
+    agentType: 'spec-flow:reviewer',
     prompt: `Review the implementation of OpenSpec change "${change}" for issue #${issue}.
 worktree: ${worktree}
 base: ${base}
@@ -162,7 +162,7 @@ diff and emit the identical contract — same outcome.`,
   },
   {
     label: 'test-rigor',
-    agentType: 'test-rigor-reviewer',
+    agentType: 'spec-flow:test-rigor-reviewer',
     prompt: `Audit TEST RIGOR for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
 Scope to the public surface the diff adds/changes (HTTP/gRPC API, CLI, library/public API) and any
 observable side effects it causes (emitted events, DB writes, published messages, files). For each,
@@ -179,7 +179,7 @@ contract exactly (JSON only); leave spec_conformance/tests_ran "full" (the spec 
   },
   {
     label: 'observability',
-    agentType: 'observability-reviewer',
+    agentType: 'spec-flow:observability-reviewer',
     prompt: `Audit OBSERVABILITY for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
 First learn the repo's existing observability stack (its logging/metrics/tracing conventions) and
 judge against THAT, not a foreign one. Scope to the new code paths and failure modes the diff
@@ -245,7 +245,7 @@ Fix each, keep the full suite (or degraded subset) green, commit with focused me
 Do NOT push and do NOT touch main. Return what you changed.
 
 ${GUARDRAILS}`,
-    { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
+    { agentType: 'spec-flow:tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
   )
 }
 
@@ -264,7 +264,7 @@ changing behavior, and commit the result. Do NOT push and do NOT touch main. Ret
 format/lint/build status.
 
 ${GUARDRAILS}`,
-  { agentType: 'build-engineer', label: `build:${change}`, phase: 'Build' },
+  { agentType: 'spec-flow:build-engineer', label: `build:${change}`, phase: 'Build' },
 )
 
 // ── Phase: Polish ────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ Make only documentation/comment edits; commit them. Do NOT push, do NOT touch ma
 Return a one-line note on what you documented (including whether user docs changed).
 
 ${GUARDRAILS}`,
-  { agentType: 'tdd-developer', label: `polish:${change}`, phase: 'Polish' },
+  { agentType: 'spec-flow:tdd-developer', label: `polish:${change}`, phase: 'Polish' },
 )
 
 return {

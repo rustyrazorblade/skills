@@ -18,6 +18,12 @@
       "source": "./plugins/easy-db-lab",
       "description": "Provision and operate AWS lab environments with Cassandra, ClickHouse, and stress testing",
       "category": "database"
+    },
+    {
+      "name": "spec-flow",
+      "source": "./plugins/spec-flow",
+      "description": "Session-driven multi-agent delivery pipeline over OpenSpec + GitHub: groom, activate (spec), implement (5-lens review panel), address, finalize",
+      "category": "workflow"
     }
   ]
 }

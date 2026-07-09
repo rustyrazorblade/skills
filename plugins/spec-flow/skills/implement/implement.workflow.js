@@ -60,9 +60,28 @@ const testInstruction = stackUp
 // priorities).
 const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree. Do NOT create or edit GitHub issues, open or modify PRs, post GitHub comments, push, or take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
+// Resolve the plugin's agents BARE-FIRST, then fall back to the plugin-namespaced
+// id (`spec-flow:<name>`). This preserves the intended override mechanism — a consuming
+// repo that defines its own `tdd-developer`/`reviewer`/etc. wins — while still working
+// in environments where only the namespaced agent is registered (the common case when the
+// plugin is installed). Bare ids containing ':' (already namespaced) and built-ins like
+// `general-purpose` resolve on the first try and never hit the fallback.
+async function agentNS(prompt, opts = {}) {
+  const want = opts.agentType
+  try {
+    return await agent(prompt, opts)
+  } catch (e) {
+    const msg = String((e && e.message) || e)
+    if (want && !want.includes(':') && /not found/i.test(msg)) {
+      return await agent(prompt, { ...opts, agentType: `spec-flow:${want}` })
+    }
+    throw e
+  }
+}
+
 // ── Phase: Implement ───────────────────────────────────────────────────────
 phase('Implement')
-await agent(
+await agentNS(
   `You are implementing an approved OpenSpec change in an existing git worktree.
 WORKTREE (run everything here, cwd): ${worktree}
 CHANGE: ${change}  — tasks at openspec/changes/${change}/tasks.md, spec at openspec/changes/${change}/specs/**/spec.md
@@ -76,7 +95,7 @@ ${testInstruction}
 Return a short summary of what you implemented and the test outcome.
 
 ${GUARDRAILS}`,
-  { agentType: 'spec-flow:tdd-developer', label: `implement:${change}`, phase: 'Implement' },
+  { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
 )
 
 // ── Phases: Review → Fix (bounded loop) ──────────────────────────────────────
@@ -110,7 +129,7 @@ const residual = []
 const reviewLenses = [
   {
     label: 'spec',
-    agentType: 'spec-flow:reviewer',
+    agentType: 'reviewer',
     prompt: `Review the implementation of OpenSpec change "${change}" for issue #${issue}.
 worktree: ${worktree}
 base: ${base}
@@ -162,7 +181,7 @@ diff and emit the identical contract — same outcome.`,
   },
   {
     label: 'test-rigor',
-    agentType: 'spec-flow:test-rigor-reviewer',
+    agentType: 'test-rigor-reviewer',
     prompt: `Audit TEST RIGOR for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
 Scope to the public surface the diff adds/changes (HTTP/gRPC API, CLI, library/public API) and any
 observable side effects it causes (emitted events, DB writes, published messages, files). For each,
@@ -179,7 +198,7 @@ contract exactly (JSON only); leave spec_conformance/tests_ran "full" (the spec 
   },
   {
     label: 'observability',
-    agentType: 'spec-flow:observability-reviewer',
+    agentType: 'observability-reviewer',
     prompt: `Audit OBSERVABILITY for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
 First learn the repo's existing observability stack (its logging/metrics/tracing conventions) and
 judge against THAT, not a foreign one. Scope to the new code paths and failure modes the diff
@@ -204,7 +223,7 @@ while (round < MAX_ROUNDS) {
   phase('Review')
   const lensResults = await parallel(
     reviewLenses.map(l => () =>
-      agent(`${l.prompt}\n\n${GUARDRAILS}`, {
+      agentNS(`${l.prompt}\n\n${GUARDRAILS}`, {
         agentType: l.agentType,
         label: `review:${l.label}:${change}#${round}`,
         phase: 'Review',
@@ -235,7 +254,7 @@ while (round < MAX_ROUNDS) {
 
   phase('Fix')
   const fixList = mustFix.map(f => `- [${f.severity}] ${f.location} (${f.rule}): ${f.problem}\n  suggested: ${f.fix}`).join('\n')
-  await agent(
+  await agentNS(
     `Resolve these review findings in the worktree, test-first where behavior changes.
 WORKTREE (cwd): ${worktree}
 CHANGE: ${change}
@@ -245,14 +264,14 @@ Fix each, keep the full suite (or degraded subset) green, commit with focused me
 Do NOT push and do NOT touch main. Return what you changed.
 
 ${GUARDRAILS}`,
-    { agentType: 'spec-flow:tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
+    { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
   )
 }
 
 // ── Phase: Build ─────────────────────────────────────────────────────────────
 phase('Build')
 const buildHint = buildSystem && buildSystem !== 'auto' ? ` (build system: ${buildSystem})` : ''
-await agent(
+await agentNS(
   `In the worktree at ${worktree}, get the build clean for review${buildHint}.
 Discover and run the repo's format, lint, and build steps — examples by ecosystem:
   - Rust:   \`cargo fmt\`, then \`cargo clippy --all-targets -- -D warnings\`, then \`cargo build\`
@@ -264,12 +283,12 @@ changing behavior, and commit the result. Do NOT push and do NOT touch main. Ret
 format/lint/build status.
 
 ${GUARDRAILS}`,
-  { agentType: 'spec-flow:build-engineer', label: `build:${change}`, phase: 'Build' },
+  { agentType: 'build-engineer', label: `build:${change}`, phase: 'Build' },
 )
 
 // ── Phase: Polish ────────────────────────────────────────────────────────────
 phase('Polish')
-const polish = await agent(
+const polish = await agentNS(
   `Final documentation polish for OpenSpec change "${change}" in worktree ${worktree}.
 Ensure any new modules/behaviors are documented consistently with the repo's conventions
 (module/responsibility comments, any architecture/index docs the repo keeps, doc comments on
@@ -281,7 +300,7 @@ Make only documentation/comment edits; commit them. Do NOT push, do NOT touch ma
 Return a one-line note on what you documented (including whether user docs changed).
 
 ${GUARDRAILS}`,
-  { agentType: 'spec-flow:tdd-developer', label: `polish:${change}`, phase: 'Polish' },
+  { agentType: 'tdd-developer', label: `polish:${change}`, phase: 'Polish' },
 )
 
 return {

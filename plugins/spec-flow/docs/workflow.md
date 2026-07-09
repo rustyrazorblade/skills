@@ -147,7 +147,9 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 **Implementation & build**
 - `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the
   plugin as canonical bases; see the README's "Extending the agents"). `tdd-developer` reads the
-  bundled `references/rust-style-guide.md` and holds itself to it **when the project is Rust**.
+  bundled `references/rust-style-guide.md` when the project is Rust, or
+  `references/kotlin-style-guide.md` when the project is Kotlin, and holds itself to the matching
+  guide.
 
 **Review panel** (run in parallel during `/spec-flow:implement` — see the Review panel below)
 - `reviewer` — the authority on **does the implementation match the spec**: reviews the branch diff

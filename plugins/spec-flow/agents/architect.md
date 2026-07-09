@@ -44,6 +44,12 @@ A design proposal the project-manager presents to the owner (and that feeds `ope
   env, or locate `references/rust-style-guide.md` under the plugin): single-responsibility
   components, zero-cost abstractions (newtypes, monomorphized generics, enum dispatch) over runtime
   machinery, no speculative over-engineering.
+- **If the project is Kotlin**, hold the design to the bundled Kotlin style guide
+  (`${CLAUDE_PLUGIN_ROOT}/references/kotlin-style-guide.md` — resolve `$CLAUDE_PLUGIN_ROOT` from the
+  env, or locate `references/kotlin-style-guide.md` under the plugin): make illegal states
+  unrepresentable with sealed hierarchies + exhaustive `when`, non-null types by default (no `!!`),
+  immutable `data`/`value class` values with invariants in `init`, structured concurrency, no
+  speculative over-engineering.
 - **Match the repo's documented conventions** — its build tool, layering, error-handling style,
   testing approach. Don't propose a pattern the repo doesn't already use without flagging it as a
   deliberate change with a reason.

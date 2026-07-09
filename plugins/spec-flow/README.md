@@ -76,7 +76,8 @@ All skills are namespaced under the plugin:
 
 **Implementation & build**
 - **`tdd-developer`** — test-first (red→green→refactor), SOLID. The implementer. Follows the
-  bundled Rust style guide automatically when the project is Rust.
+  bundled Rust style guide automatically when the project is Rust, or the Kotlin style guide when
+  the project is Kotlin.
 - **`build-engineer`** — gets the build clean (format/lint/build), adapts to the project's tool.
 
 **Review panel (the 5 lenses run in parallel during `implement`)**
@@ -88,10 +89,13 @@ All skills are namespaced under the plugin:
   prod (logging/metrics/tracing, no silent failures, no secrets in telemetry)?
 - plus two built-in-skill lenses: **`/code-review`** (correctness) and **`/security-review`**.
 
-> **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …), but the workflow spawns
-> them by bare name (`reviewer`, `tdd-developer`, …). If the consuming repo defines its own agent
-> with the same name (project `.claude/agents/` or user `~/.claude/agents/`), **that one overrides
-> the plugin's** — a deliberate way to specialize an agent for a repo's stack.
+> **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …) when installed, but the
+> workflow resolves them **bare-first with a namespaced fallback** — it tries the bare name
+> (`reviewer`, `tdd-developer`, …) and, only if no such agent is registered, falls back to
+> `spec-flow:<name>`. So if the consuming repo defines its own agent with the same name (project
+> `.claude/agents/` or user `~/.claude/agents/`), **that one overrides the plugin's** — a deliberate
+> way to specialize an agent for a repo's stack — while the bundled namespaced agent is still found
+> when no override exists. (Resolution lives in the `agentNS()` helper in `implement.workflow.js`.)
 
 ## Wiring the project-manager as your default agent
 

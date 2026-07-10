@@ -1,4 +1,4 @@
-# flow
+# spec-flow
 
 A Claude Code plugin: a **session-driven, multi-agent delivery pipeline** over **OpenSpec** +
 **GitHub**. You own the two human seams — **defining/prioritizing work** and **final review +
@@ -38,7 +38,14 @@ the 1:1:1:1 naming, and the review panel).
 claude --plugin-dir /path/to/spec-flow
 ```
 
-**Marketplace** (reusable across repos):
+**Marketplace** (reusable across repos). From the `rustyrazorblade/skills` marketplace this plugin
+ships in:
+```bash
+/plugin marketplace add rustyrazorblade/skills
+/plugin install spec-flow@rustyrazorblade-plugins
+```
+Or standalone, from a checkout of this plugin directory alone (it declares its own `spec-flow-tools`
+marketplace for exactly this):
 ```bash
 /plugin marketplace add /path/to/spec-flow      # or a GitHub repo / URL hosting it
 /plugin install spec-flow@spec-flow-tools

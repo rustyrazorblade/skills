@@ -1,6 +1,7 @@
 ---
 name: groom
 description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. First stage of the flow delivery workflow (see docs/workflow.md).
+argument-hint: [rough idea — a todo, feature, or bug]
 ---
 
 # groom — rough idea → scoped GitHub issue

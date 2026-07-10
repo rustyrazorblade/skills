@@ -1,6 +1,7 @@
 ---
 name: finalize
 description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs, archive the change, remove its git worktree, and close the GitHub issue. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the PR in GitHub; it never merges.
+argument-hint: [issue number, with its PR already squash-merged]
 ---
 
 # finalize — sync, archive, and clean up after merge

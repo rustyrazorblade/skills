@@ -1,6 +1,7 @@
 ---
 name: implement
 description: Implement an approved issue — run the background subagent team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish) via a Workflow script in the issue's worktree, then push the branch and open a PR. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to multi-agent Workflow orchestration.
+argument-hint: [issue number, with its spec already approved]
 ---
 
 # implement — build the approved spec, open a PR

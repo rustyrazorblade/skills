@@ -1,6 +1,7 @@
 ---
 name: address
 description: Address the owner's GitHub review comments on an issue's PR — pull the comments, fix them in the issue's worktree, push, and reply per review thread. Fourth stage of the flow delivery workflow (see docs/workflow.md). Owner-invoked when they return after reviewing; never polls.
+argument-hint: [issue number, or its PR number]
 ---
 
 # address — resolve the owner's PR review comments

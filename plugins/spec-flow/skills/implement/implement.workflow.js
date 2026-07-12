@@ -112,10 +112,12 @@ const residual = []
 //   3. security-review — security pass (input validation, auth/tenant isolation, injection,
 //                        secret/data exposure, external-surface hardening), via /security-review;
 //                        SELF-GATES (approve+empty) on changes touching no relevant surface.
-//   4. test-rigor      — TEST-rigor (test-rigor-reviewer): does the diff's touched public surface +
-//                        observable side effects have ANTAGONISTIC, regression-exposing tests?
-//                        Happy-path-only / no side-effect assertion = a gap. No-ops off any public
-//                        surface or observable side effect.
+//   4. test-rigor      — TEST-rigor (test-rigor-reviewer): bidirectional. Does the diff's touched
+//                        public surface + observable side effects have ANTAGONISTIC, regression-
+//                        exposing tests (happy-path-only / no side-effect assertion = a gap)? AND
+//                        the brake: over-built tests (fakes reconstructing a dependency, library
+//                        re-verification) + test churn (per-test container restarts) = minor unless
+//                        egregious. No-ops off any public surface, side effect, or added tests.
 //   5. observability   — OBSERVABILITY (observability-reviewer): are the diff's new code paths +
 //                        failure modes diagnosable in prod? Logging at the right level w/ structured
 //                        context, metrics on ops + errors (bounded label cardinality), tracing/spans
@@ -192,9 +194,18 @@ one), concurrency conflicts, auth/tenant isolation where applicable, already-exi
 idempotency/replay. And flag (rule "side-effect-coverage") any write/op whose tests assert the
 direct result but NOT its observable side effect (the emitted event/message/row is never asserted),
 judged surface → state → side-effect. A happy-path-only surface, or one with no side-effect
-assertion, is a "major" gap (withholds approval, feeds the fix loop). If the diff touches NO public
-surface or observable side effect, return approve=true with empty findings. Follow your output
-contract exactly (JSON only); leave spec_conformance/tests_ran "full" (the spec reviewer owns them).`,
+assertion, is a "major" gap (withholds approval, feeds the fix loop).
+ALSO run the brake (the other direction). Flag (rule "over-testing") tests the diff adds that are
+over-built: a fake reconstructing a well-tested dependency to test the dependency rather than this
+change (a hand-built fake SSH/DB/HTTP server where a boundary stub would do), a test that only
+re-verifies a library/framework, a trivial-glue test with no nameable regression, or a pure
+duplicate. And flag (rule "test-practicality") avoidable test-infrastructure churn — most importantly
+a Testcontainers test that restarts a container per test where a shared/reused container would give
+the same coverage far faster. These default to "minor" (surfaced, non-blocking); escalate to "major"
+only for egregious, objective waste. The brake is for high-confidence waste, not taste.
+If the diff touches NO public surface, observable side effect, OR tests, return approve=true with
+empty findings. Follow your output contract exactly (JSON only); leave spec_conformance/tests_ran
+"full" (the spec reviewer owns them).`,
   },
   {
     label: 'observability',

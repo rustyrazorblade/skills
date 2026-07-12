@@ -10,13 +10,13 @@ export const meta = {
   ],
 }
 
-// args: { worktree, repoRoot, change, issue, base, stackUp, buildSystem }
+// args: { worktree, repoRoot, change, issue, base, buildSystem }
 // buildSystem: the project's build tool, used only as a hint for the build phase (e.g. 'cargo',
 // 'gradle', 'npm', 'go', 'pytest', or 'auto' to let the agent discover it). NOT an exhaustive
 // switch — the agents detect the real runner from the repo.
 // Robust to args arriving as a JSON string (some invocations stringify it) or missing.
 const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
-const { worktree, change, issue, base = 'origin/main', stackUp = false, buildSystem = 'auto' } = _args
+const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto' } = _args
 if (!worktree || !change || issue === undefined || issue === null) {
   // Fail fast — never run a review against an empty/clean tree and report a false blocker.
   throw new Error(
@@ -30,7 +30,7 @@ const REVIEW_SCHEMA = {
   properties: {
     summary: { type: 'string' },
     spec_conformance: { enum: ['full', 'partial', 'failing'] },
-    tests_ran: { enum: ['full', 'degraded', 'none'] },
+    tests_ran: { enum: ['full', 'unit', 'degraded', 'none'] },
     findings: {
       type: 'array',
       items: {
@@ -50,9 +50,9 @@ const REVIEW_SCHEMA = {
   },
 }
 
-const testInstruction = stackUp
-  ? `The repo's external test prerequisites are available — run the FULL test suite as your gate. Discover the runner from the repo (e.g. \`cargo test\`, \`npm test\`, \`./gradlew test\`, \`go test ./...\`, \`pytest\`).`
-  : `External test prerequisites (e.g. a docker compose stack or a database) are NOT reachable — DEGRADE to a build + the prerequisite-independent unit tests, and state plainly in your summary that the full suite did not run and why. Never silently skip.`
+// Local gate = the UNIT tier + the branch's flagged set (docs/workflow.md, "Test tiering"). The
+// full/integration suite is CI's gate and is never run locally.
+const testInstruction = `Run the UNIT tier locally as your gate — the repo's fast, no-container / no-I/O unit tests, i.e. the runner's default fast selection (e.g. \`cargo nextest run\`, \`./gradlew test\`, \`npm test\`, \`go test -short ./...\`, \`pytest -m 'not integration'\`). ALSO run any tests listed in \`.spec-flow/flagged-tests\` at the worktree root if that file exists (one runner-selectable test id per line; '#' and blank lines ignored) — these are tests CI flagged on this branch, guarded locally. Do NOT run the full/integration suite locally — that is CI's gate. State plainly in your summary that the unit tier (plus any flagged tests) ran locally and the full suite runs in CI. If the repo has not split its tests into unit/integration tiers yet, run its default test command and say so.`
 
 // Strict guardrail appended to every agent prompt: implement agents must stay inside the
 // worktree and never take outward/backlog actions. Prioritization + issue creation are the
@@ -252,7 +252,7 @@ while (round < MAX_ROUNDS) {
       .map((r, i) => `[${reviewLenses[i].label}] ${r ? r.summary : '(no result)'}`)
       .join('\n\n'),
     spec_conformance: specLens ? specLens.spec_conformance : 'unknown',
-    tests_ran: specLens ? specLens.tests_ran : (stackUp ? 'full' : 'degraded'),
+    tests_ran: specLens ? specLens.tests_ran : 'unit',
     findings,
     approve: reviews.every(r => r.approve) && mustFix.length === 0,
   }
@@ -271,7 +271,7 @@ WORKTREE (cwd): ${worktree}
 CHANGE: ${change}
 FINDINGS:
 ${fixList}
-Fix each, keep the full suite (or degraded subset) green, commit with focused messages.
+Fix each, keep the unit tier (plus the branch's `.spec-flow/flagged-tests`) green, commit with focused messages.
 Do NOT push and do NOT touch main. Return what you changed.
 
 ${GUARDRAILS}`,
@@ -317,7 +317,7 @@ ${GUARDRAILS}`,
 return {
   change,
   issue,
-  tests_ran: review ? review.tests_ran : (stackUp ? 'full' : 'degraded'),
+  tests_ran: review ? review.tests_ran : 'unit',
   spec_conformance: review ? review.spec_conformance : 'unknown',
   approved: !!(review && review.approve && residual.length === 0),
   review_rounds: round,

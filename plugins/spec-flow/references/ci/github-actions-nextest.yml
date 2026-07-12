@@ -1,0 +1,48 @@
+# spec-flow CI contract — cargo nextest. See references/ci/README.md.
+# Runs the FULL suite (all tiers, including #[ignore]'d). On test failure, writes the failing test
+# ids (one nextest test path per line) to spec-flow-failures.txt and uploads it as the
+# `spec-flow-failures` artifact, which /spec-flow:sync-ci pulls into the branch's flagged set.
+# Requires a JUnit report from nextest — add to .config/nextest.toml:
+#   [profile.ci.junit]
+#   path = "junit.xml"
+# Enable this check in branch protection so merge is gated on green CI.
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Run full suite (all tiers)
+        run: cargo nextest run --profile ci --run-ignored all
+      - name: Collect failing test ids
+        if: failure()
+        run: |
+          python3 - <<'PY' > spec-flow-failures.txt
+          import glob, xml.etree.ElementTree as ET
+          ids = set()
+          # nextest writes its JUnit report under target/nextest/<profile>/ (path from nextest.toml)
+          for f in glob.glob("target/nextest/**/*.xml", recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+              except ET.ParseError:
+                  continue
+              for tc in root.iter("testcase"):
+                  if any(c.tag in ("failure", "error") for c in tc):
+                      name = tc.get("name", "")
+                      if name:
+                          ids.add(name)
+          print("\n".join(sorted(ids)))
+          PY
+      - name: Upload failing test ids
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec-flow-failures
+          path: spec-flow-failures.txt
+          if-no-files-found: ignore

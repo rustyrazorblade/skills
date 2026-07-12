@@ -69,9 +69,12 @@ From the worktree, discover and run the repo's own format / lint / build / test 
 - format check (e.g. `cargo fmt --check`, `prettier --check`, `gofmt -l .`)
 - lint (e.g. `cargo clippy --all-targets -- -D warnings`, `npm run lint`, `go vet ./...`)
 - build
-- tests: prefer the full suite; if it has external prerequisites (Docker, a database) that are
-  unreachable, report that the full suite could not run and what subset did — never report a
-  degraded run as full.
+- tests: run the **unit** tier — the local gate (fast, no container/no I/O), the runner's default
+  fast selection — plus any tests in the worktree's `.spec-flow/flagged-tests`. Report `tests_ran:
+  "unit"`. The full/integration suite is **CI's** gate (merge is gated on green CI), not something you
+  run here; never run it locally and never report the unit tier as `full`. See "Test tiering" in
+  `docs/workflow.md`. (If the repo hasn't split its tests into tiers yet, run its default test
+  command and report `tests_ran` honestly.)
 
 ## Output contract
 
@@ -81,7 +84,7 @@ Return JSON only (no prose around it):
 {
   "summary": "one-paragraph verdict",
   "spec_conformance": "full | partial | failing",
-  "tests_ran": "full | degraded | none",
+  "tests_ran": "unit | full | degraded | none",
   "findings": [
     {
       "id": "F1",

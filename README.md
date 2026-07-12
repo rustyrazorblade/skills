@@ -228,6 +228,7 @@ yourself.
 | `/spec-flow:activate <N>` | Worktree + branch → OpenSpec explore+propose → commit spec → **stop for your approval** (Seam 1) |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread |
+| `/spec-flow:sync-ci <N>` | When CI goes red: pull the failing tests into the branch's local flagged set so the fast local loop guards them until merge |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
 
@@ -325,9 +326,10 @@ status:  ready ──▶ spec-review ──▶ in-progress ──▶ in-review �
 - **Session-driven, not cron.** `implement` runs as a background `Workflow` that notifies on
   completion, but it's in-session — closing the session pauses the work. `address` is invoked by you
   when you return; nothing polls.
-- **Degraded test runs are never silent.** If the full suite needs Docker, a database, or a broker,
-  `implement` probes reachability first; when they're unavailable it falls back to a build plus the
-  prerequisite-independent unit tests and says so plainly in both its report and the PR body.
+- **Test tiering — fast locally, full suite in CI.** `implement` runs the fast **unit** tier locally
+  (plus any tests CI flagged on the branch, pulled in by `sync-ci`); the full/integration suite is
+  CI's gate. It says so plainly in its report and the PR body rather than implying the full suite ran
+  locally. Merge is gated on green CI.
 - **Issue and PR numbers always carry a description** — `#85 (field identity)`, never a bare `#85`.
 
 #### Overriding a bundled agent

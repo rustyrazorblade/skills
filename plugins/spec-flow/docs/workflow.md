@@ -6,7 +6,7 @@ the middle runs as a repeatable, agent-driven pipeline you invoke turn-by-turn f
 Claude session.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
-(`/spec-flow:groom|activate|implement|address|board|finalize`) plus a roster of agents: a
+(`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board`) plus a roster of agents: a
 `project-manager` orchestrator you talk to directly; `product-manager` and `architect` at the front
 of the pipeline (refine → design → proposal); `tdd-developer` and `build-engineer` for
 implementation/build; and a review panel of `reviewer`, `test-rigor-reviewer`, and
@@ -121,6 +121,7 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` designs it → openspec explore+propose (architect + domain expert advise) → commit spec → `status:spec-review`, then STOP for your approval. |
 | `/spec-flow:implement` | background | After your approval: a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish), pushes, opens a PR `Closes #N`, sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
+| `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
 | `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
 
@@ -210,6 +211,77 @@ generalizes over N lenses — there is no per-lens special-casing beyond the spe
 `spec_conformance`/`tests_ran`. To add or remove a lens, edit the `reviewLenses` array; the loop
 needs no change.
 
+## Test tiering (unit / integration)
+
+The pipeline runs the **unit tier locally and the full suite in CI** — never the full suite locally.
+The local TDD loop stays fast while CI stays the authoritative gate. When CI catches a regression,
+that specific failing test is run locally for the rest of the branch so the same break can't slip
+through again.
+
+**Precondition.** This assumes the consuming repo separates its tests **structurally** into a fast
+**unit** tier and a slow **integration** tier, and that **merge is gated on green CI**. A repo that
+hasn't split its tests yet is brought onto the convention by a one-time adoption migration (a
+separate concern); until then the unit tier is just the repo's default test command and the model
+degrades gracefully to running whatever that is.
+
+### unit — the fast local tier
+
+Structural, not annotated: the **unit** tier is the unit-test source location the runner selects by
+default (fast, no container, no I/O). It runs on **every local TDD cycle** and is the
+`/spec-flow:implement` local gate.
+
+- **Gradle** — the `test` source set (unit); integration/container tests live in a separate
+  `integrationTest` source set/suite whose classpath *alone* carries Testcontainers/JDBC/network
+  deps, so a container test can't compile under `src/test`. Local: `./gradlew test`. CI: `./gradlew check`.
+- **Rust (nextest)** — `src/` unit tests vs `tests/` integration binaries, selected by
+  `.config/nextest.toml` profile `default-filter`s. Local: `cargo nextest run`. CI:
+  `cargo nextest run --profile ci --run-ignored all`.
+
+### integration — the CI tier, with a per-branch local watch
+
+The **integration** tier (slow, container/I/O) runs only in CI. But when CI catches a regression on a
+branch, that specific failing test is pulled into the local loop for the rest of the branch — a
+per-branch **flagged set**, so a proven-fragile spot is guarded locally instead of costing another
+full CI round-trip.
+
+- A gitignored file, **`.spec-flow/flagged-tests`** inside the issue's worktree. One
+  runner-selectable test id per line; `#` comments and blank lines ignored. Ignored via a
+  `.spec-flow/` entry in the repo's `.gitignore` (added once; `/spec-flow:sync-ci` ensures it), so it
+  never commits.
+- **Starts empty on every new branch.** No bootstrap, no diff-based guessing.
+- **Populated only by CI failures on that branch** (via `/spec-flow:sync-ci`). Because a branch
+  starts from green `main` (merge is gated on green CI), any CI failure on it is by definition a real
+  regression the diff introduced — so the caught test is added, **whatever its tier** (including
+  integration/container tests), and run locally for the rest of the branch.
+- **Local inner loop = unit tier + flagged set.** The `/spec-flow:implement` gate and
+  `tdd-developer`'s cycles run both.
+- **Dies with the branch.** The branch boundary is the pruning mechanism; nothing carries forward —
+  and there is nothing to "promote": a fast test written during the fix already lives in the unit
+  tier by location, so it is in the local run on the next branch automatically.
+
+### The loop
+
+```
+implement → push → CI runs full suite ──(red)──▶ /spec-flow:sync-ci
+                                                    → append failures to .spec-flow/flagged-tests
+                                                              │
+   local loop runs unit tier + flagged set  ◀─────────────────┘
+                                                              │
+                                    you merge (green CI) → flagged set evaporates
+```
+
+- **`/spec-flow:sync-ci <N>`** — owner-invoked when CI reports red: pulls the branch's latest CI
+  failures (the `spec-flow-failures` artifact) and appends them to the flagged set. Session-driven;
+  never polls.
+
+### CI contract
+
+On test failure, the consuming repo's CI must upload the failing test id(s) as an artifact named
+**`spec-flow-failures`** — one id per line, the same runner-selectable form the flagged set uses.
+spec-flow ships reference CI templates under `references/ci/` for the supported runners;
+`/spec-flow:sync-ci` reads that artifact. **Merge is gated on green CI** — the invariant the flagged
+set's blind-append safety rests on.
+
 ## Substrate and constraints
 
 - **Session-driven, not cron.** Everything is triggered and narrated by the main session.
@@ -218,11 +290,12 @@ needs no change.
   you return, never polled.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
-- **Test precondition.** If the full suite has external prerequisites (Docker, a database, a
-  broker), `/spec-flow:implement` probes their reachability; if unavailable it degrades to a build +
-  prerequisite-independent unit tests and states plainly (in its report and the PR) that the full
-  suite did not run. Never silent. Test resources that could collide between concurrent runs
-  should carry a per-process-unique seed so two runs never name the same resource.
+- **Test tiering.** The local gate is the fast **unit** tier plus the branch's
+  `.spec-flow/flagged-tests` — never the full suite; the full/integration suite is CI's gate.
+  `/spec-flow:implement` states plainly in its report and the PR that the unit tier ran locally and
+  the full suite runs in CI. See **Test tiering (unit / integration)** above. Test resources that
+  could collide between concurrent runs should carry a per-process-unique seed so two runs never
+  name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation; TDD; significant design
   decisions are the owner's (an advisor agent only advises); land on `main` via PR (no agent
   merge, no push to `main`).

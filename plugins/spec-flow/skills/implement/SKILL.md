@@ -23,19 +23,12 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    gh issue edit <N> --remove-label status:spec-review --add-label status:in-progress
    ```
 
-2. **Check the test precondition.** The full test suite is the gate. If the suite has **external
-   prerequisites** (e.g. a `docker compose` stack, a database, a broker), probe their
-   reachability and decide full-vs-degraded. For example:
-   ```bash
-   # Example probe for a repo whose tests need Docker + a database on :5432.
-   # Adapt the checks to the repo's actual prerequisites.
-   docker info >/dev/null 2>&1 && nc -z 127.0.0.1 5432 2>/dev/null && echo STACK_UP || echo STACK_DOWN
-   ```
-   - prerequisites reachable → the team runs the **full** suite as the gate (`stackUp: true`).
-   - prerequisites unreachable → consider bringing them up if appropriate; otherwise the team
-     **degrades** to a build + prerequisite-independent unit tests and **must say so** in its
-     report and the PR body (`stackUp: false`). Never silent.
-   If the suite has no external prerequisites, pass `stackUp: true`.
+2. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
+   **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
+   suite is CI's gate and is never run locally. See **Test tiering (unit / integration)** in
+   `docs/workflow.md`. No stack probe, no full-vs-degraded decision — the workflow handles this. If
+   the repo hasn't split its tests into unit/integration tiers yet, the team runs the repo's default
+   test command and says so; the tiering degrades gracefully.
 
 3. **Run the implementation Workflow.** Invoke the `Workflow` tool with the script bundled in
    this plugin and pass `args`:
@@ -48,7 +41,6 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
        "change":   "<slug>",
        "issue":    <N>,
        "base":     "origin/main",
-       "stackUp":  true,
        "buildSystem": "auto"
      }
    }
@@ -62,8 +54,8 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    surfaces; the `test-rigor-reviewer` lens for antagonistic/regression-exposing test coverage; the
    `observability-reviewer` lens for prod-diagnosability of new paths/failures, which self-gates) →
    fix loop until **every** lens approves with no blocker/major (bounded) → build-engineer gets the
-   build clean (format/lint/build) → docs polish. It returns a summary (tests ran full/degraded,
-   review verdict, residual findings). See `docs/workflow.md` ("Review panel") for the lens
+   build clean (format/lint/build) → docs polish. It returns a summary (unit tier ran locally / full
+   suite runs in CI, review verdict, residual findings). See `docs/workflow.md` ("Review panel") for the lens
    semantics.
 
 4. **Push and open the PR** (outward-facing — done here in the main session, narrated):
@@ -73,7 +65,7 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
      --title "<issue title>" \
      --body "Closes #<N>
 
-   <summary from the workflow, INCLUDING whether the full test suite ran or was degraded>"
+   <summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>"
    ```
 
 5. **Mark in-review and report.**
@@ -86,7 +78,8 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
 ## Rules
 
 - **Never merge, never push to `main`.** This skill only pushes the issue branch and opens a PR.
-- A degraded test run (full suite's prerequisites unavailable) must be explicit in the PR body.
+- The PR body must state plainly that the unit tier ran locally and the full suite runs in CI — the
+  reviewer relies on CI (gate is green CI) for full-suite results. Never imply the full suite ran locally.
 - If the review panel can't reach `approve` within the bounded fix loop, stop and surface the
   residual findings to the owner rather than opening a green-looking PR.
 - All code work happens in the worktree; the main session only orchestrates, pushes, and PRs.

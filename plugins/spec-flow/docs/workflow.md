@@ -124,6 +124,7 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
 | `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
+| `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 
 ## Agents
 
@@ -220,9 +221,9 @@ through again.
 
 **Precondition.** This assumes the consuming repo separates its tests **structurally** into a fast
 **unit** tier and a slow **integration** tier, and that **merge is gated on green CI**. A repo that
-hasn't split its tests yet is brought onto the convention by a one-time adoption migration (a
-separate concern); until then the unit tier is just the repo's default test command and the model
-degrades gracefully to running whatever that is.
+hasn't split its tests yet is brought onto the convention by **`/spec-flow:adopt-tiering`** (a
+one-time migration — classify by evidence, separate structurally, wire CI); until then the unit tier
+is just the repo's default test command and the model degrades gracefully to running whatever that is.
 
 ### unit — the fast local tier
 

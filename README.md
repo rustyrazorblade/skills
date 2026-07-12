@@ -231,6 +231,7 @@ yourself.
 | `/spec-flow:sync-ci <N>` | When CI goes red: pull the failing tests into the branch's local flagged set so the fast local loop guards them until merge |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
+| `/spec-flow:adopt-tiering` | One-time per repo: split an existing suite into the unit/integration tiers the tiering model needs, then open a PR |
 
 #### Agents
 

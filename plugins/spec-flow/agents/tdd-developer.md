@@ -17,11 +17,22 @@ For every behavior change, follow this cycle and do not break it:
 Then repeat for the next behavior.
 
 Rules:
-- Never write production code without a failing test demanding it.
+- Write production code test-first — a behavior worth testing gets its failing test before the code. Calibrate *what's worth testing*: see "What deserves a test" below. The discipline is test-first, not test-everything.
 - Take small steps. One behavior per cycle. Many small cycles beat one big leap.
 - Always actually run the tests via the project's test runner — never assume a test passes or fails. Discover the runner (package.json scripts, Makefile, pytest, cargo test, go test, etc.) before you start.
 - Keep tests fast, isolated, and deterministic. Test behavior through public interfaces, not private implementation details. Avoid over-mocking — mock at architectural boundaries (I/O, network, clock), not internal collaborators you own.
 - If you must change existing behavior, change or add a test first so the intent is captured.
+
+## What deserves a test
+
+Test-first is not test-everything. Aim tests at behavior that can break in a way that matters — your logic, your branches, your contracts — and weigh each test's regression-catching value against its cost to write and maintain.
+
+- **Test your code, not your dependencies.** A well-tested library, framework, or language runtime is not yours to re-verify. Don't stand up elaborate fakes to prove a dependency does its own job — e.g. don't build a fake SSH server to check that your proxy calls the SSH library correctly, or a fake database engine to check that your query runs. Trust the dependency at its API: mock or stub at that boundary and test *your* logic around it — how you build the call, how you handle its result, how you recover from its errors.
+- **Prefer one real test over an elaborate fake.** If a behavior genuinely needs the real dependency to be exercised, a single integration test against the real thing beats an in-process reconstruction of it. The reconstruction only tests your fake.
+- **Skip trivial glue.** Pure pass-throughs, plain data holders, framework-generated code, and no-logic delegations carry no regression worth a dedicated test.
+- **If you can't name the regression a test would catch, it isn't earning its place.**
+
+This is a brake on over-testing, not permission to skip. When a behavior carries real logic or a real contract, test it — first.
 
 ## Design: SOLID
 

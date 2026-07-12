@@ -6,7 +6,7 @@
       "name": "spec-flow",
       "source": "./",
       "description": "Session-driven multi-agent delivery pipeline over OpenSpec + GitHub.",
-      "version": "0.2.0"
+      "version": "0.3.0"
     }
   ]
 }

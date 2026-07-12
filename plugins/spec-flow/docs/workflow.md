@@ -119,7 +119,7 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 |---|---|---|
 | `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (the `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`). |
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` designs it → openspec explore+propose (architect + domain expert advise) → commit spec → `status:spec-review`, then STOP for your approval. |
-| `/spec-flow:implement` | background | After your approval: a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish), pushes, opens a PR `Closes #N`, sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
+| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
 | `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
@@ -218,6 +218,11 @@ The pipeline runs the **unit tier locally and the full suite in CI** — never t
 The local TDD loop stays fast while CI stays the authoritative gate. When CI catches a regression,
 that specific failing test is run locally for the rest of the branch so the same break can't slip
 through again.
+
+For CI to actually run *in parallel* with the local loop, `/spec-flow:implement` opens a **draft PR
+at the start** and pushes at checkpoints — so the full suite runs on each pushed increment *during*
+implementation, not just once at the end. CI stays busy while local work continues, and its results
+are ready by the time the PR is marked ready for review.
 
 **Precondition.** This assumes the consuming repo separates its tests **structurally** into a fast
 **unit** tier and a slow **integration** tier, and that **merge is gated on green CI**. A repo that

@@ -226,7 +226,7 @@ yourself.
 |-------|---------|
 | `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, testable acceptance criteria, one `P0–P3`) |
 | `/spec-flow:activate <N>` | Worktree + branch → OpenSpec explore+propose → commit spec → **stop for your approval** (Seam 1) |
-| `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR |
+| `/spec-flow:implement <N>` | After approval: open a draft PR early (keeps CI warm), run the background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) pushing at checkpoints, then mark the PR ready |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread |
 | `/spec-flow:sync-ci <N>` | When CI goes red: pull the failing tests into the branch's local flagged set so the fast local loop guards them until merge |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |

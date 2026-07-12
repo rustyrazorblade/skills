@@ -23,14 +23,28 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    gh issue edit <N> --remove-label status:spec-review --add-label status:in-progress
    ```
 
-2. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
+2. **Open a draft PR early — keep CI warm.** Push the branch (it already carries the committed spec)
+   and open a **draft** PR *now*, before implementation runs. CI triggers on `pull_request` and runs
+   on draft PRs, so from here every checkpoint push during implementation exercises the full suite in
+   parallel with local work — CI is the slow backstop the tiering model relies on, and this keeps it
+   busy instead of idle until the end.
+   ```bash
+   git -C <worktree> push -u origin issue-<N>-<slug>
+   gh pr create --draft --head issue-<N>-<slug> --base main \
+     --title "<issue title>" \
+     --body "Closes #<N>
+
+   Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
+   ```
+
+3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
    suite is CI's gate and is never run locally. See **Test tiering (unit / integration)** in
    `docs/workflow.md`. No stack probe, no full-vs-degraded decision — the workflow handles this. If
    the repo hasn't split its tests into unit/integration tiers yet, the team runs the repo's default
    test command and says so; the tiering degrades gracefully.
 
-3. **Run the implementation Workflow.** Invoke the `Workflow` tool with the script bundled in
+4. **Run the implementation Workflow.** Invoke the `Workflow` tool with the script bundled in
    this plugin and pass `args`:
    ```json
    {
@@ -56,20 +70,17 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    fix loop until **every** lens approves with no blocker/major (bounded) → build-engineer gets the
    build clean (format/lint/build) → docs polish. It returns a summary (unit tier ran locally / full
    suite runs in CI, review verdict, residual findings). See `docs/workflow.md` ("Review panel") for the lens
-   semantics.
+   semantics. The team **commits and pushes the branch at checkpoints**, so CI runs the full suite on
+   the draft PR throughout implementation rather than only at the end.
 
-4. **Push and open the PR** (outward-facing — done here in the main session, narrated):
+5. **Mark the PR ready and report.** When the workflow returns approved, finalize the already-open
+   draft PR (outward-facing — done here in the main session, narrated):
    ```bash
-   git -C <worktree> push -u origin issue-<N>-<slug>
-   gh pr create --head issue-<N>-<slug> --base main \
-     --title "<issue title>" \
-     --body "Closes #<N>
+   git -C <worktree> push origin issue-<N>-<slug>          # ensure the final state is pushed
+   gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
+   gh pr edit <PR> --body "Closes #<N>
 
-   <summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>"
-   ```
-
-5. **Mark in-review and report.**
-   ```bash
+   <final summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
    ```
    Give the owner the PR URL for GitHub review (Seam 2). When they leave comments, the next
@@ -77,10 +88,13 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
 
 ## Rules
 
-- **Never merge, never push to `main`.** This skill only pushes the issue branch and opens a PR.
+- **Never merge, never push to `main`.** This skill pushes only the issue branch, opens a *draft*
+  PR, and later marks it ready — it never merges.
+- **Draft until approved.** The PR opens as a draft so CI runs during implementation; mark it ready
+  only after the review panel approves. If the panel can't reach `approve` within the bounded fix
+  loop, leave the PR a draft and surface the residual findings to the owner — never mark a
+  red/unapproved PR ready.
 - The PR body must state plainly that the unit tier ran locally and the full suite runs in CI — the
   reviewer relies on CI (gate is green CI) for full-suite results. Never imply the full suite ran locally.
-- If the review panel can't reach `approve` within the bounded fix loop, stop and surface the
-  residual findings to the owner rather than opening a green-looking PR.
-- All code work happens in the worktree; the main session only orchestrates, pushes, and PRs.
+- All code work happens in the worktree; the main session only orchestrates, pushes, and manages the PR.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

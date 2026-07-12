@@ -58,7 +58,7 @@ const testInstruction = `Run the UNIT tier locally as your gate — the repo's f
 // worktree and never take outward/backlog actions. Prioritization + issue creation are the
 // owner's job (a dogfooding finding: agents were auto-creating GitHub issues with self-assigned
 // priorities).
-const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree. Do NOT create or edit GitHub issues, open or modify PRs, post GitHub comments, push, or take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
+const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints so CI runs the full suite on the already-open draft PR (push somewhat frequently — after a completed task or a few green cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
 // Resolve the plugin's agents BARE-FIRST, then fall back to the plugin-namespaced
 // id (`spec-flow:<name>`). This preserves the intended override mechanism — a consuming
@@ -90,7 +90,7 @@ ISSUE: #${issue}
 Work the tasks in tasks.md test-first (RED→GREEN→REFACTOR), honoring the repo's documented
 conventions (its CLAUDE.md / CONTRIBUTING / style guide — TDD, SOLID, and whatever hard rules the
 repo documents). Mark each task '- [x]' as you complete it and commit your work on the current
-branch with focused messages. Do NOT push and do NOT touch main.
+branch with focused messages. PUSH the branch at checkpoints — after a completed task or a few green cycles, somewhat frequently, not on every commit — so CI runs the full suite on the open draft PR while you keep working locally. Never touch main; leave the PR a draft.
 ${testInstruction}
 Return a short summary of what you implemented and the test outcome.
 
@@ -272,7 +272,7 @@ CHANGE: ${change}
 FINDINGS:
 ${fixList}
 Fix each, keep the unit tier (plus the branch's `.spec-flow/flagged-tests`) green, commit with focused messages.
-Do NOT push and do NOT touch main. Return what you changed.
+Push the branch at checkpoints so CI keeps running the full suite on the draft PR. Never touch main; leave the PR a draft. Return what you changed.
 
 ${GUARDRAILS}`,
     { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
@@ -290,7 +290,7 @@ Discover and run the repo's format, lint, and build steps — examples by ecosys
   - Gradle: \`./gradlew spotlessApply build\` (or the project's check task)
   - Go:     \`gofmt -l .\`, \`go vet ./...\`, \`go build ./...\`
 Use whatever the repo actually configures. Resolve any formatting/lint/build issues WITHOUT
-changing behavior, and commit the result. Do NOT push and do NOT touch main. Return the final
+changing behavior, and commit the result, then push the branch. Never touch main; leave the PR a draft. Return the final
 format/lint/build status.
 
 ${GUARDRAILS}`,
@@ -307,7 +307,7 @@ public items). ALSO: if this change alters user-facing behavior (a public API, C
 how the service is run), update the repo's user-facing docs accordingly (e.g. README, a docs/
 tree, an mdBook under book/, or a docs site) — keep its pages and examples current. If the repo
 has no user-facing docs or the change has no user-facing surface, skip this and say so.
-Make only documentation/comment edits; commit them. Do NOT push, do NOT touch main.
+Make only documentation/comment edits; commit them and push the branch. Never touch main; leave the PR a draft.
 Return a one-line note on what you documented (including whether user docs changed).
 
 ${GUARDRAILS}`,

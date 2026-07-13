@@ -21,6 +21,27 @@ The full design is in `docs/workflow.md` (read it when you need the details — 
 the 1:1:1:1 naming, the review panel). The lifecycle labels (`P0–P3`, `status:*`) and the
 "what's next" rule (highest-priority `status:ready`) are your source of truth for state.
 
+## Why this pipeline exists
+
+Two goals drive every decision you make, and they're in tension — optimize only for speed and
+quality slips; optimize only for quality and the owner sits idle waiting on one thing at a time.
+
+- **Quality, structurally enforced.** The spec seam and the 5-lens review panel exist so
+  correctness, security, test rigor, and observability are checked by construction, not by
+  vigilance — the owner shouldn't have to remember to ask "did anyone check for X." Never let an
+  owner shortcut ("just skip the review panel this once") erode that; surface the tradeoff instead
+  of silently complying.
+- **Throughput, via parallelism.** The owner's time is the scarce resource, not compute. Keep as
+  many issues moving at once as the owner can track: several worktrees in flight, and — within
+  each — CI running the full suite in the background while the local loop keeps iterating (see
+  **Test tiering** in `docs/workflow.md`), so results are ready by the time a human looks again.
+  A pipeline with only one issue in flight, or one sitting idle mid-stage while nothing else
+  progresses, is under-using the model.
+
+Concretely: **always know what could be moving that isn't**, and say so. If an issue is blocked
+on the owner (spec review, a green-CI PR) while another `status:ready` issue sits untouched,
+surface that — don't just report the one thing you were asked about.
+
 ## How you operate
 
 - **Always start from the board.** Before recommending or doing anything, know the current state.

@@ -13,8 +13,13 @@ integration)** in `docs/workflow.md`). This is a **one-time migration per repo**
 PR and **never merges**.
 
 This is repo **infrastructure**, not a feature — so it is **not** tied to a GitHub issue and does
-**not** go through `groom → activate → implement`. Work on a dedicated branch, e.g.
-`chore/adopt-test-tiering`, cut from up-to-date `main`.
+**not** go through `groom → activate → implement`. Create a dedicated worktree + branch, e.g.:
+```bash
+git -C <repo-root> fetch origin
+git -C <repo-root> worktree add ".claude/worktrees/chore-adopt-test-tiering" -b "chore/adopt-test-tiering" origin/main
+```
+All work happens inside that worktree from here on — `git worktree` managed (long-lived), never
+the Agent throwaway isolation, same as the other stages.
 
 ## Why the split has to be structural
 

@@ -14,7 +14,9 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
    ```bash
    gh issue list --state open --json number,title,labels,url --limit 100
    ```
-   Bucket by the `status:*` label; read the `P?` label as priority.
+   Bucket by the `status:*` label; read the `P?` label as priority. Issues carrying **no
+   `status:*` label** are the raw backlog — not yet groomed, so no `P?` either. Keep them
+   separate; they're the fallback when nothing labeled is actionable.
 
 2. **Gather PR state** for branches `issue-*`:
    ```bash
@@ -55,11 +57,21 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
    📋 READY
      ready         #L P0  <title>                  → /spec-flow:activate <L>   ← next up
 
+   📥 BACKLOG (ungroomed)
+     (no labels)   #H     <title>                  → /spec-flow:groom <H>
+
    (worktrees: 3 active · open PRs: 2)
    ```
 
 5. **Call out the two things that matter most:**
-   - **Next up** — the highest-priority `status:ready` issue (the "what's next" rule).
+   - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder
+     until something applies: (1) a `status:in-review` PR **whose CI is green** — one merge away
+     from shipping, and `/spec-flow:finalize` can't run until it merges; (2) the highest-priority
+     `status:ready` issue to activate; (3) if nothing is `status:ready` either, the highest-value
+     **BACKLOG** issue to groom — and if it looks too large to spec and land as one unit, say so
+     and suggest splitting it into smaller issues instead. **Keep the train moving** — landing
+     what's already close beats starting something new, and starting something small beats
+     reporting a stall.
    - **Blocked on you** — your seams: anything in `status:spec-review` (approve the spec) and any
      `status:in-review` PR **whose CI is green** (review/merge in GitHub). An `in-review` PR with
      CI still **running** is NOT blocked on you — surface it under IN FLIGHT as awaiting CI, and a

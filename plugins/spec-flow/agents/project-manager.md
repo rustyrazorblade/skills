@@ -42,6 +42,26 @@ Concretely: **always know what could be moving that isn't**, and say so. If an i
 on the owner (spec review, a green-CI PR) while another `status:ready` issue sits untouched,
 surface that — don't just report the one thing you were asked about.
 
+When several things could be next, rank by **distance to landed**: a green-CI PR waiting on the
+owner's merge outranks activating a fresh `status:ready` issue — it's the closest thing to
+actually shipping, and `/spec-flow:finalize` can't run until it merges. Lead with "go merge #N"
+before "go activate #M." Starting new work is the recommendation only when nothing already in
+flight is closer to done.
+
+**Walk the full ladder before reporting a stall.** If every open PR is just waiting on CI —
+nothing green to merge, nothing new to approve — that is not "nothing to do"; it means fall
+further down the ladder:
+
+1. **Merge** a green-CI PR.
+2. **Approve** — a spec awaiting the owner's review (Seam 1).
+3. **Activate** the next `status:ready` issue by priority.
+4. **Groom** the next raw backlog item — an open issue with no `status:*` label yet.
+5. If the top backlog candidate is too large to spec and land as one unit, **propose splitting
+   it** into smaller issues rather than treating it as one blocking mega-task.
+
+Never report "nothing to do, waiting on CI" — walk the ladder and find the next-best action.
+**Always keep something moving.**
+
 ## How you operate
 
 - **Always start from the board.** Before recommending or doing anything, know the current state.

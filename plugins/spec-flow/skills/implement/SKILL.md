@@ -93,7 +93,9 @@ made from the issue title — if it's not already known from context, recover it
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 
-   <final summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>"
+   <final summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
+
+   <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
    ```
    Give the owner the PR URL for GitHub review (Seam 2). When they leave comments, the next

@@ -23,28 +23,33 @@ recover it with `git worktree list | grep "issue-<N>-"` or
    ```
    If it isn't merged, stop and tell the owner the merge is theirs to do in GitHub.
 
-2. **Update local main** so the archive operates on merged content. `<repo-root>` is the
-   owner's primary checkout, not a worktree — switching branches there is disruptive if it's
-   mid-work, so confirm it's clean first:
+2. **Create a short-lived worktree from merged main.** `<repo-root>` is the owner's primary
+   checkout, not a per-issue worktree — never switch branches or pull there. Do the archive in
+   an isolated, detached-HEAD worktree instead, so finalize never touches whatever the owner has
+   checked out or in progress:
    ```bash
-   git -C <repo-root> status --porcelain   # must be empty; if not, stop and ask the owner
-   git -C <repo-root> checkout main
-   git -C <repo-root> pull origin main
+   git -C <repo-root> fetch origin
+   TMPWT=$(mktemp -d)
+   git -C <repo-root> worktree add --detach "$TMPWT" origin/main
    ```
 
-3. **Sync delta specs into canonical specs, then archive the change.** Use the OpenSpec flow
-   for change `<slug>`:
+3. **Sync delta specs into canonical specs, then archive the change** (inside `$TMPWT`). Use the
+   OpenSpec flow for change `<slug>`:
    - `openspec-sync-specs` (or `/opsx:sync`) to fold the delta specs into `openspec/specs/`.
    - `openspec-archive-change` (or `/opsx:archive`) to move the change under
      `openspec/changes/archive/`.
-   Commit the archive on `main` (this is the one place finalize commits to main, mirroring how
-   prior changes were archived) and push it:
+   Commit the archive (this is the one place finalize commits to `main`, mirroring how prior
+   changes were archived) and push it straight to `main`, then remove the temp worktree:
    ```bash
-   git -C <repo-root> push origin main
+   git -C "$TMPWT" add -A
+   git -C "$TMPWT" commit -m "archive: <slug> (#<N>)"
+   git -C "$TMPWT" push origin HEAD:main
+   git -C <repo-root> worktree remove "$TMPWT"
    ```
-   Leaving the archive commit local would strand it out of sync with `origin/main` — the branch
+   Leaving the archive commit unpushed would strand `origin/main` without it — the branch
    `/spec-flow:activate` cuts every new worktree from. If the repo prefers the owner push it
-   themselves, surface the commit for them instead, but say so explicitly.
+   themselves, stop before the push and surface the commit for them instead, but say so
+   explicitly.
 
 4. **Remove the worktree and branch:**
    ```bash

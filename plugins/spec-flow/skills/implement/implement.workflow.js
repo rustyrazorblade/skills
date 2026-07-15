@@ -293,11 +293,16 @@ ${GUARDRAILS}`,
   )
 }
 
-// ── Phase: Build ─────────────────────────────────────────────────────────────
-phase('Build')
-const buildHint = buildSystem && buildSystem !== 'auto' ? ` (build system: ${buildSystem})` : ''
-await agentNS(
-  `In the worktree at ${worktree}, get the build clean for review${buildHint}.
+// ── Phases: Build → Polish (skipped if the panel never approved) ─────────────
+// A tree with unresolved blocker/major findings is going back through another `implement` round
+// regardless — that round's own Build phase runs again once it's actually approved, so running
+// Build/Polish now is pure waste: extra agent runs and commits on a tree already known to change.
+let polish = 'n/a'
+if (review && review.approve) {
+  phase('Build')
+  const buildHint = buildSystem && buildSystem !== 'auto' ? ` (build system: ${buildSystem})` : ''
+  await agentNS(
+    `In the worktree at ${worktree}, get the build clean for review${buildHint}.
 Discover and run the repo's format, lint, and build steps — examples by ecosystem:
   - Rust:   \`cargo fmt\`, then \`cargo clippy --all-targets -- -D warnings\`, then \`cargo build\`
   - Node:   the repo's lint + build scripts (e.g. \`npm run lint && npm run build\`)
@@ -308,13 +313,12 @@ changing behavior, and commit the result, then push the branch. Never touch main
 format/lint/build status.
 
 ${GUARDRAILS}`,
-  { agentType: 'build-engineer', label: `build:${change}`, phase: 'Build' },
-)
+    { agentType: 'build-engineer', label: `build:${change}`, phase: 'Build' },
+  )
 
-// ── Phase: Polish ────────────────────────────────────────────────────────────
-phase('Polish')
-const polish = await agentNS(
-  `Final documentation polish for OpenSpec change "${change}" in worktree ${worktree}.
+  phase('Polish')
+  polish = await agentNS(
+    `Final documentation polish for OpenSpec change "${change}" in worktree ${worktree}.
 Ensure any new modules/behaviors are documented consistently with the repo's conventions
 (module/responsibility comments, any architecture/index docs the repo keeps, doc comments on
 public items). ALSO: if this change alters user-facing behavior (a public API, CLI, config, or
@@ -325,8 +329,11 @@ Make only documentation/comment edits; commit them and push the branch. Never to
 Return a one-line note on what you documented (including whether user docs changed).
 
 ${GUARDRAILS}`,
-  { agentType: 'tdd-developer', label: `polish:${change}`, phase: 'Polish' },
-)
+    { agentType: 'tdd-developer', label: `polish:${change}`, phase: 'Polish' },
+  )
+} else {
+  log('Review panel did not approve within the bounded fix loop — skipping Build/Polish; residual findings are for the owner.')
+}
 
 return {
   change,
@@ -336,6 +343,14 @@ return {
   approved: !!(review && review.approve && residual.length === 0),
   review_rounds: round,
   residual_findings: residual,
+  // Deliberately non-blocking findings (e.g. test-rigor's over-testing/test-practicality flags)
+  // from an approving round — computed above in `findings` but otherwise never returned, so they
+  // silently vanished before reaching the owner at Seam 2.
+  non_blocking_findings: review
+    ? review.findings
+        .filter(f => f.severity === 'minor' || f.severity === 'nit')
+        .map(f => `[${f.severity}] ${f.location} (${f.rule}): ${f.problem}`)
+    : [],
   review_summary: review ? review.summary : 'no review captured',
   polish: polish || 'n/a',
 }

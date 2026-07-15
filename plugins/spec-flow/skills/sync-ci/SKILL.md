@@ -52,11 +52,17 @@ the branch merges, then evaporates.
    ```
 
 4. **Append the failing ids to the flagged set** (dedup; keep what's already there — the set
-   accumulates across the branch's life):
+   accumulates across the branch's life). Diff the incoming ids against what's already flagged
+   *before* merging, so step 5 can tell the owner which are new vs. repeat failures — an id
+   failing again after a fix round is either still broken or flaky, worth calling out rather than
+   folding silently into the merge:
    ```bash
    mkdir -p <worktree>/.spec-flow
    FLAG=<worktree>/.spec-flow/flagged-tests
    touch "$FLAG"
+   INCOMING=$(cat "$TMP"/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | sort -u)
+   NEW=$(comm -23 <(echo "$INCOMING") <(sort -u "$FLAG"))
+   REPEAT=$(comm -12 <(echo "$INCOMING") <(sort -u "$FLAG"))
    # Merge new ids in, preserving existing, dropping blanks/duplicates:
    cat "$FLAG" "$TMP"/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' \
      | sort -u > "$FLAG.new" && mv "$FLAG.new" "$FLAG"
@@ -64,11 +70,12 @@ the branch merges, then evaporates.
    Each line is a runner-selectable test id in the same form CI emitted (a JUnit `Class.method`, a
    nextest `test(=path)` / test path). The local gate expands these alongside the unit-tier command.
 
-5. **Report.** Tell the owner which test ids were added (and the total now in the flagged set), and
-   that the next local run — `/spec-flow:implement`'s gate or a manual run — will include them. Then
-   the loop is: fix on the branch (tests stay green locally including the flagged ones), push, CI
-   re-runs the full suite; when it's green and the owner merges, the flagged set evaporates with the
-   worktree at `/spec-flow:finalize`.
+5. **Report.** Tell the owner which test ids are newly flagged (`$NEW`) and which are repeat
+   failures already in the set (`$REPEAT` — still broken or flaky, call it out explicitly), plus
+   the total now in the flagged set, and that the next local run — `/spec-flow:implement`'s gate
+   or a manual run — will include them. Then the loop is: fix on the branch (tests stay green
+   locally including the flagged ones), push, CI re-runs the full suite; when it's green and the
+   owner merges, the flagged set evaporates with the worktree at `/spec-flow:finalize`.
 
 ## Rules
 

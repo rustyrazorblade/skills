@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — create its git worktree and branch, run OpenSpec explore+propose to produce a committed spec (consulting a domain-expert agent for any architectural/data-model decisions), and stop for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). This is the human approval seam; it never implements.
+description: Activate a groomed GitHub issue for development — create its git worktree and branch, delegate the design to the architect agent (consulting a domain-expert agent for any architectural/data-model decisions), run OpenSpec explore+propose to produce a committed spec, and stop for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). This is the human approval seam; it never implements.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 

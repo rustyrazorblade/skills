@@ -11,12 +11,20 @@ on:
   pull_request:
   push:
     branches: [main]
+concurrency:
+  # Checkpoint pushes during /spec-flow:implement recur often — cancel a superseded run rather
+  # than let it finish and confuse /spec-flow:sync-ci's "most recent completed run" pick.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        # Caches ~/.cargo/registry, ~/.cargo/git, and target/ keyed on Cargo.lock — checkpoint
+        # pushes during /spec-flow:implement recur often, so a cold build defeats "keep CI warm".
       - uses: taiki-e/install-action@nextest
       - name: Run full suite (all tiers)
         run: cargo nextest run --profile ci --run-ignored all
@@ -24,7 +32,7 @@ jobs:
         if: failure()
         run: |
           python3 - <<'PY'
-          import glob, xml.etree.ElementTree as ET
+          import glob, os, xml.etree.ElementTree as ET
           ids = set()
           # nextest writes its JUnit report under target/nextest/<profile>/ (path from nextest.toml)
           for f in glob.glob("target/nextest/**/*.xml", recursive=True):
@@ -44,6 +52,13 @@ jobs:
           if ids:
               with open("spec-flow-failures.txt", "w") as fh:
                   fh.write("\n".join(sorted(ids)) + "\n")
+              # Also surface them on the run's summary page — no artifact download needed to see
+              # what broke.
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with open(summary, "a") as fh:
+                      fh.write("## Failing tests\n\n")
+                      fh.write("\n".join(f"- `{i}`" for i in sorted(ids)) + "\n")
           PY
       - name: Upload failing test ids
         if: failure()

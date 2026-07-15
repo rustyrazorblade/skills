@@ -60,6 +60,10 @@ const testInstruction = `Run the UNIT tier locally as your gate — the repo's f
 // priorities).
 const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints so CI runs the full suite on the already-open draft PR (push somewhat frequently — after a completed task or a few green cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
+// Review lenses are read-only critics, not implementers — they must never commit or push (unlike
+// GUARDRAILS above, which permits checkpoint pushes for the tdd-developer/build-engineer phases).
+const REVIEW_GUARDRAILS = `GUARDRAILS (strict, READ-ONLY): You are reviewing, not implementing. Operate ONLY inside the worktree, read-only. Do NOT commit, do NOT \`git push\`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR, do NOT post GitHub comments, and do NOT take any other outward or destructive action — your output is the JSON review contract, nothing else. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your findings/summary for the owner to triage — never file them yourself.`
+
 // Resolve the plugin's agents BARE-FIRST, then fall back to the plugin-namespaced
 // id (`spec-flow:<name>`). This preserves the intended override mechanism — a consuming
 // repo that defines its own `tdd-developer`/`reviewer`/etc. wins — while still working
@@ -234,7 +238,7 @@ while (round < MAX_ROUNDS) {
   phase('Review')
   const lensResults = await parallel(
     reviewLenses.map(l => () =>
-      agentNS(`${l.prompt}\n\n${GUARDRAILS}`, {
+      agentNS(`${l.prompt}\n\n${REVIEW_GUARDRAILS}`, {
         agentType: l.agentType,
         label: `review:${l.label}:${change}#${round}`,
         phase: 'Review',

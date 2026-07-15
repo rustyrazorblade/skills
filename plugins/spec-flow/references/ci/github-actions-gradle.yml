@@ -8,6 +8,11 @@ on:
   pull_request:
   push:
     branches: [main]
+concurrency:
+  # Checkpoint pushes during /spec-flow:implement recur often — cancel a superseded run rather
+  # than let it finish and confuse /spec-flow:sync-ci's "most recent completed run" pick.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,6 +22,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        # Wrapper/distribution cache + Gradle build cache — checkpoint pushes during
+        # /spec-flow:implement recur often, so a cold build here defeats "keep CI warm".
       - name: Run full suite (unit + integration)
         # `check` must depend on `integrationTest` (see docs/workflow.md, Gradle tiering) so the
         # integration tier actually runs in CI. Adjust if your integration task is named differently.
@@ -28,7 +36,7 @@ jobs:
         if: failure()
         run: |
           python3 - <<'PY'
-          import glob, xml.etree.ElementTree as ET
+          import glob, os, xml.etree.ElementTree as ET
           ids = set()
           for f in glob.glob("**/build/test-results/**/*.xml", recursive=True):
               try:
@@ -47,6 +55,13 @@ jobs:
           if ids:
               with open("spec-flow-failures.txt", "w") as fh:
                   fh.write("\n".join(sorted(ids)) + "\n")
+              # Also surface them on the run's summary page — no artifact download needed to see
+              # what broke.
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with open(summary, "a") as fh:
+                      fh.write("## Failing tests\n\n")
+                      fh.write("\n".join(f"- `{i}`" for i in sorted(ids)) + "\n")
           PY
       - name: Upload failing test ids
         if: failure()

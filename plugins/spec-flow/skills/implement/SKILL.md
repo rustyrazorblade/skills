@@ -44,7 +44,9 @@ made from the issue title — if it's not already known from context, recover it
      PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
    fi
    ```
-   Keep `<PR>` — step 5 needs it.
+   `--base main` must match the repo's actual default branch — the same one `activate` branched
+   from (see its "if `main` is not the repo's default branch, substitute it" caveat). Keep `<PR>`
+   — step 5 needs it.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
@@ -68,9 +70,11 @@ made from the issue title — if it's not already known from context, recover it
      }
    }
    ```
-   `buildSystem` is a hint for the build phase — the project's build tool (`cargo`, `gradle`,
-   `npm`, `go`, `pytest`, …) or `"auto"` to let the build-engineer discover the real runner from
-   the repo. It is NOT an exhaustive switch; the agents detect the actual commands.
+   `base` must match the repo's actual default branch (same substitution caveat as step 2's
+   `--base`) — the review lenses diff `base...HEAD` in the worktree, so a wrong base reviews the
+   wrong range. `buildSystem` is a hint for the build phase — the project's build tool (`cargo`,
+   `gradle`, `npm`, `go`, `pytest`, …) or `"auto"` to let the build-engineer discover the real
+   runner from the repo. It is NOT an exhaustive switch; the agents detect the actual commands.
    The script: tdd-developer applies the OpenSpec tasks test-first → a **five-lens review panel**
    reviews the diff in parallel (spec-conformance + repo rules; the built-in `/code-review`
    correctness lens; the built-in `/security-review` lens, which self-gates to security-relevant

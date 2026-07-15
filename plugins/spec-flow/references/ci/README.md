@@ -20,10 +20,11 @@ green `main`, any CI failure is a real regression the diff introduced, never a p
 
 - `github-actions-gradle.yml` — runs `./gradlew check` (wire `integrationTest` into `check` so the
   integration tier runs in CI), parses JUnit XML under `build/test-results/`, uploads
-  `spec-flow-failures` on failure.
+  `spec-flow-failures` on failure. Cached by default (`gradle/actions/setup-gradle`) — checkpoint
+  pushes during `/spec-flow:implement` recur often enough that a cold build defeats "keep CI warm".
 - `github-actions-nextest.yml` — runs `cargo nextest run --profile ci --run-ignored all`, parses the
   nextest JUnit report (requires `[profile.ci.junit] path` in `.config/nextest.toml`), uploads
-  `spec-flow-failures` on failure.
+  `spec-flow-failures` on failure. Cached by default (`Swatinem/rust-cache`), same reasoning.
 
 Copy the one matching your runner into `.github/workflows/`, adjust the toolchain versions and any
 service containers your integration tier needs, and enable the check in branch protection. These are

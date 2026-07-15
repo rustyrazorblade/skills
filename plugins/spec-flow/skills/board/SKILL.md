@@ -10,6 +10,9 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
 
 ## Steps
 
+Steps 1-3 are independent reads — issue them together (parallel tool calls) rather than one at a
+time.
+
 1. **Gather issues by lifecycle:**
    ```bash
    gh issue list --state open --json number,title,labels,url --limit 100
@@ -18,19 +21,17 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
    `status:*` label** are the raw backlog — not yet groomed, so no `P?` either. Keep them
    separate; they're the fallback when nothing labeled is actionable.
 
-2. **Gather PR state** for branches `issue-*`:
+2. **Gather PR state AND CI state in one call.** `statusCheckRollup` carries every check for
+   every open PR, so there's no need to loop `gh pr checks` per PR:
    ```bash
-   gh pr list --state open --json number,headRefName,title,reviewDecision,url --limit 100
+   gh pr list --state open --json number,headRefName,title,reviewDecision,url,statusCheckRollup --limit 100
    ```
-
-   Then **gather CI state for each open `issue-*` PR** — an `in-review` PR is only actionable
-   by the owner once CI is green; while CI runs there is nothing for them to do:
-   ```bash
-   gh pr checks <PR> --json name,state,bucket   # per PR; bucket ∈ pass/fail/pending/skipping
-   ```
-   Roll the checks into one CI status per PR: **green** (all required checks pass), **running**
-   (any required check still pending/queued), or **failing** (any required check failed). Treat
-   `skipping` (e.g. deploy-pages off a PR) as not-required.
+   Roll each PR's `statusCheckRollup` array into one CI status — an `in-review` PR is only
+   actionable by the owner once CI is green; while CI runs there is nothing for them to do:
+   **green** if every entry is complete and successful (`conclusion` ∈ SUCCESS/NEUTRAL/SKIPPED,
+   or the legacy commit-status `state` = SUCCESS), **running** if any entry is still in progress
+   (`status` ∈ QUEUED/IN_PROGRESS, or legacy `state` = PENDING), otherwise **failing**. An empty
+   `statusCheckRollup` (no CI configured on the repo) counts as green — nothing to wait on.
 
 3. **Gather worktrees:**
    ```bash

@@ -243,6 +243,7 @@ while (round < MAX_ROUNDS) {
   )
   const reviews = lensResults.filter(Boolean)
   if (reviews.length === 0) { residual.push('all review lenses returned no result'); break }
+  const missingLenses = reviewLenses.filter((l, i) => !lensResults[i]).map(l => l.label)
 
   const findings = reviews.flatMap(r => r.findings || [])
   const mustFix = findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
@@ -254,13 +255,22 @@ while (round < MAX_ROUNDS) {
     spec_conformance: specLens ? specLens.spec_conformance : 'unknown',
     tests_ran: specLens ? specLens.tests_ran : 'unit',
     findings,
-    approve: reviews.every(r => r.approve) && mustFix.length === 0,
+    // Approval requires EVERY lens to have reported AND approved — a lens that returns no
+    // result must never be silently dropped from the vote.
+    approve: missingLenses.length === 0 && reviews.every(r => r.approve) && mustFix.length === 0,
   }
 
   if (review.approve) break
   if (round >= MAX_ROUNDS) {
     residual.push(...mustFix.map(f => `[${f.severity}] ${f.location}: ${f.problem}`))
+    if (missingLenses.length) residual.push(`lens(es) did not report: ${missingLenses.join(', ')}`)
     break
+  }
+
+  if (mustFix.length === 0 && missingLenses.length > 0) {
+    // Nothing actionable to fix — only missing lenses withheld approval. Re-run the panel
+    // next round instead of dispatching an empty Fix pass.
+    continue
   }
 
   phase('Fix')
@@ -271,7 +281,7 @@ WORKTREE (cwd): ${worktree}
 CHANGE: ${change}
 FINDINGS:
 ${fixList}
-Fix each, keep the unit tier (plus the branch's `.spec-flow/flagged-tests`) green, commit with focused messages.
+Fix each, keep the unit tier (plus the branch's \`.spec-flow/flagged-tests\`) green, commit with focused messages.
 Push the branch at checkpoints so CI keeps running the full suite on the draft PR. Never touch main; leave the PR a draft. Return what you changed.
 
 ${GUARDRAILS}`,

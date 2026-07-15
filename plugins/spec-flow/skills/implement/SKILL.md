@@ -12,7 +12,9 @@ runs as a background `Workflow` — **invoking this skill is the owner's explici
 that orchestration** (it may spawn several subagents).
 
 Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>`, branch
-`issue-<N>-<slug>`, OpenSpec change `<slug>`.
+`issue-<N>-<slug>`, OpenSpec change `<slug>`. `<slug>` was a one-time judgment call `activate`
+made from the issue title — if it's not already known from context, recover it with
+`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
 
 ## Steps
 
@@ -27,15 +29,22 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
    and open a **draft** PR *now*, before implementation runs. CI triggers on `pull_request` and runs
    on draft PRs, so from here every checkpoint push during implementation exercises the full suite in
    parallel with local work — CI is the slow backstop the tiering model relies on, and this keeps it
-   busy instead of idle until the end.
+   busy instead of idle until the end. **Re-running this skill is normal** (resuming after a crash,
+   after residual findings, or after the owner sends you back) — check for an existing PR first and
+   reuse it rather than erroring on a duplicate:
    ```bash
    git -C <worktree> push -u origin issue-<N>-<slug>
-   gh pr create --draft --head issue-<N>-<slug> --base main \
-     --title "<issue title>" \
-     --body "Closes #<N>
+   PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+   if [ -z "$PR" ]; then
+     gh pr create --draft --head issue-<N>-<slug> --base main \
+       --title "<issue title>" \
+       --body "Closes #<N>
 
    Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
+     PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+   fi
    ```
+   Keep `<PR>` — step 5 needs it.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
@@ -90,6 +99,9 @@ Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>
 
 - **Never merge, never push to `main`.** This skill pushes only the issue branch, opens a *draft*
   PR, and later marks it ready — it never merges.
+- **If a PR already exists for the branch (re-run), reuse it rather than erroring.** Common after
+  a resumed/interrupted run, residual findings sent back for another pass, or the owner asking for
+  another round.
 - **Draft until approved.** The PR opens as a draft so CI runs during implementation; mark it ready
   only after the review panel approves. If the panel can't reach `approve` within the bounded fix
   loop, leave the PR a draft and surface the residual findings to the owner — never mark a

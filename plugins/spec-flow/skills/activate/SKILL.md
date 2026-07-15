@@ -27,6 +27,16 @@ and confirm the choice with the owner.
    All spec work happens inside that worktree path from here on. (If `main` is not the repo's
    default branch, substitute it.)
 
+   **Exclude `.claude/worktrees/` from git** (idempotent, one-time; the nested checkouts must
+   never show up as untracked/stageable content in the primary working tree):
+   ```bash
+   grep -qxF '.claude/worktrees/' <repo-root>/.git/info/exclude 2>/dev/null \
+     || printf '\n# spec-flow long-lived worktrees (local-only, never commit)\n.claude/worktrees/\n' \
+        >> <repo-root>/.git/info/exclude
+   ```
+   Uses `.git/info/exclude`, not a committed `.gitignore` — this is local repo state, not
+   something to push to `main`.
+
 3. **Design first — delegate to the `architect` agent.** Before generating the proposal, spawn the
    `architect` subagent with the issue's scope + acceptance criteria. It returns a design proposal —
    approach, structure/boundaries (SOLID), data model, key interfaces, and **trade-offs framed as

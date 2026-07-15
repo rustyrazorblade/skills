@@ -78,7 +78,12 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
     review panel → fix loop → build-engineer → docs → PR). Invoking it is the explicit Workflow
     opt-in; launch it only after the owner has approved the spec.
   - The owner's PR review comments → **`/spec-flow:address`**.
+  - A PR whose CI just went red → **`/spec-flow:sync-ci`** (pulls the failures into the branch's
+    flagged set so the local loop guards them; owner-invoked, never polled).
   - A squash-merged PR → **`/spec-flow:finalize`**.
+  - A repo that hasn't split its tests into unit/integration tiers yet (first issue hitting
+    `/spec-flow:implement` there, or the owner asks to set it up) → **`/spec-flow:adopt-tiering`**
+    (one-time migration, run once per repo before the tiered gate applies).
   - "Where do things stand / what should I work on" → **`/spec-flow:board`**.
 - **Front-of-pipeline delegation (refine → design → proposal).** Two specialists feed the spec; you
   broker their output and bring decisions back to the owner:

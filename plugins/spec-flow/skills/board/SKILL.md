@@ -50,7 +50,7 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
 
    🔧 IN FLIGHT (agents / CI)
      in-review     #M P1  <title>  PR #P  ⏳ CI     (awaiting CI — not on you yet)
-     in-review     #M P1  <title>  PR #P  ❌ CI     (CI failing — /spec-flow:address or fix)
+     in-review     #M P1  <title>  PR #P  ❌ CI     (CI failing — /spec-flow:sync-ci)
      in-progress   #K P2  <title>                  (worktree present)
      addressing    #J P1  <title>  PR #Q           (resolving your comments)
 
@@ -75,7 +75,8 @@ derived from GitHub labels + PR state + worktrees. Read-only; you don't change a
    - **Blocked on you** — your seams: anything in `status:spec-review` (approve the spec) and any
      `status:in-review` PR **whose CI is green** (review/merge in GitHub). An `in-review` PR with
      CI still **running** is NOT blocked on you — surface it under IN FLIGHT as awaiting CI, and a
-     PR with **failing** CI as needing a fix (`/spec-flow:address`), not as your action.
+     PR with **failing** CI as needing `/spec-flow:sync-ci` (pull the failures into the branch's
+     flagged set, then re-run the fix loop), not as your action.
 
 ## Rules
 

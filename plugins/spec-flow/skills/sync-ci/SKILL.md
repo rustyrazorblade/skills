@@ -12,7 +12,9 @@ something failed. Pull those failures into the branch's **flagged set** so the f
 owner-invoked — run it when you see CI go red — there is **no polling**.
 
 Input: an issue number `#N` (or its PR number). Worktree `.claude/worktrees/issue-<N>-<slug>`,
-branch `issue-<N>-<slug>`. See **Test tiering (unit / integration)** in `docs/workflow.md` for the
+branch `issue-<N>-<slug>`. If `<slug>` isn't already known from context, recover it with
+`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
+See **Test tiering (unit / integration)** in `docs/workflow.md` for the
 model: the unit tier runs locally every cycle; a CI-caught test is added here and run locally until
 the branch merges, then evaporates.
 

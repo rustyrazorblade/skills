@@ -23,7 +23,7 @@ jobs:
       - name: Collect failing test ids
         if: failure()
         run: |
-          python3 - <<'PY' > spec-flow-failures.txt
+          python3 - <<'PY'
           import glob, xml.etree.ElementTree as ET
           ids = set()
           # nextest writes its JUnit report under target/nextest/<profile>/ (path from nextest.toml)
@@ -37,7 +37,13 @@ jobs:
                       name = tc.get("name", "")
                       if name:
                           ids.add(name)
-          print("\n".join(sorted(ids)))
+          # Only write the file when there are actual test-failure ids. A compile break fails the
+          # job with no JUnit XML at all; leaving spec-flow-failures.txt unwritten (vs. writing an
+          # empty file) lets `if-no-files-found: ignore` skip the upload, so /spec-flow:sync-ci
+          # correctly reads "not a test failure" instead of an empty artifact.
+          if ids:
+              with open("spec-flow-failures.txt", "w") as fh:
+                  fh.write("\n".join(sorted(ids)) + "\n")
           PY
       - name: Upload failing test ids
         if: failure()

@@ -11,7 +11,8 @@ and left comments. Pull them, fix them in the worktree, push, and reply to each 
 is owner-invoked (run it when you're back) — there is no polling.
 
 Input: an issue number `#N` (or its PR number). Worktree `.claude/worktrees/issue-<N>-<slug>`,
-branch `issue-<N>-<slug>`.
+branch `issue-<N>-<slug>`. If `<slug>` isn't already known from context, recover it with
+`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
 
 ## Steps
 
@@ -36,8 +37,10 @@ branch `issue-<N>-<slug>`.
    - behavior/test/structure changes → `tdd-developer` (test-first);
    - review-rule/spec-conformance concerns → `reviewer` to re-check after fixes, or
      `build-engineer` for build/lint/format.
-   Instruct it to make focused commits, keep tests green (full or degraded, as available),
-   and **never push or touch main**.
+   Instruct it to make focused commits, keep the **unit tier** (plus the branch's
+   `.spec-flow/flagged-tests`, if any) green locally as its gate — never the full/integration
+   suite, which is CI's gate — and **never push or touch main**. See **Test tiering (unit /
+   integration)** in `docs/workflow.md`.
 
 4. **Push the branch** (outward-facing — done here, narrated):
    ```bash

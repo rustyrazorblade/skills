@@ -49,6 +49,12 @@ and confirm the choice with the owner.
    - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`, carrying
      the architect's recommended design (and the alternatives) into the proposal/design docs.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
+   - **Build an explicit AC→scenario mapping.** List every acceptance criterion from the issue,
+     and every risk/failure-mode the architect's design surfaced ("Risks & impact"), against the
+     scenario(s) that cover each. Every criterion and every architect-surfaced risk must map to at
+     least one scenario — if one doesn't, either add a scenario for it or explicitly note it as an
+     intentional exclusion with a one-line reason. Never let a criterion silently drop out with no
+     scenario and no explanation. This mapping is rendered for the owner at step 7.
 
 5. **Route significant decisions to the owner — and to a domain expert for facts.** Every
    consequential design / data-model choice the architect surfaced (new tables / partition or
@@ -73,11 +79,14 @@ and confirm the choice with the owner.
    reviews here, not in an editor. Render the substance inline: the **proposal** (why + what
    changes + scope), the **design decisions** (each decision, and any rejected alternative or
    open review choice called out explicitly), the **delta-spec requirements + their
-   `#### Scenario:` blocks** (the testable contract), and the **tasks** in order. Summarize
-   faithfully — it must be enough to approve or redirect without opening a file. You may also
-   give the path as a secondary reference, but the inline render is the deliverable. State that
-   nothing will be implemented until they approve. **Do not proceed to implementation.** When
-   the owner approves, the next step is `/spec-flow:implement <N>`.
+   `#### Scenario:` blocks** (the testable contract), the **AC→scenario mapping** from step 4 —
+   every acceptance criterion and architect-surfaced risk against its covering scenario(s), with
+   any intentional exclusions called out by name so the owner can catch a dropped criterion before
+   approving, not after implementation — and the **tasks** in order. Summarize faithfully — it
+   must be enough to approve or redirect without opening a file. You may also give the path as a
+   secondary reference, but the inline render is the deliverable. State that nothing will be
+   implemented until they approve. **Do not proceed to implementation.** When the owner approves,
+   the next step is `/spec-flow:implement <N>`.
 
 ## Rules
 

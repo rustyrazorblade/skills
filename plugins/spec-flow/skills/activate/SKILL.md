@@ -1,14 +1,16 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — create its git worktree and branch, delegate the design to the architect agent (consulting a domain-expert agent for any architectural/data-model decisions), run OpenSpec explore+propose to produce a committed spec, and stop for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). This is the human approval seam; it never implements.
+description: Activate a groomed GitHub issue for development — create its git worktree and branch, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints — the design choice, then the spec approval (Seam 1); it never implements.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
-# activate — spec the work, then stop for approval
+# activate — decide the design, spec the work, then stop for approval
 
 You are the PM/lead in the main session. Take a `status:ready` issue and produce a committed,
-owner-approvable OpenSpec change on an isolated worktree. **This is Seam 1.** When the spec is
-committed you STOP and hand back — you do not implement, and you do not start `/spec-flow:implement`.
+owner-approvable OpenSpec change on an isolated worktree. This skill stops for the owner **twice**:
+once at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam
+1** — to approve the resulting spec. Neither stop is optional; when the spec is committed and
+approved you hand back — you do not implement, and you do not start `/spec-flow:implement`.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue
 (`gh issue list --label status:ready --json number,title,labels` and choose `P0` over `P1` …),
@@ -37,17 +39,36 @@ and confirm the choice with the owner.
    Uses `.git/info/exclude`, not a committed `.gitignore` — this is local repo state, not
    something to push to `main`.
 
-3. **Design first — delegate to the `architect` agent.** Before generating the proposal, spawn the
-   `architect` subagent with the issue's scope + acceptance criteria. It returns a design proposal —
-   approach, structure/boundaries (SOLID), data model, key interfaces, and **trade-offs framed as
-   owner decisions** (recommended option + alternatives + why). This design feeds the OpenSpec
-   proposal below. The architect **advises**; it never makes the call.
+3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** Before
+   generating anything, spawn the `architect` subagent with the issue's scope + acceptance
+   criteria. If a domain-expert agent is available in the consuming repo (e.g. a database or
+   domain expert), spawn it **at the same time** — one message, two tool calls — with the same
+   scope + acceptance criteria; both are independent read-only advisors working from the same
+   input, so there's no reason to serialize them. The architect returns a design proposal —
+   approach, structure/boundaries (SOLID), data model, key interfaces, risks & impact, and
+   **trade-offs framed as owner decisions** (recommended option + alternatives + why). The
+   domain-expert returns the domain facts behind those trade-offs. If the architect's design
+   raises a specific domain question neither agent already answered, follow up with a second,
+   targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
 
-4. **Explore + propose, inside the worktree.** Run the OpenSpec flow for a change named
-   `<slug>` against the issue's scope and acceptance criteria, folding in the architect's design:
+4. **Stop and route the decision to the owner — before generating anything.** Every consequential
+   design / data-model choice the architect surfaced (new tables / partition or clustering keys /
+   indexes / schema changes / a new public interface / a concurrency model) is the **owner's** to
+   make. Present the architect's (and domain-expert's) options inline — recommended choice +
+   alternatives + why, and the risks — and **wait for the owner to choose** before proceeding to
+   step 5. This is a real pause, not a formality folded into the final spec review at step 7: the
+   spec generated in step 5 embodies whatever the owner picks here, so a chosen alternative must
+   never leave stale traces of the rejected recommendation in `tasks.md` or the scenarios. The
+   agents never make the architectural call.
+
+5. **Explore + propose, inside the worktree, from the owner's chosen design.** Run the OpenSpec
+   flow for a change named `<slug>` against the issue's scope and acceptance criteria, folding in
+   the design the **owner chose** in step 4 — not the architect's raw recommendation if they
+   picked differently:
    - Use `openspec-explore` to think through the change if it's non-trivial.
    - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`, carrying
-     the architect's recommended design (and the alternatives) into the proposal/design docs.
+     the owner's chosen design (and why the alternatives were set aside) into the proposal/design
+     docs.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
    - **Build an explicit AC→scenario mapping.** List every acceptance criterion from the issue,
      and every risk/failure-mode the architect's design surfaced ("Risks & impact"), against the
@@ -55,15 +76,6 @@ and confirm the choice with the owner.
      least one scenario — if one doesn't, either add a scenario for it or explicitly note it as an
      intentional exclusion with a one-line reason. Never let a criterion silently drop out with no
      scenario and no explanation. This mapping is rendered for the owner at step 7.
-
-5. **Route significant decisions to the owner — and to a domain expert for facts.** Every
-   consequential design / data-model choice the architect surfaced (new tables / partition or
-   clustering keys / indexes / schema changes / a new public interface / a concurrency model) is the
-   **owner's** to make. Where deeper domain facts are needed, also consult a relevant
-   **domain-expert agent if one is available** (e.g. a database or domain expert configured in
-   the consuming repo) for trade-offs. **Present the options to the owner and let the owner choose**;
-   capture the owner's decision in the spec/design. The agents never make the architectural call —
-   they advise only.
 
 6. **Commit the spec on the branch:**
    ```bash
@@ -76,10 +88,12 @@ and confirm the choice with the owner.
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
    ```
    **Show the spec in the conversation — do NOT just point at the worktree path.** The owner
-   reviews here, not in an editor. Render the substance inline: the **proposal** (why + what
-   changes + scope), the **design decisions** (each decision, and any rejected alternative or
-   open review choice called out explicitly), the **delta-spec requirements + their
-   `#### Scenario:` blocks** (the testable contract), the **AC→scenario mapping** from step 4 —
+   reviews here, not in an editor. This is confirmation that step 5 faithfully translated the
+   design already **chosen at step 4** into a concrete spec — not the first time the owner sees
+   the decision. Render the substance inline: the **proposal** (why + what changes + scope), the
+   **design the owner chose at step 4** (restated, with the rejected alternatives and why, so the
+   owner can confirm this is still what they meant), the **delta-spec requirements + their
+   `#### Scenario:` blocks** (the testable contract), the **AC→scenario mapping** from step 5 —
    every acceptance criterion and architect-surfaced risk against its covering scenario(s), with
    any intentional exclusions called out by name so the owner can catch a dropped criterion before
    approving, not after implementation — and the **tasks** in order. Summarize faithfully — it
@@ -90,11 +104,15 @@ and confirm the choice with the owner.
 
 ## Rules
 
-- **Show, don't link.** At the review seam, render the spec inline in the conversation; never
-  hand back only a file path and expect the owner to open it. The owner is not in an editor.
-- Stop at the spec. No implementation, no `/spec-flow:implement`, no pushing the branch.
+- **Show, don't link.** At either stop, render inline in the conversation; never hand back only a
+  file path and expect the owner to open it. The owner is not in an editor.
+- **Two real stops, in order.** Step 4 (design choice) always precedes step 5 (generation) —
+  never generate the spec before the owner has picked among the architect's options. Step 7 (spec
+  approval, Seam 1) always follows step 6 (commit) — no implementation, no
+  `/spec-flow:implement`, no pushing the branch, until both stops have passed.
 - Worktree managed by `git worktree` (long-lived), never the Agent throwaway isolation.
 - One change per issue; the change name equals the slug; branch/worktree are `issue-<N>-<slug>`.
-- Architectural / data-model decisions are the owner's; a domain-expert agent advises only.
+- Architectural / data-model decisions are the owner's, made at step 4; the architect and any
+  domain-expert agent advise only, never decide.
 - If the worktree/branch already exists (re-activation), reuse it rather than erroring.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

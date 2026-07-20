@@ -60,7 +60,7 @@ All skills are namespaced under the plugin:
 | Command | Does |
 |---|---|
 | `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). |
-| `/spec-flow:activate <N>` | Worktree + branch → OpenSpec explore+propose → commit spec → **stop for your approval** (Seam 1). |
+| `/spec-flow:activate <N>` | Worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you. |
@@ -79,7 +79,8 @@ All skills are namespaced under the plugin:
   (the what/why). Consulted during `groom`.
 - **`architect`** — turns the refined idea into a **design** (structure, SOLID, data model,
   trade-offs framed as owner decisions) that feeds the OpenSpec proposal. Consulted during
-  `activate`, before propose. Advises; you decide.
+  `activate`, concurrently with a domain-expert agent if one is available, and **before**
+  propose — you stop and decide right there, before anything is generated. Advises; never decides.
 
 **Implementation & build**
 - **`tdd-developer`** — test-first (red→green→refactor), SOLID. The implementer. Follows the
@@ -135,7 +136,8 @@ they are the single source you maintain, and every repo using the plugin inherit
 
 - The pipeline **never merges and never pushes to `main`** — it only pushes the issue branch and
   opens a PR. The squash-merge is your action in GitHub.
-- Significant design / data-model decisions are made at Seam 1 (spec approval): the `architect`
-  (and a domain-expert agent, if the repo has one) advises with options + trade-offs, you decide;
-  the agents never make the call.
+- Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
+  `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
+  trade-offs, you decide right there before anything is generated; Seam 1 then confirms the
+  resulting spec faithfully reflects your choice. The agents never make the call.
 - Issue/PR numbers are always rendered with a brief `(description)` — a bare number is meaningless.

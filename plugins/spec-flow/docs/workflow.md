@@ -25,12 +25,15 @@ PRs).
  │   → scoped GitHub issue      │
  │ /spec-flow:activate <issue#>      │
  │   → worktree + branch        │
+ │   → architect + domain expert│
+ │     design (concurrently)    │
+ │   ⏸ you pick the design      │
  │   → openspec explore+propose │
- │     (domain expert advises)  │
+ │     from your chosen design  │
  │   → commit spec              │
  │   → status:spec-review        │──┐
  └────────────────────────────┘  │
-        ▲  SEAM 1: you approve the committed spec (and thereby the design)
+        ▲  SEAM 1: you approve the committed spec (design already chosen above)
         │                          │
         │                          ▼
         │                 ┌────────────────────────────┐
@@ -62,13 +65,19 @@ PRs).
                           └────────────────────────────┘
 ```
 
-**Seam 1 — spec approval.** `/spec-flow:activate` stops after committing the spec. Nothing is
-implemented until you explicitly approve. This is also where *all significant design decisions are
-made*: the **`architect` agent** designs the work and surfaces options + trade-offs (and a relevant
-**domain-expert agent**, if one is available, adds deeper facts), and **you decide** — the agents
-never make the call. Approving the spec = approving the design. (Upstream of this, at `groom`, the
-**`product-manager` agent** refines the raw idea into scope + testable acceptance criteria — the
-*what/why* — which the architect then designs the *how* for.)
+**Design decision, before Seam 1.** `/spec-flow:activate` stops **twice**. First, right after the
+**`architect` agent** designs the work and surfaces options + trade-offs (with a relevant
+**domain-expert agent**, if one is available, consulted *concurrently* and adding deeper facts) —
+**you decide** among the options *before anything is generated*, so a chosen alternative can never
+leave stale traces of the rejected recommendation in the generated spec/tasks. The agents never
+make the call.
+
+**Seam 1 — spec approval.** Second, `/spec-flow:activate` stops again after generating the spec
+from your chosen design and committing it. Nothing is implemented until you explicitly approve.
+This stop confirms the spec faithfully reflects the design you already picked — it is not the
+first time you see the decision. (Upstream of both stops, at `groom`, the **`product-manager`
+agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
+architect then designs the *how* for.)
 
 **Seam 2 — GitHub review + merge.** The pipeline only ever pushes the issue branch and opens a
 PR. It never merges and never pushes to `main`. You review in GitHub, optionally loop through
@@ -118,7 +127,7 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 | Skill | Phase | Does |
 |---|---|---|
 | `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (the `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`). |
-| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` designs it → openspec explore+propose (architect + domain expert advise) → commit spec → `status:spec-review`, then STOP for your approval. |
+| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). |
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
@@ -143,8 +152,9 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
   the project-manager brings its draft back to you to edit. Owns the what/why, never the how.
 - `architect` — turns the refined idea into a **design** (approach, structure/boundaries to SOLID,
   data model, key interfaces) with **trade-offs framed as owner decisions**. Consulted during
-  `/spec-flow:activate`, before `openspec-propose`; its design feeds the proposal. Advises only —
-  you decide at Seam 1.
+  `/spec-flow:activate`, concurrently with a domain-expert agent if one is available, and
+  **before** `openspec-propose` — you decide among its options right there, before anything is
+  generated, and Seam 1 later confirms the resulting spec. Advises only — never decides.
 
 **Implementation & build**
 - `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the

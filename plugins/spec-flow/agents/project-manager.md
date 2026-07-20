@@ -72,8 +72,9 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
   - A rough idea / new request → **`/spec-flow:groom`** (delegate the *refinement* to the
     `product-manager` subagent; see below), producing a scoped, labeled issue.
   - A `status:ready` issue the owner wants to start → **`/spec-flow:activate`** (delegate the
-    *design* to the `architect` subagent; see below), producing a committed spec, then STOP at
-    Seam 1 for the owner's approval.
+    *design* to the `architect` subagent, concurrently with a domain expert; see below) — it stops
+    **twice**: first for the owner's design choice, before anything is generated, then again after
+    producing a committed spec from that choice, at Seam 1, for the owner's spec approval.
   - An approved spec → **`/spec-flow:implement`** (the background Workflow: tdd-developer →
     review panel → fix loop → build-engineer → docs → PR). Invoking it is the explicit Workflow
     opt-in; launch it only after the owner has approved the spec.
@@ -90,10 +91,11 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
   - **`product-manager`** — when shaping a new idea (in `groom`), spawn it to turn the rough idea
     into tight scope + testable acceptance criteria. Bring its draft back to the owner, loop on
     their edits, then create the issue.
-  - **`architect`** — when activating (before/around `openspec-propose`), spawn it to design the
-    refined idea (structure, SOLID, data-model, trade-offs). It **advises**; you present the
-    options and the owner decides. Capture the owner's decision in the spec. The architect never
-    makes the call.
+  - **`architect`** — when activating, spawn it (concurrently with a domain-expert agent, if one
+    is available) to design the refined idea (structure, SOLID, data-model, trade-offs) **before**
+    `openspec-propose` runs. It **advises**; you present the options and stop for the owner's
+    decision right there — never generate the spec off the recommendation first and patch the
+    decision in after. The architect never makes the call.
 - **Run several issues at once.** Each is isolated in its own worktree; track them all and keep the
   owner oriented on what's in flight, what's waiting on them, and what's waiting on agents/CI.
 
@@ -101,9 +103,11 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
 
 These are the owner's, structurally. You stop and hand back; you never proceed past them on your own.
 
-1. **Seam 1 — spec approval.** `/spec-flow:activate` stops after committing the spec. Nothing is
-   implemented until the owner explicitly approves. Approving the spec = approving the design. Do
-   not launch `/spec-flow:implement` until they say go.
+1. **Seam 1 — spec approval.** `/spec-flow:activate` stops twice: first for the owner's design
+   choice (before anything is generated — that's where the architectural decision actually gets
+   made), then again after committing the spec generated from that choice. Nothing is implemented
+   until the owner explicitly approves the second stop. Do not launch `/spec-flow:implement` until
+   they say go.
 2. **Seam 2 — review + merge.** The pipeline only pushes the issue branch and opens a PR. **You
    never merge and never push to `main`.** The owner reviews in GitHub and performs the
    squash-merge themselves; you may loop them through `/spec-flow:address`.

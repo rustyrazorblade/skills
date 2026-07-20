@@ -61,6 +61,14 @@ and confirm the choice with the owner.
    never leave stale traces of the rejected recommendation in `tasks.md` or the scenarios. The
    agents never make the architectural call.
 
+   **Also present any nearby structural debt the architect flagged**, alongside the design options.
+   For each item the architect marked "fold into this change," confirm with the owner and, if
+   agreed, note it so step 5 adds it as an explicit task. For each item marked "recommend as a
+   separate issue," ask the owner whether to file it now (if so, `gh issue create` it as its own
+   ungroomed backlog item — this is the owner's explicit call, not something you do on your own
+   initiative) or leave it for later. Never fold a "separate issue" item into the current change's
+   scope without the owner explicitly saying so.
+
 5. **Explore + propose, inside the worktree, from the owner's chosen design.** Run the OpenSpec
    flow for a change named `<slug>` against the issue's scope and acceptance criteria, folding in
    the design the **owner chose** in step 4 — not the architect's raw recommendation if they
@@ -69,6 +77,9 @@ and confirm the choice with the owner.
    - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`, carrying
      the owner's chosen design (and why the alternatives were set aside) into the proposal/design
      docs.
+   - If the owner agreed at step 4 to fold in any nearby structural-debt item, add it as an
+     explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
+     the decision and the generated plan.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
    - **Build an explicit AC→scenario mapping.** List every acceptance criterion from the issue,
      and every risk/failure-mode the architect's design surfaced ("Risks & impact"), against the
@@ -96,11 +107,13 @@ and confirm the choice with the owner.
    `#### Scenario:` blocks** (the testable contract), the **AC→scenario mapping** from step 5 —
    every acceptance criterion and architect-surfaced risk against its covering scenario(s), with
    any intentional exclusions called out by name so the owner can catch a dropped criterion before
-   approving, not after implementation — and the **tasks** in order. Summarize faithfully — it
-   must be enough to approve or redirect without opening a file. You may also give the path as a
-   secondary reference, but the inline render is the deliverable. State that nothing will be
-   implemented until they approve. **Do not proceed to implementation.** When the owner approves,
-   the next step is `/spec-flow:implement <N>`.
+   approving, not after implementation — the **tasks** in order, including any folded-in
+   structural-debt task from step 4 — and, if any nearby structural debt was recommended as a
+   separate issue, a one-line reminder of its disposition (filed as `#<M>`, or left for later).
+   Summarize faithfully — it must be enough to approve or redirect without opening a file. You may
+   also give the path as a secondary reference, but the inline render is the deliverable. State
+   that nothing will be implemented until they approve. **Do not proceed to implementation.** When
+   the owner approves, the next step is `/spec-flow:implement <N>`.
 
 ## Rules
 
@@ -114,5 +127,8 @@ and confirm the choice with the owner.
 - One change per issue; the change name equals the slug; branch/worktree are `issue-<N>-<slug>`.
 - Architectural / data-model decisions are the owner's, made at step 4; the architect and any
   domain-expert agent advise only, never decide.
+- **Nearby structural debt is a recommendation, not scope creep.** Never bundle a "recommend as a
+  separate issue" item into the current change without the owner explicitly saying so, and never
+  file that issue on your own initiative — only at the owner's explicit direction (step 4).
 - If the worktree/branch already exists (re-activation), reuse it rather than erroring.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

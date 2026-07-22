@@ -20,7 +20,7 @@
 #   <cluster-dir>/
 #     easy-db-lab       ← wrapper (cds into cluster-dir)
 #     docs/             ← lab report source
-#       report.toml
+#       book.toml
 #       SUMMARY.md
 #       Makefile
 #       journal.md
@@ -34,7 +34,7 @@
 #     <dc2>/
 #       easy-db-lab
 #     docs/             ← shared across DCs; one environment, multiple datacenters
-#       report.toml
+#       book.toml
 #       SUMMARY.md
 #       Makefile
 #       journal.md
@@ -111,7 +111,7 @@ fi
 DOCS="$CLUSTER_DIR/docs"
 mkdir -p "$DOCS/images"
 
-cat > "$DOCS/report.toml" <<EOF
+cat > "$DOCS/book.toml" <<EOF
 [book]
 title = "$CLUSTER_NAME"
 src = "."

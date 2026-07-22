@@ -51,7 +51,13 @@ This is the only correct procedure for multi-DC Cassandra. Follow it exactly —
 
 ### Prerequisites
 
-VPC peering and security groups between DCs must already be in place (handled by `/easy-db-lab:provision`). Each DC lives in its own workspace directory (e.g. `dc1/`, `dc2/`). All `easy-db-lab` commands for a DC must be run from its directory.
+VPC peering and security groups between DCs must already be in place. Each DC lives in its own workspace directory (e.g. `dc1/`, `dc2/`). All `easy-db-lab` commands for a DC must be run from its directory.
+
+Set up VPC peering with `setup-vpc-peering.sh` (available on PATH via the plugin's `bin/`) — creates the peering connection, route tables, and security groups for one DC pair. Run once per pair (3 DCs = 3 runs):
+
+```bash
+setup-vpc-peering.sh --dc1 <name> --vpc1 <id> --cidr1 <cidr> --dc2 <name> --vpc2 <id> --cidr2 <cidr> --region <region>
+```
 
 ### Step 1 — Select a Cassandra version in each DC
 

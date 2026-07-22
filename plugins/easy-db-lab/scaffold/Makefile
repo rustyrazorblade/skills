@@ -3,10 +3,10 @@
 all: build
 
 build:
-	mdbook build --config report.toml
+	mdbook build
 
 serve:
-	mdbook serve --config report.toml
+	mdbook serve
 
 clean:
 	rm -rf report

@@ -50,7 +50,19 @@ If no environment exists, guide the user through provisioning before anything el
 3. **Instance type?** (default: `m5.2xlarge`)
 4. **Single DC or multi-DC?**
 
-Walk through the `$EDB init --up` flow directly (see the Cluster Lifecycle section in the agent).
+Walk through the `$EDB init --up` flow directly:
+
+```bash
+# Single DC
+$EDB init <name> --db <count> --app <count> --up
+
+# Multi-DC (each DC in its own subdirectory, non-overlapping CIDRs /20 or larger)
+(mkdir -p dc1 && cd dc1 && easy-db-lab init dc1 --db <count> --app <count> --cidr 10.0.0.0/16 --up) &
+(mkdir -p dc2 && cd dc2 && easy-db-lab init dc2 --db <count> --app <count> --cidr 10.1.0.0/16 --up) &
+wait
+```
+
+For multi-DC, after `init --up` completes, set up VPC peering — see `../../references/cassandra.md` Multi-DC Setup.
 
 Once provisioning completes, continue to Step 3.
 

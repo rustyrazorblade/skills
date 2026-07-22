@@ -1,6 +1,6 @@
 ---
 name: run
-description: Executes a plan step by step in an explicit cluster workspace, confirming each step with the user and updating journal.md as work proceeds. Use when running or resuming a lab plan, benchmark, or database experiment.
+description: Executes a plan step by step in an explicit cluster workspace, confirming each step with the user and updating journal.md as work proceeds. Use when the user says "run a plan", "execute the plan", "run this plan.md", "start/resume the lab run", or otherwise asks to run, execute, or resume a lab plan, benchmark, or database experiment.
 argument-hint: "<cluster directory> [step N]  OR  <plan.md path> <cluster directory> [--binary <path>] [--jdk <path>] [step N]"
 user-invocable: true
 ---
@@ -69,6 +69,8 @@ If a required argument is missing, ask the user for it before continuing.
 **Scaffold the cluster workspace — run the script, never do this manually:**
 
 > **NEVER create workspace files or directories by hand, and NEVER read `setup-cluster.sh` and perform its steps yourself. You MUST execute it as a script via bash. The tool requires a strict directory structure that only the script produces correctly. Any manual recreation will produce a broken workspace.**
+>
+> **Use this plugin's `setup-cluster.sh` (from this plugin's `bin/`) — nothing else.** The `easy-db-lab` product repo also ships a similarly named `bin/create-easy-db-lab-wrapper` script for developer convenience. It only creates the `easy-db-lab` wrapper and does **not** create the `docs/` report scaffold (`book.toml`, `SUMMARY.md`, `Makefile`) or copy `plan.md`. Running it instead of `setup-cluster.sh` succeeds silently but leaves the workspace unable to build a report later — do not use it here.
 
 ```bash
 # Single DC (DCS=single)
@@ -77,6 +79,8 @@ setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.
 # Multi DC (DCS="dc1 dc2 ...")
 setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.md path> [--jdk <path>] --dc dc1 --dc dc2
 ```
+
+**Verify the scaffold before continuing.** Confirm `<cluster-dir>/docs/Makefile`, `<cluster-dir>/docs/book.toml`, `<cluster-dir>/docs/SUMMARY.md`, and `<cluster-dir>/docs/plan.md` all exist. If any are missing, the wrong script ran (or scaffolding failed) — stop and fix this before executing any plan step; do not proceed on a partial workspace.
 
 After scaffolding, set `$EDB` from the wrapper path(s) and use `<cluster-dir>/docs/plan.md` for all subsequent references — not the original plan file.
 
@@ -213,6 +217,8 @@ make -C <cluster-dir>/docs
 
 This generates the browsable lab report from the summary, journal, plan, and issues log.
 
+**Verify it actually built.** Check the command's exit code and confirm `<cluster-dir>/docs/report/index.html` exists. If `make` fails or the output is missing, do not silently move on — diagnose the cause (missing scaffold files, broken `SUMMARY.md` links, mdbook errors), write an entry to `<cluster-dir>/docs/issues.md`, fix it, and re-run `make` before proceeding to step 3.
+
 **3. Decide what to do with the cluster**
 
 If the user already stated their intent earlier in the session (e.g. "shut down when done", "tear it down after", "clean up automatically"), honor that instruction without prompting.
@@ -257,7 +263,7 @@ If a step fails:
 2. Immediately write to `<cluster-dir>/docs/journal.md` — record the failure, the error output, and the timestamp. Do not wait.
 3. If the error was unhelpful, undocumented, or not anticipated by the plan, immediately write an entry to `<cluster-dir>/docs/issues.md`. Do not wait.
 4. Do not proceed to the next step.
-5. Diagnose the failure — check logs, status, or node health as appropriate. Every diagnostic command you run and every finding must be logged to `<cluster-dir>/docs/journal.md` as it happens, not summarized afterward.
+5. Diagnose the failure — check logs, status, or node health as appropriate. Every diagnostic command you run and every finding must be logged to `<cluster-dir>/docs/journal.md` as it happens, not summarized afterward. For Cassandra clusters, invoke the `cassandra-expert` agent to diagnose before proposing a fix — e.g. latency spikes, throughput mismatches, compaction storms, or unexpected behavior after a config or schema change.
 6. Propose a fix and wait for user approval before retrying.
 7. Update `<cluster-dir>/docs/journal.md` with the resolution once the fix is applied.
 
@@ -272,4 +278,9 @@ Load the relevant reference file when a step involves a specific database:
 
 ## Team Agents
 
-Follow the Team Agents guidance in the agent for when and how to invoke subject-matter experts. Record any agent findings relevant to the run in `<cluster-dir>/docs/journal.md`.
+Invoke `cassandra-expert` proactively for any Cassandra work — don't wait until something is wrong:
+- On step failure or unexpected behavior, diagnose with it before proposing a fix (see Error Handling above).
+- When schema or data modeling decisions come up during a run that weren't in the plan, ask it before improvising.
+- When writing `results.md`, invoke it to add expert context to the Recommendations section — why the winning configuration worked, what the tradeoffs were, what to test next (see Completion above).
+
+Record any agent findings relevant to the run in `<cluster-dir>/docs/journal.md`. If the work does not involve Cassandra, skip these invocations.

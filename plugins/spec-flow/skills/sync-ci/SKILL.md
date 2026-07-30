@@ -6,7 +6,8 @@ argument-hint: [issue number, or its PR number]
 
 # sync-ci — pull CI failures into the local flagged set
 
-You are the PM/lead in the main session. CI ran the full suite on issue `#N`'s branch and
+You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
+coordinator if invoked directly. CI ran the full suite on issue `#N`'s branch and
 something failed. Pull those failures into the branch's **flagged set** so the fast local loop
 (`/spec-flow:implement`'s gate and your own runs) guards them for the rest of the branch. This is
 owner-invoked — run it when you see CI go red — there is **no polling**.

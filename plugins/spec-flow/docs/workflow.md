@@ -2,15 +2,18 @@
 
 A session-driven, multi-agent delivery pipeline. You (the owner) spend hands-on time only on the
 two things a human should own — **defining/prioritizing work** and **final review + merge** — and
-the middle runs as a repeatable, agent-driven pipeline you invoke turn-by-turn from the main
-Claude session.
+the middle runs as a repeatable, agent-driven pipeline. A central coordinator handles cross-issue
+state and grooming; the moment you start working a specific issue, you switch to a dedicated
+per-issue agent that drives that issue's pipeline turn-by-turn with you until it merges.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board`) plus a roster of agents: a
-`project-manager` orchestrator you talk to directly; `product-manager` and `architect` at the front
-of the pipeline (refine → design → proposal); `tdd-developer` and `build-engineer` for
-implementation/build; and a review panel of `reviewer`, `test-rigor-reviewer`, and
-`observability-reviewer` (plus the built-in `/code-review` and `/security-review` skills).
+`project-manager` central coordinator you talk to directly for cross-issue state and grooming, an
+`issue-pm` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
+issue leads** below); `product-manager` and `architect` at the front of the pipeline (refine →
+design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a review
+panel of `reviewer`, `test-rigor-reviewer`, and `observability-reviewer` (plus the built-in
+`/code-review` and `/security-review` skills).
 
 It rides on two backbones the consuming repo must provide: **OpenSpec** (the spec-approval seam,
 via the `openspec` CLI + the `/opsx:*` commands) and **GitHub** (`gh`-driven issues, labels, and
@@ -18,8 +21,12 @@ PRs).
 
 ## The two human seams
 
+`groom` runs in the central coordinator; `activate` onward runs in that issue's `issue-pm`, once
+you switch to it (see **Coordinator and issue leads** below) — the sequence below is the same
+either way, just split across two agent conversations instead of one:
+
 ```
- FOREGROUND (you + PM = the main session)      BACKGROUND (subagent teams)        GITHUB (you)
+ FOREGROUND (you + coordinator, then you + issue-pm)   BACKGROUND (subagent teams)   GITHUB (you)
  ┌────────────────────────────┐
  │ /spec-flow:groom  rough idea     │
  │   → scoped GitHub issue      │
@@ -122,6 +129,27 @@ pull request      body contains "Closes #N"
 Worktrees are long-lived (one per issue, across many stages and sessions) and managed via
 `git worktree` — **not** the Agent tool's throwaway `isolation:"worktree"`.
 
+## Coordinator and issue leads
+
+Two tiers of agent, not one. `project-manager` is the **central coordinator** — cross-issue board,
+grooming new work, deciding what's next. It does not drive an individual issue's
+`activate → implement → address → finalize` itself. Instead:
+
+- When you want to start or resume work on a specific issue, `project-manager` spawns a dedicated
+  **`issue-pm`** subagent for it, named `issue-pm-<N>`, and you **switch to it** (via the agent
+  switcher) to work that issue directly.
+- That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
+  `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own conversation
+  with you. It hands back once the issue is merged, archived, and closed.
+- Several issues can be in flight at once, each with its own `issue-pm`, isolated in its own
+  worktree. `project-manager` tracks which issues have one running so it never spawns a duplicate;
+  switch between them, or back to the coordinator, as you go.
+- `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
+  work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
+
+This is the default flow, not an opt-in — every time you start work on an issue, expect
+`project-manager` to spin up its `issue-pm` rather than driving the stages inline.
+
 ## The skills
 
 | Skill | Phase | Does |
@@ -138,13 +166,20 @@ Worktrees are long-lived (one per issue, across many stages and sessions) and ma
 ## Agents
 
 **Orchestration**
-- `project-manager` — the agent you talk to directly. It knows the whole lifecycle, runs the board,
-  tracks work-in-progress across in-flight issues, decides what's next by priority + lifecycle, and
-  **delegates** every unit of work to the stage skills and the specialist agents. It coordinates; it
-  does not implement and never crosses your two seams. Wire it as a repo's **default agent** (in
-  that repo's `.claude/settings.json`) to make it your standing entry point. The plugin ships **no**
-  root `settings.json` with an `agent` field — opting your repos in is your choice, per repo, so the
+- `project-manager` — the **central coordinator**, the agent you talk to directly. It knows the
+  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running, decides what's
+  next by priority + lifecycle, and **delegates** — `groom` to the `product-manager` subagent, and
+  any specific issue's `activate → implement → address → finalize` to that issue's `issue-pm`
+  subagent. It coordinates; it does not implement, does not drive an issue's stages inline, and
+  never crosses your two seams. Wire it as a repo's **default agent** (in that repo's
+  `.claude/settings.json`) to make it your standing entry point. The plugin ships **no** root
+  `settings.json` with an `agent` field — opting your repos in is your choice, per repo, so the
   plugin never hijacks the main thread of every project that installs it.
+- `issue-pm` — the **per-issue delivery lead**, spawned by `project-manager` (named `issue-pm-<N>`)
+  when you start or resume work on issue `#N`. You switch to it (via the agent switcher) and it
+  becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
+  stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
+  **Coordinator and issue leads** above.
 
 **Front of pipeline (refine → design → proposal)**
 - `product-manager` — refines a rough idea into a tight problem statement, in/out scope, and
@@ -300,10 +335,10 @@ set's blind-append safety rests on.
 
 ## Substrate and constraints
 
-- **Session-driven, not cron.** Everything is triggered and narrated by the main session.
-  `/spec-flow:implement` runs as a background `Workflow` (in-session, notifies on completion) — that
-  is *not* cron; work pauses when you close the session. `/spec-flow:address` is invoked by you when
-  you return, never polled.
+- **Session-driven, not cron.** Everything is triggered and narrated by a session — the central
+  coordinator's, or the issue's `issue-pm` once you've switched to it. `/spec-flow:implement` runs
+  as a background `Workflow` (in-session, notifies on completion) — that is *not* cron; work pauses
+  when you close the session. `/spec-flow:address` is invoked by you when you return, never polled.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
 - **Test tiering.** The local gate is the fast **unit** tier plus the branch's

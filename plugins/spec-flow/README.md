@@ -3,7 +3,7 @@
 A Claude Code plugin: a **session-driven, multi-agent delivery pipeline** over **OpenSpec** +
 **GitHub**. You own the two human seams — **defining/prioritizing work** and **final review +
 merge** — and the middle (spec → implement → review → fix → build → docs → PR) runs as
-agents you invoke turn-by-turn from the main Claude session.
+agents you invoke turn-by-turn.
 
 ```
 groom ─▶ activate ─▶ [SEAM 1: you approve the spec] ─▶ implement ─▶ [SEAM 2: you review + squash-merge] ─▶ finalize
@@ -12,9 +12,14 @@ refine     design                                  5-lens review panel
 (product)  (architect)
 ```
 
-A `project-manager` agent is the orchestrator you talk to directly — it runs the board, tracks
-work-in-progress, decides what's next, and delegates each stage to the skills and specialist
-agents. Wire it as a repo's **default agent** to make it your standing entry point (see below).
+Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
+directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
+individual issue itself. When you're ready to start or resume an issue, it spawns a dedicated
+**`issue-pm`** subagent for that issue (named `issue-pm-<N>`) and you switch to it (via the agent
+switcher) — that subagent owns `activate → implement → address → finalize` for that one issue,
+end to end, and hands back once it's merged. Several issues can be in flight at once, each with
+its own `issue-pm`. Wire `project-manager` as a repo's **default agent** to make it your standing
+entry point (see below).
 
 See [`docs/workflow.md`](docs/workflow.md) for the full design (the two seams, lifecycle/labels,
 the 1:1:1:1 naming, and the review panel).
@@ -69,10 +74,15 @@ All skills are namespaced under the plugin:
 ## Bundled agents
 
 **Orchestration**
-- **`project-manager`** — the agent you talk to directly. Runs the board, tracks WIP across all
-  in-flight issues, decides what's next, and delegates to the stage skills + specialist agents.
-  It coordinates; it never implements and never crosses your two seams. Wire it as your repo's
-  **default agent** (next section).
+- **`project-manager`** — the **central coordinator**, the agent you talk to directly. Runs the
+  board, grooms new work, tracks which issues have an `issue-pm` running, and decides what's next.
+  It coordinates; it never implements, never drives an issue's stages itself, and never crosses
+  your two seams. Wire it as your repo's **default agent** (next section).
+- **`issue-pm`** — the **per-issue delivery lead**. `project-manager` spawns one (named
+  `issue-pm-<N>`) when you start or resume work on issue `#N`; you switch to it directly. It owns
+  that issue alone, end to end: claims it, drives `activate` (both owner stops) →
+  `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. This is the default
+  flow for working an issue, not an opt-in.
 
 **Front of pipeline (refine → design → proposal)**
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
@@ -117,8 +127,10 @@ pipeline. Set it **per-project** in the consuming repo's `.claude/settings.json`
 }
 ```
 
-Now opening that project drops you into the PM: it reads the board and tells you what's next, and
-you drive everything by talking to it.
+Now opening that project drops you into the coordinator: it reads the board and tells you what's
+next. When you tell it to start (or resume) a specific issue, it spawns that issue's `issue-pm` —
+switch to it (via the agent switcher) to drive that issue directly, and switch back to the
+coordinator (or to another issue's `issue-pm`) whenever you want the cross-issue view again.
 
 > **Why per-project and not in the plugin?** The plugin deliberately ships **no** root
 > `settings.json` with an `agent` field. A plugin that sets a default agent hijacks the main thread

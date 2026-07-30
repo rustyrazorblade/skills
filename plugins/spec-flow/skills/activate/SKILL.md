@@ -6,7 +6,8 @@ argument-hint: [issue number — omit to take the highest-priority status:ready 
 
 # activate — decide the design, spec the work, then stop for approval
 
-You are the PM/lead in the main session. Take a `status:ready` issue and produce a committed,
+You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
+coordinator if invoked directly. Take a `status:ready` issue and produce a committed,
 owner-approvable OpenSpec change on an isolated worktree. This skill stops for the owner **twice**:
 once at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam
 1** — to approve the resulting spec. Neither stop is optional; when the spec is committed and

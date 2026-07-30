@@ -6,7 +6,8 @@ argument-hint: [issue number, with its spec already approved]
 
 # implement — build the approved spec, open a PR
 
-You are the PM/lead in the main session. The owner has **approved the committed spec** for
+You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
+coordinator if invoked directly. The owner has **approved the committed spec** for
 issue `#N`. Drive the implementation team to completion and open a review-ready PR. The team
 runs as a background `Workflow` — **invoking this skill is the owner's explicit opt-in to
 that orchestration** (it may spawn several subagents).
@@ -87,7 +88,7 @@ made from the issue title — if it's not already known from context, recover it
    the draft PR throughout implementation rather than only at the end.
 
 5. **Mark the PR ready and report.** When the workflow returns approved, finalize the already-open
-   draft PR (outward-facing — done here in the main session, narrated):
+   draft PR (outward-facing — done here in this session, narrated):
    ```bash
    git -C <worktree> push origin issue-<N>-<slug>          # ensure the final state is pushed
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
@@ -114,5 +115,5 @@ made from the issue title — if it's not already known from context, recover it
   red/unapproved PR ready.
 - The PR body must state plainly that the unit tier ran locally and the full suite runs in CI — the
   reviewer relies on CI (gate is green CI) for full-suite results. Never imply the full suite ran locally.
-- All code work happens in the worktree; the main session only orchestrates, pushes, and manages the PR.
+- All code work happens in the worktree; this session only orchestrates, pushes, and manages the PR.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

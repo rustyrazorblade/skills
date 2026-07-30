@@ -6,7 +6,8 @@ argument-hint: [issue number, with its PR already squash-merged]
 
 # finalize — sync, archive, and clean up after merge
 
-You are the PM/lead in the main session. The owner has **squash-merged** the PR for issue
+You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
+coordinator if invoked directly. The owner has **squash-merged** the PR for issue
 `#N` in GitHub. Sync and archive the OpenSpec change, tear down the worktree, and close the
 issue. **This skill never merges** — the merge is the owner's action in GitHub.
 

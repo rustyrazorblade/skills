@@ -6,7 +6,8 @@ argument-hint: [issue number, or its PR number]
 
 # address — resolve the owner's PR review comments
 
-You are the PM/lead in the main session. The owner reviewed the PR for issue `#N` in GitHub
+You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
+coordinator if invoked directly. The owner reviewed the PR for issue `#N` in GitHub
 and left comments. Pull them, fix them in the worktree, push, and reply to each thread. This
 is owner-invoked (run it when you're back) — there is no polling.
 

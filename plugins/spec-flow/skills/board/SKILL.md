@@ -15,11 +15,13 @@ time.
 
 1. **Gather issues by lifecycle:**
    ```bash
-   gh issue list --state open --json number,title,labels,url --limit 100
+   gh issue list --state open --json number,title,labels,url,assignees --limit 100
    ```
    Bucket by the `status:*` label; read the `P?` label as priority. Issues carrying **no
    `status:*` label** are the raw backlog — not yet groomed, so no `P?` either. Keep them
-   separate; they're the fallback when nothing labeled is actionable.
+   separate; they're the fallback when nothing labeled is actionable. Also fetch the current user
+   (`gh api user --jq .login`) once, to tell "assigned to you" apart from "claimed by someone
+   else" — this repo may have multiple users.
 
 2. **Gather PR state AND CI state in one call.** `statusCheckRollup` carries every check for
    every open PR, so there's no need to loop `gh pr checks` per PR:
@@ -46,38 +48,49 @@ time.
    ## Delivery board
 
    ⛳ BLOCKED ON YOU
-     spec-review   #N P1  <title>                  → review spec in worktree, then /spec-flow:implement <N>
-     in-review     #M P0  <title>  PR #P  ✅ CI     → review in GitHub: <url>
+     spec-review   #N P1  <title>  @you             → review spec in worktree, then /spec-flow:implement <N>
+     in-review     #M P0  <title>  @you  PR #P  ✅ CI → review in GitHub: <url>
 
    🔧 IN FLIGHT (agents / CI)
-     in-review     #M P1  <title>  PR #P  ⏳ CI     (awaiting CI — not on you yet)
-     in-review     #M P1  <title>  PR #P  ❌ CI     (CI failing — /spec-flow:sync-ci)
-     in-progress   #K P2  <title>                  (worktree present)
-     addressing    #J P1  <title>  PR #Q           (resolving your comments)
+     in-review     #M P1  <title>  @you  PR #P  ⏳ CI (awaiting CI — not on you yet)
+     in-review     #M P1  <title>  @you  PR #P  ❌ CI (CI failing — /spec-flow:sync-ci)
+     in-progress   #K P2  <title>  @alice           (worktree present)
+     addressing    #J P1  <title>  @you  PR #Q      (resolving your comments)
 
    📋 READY
-     ready         #L P0  <title>                  → /spec-flow:activate <L>   ← next up
+     ready         #L P0  <title>  (unclaimed)      → /spec-flow:activate <L>   ← next up
+     ready         #Q P1  <title>  @alice            (claimed by @alice)
 
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
    (worktrees: 3 active · open PRs: 2)
    ```
+   Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
+   issues with no assignee — everything before `status:ready` is unclaimed by design, since
+   `/spec-flow:activate` is what claims it).
 
-5. **Call out the two things that matter most:**
+5. **Call out the two things that matter most — scoped to the current user, not the whole team.**
+   With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
+   "next up" for you, even though it's still worth showing in the board for visibility:
    - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder
-     until something applies: (1) a `status:in-review` PR **whose CI is green** — one merge away
-     from shipping, and `/spec-flow:finalize` can't run until it merges; (2) the highest-priority
-     `status:ready` issue to activate; (3) if nothing is `status:ready` either, the highest-value
+     until something applies, considering only items assigned to **you** (or unclaimed, for
+     `status:ready`): (1) a `status:in-review` PR **whose CI is green** and assigned to you — one
+     merge away from shipping, and `/spec-flow:finalize` can't run until it merges; (2) the
+     highest-priority `status:ready` issue that's **unclaimed** to activate — never one already
+     assigned to someone else; (3) if nothing is `status:ready` either, the highest-value
      **BACKLOG** issue to groom — and if it looks too large to spec and land as one unit, say so
      and suggest splitting it into smaller issues instead. **Keep the train moving** — landing
      what's already close beats starting something new, and starting something small beats
      reporting a stall.
-   - **Blocked on you** — your seams: anything in `status:spec-review` (approve the spec) and any
-     `status:in-review` PR **whose CI is green** (review/merge in GitHub). An `in-review` PR with
-     CI still **running** is NOT blocked on you — surface it under IN FLIGHT as awaiting CI, and a
-     PR with **failing** CI as needing `/spec-flow:sync-ci` (pull the failures into the branch's
-     flagged set, then re-run the fix loop), not as your action.
+   - **Blocked on you** — your seams, and only items **assigned to you**: anything in
+     `status:spec-review` (approve the spec) and any `status:in-review` PR **whose CI is green**
+     (review/merge in GitHub). An `in-review` PR with CI still **running** is NOT blocked on you —
+     surface it under IN FLIGHT as awaiting CI, and a PR with **failing** CI as needing
+     `/spec-flow:sync-ci` (pull the failures into the branch's flagged set, then re-run the fix
+     loop), not as your action. An item in the same states but assigned to someone else is neither
+     — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
+     visibility, just don't claim it's actionable by you.
 
 ## Rules
 

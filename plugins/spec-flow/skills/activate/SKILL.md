@@ -12,14 +12,26 @@ once at step 4 to pick the design, before anything is generated, and again at st
 1** — to approve the resulting spec. Neither stop is optional; when the spec is committed and
 approved you hand back — you do not implement, and you do not start `/spec-flow:implement`.
 
-Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue
-(`gh issue list --label status:ready --json number,title,labels` and choose `P0` over `P1` …),
-and confirm the choice with the owner.
+Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
+unassigned or already assigned to you (`gh issue list --label status:ready --json
+number,title,labels,assignees` and choose `P0` over `P1` …, skipping any issue assigned to someone
+else — that's their claim, not yours to take), and confirm the choice with the owner.
 
 ## Steps
 
-1. **Load the issue.** `gh issue view <N> --json number,title,body,labels`. Derive a
-   kebab-case `slug` from the title (concise, e.g. `predicate-pushdown`).
+1. **Load the issue and claim it.** `gh issue view <N> --json number,title,body,labels,assignees`.
+   Derive a kebab-case `slug` from the title (concise, e.g. `predicate-pushdown`).
+
+   **Multi-user guard.** Check `assignees` against the authenticated user
+   (`gh api user --jq .login`). If the issue is already assigned to someone else, **stop** — tell
+   the owner it's claimed and let them pick a different issue or coordinate with whoever has it;
+   do not proceed. If it's unassigned, or already assigned to the current user (the re-activation
+   case), claim it before doing anything else:
+   ```bash
+   gh issue edit <N> --add-assignee @me
+   ```
+   This is what makes "who's working on what" visible to other users of this repo — claim before
+   creating the worktree, not after.
 
 2. **Create the worktree + branch** (1:1:1:1 naming) from up-to-date `main`:
    ```bash
@@ -131,4 +143,6 @@ and confirm the choice with the owner.
   separate issue" item into the current change without the owner explicitly saying so, and never
   file that issue on your own initiative — only at the owner's explicit direction (step 4).
 - If the worktree/branch already exists (re-activation), reuse it rather than erroring.
+- **Never activate an issue assigned to someone else.** This repo may have multiple users; an
+  issue's assignee is another person's claim. Stop and say so rather than proceeding.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

@@ -39,8 +39,11 @@ quality slips; optimize only for quality and the owner sits idle waiting on one 
   progresses, is under-using the model.
 
 Concretely: **always know what could be moving that isn't**, and say so. If an issue is blocked
-on the owner (spec review, a green-CI PR) while another `status:ready` issue sits untouched,
-surface that — don't just report the one thing you were asked about.
+on the owner (spec review, a green-CI PR) while another **unclaimed** `status:ready` issue sits
+untouched, surface that — don't just report the one thing you were asked about. This repo may have
+multiple users: only issues assigned to the owner (or unassigned, for `status:ready`) are yours to
+recommend or act on — an issue assigned to someone else is their claim, not idle work you can pick
+up. Read the assignee from `/spec-flow:board`'s output before recommending anything.
 
 When several things could be next, rank by **distance to landed**: a green-CI PR waiting on the
 owner's merge outranks activating a fresh `status:ready` issue — it's the closest thing to
@@ -52,9 +55,10 @@ flight is closer to done.
 nothing green to merge, nothing new to approve — that is not "nothing to do"; it means fall
 further down the ladder:
 
-1. **Merge** a green-CI PR.
-2. **Approve** — a spec awaiting the owner's review (Seam 1).
-3. **Activate** the next `status:ready` issue by priority.
+1. **Merge** a green-CI PR (assigned to the owner).
+2. **Approve** — a spec awaiting the owner's review (Seam 1; assigned to the owner).
+3. **Activate** the next **unclaimed** `status:ready` issue by priority — never one already
+   assigned to someone else.
 4. **Groom** the next raw backlog item — an open issue with no `status:*` label yet.
 5. If the top backlog candidate is too large to spec and land as one unit, **propose splitting
    it** into smaller issues rather than treating it as one blocking mega-task.
@@ -72,7 +76,8 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
   - A rough idea / new request → **`/spec-flow:groom`** (delegate the *refinement* to the
     `product-manager` subagent; see below), producing a scoped, labeled issue.
   - A `status:ready` issue the owner wants to start → **`/spec-flow:activate`** (delegate the
-    *design* to the `architect` subagent, concurrently with a domain expert; see below) — it stops
+    *design* to the `architect` subagent, concurrently with a domain expert; see below) — it
+    claims the issue for the owner first (refusing if someone else already has it), then stops
     **twice**: first for the owner's design choice, before anything is generated, then again after
     producing a committed spec from that choice, at Seam 1, for the owner's spec approval.
   - An approved spec → **`/spec-flow:implement`** (the background Workflow: tdd-developer →

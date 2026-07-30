@@ -2,6 +2,15 @@
 
 Cassandra runs directly on the EC2 instances — not in Kubernetes. Do not use `kubectl` for any Cassandra operations. The Cassandra sidecar runs in k8s on port 9043.
 
+## Known Gotchas
+
+Hard-won discoveries from real planning/run sessions that aren't obvious from the command reference alone. When a future session discovers something similar — a flag that silently does more than it looks like, a default that undermines a stated objective, a command whose scope is narrower than its name suggests — add it here so it doesn't have to be rediscovered.
+
+- **`cassandra use <version>` silently switches JDK.** `cassandra_versions.yaml` maps each Cassandra version to a specific JDK, and running `easy-db-lab cassandra use <version>` changes the JDK on every targeted node as a side effect, even when that's not the intent. If a test needs to hold the JDK constant (e.g. comparing a stock release against a personal fork), pin it explicitly with `--java <version>` on every `cassandra use` invocation rather than trusting the version's default.
+- **`cleanup --kit <name>` only resets K8s-kit data, not Cassandra data.** It targets the kit's LPV (local persistent volume) data at `$DB_MOUNT_PATH/<kit>`. There is no dedicated command to reset Cassandra's own data directories between runs. To wipe Cassandra data, use `easy-db-lab exec run -t cassandra -- sudo rm -rf <path>` instead.
+- **cassandra-easy-stress's `--populate` phase runs to completion before the `-d` duration timer starts.** Metrics reset when the timed portion of the run begins. Don't count populate time against the stated test duration when budgeting how long a run will take.
+- **cassandra-easy-stress's `--rate` is per-thread, not a global target.** Total throughput is `--rate` × `--threads` — it scales linearly, it isn't a concurrency pool the tool uses to saturate a fixed ceiling. Doubling `--threads` doubles total throughput, full stop. It defaults to `--threads 1`, so `--rate 50000` with default threads gives exactly 50k total (not less, and not more). To hit a specific total throughput target, compute `--rate` and `--threads` so their product equals it (e.g. `--rate 5000 --threads 10` for 50k total) — don't put the full target in `--rate` and assume the tool will use threads to get there.
+
 ## Select Version
 
 ```bash

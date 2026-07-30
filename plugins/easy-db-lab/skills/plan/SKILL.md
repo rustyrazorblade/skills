@@ -55,6 +55,8 @@ If `--interactive` was passed, engage the Socratic dialogue protocol described b
 
 **After each answer the user gives, before moving to the next question:**
 
+0. **Distinguish decided from open.** If the phrasing signals a firm, already-considered decision ("i4i.2xlarge, that's final", "we're using TWCS, not up for debate") rather than an open or exploratory answer, apply steps 1-3 below at most once: surface the concern a single time, then accept the answer and move on regardless of their response. Do not re-raise it later in the session. Repeated pushback on a settled decision reads as arguing, not diligence. Reserve the full probing below for answers that are genuinely open or exploratory.
+
 1. **Probe for completeness.** If the answer is vague ("test performance", "see how it handles load"), push back: "That's a reasonable goal — what specific number or observation would tell you the test succeeded? What would you do differently if the result was X vs Y?"
 
 2. **Surface hidden assumptions.** Identify any assumption baked into their answer and name it: "That approach assumes writes are uniformly distributed across partition keys — is that true for your workload?" Do not move on until the assumption is confirmed or revised.
@@ -134,6 +136,7 @@ With the objective in hand, determine what components and workload are needed to
   - **io2** — high-IOPS SSD, for latency-sensitive workloads requiring provisioned IOPS
   Present these as a menu. If they choose io2, also ask for the IOPS value.
 - If the user doesn't specify an instance type, recommend `i4i.xlarge` for database nodes (local NVMe, no EBS needed).
+- **If the objective involves measuring resource overhead** (CPU, memory, allocation, or similar), explicitly flag that an undersized instance can mask the very effect being measured — e.g. a memory regression won't show up if the instance is starved for memory regardless. Connect the sizing choice back to the objective rather than defaulting to a generic recommendation disconnected from what's being tested.
 
 **Software to install:**
 Identify every database, tool, or app the test requires. For each one:
@@ -156,6 +159,8 @@ Identify every database, tool, or app the test requires. For each one:
 - What stress workload? (for Cassandra: `$EDB cassandra stress list`)
 - How long should the test run? How many threads?
 - Any custom tags for metrics?
+- **If the objective names a specific feature or change being evaluated** (a new compaction strategy, a config flag, a code path), confirm now — not later in review — that the workload's default schema/config actually activates that feature. Check `$EDB cassandra stress info <workload>` (or the equivalent for the tool in use) and don't assume the default schema exercises it; a workload can run to completion and produce clean numbers while never touching the thing under test. This is a required question, not something to catch opportunistically in Step 5.
+- **If the plan sets an explicit rate/throughput target**, check how the tool actually combines its rate and concurrency flags to produce total throughput — don't assume a rate flag is a global target on its own. For cassandra-easy-stress, `--rate` is per-thread: total throughput is `--rate` × `--threads`, and it defaults to `--threads 1`. Threads aren't a concurrency pool the tool uses to help saturate a fixed target — doubling threads doubles total throughput linearly. When the objective specifies a total throughput number, set `--rate` and `--threads` so their product equals it (e.g. `--rate 5000 --threads 10` for 50k total), rather than putting the full target in `--rate` and leaving `--threads` at its default.
 
 **Observability:**
 - Will Grafana be used to monitor? (it's part of the default stack)
@@ -175,6 +180,14 @@ In **interactive mode**, show the step outline (step names and brief description
 6. Tear down (if applicable)
 
 **The run skill handles all workspace scaffolding** (cluster directory, wrapper, docs) before executing any plan step. The first step in the plan must be provisioning (`easy-db-lab init ... --up`). Never include wrapper creation, directory setup, or `EDB=` assignments — those are handled automatically and must not appear in the plan.
+
+**Validate every command before presenting the plan.** The "Discover Before You Plan" discipline of never guessing flags applies to every command in the draft, not just `kit install` lines — a flag can look plausible (borrowed from another CLI's conventions, like `--name` instead of a positional argument) and still be wrong. For each command:
+
+(a) Confirm it matches a real subcommand and flag in the `$EDB commands` output captured during discovery.
+(b) Confirm every required positional argument is present.
+(c) Confirm any `--kit`, name, or enum-like argument value corresponds to something real — kit names against `kit list`, node types/hosts against the actual cluster config. Some flags accept a free-form string with no runtime validation (e.g. `--kit` on non-install commands like `cleanup`) — the tool will not catch a wrong value for you, so you must check it against the same authoritative source yourself.
+
+Do this pass before showing the plan to the user, not after they've approved it.
 
 ## Step 4 — Write the Plan
 
@@ -200,4 +213,6 @@ Before finishing, review the written plan against the objective established in S
 - **No gaps in the sequence** — could someone follow this plan start to finish without needing to improvise?
 - **Cassandra-specific:** if the plan involves Cassandra, ask the `cassandra-expert` agent to do a final pass: "Does this plan's configuration match the stated workload and Cassandra version? Are there any settings that will skew the results or make the test harder to interpret?" Incorporate its findings before presenting the review to the user.
 
-Present the review findings to the user as a short bulleted list — what looks good, and anything that should be changed. If changes are needed, update the plan file and confirm with the user. Once the plan passes review, tell them to run `/easy-db-lab:run` to execute it.
+**Loop until clean.** After applying fixes from a review round, re-run the full review (including the `cassandra-expert` pass) before presenting the plan as final. A round that finds nothing new is what ends the loop — a round that produced fixes is not itself proof the plan is ready, since those fixes can introduce or expose new issues. Expect this to take multiple rounds on non-trivial plans; that's normal, not a sign something is wrong. Never present an interim state — one that still has an open round of unaddressed findings — as "done."
+
+Present the review findings to the user as a short bulleted list — what looks good, and anything that should be changed. If changes are needed, update the plan file and confirm with the user. Once a review round passes with no new findings, tell them to run `/easy-db-lab:run` to execute it.

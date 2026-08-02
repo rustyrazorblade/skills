@@ -6,24 +6,25 @@ argument-hint: [issue number, or its PR number]
 
 # sync-ci — pull CI failures into the local flagged set
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. CI ran the full suite on issue `#N`'s branch and
-something failed. Pull those failures into the branch's **flagged set** so the fast local loop
-(`/spec-flow:implement`'s gate and your own runs) guards them for the rest of the branch. This is
-owner-invoked — run it when you see CI go red — there is **no polling**.
+You are this issue's `issue-pm`, running as your own dedicated background session. CI ran the full
+suite on issue `#N`'s branch and something failed. Pull those failures into the branch's
+**flagged set** so the fast local loop (`/spec-flow:implement`'s gate and your own runs) guards
+them for the rest of the branch. This is owner-invoked — run it when you see CI go red — there is
+**no polling**.
 
-Input: an issue number `#N` (or its PR number). Worktree `.claude/worktrees/issue-<N>-<slug>`,
-branch `issue-<N>-<slug>`. If `<slug>` isn't already known from context, recover it with
-`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
-See **Test tiering (unit / integration)** in `docs/workflow.md` for the
-model: the unit tier runs locally every cycle; a CI-caught test is added here and run locally until
-the branch merges, then evaporates.
+Input: an issue number `#N` (or its PR number). You're already running inside this issue's
+worktree — Claude Code's own background-session isolation put you there, on whatever branch it
+assigned; resolve it with `git rev-parse --abbrev-ref HEAD` rather than assuming a name. If you
+need to recover the PR from scratch, search by issue instead of by branch name:
+`gh pr list --search "Closes #<N> in:body" --json number,headRefName`. See **Test tiering (unit /
+integration)** in `docs/workflow.md` for the model: the unit tier runs locally every cycle; a
+CI-caught test is added here and run locally until the branch merges, then evaporates.
 
 ## Steps
 
 1. **Resolve the branch and its latest CI run.**
    ```bash
-   BR=issue-<N>-<slug>
+   BR=$(git rev-parse --abbrev-ref HEAD)
    # Most recent completed run for this branch:
    gh run list --branch "$BR" --json databaseId,status,conclusion,workflowName,createdAt \
      --limit 10

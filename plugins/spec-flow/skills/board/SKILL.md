@@ -1,16 +1,16 @@
 ---
 name: board
-description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, worktree, and PR state — and highlight what's next and what's blocked on the owner. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
+description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, live issue-pm session, and PR state — and highlight what's next, what's blocked on the owner, and what's stalled. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
 ---
 
 # board — status across all in-flight pipelines
 
-You are the PM/lead in the main session. Give the owner one view of the whole pipeline,
-derived from GitHub labels + PR state + worktrees. Read-only; you don't change anything.
+You are the central `project-manager`. Give the owner one view of the whole pipeline, derived from
+GitHub labels + PR state + live `issue-pm` sessions. Read-only; you don't change anything.
 
 ## Steps
 
-Steps 1-3 are independent reads — issue them together (parallel tool calls) rather than one at a
+Steps 1-4 are independent reads — issue them together (parallel tool calls) rather than one at a
 time.
 
 1. **Gather issues by lifecycle:**
@@ -35,12 +35,26 @@ time.
    (`status` ∈ QUEUED/IN_PROGRESS, or legacy `state` = PENDING), otherwise **failing**. An empty
    `statusCheckRollup` (no CI configured on the repo) counts as green — nothing to wait on.
 
-3. **Gather worktrees:**
+3. **Gather live `issue-pm` sessions:**
+   ```bash
+   claude agents --json
+   ```
+   Match each session by `name` (`issue-pm-<N>`) to the issue it belongs to. A session present
+   here is **live** — the owner can jump straight into its tab via `claude attach <id>` (`.id` from
+   this JSON). An issue in `status:in-progress`, `status:in-review`, or `status:addressing` with
+   **no** matching live session is **stalled**: nothing is driving it forward even though its label
+   says it should be — surface that in the board, it doesn't happen automatically anywhere else.
+
+4. **Gather worktrees:**
    ```bash
    git worktree list
    ```
+   Worktree names/branches are Claude Code's own (not derived from the issue number), so this is
+   just a rough "how many isolated checkouts exist" count now — cross-reference *which* issue a
+   session belongs to via step 3's `name`/`cwd`, not by matching this list's paths against issue
+   numbers.
 
-4. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
+5. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
    goes under **BLOCKED ON YOU only when its CI is green**; while CI is running it goes under
    **IN FLIGHT** with its CI state, because the owner has nothing to act on yet:
 
@@ -48,29 +62,30 @@ time.
    ## Delivery board
 
    ⛳ BLOCKED ON YOU
-     spec-review   #N P1  <title>  @you             → review spec in worktree, then /spec-flow:implement <N>
-     in-review     #M P0  <title>  @you  PR #P  ✅ CI → review in GitHub: <url>
+     spec-review   #N P1  <title>  @you  🟢 issue-pm  → /spec-flow:activate's spec is ready to approve — attach: claude attach a1b2c3
+     in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 issue-pm → review in GitHub: <url>
 
    🔧 IN FLIGHT (agents / CI)
-     in-review     #M P1  <title>  @you  PR #P  ⏳ CI (awaiting CI — not on you yet)
-     in-review     #M P1  <title>  @you  PR #P  ❌ CI (CI failing — /spec-flow:sync-ci)
-     in-progress   #K P2  <title>  @alice           (worktree present)
-     addressing    #J P1  <title>  @you  PR #Q      (resolving your comments)
+     in-review     #M P1  <title>  @you  PR #P  ⏳ CI  🟢 issue-pm (awaiting CI — not on you yet)
+     in-review     #M P1  <title>  @you  PR #P  ❌ CI  🟢 issue-pm (CI failing — /spec-flow:sync-ci)
+     in-progress   #K P2  <title>  @alice        🟢 issue-pm
+     addressing    #J P1  <title>  @you  PR #Q   🔴 STALLED — no live issue-pm session
 
    📋 READY
-     ready         #L P0  <title>  (unclaimed)      → /spec-flow:activate <L>   ← next up
+     ready         #L P0  <title>  (unclaimed)      → spawn: scripts/spawn-issue-pm.sh L   ← next up
      ready         #Q P1  <title>  @alice            (claimed by @alice)
 
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
-   (worktrees: 3 active · open PRs: 2)
+   (live issue-pm sessions: 3 · worktrees: 3 · open PRs: 2)
    ```
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
-   `/spec-flow:activate` is what claims it).
+   `/spec-flow:activate` is what claims it). Show the session marker (🟢 live / 🔴 stalled) on
+   every row past `status:ready` — that's the whole point of step 3.
 
-5. **Call out the two things that matter most — scoped to the current user, not the whole team.**
+6. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
    "next up" for you, even though it's still worth showing in the board for visibility:
    - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder
@@ -91,6 +106,9 @@ time.
      loop), not as your action. An item in the same states but assigned to someone else is neither
      — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
      visibility, just don't claim it's actionable by you.
+   - **Stalled** — any issue assigned to you past `status:ready` with no live `issue-pm` session
+     (step 3). Call these out explicitly and offer the fix: `scripts/spawn-issue-pm.sh <N>` to
+     resume it.
 
 ## Rules
 

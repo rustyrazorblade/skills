@@ -6,16 +6,16 @@ argument-hint: [issue number, with its spec already approved]
 
 # implement — build the approved spec, open a PR
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. The owner has **approved the committed spec** for
-issue `#N`. Drive the implementation team to completion and open a review-ready PR. The team
-runs as a background `Workflow` — **invoking this skill is the owner's explicit opt-in to
-that orchestration** (it may spawn several subagents).
+You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
+**approved the committed spec** for issue `#N`. Drive the implementation team to completion and
+open a review-ready PR. The team runs as a background `Workflow` — **invoking this skill is the
+owner's explicit opt-in to that orchestration** (it may spawn several subagents).
 
-Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>`, branch
-`issue-<N>-<slug>`, OpenSpec change `<slug>`. `<slug>` was a one-time judgment call `activate`
-made from the issue title — if it's not already known from context, recover it with
-`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
+Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
+already running inside this issue's worktree — Claude Code's own background-session isolation put
+you there, on whatever branch it assigned; resolve it with `git rev-parse --abbrev-ref HEAD`
+rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `openspec/changes/`
+(excluding `archive/`) and orient yourself in whatever is — it may predate this naming.
 
 ## Steps
 
@@ -34,15 +34,16 @@ made from the issue title — if it's not already known from context, recover it
    after residual findings, or after the owner sends you back) — check for an existing PR first and
    reuse it rather than erroring on a duplicate:
    ```bash
-   git -C <worktree> push -u origin issue-<N>-<slug>
-   PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   git -C <worktree> push -u origin "$BR"
+   PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
    if [ -z "$PR" ]; then
-     gh pr create --draft --head issue-<N>-<slug> --base main \
+     gh pr create --draft --head "$BR" --base main \
        --title "<issue title>" \
        --body "Closes #<N>
 
    Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
-     PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+     PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
    fi
    ```
    `--base main` must match the repo's actual default branch — the same one `activate` branched
@@ -62,9 +63,9 @@ made from the issue title — if it's not already known from context, recover it
    {
      "scriptPath": "${CLAUDE_PLUGIN_ROOT}/skills/implement/implement.workflow.js",
      "args": {
-       "worktree": "<abs path>/.claude/worktrees/issue-<N>-<slug>",
+       "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
        "repoRoot": "<abs repo root>",
-       "change":   "<slug>",
+       "change":   "issue-<N>",
        "issue":    <N>,
        "base":     "origin/main",
        "buildSystem": "auto"
@@ -90,7 +91,7 @@ made from the issue title — if it's not already known from context, recover it
 5. **Mark the PR ready and report.** When the workflow returns approved, finalize the already-open
    draft PR (outward-facing — done here in this session, narrated):
    ```bash
-   git -C <worktree> push origin issue-<N>-<slug>          # ensure the final state is pushed
+   git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 

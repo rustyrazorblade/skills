@@ -6,20 +6,23 @@ argument-hint: [issue number, or its PR number]
 
 # address — resolve the owner's PR review comments
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. The owner reviewed the PR for issue `#N` in GitHub
-and left comments. Pull them, fix them in the worktree, push, and reply to each thread. This
-is owner-invoked (run it when you're back) — there is no polling.
+You are this issue's `issue-pm`, running as your own dedicated background session. The owner
+reviewed the PR for issue `#N` in GitHub and left comments. Pull them, fix them in the worktree,
+push, and reply to each thread. This is owner-invoked (run it when you're back) — there is no
+polling.
 
-Input: an issue number `#N` (or its PR number). Worktree `.claude/worktrees/issue-<N>-<slug>`,
-branch `issue-<N>-<slug>`. If `<slug>` isn't already known from context, recover it with
-`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
+Input: an issue number `#N` (or its PR number). You're already running inside this issue's
+worktree — Claude Code's own background-session isolation put you there, on whatever branch it
+assigned; resolve it with `git rev-parse --abbrev-ref HEAD` rather than assuming a name. If you
+need to recover the PR from scratch (not already known from context), search by issue instead of
+by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRefName`.
 
 ## Steps
 
 1. **Find the PR and fetch review comments.**
    ```bash
-   gh pr list --head issue-<N>-<slug> --json number,url
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   gh pr list --head "$BR" --json number,url
    # Review threads (line comments) + their bodies:
    gh api repos/{owner}/{repo}/pulls/<PR>/comments --paginate
    # Top-level review summaries:
@@ -45,7 +48,7 @@ branch `issue-<N>-<slug>`. If `<slug>` isn't already known from context, recover
 
 4. **Push the branch** (outward-facing — done here, narrated):
    ```bash
-   git -C <worktree> push origin issue-<N>-<slug>
+   git -C <worktree> push origin "$BR"
    ```
 
 5. **Reply per thread.** For each review comment you addressed, post a reply noting the commit

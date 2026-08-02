@@ -55,6 +55,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
   might already exist.
 - Acceptance criteria are the seed of the spec's `#### Scenario:` blocks — write them as
   observable WHEN/THEN outcomes where you can.
-- The slug for later stages is derived from the title (kebab-case); keep titles concrete and short.
+- Keep titles concrete and short — the OpenSpec change name is `issue-<N>` (deterministic, not
+  derived from the title), so the title only has to be a good title, not double as a slug source.
 - When you cite an issue/PR number, always pair it with a brief `(description)` — the owner does
   not track raw numbers.

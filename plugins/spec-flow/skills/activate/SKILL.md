@@ -1,13 +1,13 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — create its git worktree and branch, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints — the design choice, then the spec approval (Seam 1); it never implements.
+description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints — the design choice, then the spec approval (Seam 1); it never implements.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
 # activate — decide the design, spec the work, then stop for approval
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. Take a `status:ready` issue and produce a committed,
+You are this issue's `issue-pm`, running as your own dedicated background session. Take a
+`status:ready` issue and produce a committed,
 owner-approvable OpenSpec change on an isolated worktree. This skill stops for the owner **twice**:
 once at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam
 1** — to approve the resulting spec. Neither stop is optional; when the spec is committed and
@@ -21,7 +21,8 @@ else — that's their claim, not yours to take), and confirm the choice with the
 ## Steps
 
 1. **Load the issue and claim it.** `gh issue view <N> --json number,title,body,labels,assignees`.
-   Derive a kebab-case `slug` from the title (concise, e.g. `predicate-pushdown`).
+   The OpenSpec change for this issue is named `issue-<N>` — deterministic, nothing to derive from
+   the title.
 
    **Multi-user guard.** Check `assignees` against the authenticated user
    (`gh api user --jq .login`). If the issue is already assigned to someone else, **stop** — tell
@@ -32,25 +33,14 @@ else — that's their claim, not yours to take), and confirm the choice with the
    gh issue edit <N> --add-assignee @me
    ```
    This is what makes "who's working on what" visible to other users of this repo — claim before
-   creating the worktree, not after.
+   anything else.
 
-2. **Create the worktree + branch** (1:1:1:1 naming) from up-to-date `main`:
-   ```bash
-   git -C <repo-root> fetch origin
-   git -C <repo-root> worktree add ".claude/worktrees/issue-<N>-<slug>" -b "issue-<N>-<slug>" origin/main
-   ```
-   All spec work happens inside that worktree path from here on. (If `main` is not the repo's
-   default branch, substitute it.)
-
-   **Exclude `.claude/worktrees/` from git** (idempotent, one-time; the nested checkouts must
-   never show up as untracked/stageable content in the primary working tree):
-   ```bash
-   grep -qxF '.claude/worktrees/' <repo-root>/.git/info/exclude 2>/dev/null \
-     || printf '\n# spec-flow long-lived worktrees (local-only, never commit)\n.claude/worktrees/\n' \
-        >> <repo-root>/.git/info/exclude
-   ```
-   Uses `.git/info/exclude`, not a committed `.gitignore` — this is local repo state, not
-   something to push to `main`.
+2. **Confirm you're isolated in your own worktree.** You run as a dedicated `issue-pm` background
+   session (spawned by `scripts/spawn-issue-pm.sh`), so Claude Code has already isolated you into
+   your own git worktree, branched from the repo's default branch — automatically, the first time
+   you touch a file (see [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
+   You don't create or name it yourself; nothing to do here except proceed knowing every file
+   change from this point lands there, not in the owner's primary checkout.
 
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** Before
    generating anything, spawn the `architect` subagent with the issue's scope + acceptance
@@ -82,12 +72,27 @@ else — that's their claim, not yours to take), and confirm the choice with the
    initiative) or leave it for later. Never fold a "separate issue" item into the current change's
    scope without the owner explicitly saying so.
 
-5. **Explore + propose, inside the worktree, from the owner's chosen design.** Run the OpenSpec
-   flow for a change named `<slug>` against the issue's scope and acceptance criteria, folding in
-   the design the **owner chose** in step 4 — not the architect's raw recommendation if they
-   picked differently:
+5. **Check for existing work-in-progress, then explore + propose from the owner's chosen design.**
+   Before creating anything, look for what's already in `openspec/changes/`:
+   ```bash
+   ls openspec/changes/ 2>/dev/null | grep -v '^archive$'
+   ```
+   - **Nothing there:** proceed fresh, naming the change `issue-<N>`.
+   - **`issue-<N>` already there** (re-activation, resuming your own earlier pass): orient
+     yourself in it first — read its proposal/design/specs/tasks and the branch's `git log` —
+     then assess whether it already reflects the design the owner just chose at step 4. If it
+     does, continue from it rather than regenerating from scratch. If it doesn't (the owner picked
+     differently this time, or it's stale/partial), say so and regenerate the affected parts.
+   - **Something else is there** (an older change predating this naming, or one you don't
+     recognize): same orientation — read what's there before deciding whether to continue it,
+     rename it to `issue-<N>`, or start fresh. Never silently create a second, competing change
+     for the same issue.
+
+   Run the OpenSpec flow for the change (`issue-<N>`) against the issue's scope and acceptance
+   criteria, folding in the design the **owner chose** in step 4 — not the architect's raw
+   recommendation if they picked differently:
    - Use `openspec-explore` to think through the change if it's non-trivial.
-   - Use `openspec-propose` to generate proposal + design + specs + tasks for `<slug>`, carrying
+   - Use `openspec-propose` to generate proposal + design + specs + tasks for `issue-<N>`, carrying
      the owner's chosen design (and why the alternatives were set aside) into the proposal/design
      docs.
    - If the owner agreed at step 4 to fold in any nearby structural-debt item, add it as an
@@ -103,8 +108,8 @@ else — that's their claim, not yours to take), and confirm the choice with the
 
 6. **Commit the spec on the branch:**
    ```bash
-   git -C <worktree> add openspec/changes/<slug>
-   git -C <worktree> commit -m "<slug>: spec (proposal/design/specs/tasks) for #<N>"
+   git -C <worktree> add openspec/changes/issue-<N>
+   git -C <worktree> commit -m "issue-<N>: spec (proposal/design/specs/tasks)"
    ```
 
 7. **Render the spec INLINE for review, then mark spec-review and STOP.**
@@ -136,14 +141,24 @@ else — that's their claim, not yours to take), and confirm the choice with the
   never generate the spec before the owner has picked among the architect's options. Step 7 (spec
   approval, Seam 1) always follows step 6 (commit) — no implementation, no
   `/spec-flow:implement`, no pushing the branch, until both stops have passed.
-- Worktree managed by `git worktree` (long-lived), never the Agent throwaway isolation.
-- One change per issue; the change name equals the slug; branch/worktree are `issue-<N>-<slug>`.
+- Worktree managed by Claude Code's own background-session isolation, scoped to this session's
+  life — not something this skill creates, and not the Agent tool's throwaway `isolation:
+  "worktree"`. Its name is whatever Claude Code assigned and doesn't matter: there is only ever
+  one worktree per issue on a machine, and it's already where you're standing. The issue number is
+  the one thing that matters for finding anything — the OpenSpec change is named `issue-<N>`
+  directly from it, and `Closes #N` in the PR body (added at `implement`) is the durable correlator
+  for the PR — see **Naming** in `docs/workflow.md`.
+- One change per issue, named `issue-<N>` — deterministic, never derived from the title.
 - Architectural / data-model decisions are the owner's, made at step 4; the architect and any
   domain-expert agent advise only, never decide.
 - **Nearby structural debt is a recommendation, not scope creep.** Never bundle a "recommend as a
   separate issue" item into the current change without the owner explicitly saying so, and never
   file that issue on your own initiative — only at the owner's explicit direction (step 4).
-- If the worktree/branch already exists (re-activation), reuse it rather than erroring.
+- **Re-activation.** When you resume a session that was inside a worktree, Claude Code returns you
+  to that same worktree automatically. If `openspec/changes/` already has something for this issue
+  (step 5), orient yourself at that work-in-progress before touching anything — don't assume it's
+  current, and don't assume it's safe to regenerate; read it, judge whether it still matches the
+  owner's step-4 choice, and continue it if so.
 - **Never activate an issue assigned to someone else.** This repo may have multiple users; an
   issue's assignee is another person's claim. Stop and say so rather than proceeding.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

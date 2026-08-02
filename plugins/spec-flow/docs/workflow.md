@@ -3,8 +3,10 @@
 A session-driven, multi-agent delivery pipeline. You (the owner) spend hands-on time only on the
 two things a human should own — **defining/prioritizing work** and **final review + merge** — and
 the middle runs as a repeatable, agent-driven pipeline. A central coordinator handles cross-issue
-state and grooming; the moment you start working a specific issue, you switch to a dedicated
-per-issue agent that drives that issue's pipeline turn-by-turn with you until it merges.
+state and grooming; the moment you start working a specific issue, it launches a dedicated
+per-issue agent as its own separate background Claude Code process — opened in a live iTerm2 tab
+or tmux window — that drives that issue's pipeline turn-by-turn with you, in its own context,
+until it merges.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board`) plus a roster of agents: a
@@ -22,8 +24,8 @@ PRs).
 ## The two human seams
 
 `groom` runs in the central coordinator; `activate` onward runs in that issue's `issue-pm`, once
-you switch to it (see **Coordinator and issue leads** below) — the sequence below is the same
-either way, just split across two agent conversations instead of one:
+it's launched (see **Coordinator and issue leads** below) — the sequence below is the same either
+way, just split across two separate processes instead of one conversation:
 
 ```
  FOREGROUND (you + coordinator, then you + issue-pm)   BACKGROUND (subagent teams)   GITHUB (you)
@@ -114,41 +116,85 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
 
-## Naming convention (1:1:1:1)
+## Naming
 
-One stable correspondence so any stage can recover the others from the issue number:
+The issue number is the only thing that has to be stable — on a given machine there is never more
+than one worktree per issue, so nothing else needs a human-readable name to stay unambiguous.
+Two things are derived directly from it, deterministically, no title-derived slug involved:
 
 ```
-GitHub issue  #N  (with slug derived from the title)
-git branch        issue-N-slug
-git worktree      .claude/worktrees/issue-N-slug
-OpenSpec change   slug
-pull request      body contains "Closes #N"
+GitHub issue     #N
+OpenSpec change  issue-N
+pull request     body contains "Closes #N"
 ```
 
-Worktrees are long-lived (one per issue, across many stages and sessions) and managed via
-`git worktree` — **not** the Agent tool's throwaway `isolation:"worktree"`.
+The git branch and worktree are **not** part of that set, and don't need to be — Claude Code names
+and places them itself. `issue-pm` runs as a background session, and Claude Code isolates every
+background session into its own git worktree automatically, before it touches any file (see
+[Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)). A stage never
+assumes a branch or worktree name; it resolves them from wherever it's already running
+(`git rev-parse --abbrev-ref HEAD`, `git rev-parse --show-toplevel`). If a stage needs to recover
+state from outside that issue's own session, it goes straight to `openspec/changes/issue-N` for
+the change or `Closes #N` in a PR's body for the PR — computed directly from the issue number, not
+discovered. (`activate` still orients itself at whatever it finds in `openspec/changes/` before
+assuming that name is free — see its **Re-activation** rule — in case older work predates this
+convention.) Worktrees are long-lived (one per issue, across many stages and sessions, resumed
+automatically by Claude Code across restarts) — **not** the Agent tool's throwaway
+`isolation:"worktree"`.
 
 ## Coordinator and issue leads
 
 Two tiers of agent, not one. `project-manager` is the **central coordinator** — cross-issue board,
 grooming new work, deciding what's next. It does not drive an individual issue's
-`activate → implement → address → finalize` itself. Instead:
+`activate → implement → address → finalize` itself, and it never runs that lifecycle in-session as
+a subagent either. Instead:
 
-- When you want to start or resume work on a specific issue, `project-manager` spawns a dedicated
-  **`issue-pm`** subagent for it, named `issue-pm-<N>`, and you **switch to it** (via the agent
-  switcher) to work that issue directly.
+- When you want to start or resume work on a specific issue, `project-manager` runs
+  `scripts/spawn-issue-pm.sh <N>`, which launches a dedicated **`issue-pm`** (named `issue-pm-<N>`)
+  as its **own separate background Claude Code process** — `claude --bg` — and opens a live,
+  attached view of it in an iTerm2 tab or tmux window (your configured **display mode**, below).
+  You talk to that process directly, in its own context; it never shares the coordinator's.
 - That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
-  `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own conversation
-  with you. It hands back once the issue is merged, archived, and closed.
-- Several issues can be in flight at once, each with its own `issue-pm`, isolated in its own
-  worktree. `project-manager` tracks which issues have one running so it never spawns a duplicate;
-  switch between them, or back to the coordinator, as you go.
+  `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
+  you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged, archived,
+  and closed.
+- Several issues can be in flight at once, each its own process, each its own tab. `project-manager`
+  checks `claude agents --json` before spawning, so it never launches a duplicate for an issue that
+  already has one running; move between tabs, or back to the coordinator's, as you go.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
   work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
+- `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
+  reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json` plus
+  GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire point of
+  running it as a separate process instead of a subagent: the coordinator's own context never
+  fills with one issue's implementation detail.
 
 This is the default flow, not an opt-in — every time you start work on an issue, expect
-`project-manager` to spin up its `issue-pm` rather than driving the stages inline.
+`project-manager` to launch its `issue-pm` as a fresh process rather than driving the stages
+inline.
+
+### Display mode
+
+`issue-pm` opens in a live terminal tab so you can talk to it the moment it's launched. Resolution
+order: a `--display` flag on `spawn-issue-pm.sh` (`iterm`, `tmux`, or `none`), then the
+`SPEC_FLOW_DISPLAY` env var, then `display=<mode>` in the repo's `.claude/spec-flow.conf`, then
+autodetect from the current terminal (`$TMUX` set → tmux; `$TERM_PROGRAM` = `iTerm.app` → iterm;
+otherwise none). `project-manager` never passes `--display` itself — it's your standing
+preference, not a per-issue decision. `none` backgrounds the session without opening anything, for
+dispatching several issues in a row; the attach command is still printed either way.
+
+### Worktree isolation
+
+`issue-pm` sessions get their file isolation from Claude Code itself, not from this plugin: every
+background session (`--bg`) is moved into its own git worktree automatically, before it edits any
+file, branched from the repo's default branch. Nothing in this plugin creates, names, or excludes
+that worktree — see **Naming** above for what that means for cross-stage state, and
+[Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees) for how Claude
+Code places, resumes, and eventually sweeps it. `finalize` still removes an issue's worktree and
+branch explicitly, on its own schedule (tied to the issue merging, not to session idleness) — see
+**The skills** below. One-time setup: add `.claude/worktrees/` to the repo's `.gitignore` (see
+**Prerequisites** in the README) so these checkouts never show up as untracked files in your
+primary checkout.
 
 ## The skills
 
@@ -167,16 +213,19 @@ This is the default flow, not an opt-in — every time you start work on an issu
 
 **Orchestration**
 - `project-manager` — the **central coordinator**, the agent you talk to directly. It knows the
-  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running, decides what's
-  next by priority + lifecycle, and **delegates** — `groom` to the `product-manager` subagent, and
-  any specific issue's `activate → implement → address → finalize` to that issue's `issue-pm`
-  subagent. It coordinates; it does not implement, does not drive an issue's stages inline, and
-  never crosses your two seams. Wire it as a repo's **default agent** (in that repo's
-  `.claude/settings.json`) to make it your standing entry point. The plugin ships **no** root
-  `settings.json` with an `agent` field — opting your repos in is your choice, per repo, so the
-  plugin never hijacks the main thread of every project that installs it.
-- `issue-pm` — the **per-issue delivery lead**, spawned by `project-manager` (named `issue-pm-<N>`)
-  when you start or resume work on issue `#N`. You switch to it (via the agent switcher) and it
+  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running (`claude agents
+  --json`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
+  `product-manager` subagent, and any specific issue's `activate → implement → address → finalize`
+  to that issue's `issue-pm`, launched as its own background process. It coordinates; it does not
+  implement, does not drive an issue's stages inline, and never crosses your two seams. Wire it as
+  a repo's **default agent** (in that repo's `.claude/settings.json`) to make it your standing
+  entry point. The plugin ships **no** root `settings.json` with an `agent` field — opting your
+  repos in is your choice, per repo, so the plugin never hijacks the main thread of every project
+  that installs it.
+- `issue-pm` — the **per-issue delivery lead**, launched by `project-manager` (named
+  `issue-pm-<N>`, via `scripts/spawn-issue-pm.sh`) as its own separate background Claude Code
+  process when you start or resume work on issue `#N`. You talk to it directly in the iTerm2 tab
+  or tmux window that opens for it — not a subagent you switch to inside another conversation. It
   becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
   stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
   **Coordinator and issue leads** above.
@@ -336,8 +385,8 @@ set's blind-append safety rests on.
 ## Substrate and constraints
 
 - **Session-driven, not cron.** Everything is triggered and narrated by a session — the central
-  coordinator's, or the issue's `issue-pm` once you've switched to it. `/spec-flow:implement` runs
-  as a background `Workflow` (in-session, notifies on completion) — that is *not* cron; work pauses
+  coordinator's, or the issue's `issue-pm` once it's launched. `/spec-flow:implement` runs as a
+  background `Workflow` (in-session, notifies on completion) — that is *not* cron; work pauses
   when you close the session. `/spec-flow:address` is invoked by you when you return, never polled.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.

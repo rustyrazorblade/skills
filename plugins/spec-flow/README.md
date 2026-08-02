@@ -14,15 +14,17 @@ refine     design                                  5-lens review panel
 
 Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
 directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
-individual issue itself. When you're ready to start or resume an issue, it spawns a dedicated
-**`issue-pm`** subagent for that issue (named `issue-pm-<N>`) and you switch to it (via the agent
-switcher) — that subagent owns `activate → implement → address → finalize` for that one issue,
-end to end, and hands back once it's merged. Several issues can be in flight at once, each with
-its own `issue-pm`. Wire `project-manager` as a repo's **default agent** to make it your standing
-entry point (see below).
+individual issue itself. When you're ready to start or resume an issue, it launches a dedicated
+**`issue-pm`** (named `issue-pm-<N>`) as its **own separate background Claude Code process**,
+opened in a live iTerm2 tab or tmux window (your choice — see **Display mode** below) that you
+talk to directly — not a subagent in the coordinator's own context. That process owns
+`activate → implement → address → finalize` for that one issue, end to end, in its own git
+worktree (Claude Code isolates it automatically), and hands back once it's merged. Several issues
+can be in flight at once, each its own process, each its own tab. Wire `project-manager` as a
+repo's **default agent** to make it your standing entry point (see below).
 
 See [`docs/workflow.md`](docs/workflow.md) for the full design (the two seams, lifecycle/labels,
-the 1:1:1:1 naming, and the review panel).
+the naming/correlators, and the review panel).
 
 ## Prerequisites (in the consuming repo)
 
@@ -35,6 +37,18 @@ the 1:1:1:1 naming, and the review panel).
   ```
 - **Built-in skills** — `/code-review` and `/security-review` are used by two of the review
   lenses (they degrade to an inline pass if unavailable).
+- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
+  placed there automatically by Claude Code. Add `.claude/worktrees/` to the repo's `.gitignore`
+  so those checkouts never show up as untracked files in your primary checkout (see
+  [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
+
+### Display mode (optional)
+
+`issue-pm` sessions open in a live terminal tab — pick iTerm2 tabs, tmux windows, or no tab at all
+(just the background session, for dispatching several issues in a row). Resolution order: a
+per-call `--display` flag, then the `SPEC_FLOW_DISPLAY` env var, then `display=<mode>` in the
+repo's `.claude/spec-flow.conf`, then autodetect from your current terminal. `project-manager`
+never overrides this itself — it's your standing preference, not a per-issue choice.
 
 ## Install
 
@@ -78,11 +92,12 @@ All skills are namespaced under the plugin:
   board, grooms new work, tracks which issues have an `issue-pm` running, and decides what's next.
   It coordinates; it never implements, never drives an issue's stages itself, and never crosses
   your two seams. Wire it as your repo's **default agent** (next section).
-- **`issue-pm`** — the **per-issue delivery lead**. `project-manager` spawns one (named
-  `issue-pm-<N>`) when you start or resume work on issue `#N`; you switch to it directly. It owns
-  that issue alone, end to end: claims it, drives `activate` (both owner stops) →
-  `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. This is the default
-  flow for working an issue, not an opt-in.
+- **`issue-pm`** — the **per-issue delivery lead**. `project-manager` launches one (named
+  `issue-pm-<N>`) as its own background process — via `scripts/spawn-issue-pm.sh` — when you start
+  or resume work on issue `#N`; you talk to it directly in the tab that opens. It owns that issue
+  alone, end to end: claims it, drives `activate` (both owner stops) → `implement` →
+  `sync-ci`/`address` as needed → `finalize`, then hands back. This is the default flow for working
+  an issue, not an opt-in.
 
 **Front of pipeline (refine → design → proposal)**
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
@@ -128,9 +143,10 @@ pipeline. Set it **per-project** in the consuming repo's `.claude/settings.json`
 ```
 
 Now opening that project drops you into the coordinator: it reads the board and tells you what's
-next. When you tell it to start (or resume) a specific issue, it spawns that issue's `issue-pm` —
-switch to it (via the agent switcher) to drive that issue directly, and switch back to the
-coordinator (or to another issue's `issue-pm`) whenever you want the cross-issue view again.
+next. When you tell it to start (or resume) a specific issue, it launches that issue's `issue-pm`
+as its own process and opens a tab for it — talk to it there to drive that issue directly, and
+return to the coordinator's tab (or another issue's `issue-pm`) whenever you want the cross-issue
+view again.
 
 > **Why per-project and not in the plugin?** The plugin deliberately ships **no** root
 > `settings.json` with an `agent` field. A plugin that sets a default agent hijacks the main thread

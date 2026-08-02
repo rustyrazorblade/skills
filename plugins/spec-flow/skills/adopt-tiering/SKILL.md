@@ -13,13 +13,12 @@ integration)** in `docs/workflow.md`). This is a **one-time migration per repo**
 PR and **never merges**.
 
 This is repo **infrastructure**, not a feature — so it is **not** tied to a GitHub issue and does
-**not** go through `groom → activate → implement`. Create a dedicated worktree + branch, e.g.:
-```bash
-git -C <repo-root> fetch origin
-git -C <repo-root> worktree add ".claude/worktrees/chore-adopt-test-tiering" -b "chore/adopt-test-tiering" origin/main
-```
-All work happens inside that worktree from here on — `git worktree` managed (long-lived), never
-the Agent throwaway isolation, same as the other stages.
+**not** go through `groom → activate → implement`. Move into a dedicated worktree using Claude
+Code's own isolation rather than creating one by hand — call the `EnterWorktree` tool (or simply
+ask to "work in a worktree") with a name like `adopt-test-tiering`. All work happens inside that
+worktree from here on; its branch name is whatever Claude Code assigns, not something this skill
+picks — that's fine, this migration isn't correlated back to anything by branch name the way an
+issue's work is.
 
 ## Why the split has to be structural
 

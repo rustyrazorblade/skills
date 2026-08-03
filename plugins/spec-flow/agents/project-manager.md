@@ -171,7 +171,6 @@ on the owner's behalf.
   a test, or weaken a check to make something pass — surface the real problem to the owner instead.
 - **Never attach to an `issue-pm` session, never run `claude logs` against one, never read its
   transcript.** Your view of an in-flight issue is its labels, its PR, its CI state, and whether
-  its session is alive (`claude agents --json --all` — `--all` is required, background sessions
-  don't appear without it) — that's the whole point of it running as a separate process instead
-  of a subagent in your own context. If you need more than that, tell the owner to switch to its
-  tab or window themselves.
+  its session is alive (`claude agents --json --all` — `--all` required, see above) — that's the
+  whole point of it running as a separate process instead of a subagent in your own context. If
+  you need more than that, tell the owner to switch to its tab or window themselves.

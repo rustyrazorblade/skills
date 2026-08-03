@@ -54,14 +54,10 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    echo "DEFAULT_BR=$DEFAULT_BR"
    echo "PR=$PR"
    ```
-   Note the printed `$DEFAULT_BR` — step 4 needs it as a **literal string**, not this shell
-   variable: the `Workflow` tool's JSON `args` isn't shell-interpolated, and even in Team mode
-   you may be reasoning across separate turns/Bash calls that don't share this one's variables.
-   Resolve `$DEFAULT_BR` from the repo itself rather than assuming `main` — the worktree was
-   already branched from whatever Claude Code resolved as the repo's actual default branch
-   (`EnterWorktree` does this on its own), so this just needs to match that, not guess it. `$PR`
-   is printed for the same reason — it's set in this same block whichever branch ran (freshly
-   created or reused), and steps 4/5 need it too, as a literal `<PR>`, not the unset variable.
+   Steps 4/5 use `<DEFAULT_BR>` and `<PR>` as the literal values printed here, never as shell
+   variables — variables don't survive separate Bash calls, and the `Workflow` tool's JSON `args`
+   isn't shell-interpolated. Resolve `$DEFAULT_BR` from the repo, never assume `main`: it must
+   match what `EnterWorktree` branched this worktree from.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
@@ -96,7 +92,12 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    — reference them by name
    (`tdd-developer`, `reviewer`, `test-rigor-reviewer`, `observability-reviewer`, `build-engineer`,
    or the built-in `general-purpose`) so each teammate gets that agent's tools/model, with your
-   spawn prompt appended as additional instructions. Give every teammate a **GUARDRAILS** block —
+   spawn prompt appended as additional instructions. **If a bare-name spawn fails "not found"**
+   (no repo/user override registered under that name, and the plugin's own bundled agent isn't
+   reachable by its bare name in this environment — Claude Code does not fall back to the plugin's
+   namespaced form on its own), retry as `spec-flow:<name>` yourself; see the README's Override
+   note and `implement.workflow.js`'s `agentNS()`, which applies this same fallback automatically
+   in Workflow mode. Give every teammate a **GUARDRAILS** block —
    two variants, below — so none of them push to `main`, touch another issue, or take outward
    GitHub action; that's yours alone. `base` = `origin/<DEFAULT_BR>` — the literal branch name
    printed in step 2, not a shell variable (don't assume `main`); the review lenses diff

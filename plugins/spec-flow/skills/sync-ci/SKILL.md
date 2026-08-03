@@ -37,16 +37,20 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    artifact named `spec-flow-failures` (the CI contract — see `references/ci/`). Fetch it:
    ```bash
    TMP=$(mktemp -d)
-   gh run download <run-id> -n spec-flow-failures -D "$TMP" 2>/dev/null \
-     || { echo "no spec-flow-failures artifact on this run"; }
+   if ! gh run download <run-id> -n spec-flow-failures -D "$TMP" 2>/dev/null; then
+     echo "no spec-flow-failures artifact on this run — nothing to sync (a build/lint break, not a" >&2
+     echo "test failure, or CI isn't wired to the contract yet — see references/ci/)." >&2
+     exit 1
+   fi
    echo "TMP=$TMP"
    ```
-   If the run failed but produced **no** `spec-flow-failures` artifact, the failure wasn't a test
-   failure (e.g. a build/lint break, or CI isn't wired to the contract yet). Report that plainly —
-   there's nothing to add to the flagged set — and point the owner at `references/ci/` if CI needs
-   wiring. Do not invent entries. **Note the printed `$TMP` path** — like `finalize`'s `$TMPWT`,
-   it's from `mktemp` and can't be recomputed; step 4 below uses `<TMP>` as a stand-in for the
-   literal path you just saw, not the unset variable, in case it runs as a separate Bash call.
+   The explicit `exit 1` matters: a run that failed but produced no `spec-flow-failures` artifact
+   means the failure wasn't a test failure, so there is nothing to add to the flagged set — stop
+   here and report that plainly to the owner rather than continuing into step 4 with an empty
+   `$TMP` and no ids to flag. Do not invent entries. **Note the printed `$TMP` path** — like
+   `finalize`'s `$TMPWT`, it's from `mktemp` and can't be recomputed; step 4 below uses `<TMP>` as a
+   stand-in for the literal path you just saw, not the unset variable, in case it runs as a separate
+   Bash call.
 
 3. **Ensure `.spec-flow/` is gitignored** (idempotent, one-time; the flagged set must never commit):
    ```bash

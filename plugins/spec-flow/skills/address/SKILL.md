@@ -54,9 +54,10 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    ```
 
 5. **Reply per thread.** For each review comment you addressed, post a reply noting the commit
-   that resolved it:
+   that resolved it. Reply to the thread's **root** comment id, not to a reply within it — the
+   replies endpoint only accepts a top-level review comment id and 422s on a reply-to-a-reply:
    ```bash
-   gh api repos/{owner}/{repo}/pulls/<PR>/comments/<comment-id>/replies \
+   gh api repos/{owner}/{repo}/pulls/<PR>/comments/<root-comment-id>/replies \
      -f body="Addressed in <short-sha>: <one line>."
    ```
 

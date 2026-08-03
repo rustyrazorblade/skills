@@ -38,6 +38,8 @@ mid-flight from an interrupted `activate`/`implement` pass.
    MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
    DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
    git -C "$MAIN" fetch origin
+   git -C "$MAIN" worktree prune   # opportunistic: drops any prior run's TMPWT registration whose
+                                    # temp dir the OS already cleaned up, before minting a new one
    TMPWT=$(mktemp -d)
    git -C "$MAIN" worktree add --detach "$TMPWT" "origin/$DEFAULT_BR"
    echo "TMPWT=$TMPWT"
@@ -105,17 +107,12 @@ mid-flight from an interrupted `activate`/`implement` pass.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-remove-worktree.sh
    ```
-   Run this from inside the worktree being removed — it resolves everything (which worktree, which
-   branch, whether it's safe) from wherever you're standing, same as the rest of this session's own
-   git/gh calls; it takes no arguments. It only reaches for the double-force once HEAD is **exactly
-   a merged PR's tip** — not just "some PR for this branch merged at some point" (a merged-PR-exists
-   check alone can't tell a fully-landed branch from one with extra local commits on top of an old
-   merge, or from a branch reused for a second, still-open PR after its first one merged — see the
-   script's own comments). Claude Code locks a worktree while its session is running, so removing
-   your own always needs `--force` twice (confirmed by test: single `--force` only overrides
-   *uncommitted changes*, not a *lock* — two separate gates) — the script never reaches for that
-   without its safety check passing first. **Safe to re-run**: if an earlier run already removed
-   the worktree, the script detects it's standing in the main checkout and exits cleanly.
+   Run it from inside the worktree being removed — it resolves everything from where you're
+   standing; no arguments. It removes the worktree only when HEAD is exactly a merged PR's tip, and
+   only then applies the double `--force` a session-locked worktree needs — the full reasoning (why
+   exact-SHA, why two forces) lives in the script's own comments; never bypass it with a hand-run
+   `git worktree remove --force --force`. **Safe to re-run**: if already removed, it detects the
+   main checkout and exits cleanly.
 
 6. **Report.** Confirm: specs synced, change archived, worktree removed, issue closed. Suggest
    `/spec-flow:board` to see the rest of the pipeline.
@@ -131,10 +128,8 @@ mid-flight from an interrupted `activate`/`implement` pass.
 - **This is where `agent:active` finally comes off** — `activate` set it, every stage since kept
   it, this is the one place it's supposed to end. Don't skip step 4's label removal even on an
   otherwise-uneventful finalize.
-- **Never double-force a worktree removal without checking it's safe first.** The lock override
-  and the uncommitted-changes override are two different gates; skipping the check means treating
-  a real safety mechanism as an obstacle instead of a signal. Step 5's script enforces this itself
-  — always go through it rather than running `git worktree remove --force --force` by hand.
+- **Never remove a worktree by hand.** Step 5's script is the only sanctioned path — it checks
+  before it forces.
 - **Safe to re-run at any step.** Step 3 skips the archive if it's already there (and its script
   handles reusing an in-progress PR/branch from an earlier interrupted run); step 4 only
   closes/comments/relabels what isn't already done; step 5's script only removes what still exists.

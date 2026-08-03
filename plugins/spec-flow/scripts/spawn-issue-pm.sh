@@ -40,7 +40,9 @@ conf="${repo_root}/.claude/spec-flow.conf"
 # precedence: flag > env > repo config > autodetect
 [[ -n "$display" ]] || display="${SPEC_FLOW_DISPLAY:-}"
 if [[ -z "$display" && -f "$conf" ]]; then
-  display=$(sed -n 's/^display=//p' "$conf" | tail -1 | tr -d '"'"'"' ')
+  # Strip a trailing `# comment` before stripping quotes/spaces — confirmed live: without this,
+  # `display=tmux # comment` parses to `tmux#comment`, an "unknown display mode" the case below rejects.
+  display=$(sed -n 's/^display=//p' "$conf" | tail -1 | sed 's/[[:space:]]*#.*//' | tr -d '"'"'"' ')
 fi
 if [[ -z "$display" ]]; then
   if   [[ -n "${TMUX:-}" ]];                     then display=tmux
@@ -122,13 +124,10 @@ retry_until_nonempty() {
 # `claude --bg` would start an unrelated, empty worktree branched from main. Confirmed empirically
 # (2026-08-03): respawn keeps the same cwd/worktree and files; a fresh --bg does not.
 # `sort_by(.startedAt) | last` picks the most recent if more than one past session shares the name.
-# A PIPESTATUS check AFTER `existing_json=$(claude ... | jq ...)` is unreachable: under `set -e`,
-# a failing left-hand command masked by jq's success-on-empty-input (jq exits 0 even when `claude`
-# failed and produced nothing) still makes the ASSIGNMENT itself fail, via pipefail, and `set -e`
-# kills the script at that line — before any later PIPESTATUS check could ever run (confirmed by
-# test: `set -euo pipefail; v=$(false | cat); echo reached` never prints). Route `claude`'s output
-# through a temp file instead of a pipe, so its exit status can be checked directly with a plain
-# `if ! cmd; then`, with jq reading the file afterward — no pipeline, no PIPESTATUS ambiguity.
+# Never `v=$(claude ... | jq ...)` under `set -euo pipefail`: pipefail fails the ASSIGNMENT when
+# `claude` fails (jq exits 0 on empty input), and `set -e` kills the script at that line — a later
+# PIPESTATUS check is unreachable (confirmed: `v=$(false | cat); echo reached` never prints). Temp
+# file instead, so `claude`'s exit status gets its own plain `if !` check.
 claude_agents_out=$(mktemp)
 if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
   rm -f "$claude_agents_out"
@@ -157,17 +156,16 @@ if [[ -n "$existing_id" ]]; then
   # signal: if it's someone else, don't respawn on top of their claim.
   active_label=$(gh issue view "$issue" --json labels \
     --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null) || true
-  # (fail open on a `gh` hiccup here — we already have local evidence this respawn is ours,
-  # unlike the fresh-spawn path below which has nothing local to fall back on)
+  # Every `gh` call below is fail-open (|| true) — we already have local evidence this respawn is
+  # ours, unlike the fresh-spawn path below, which has nothing local to fall back on and fails
+  # closed instead. Check ALL assignees (not just assignees[0]), consistent with the fresh-spawn
+  # path and activate's own guard, so a multi-assigned issue where you're listed second doesn't
+  # false-refuse. `// empty`, not a sentinel like "unknown": an unassigned issue (this session
+  # crashed before `activate` got far enough to claim it) or a transient `gh` failure must NOT read
+  # as "assigned to someone else" — only refuse on a REAL, different login, otherwise this refuses
+  # the exact same-machine crash-recovery respawn exists for.
   if [[ -n "$active_label" ]]; then
-    me=$(gh api user --jq .login 2>/dev/null) || true   # can't verify -> fall through and respawn;
-                                                          # we already have local evidence this is ours
-    # Check ALL assignees (not just assignees[0]) — consistent with the fresh-spawn path and
-    # activate's own guard, so a multi-assigned issue where you're listed second doesn't false-
-    # refuse. `// empty`-based emptiness, not a sentinel like "unknown" — an unassigned issue (e.g.
-    # this session crashed before `activate` got far enough to claim it) or a transient `gh`
-    # failure must NOT read as "assigned to someone else." Only refuse when a REAL, different login
-    # is present — otherwise this refuses the exact same-machine crash-recovery respawn exists for.
+    me=$(gh api user --jq .login 2>/dev/null) || true
     assignees=$(gh issue view "$issue" --json assignees --jq '[.assignees[].login]' 2>/dev/null) || true
     if [[ -n "$me" && -n "$assignees" && "$assignees" != "[]" ]] \
       && ! jq -e --arg me "$me" 'any(.[]; . == $me)' <<<"$assignees" >/dev/null 2>&1; then

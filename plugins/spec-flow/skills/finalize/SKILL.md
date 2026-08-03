@@ -50,49 +50,34 @@ mid-flight from an interrupted `activate`/`implement` pass.
    silently uses whatever the cwd happens to be — exactly the kind of silent wrong-tree operation
    this skill's one self-merge exception can't afford.
 
-3. **Sync delta specs into canonical specs, then archive the change** (inside `<TMPWT>`, the literal
-   path from step 2 — not a shell variable). If
+3. **Sync delta specs into canonical specs, then hand off the archive-and-PR mechanics to a
+   script** (inside `<TMPWT>`, the literal path from step 2 — not a shell variable). If
    `openspec/changes/archive/issue-<N>` already exists here, a previous finalize run already got
-   this far — skip straight to step 4, nothing to redo. Otherwise, use the OpenSpec flow for
-   change `issue-<N>`:
+   this far — remove the now-unneeded `<TMPWT>` and skip straight to step 4, nothing else to redo
+   (step 2 creates `<TMPWT>` unconditionally before this check runs, so skipping without removing
+   it would leave a registered-but-abandoned worktree behind on every re-run):
+   ```bash
+   git -C <MAIN> worktree remove <TMPWT>
+   ```
+   Otherwise, use the OpenSpec flow for change `issue-<N>` — OpenSpec is this repo's spec framework
+   today; the script below doesn't know or care which one produced the change, it just archives
+   and lands whatever's staged, so swapping frameworks later needs no change here:
    - `openspec-sync-specs` (or `/opsx:sync`) to fold the delta specs into `openspec/specs/`.
    - `openspec-archive-change` (or `/opsx:archive`) to move the change under
      `openspec/changes/archive/`.
-   Commit the archive, then land it on `main` **through a PR, not a direct push** — this repo's
-   own rule against pushing straight to `main` applies to finalize too, and a repo with branch
-   protection (the configuration `/spec-flow:adopt-tiering` tells owners to set up) would simply
-   reject a direct push outright. `$MAIN`/`$DEFAULT_BR` are cheap to recompute, so re-resolve them
-   fresh here rather than assume they carried over from step 2 — same reasoning as `<TMPWT>` above,
-   they just happen to be values a one-liner can reconstruct instead of needing to be inlined:
+   Then hand the generic git/gh mechanics — commit, open the archive PR (or reuse one from an
+   earlier interrupted run), merge it, clean up `<TMPWT>` — to the script, rather than reasoning
+   through the push-vs-reuse/non-fast-forward cases by hand every time:
    ```bash
-   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
-   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-   ARCHIVE_BR="archive/issue-<N>"
-   EXISTING_PR=$(gh pr list --head "$ARCHIVE_BR" --state open --json number --jq '.[0].number // empty')
-   if [[ -n "$EXISTING_PR" ]]; then
-     echo "archive PR #$EXISTING_PR already open for $ARCHIVE_BR — an earlier finalize run got this far and was interrupted before merging. Merging it rather than recreating (a fresh push here would be rejected as non-fast-forward anyway)." >&2
-   else
-     git -C <TMPWT> add -A
-     git -C <TMPWT> commit -m "archive: issue-<N>"
-     git -C <TMPWT> push origin "HEAD:$ARCHIVE_BR"
-     gh pr create --head "$ARCHIVE_BR" --base "$DEFAULT_BR" \
-       --title "archive: issue-<N>" \
-       --body "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
-   fi
-   if ! gh pr merge "$ARCHIVE_BR" --squash --delete-branch; then
-     echo "archive PR for issue-<N> is open but didn't merge automatically (required checks still" >&2
-     echo "pending, or branch protection needs a review) — merge it yourself: gh pr merge" >&2
-     echo "$ARCHIVE_BR --squash --delete-branch (or in GitHub), then re-run finalize." >&2
-     exit 1
-   fi
-   git -C "$MAIN" worktree remove <TMPWT>
+   ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-archive-pr.sh <N> <TMPWT> "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
    ```
-   This is the **one** PR this skill merges itself — see the frontmatter note on why. Don't let the
-   archive PR merge silently fail and fall through to closing the issue anyway: leaving the archive
-   commit unmerged would strand `main` without it — the branch `/spec-flow:activate` cuts every new
-   worktree from. **Re-running after an interruption between the push and the merge is safe** — the
-   `EXISTING_PR` check above reuses the already-open PR/branch instead of erroring on a duplicate or
-   a rejected non-fast-forward push.
+   This is the **one** PR this skill merges itself — see the frontmatter note on why. The script
+   exits non-zero if the PR doesn't merge automatically (required checks still pending, or branch
+   protection needs a review) — don't let that fall through to closing the issue anyway: leaving
+   the archive commit unmerged would strand `main` without it, the branch `/spec-flow:activate`
+   cuts every new worktree from. **Re-running after any interruption between the commit and the
+   merge is safe** — the script handles reusing an already-open PR, a pushed-but-PR-less branch, or
+   a fully fresh push, whichever the previous run got to.
 
 4. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — check `state`/`closed`
    from the `gh issue view` below first, and only close/comment/relabel what isn't already done —
@@ -112,39 +97,22 @@ mid-flight from an interrupted `activate`/`implement` pass.
      2>/dev/null || true
    ```
 
-5. **Remove your own worktree and branch — only once verified safe, then a genuine double-force.**
-   Resolve them from where you're standing — you never assumed a name for either. Claude Code locks
-   a worktree while its session is running, so removing your own always needs `--force` twice
-   (confirmed by test: single `--force` only overrides *uncommitted changes*, not a *lock* — those
-   are two separate gates). **Never reach for the double-force without checking first** — it would
-   just as happily discard real, unrecoverable work as it overrides the lock. "Safe" here means a
-   **merged PR exists for this branch** — check that directly via GitHub (the same fact step 1
-   already established, re-verified here since this may be a separate session/run) rather than git
-   ancestry: confirmed by test, a squash-merged branch's tip is **never** an ancestor of the target
-   branch — squash creates a brand-new commit on the target, so `merge-base --is-ancestor` fails
-   closed on every normal, successful squash-merge, not just the risky unlanded case (the same fact
-   is exactly why `branch -D` below needs `-D`, not `-d`). Re-resolve `$MAIN`/`$DEFAULT_BR` here
-   rather than assuming they carried over from step 2 — a fresh Bash call doesn't inherit another
-   one's shell variables, only its working directory:
+5. **Remove your own worktree and branch — hand off to a script that only acts once verified
+   safe.**
    ```bash
-   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
-   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-   BR=$(git rev-parse --abbrev-ref HEAD)
-   WT=$(git rev-parse --show-toplevel)
-   DIRTY=$(git -C "$WT" status --porcelain)
-   MERGED_PR=$(gh pr list --head "$BR" --state merged --json number --jq '.[0].number // empty')
-   if [[ -n "$DIRTY" ]] || [[ -z "$MERGED_PR" ]]; then
-     echo "worktree has uncommitted changes, or no merged PR found for $BR yet — not removing. Resolve it, then re-run finalize." >&2
-     exit 1
-   fi
-   cd "$MAIN"    # off the worktree BEFORE removing it, so nothing below runs from a deleted cwd
-   git -C "$MAIN" worktree remove --force --force "$WT"
-   git -C "$MAIN" branch -D "$BR"                          # local — -D, not -d: a squash-merge
-                                                             # commit is never an ancestor of the
-                                                             # branch tip, so -d always refuses here
-   git -C "$MAIN" push origin --delete "$BR" 2>/dev/null || true   # remote — often already gone if
-                                                                     # the repo auto-deletes on merge
+   ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-remove-worktree.sh
    ```
+   Run this from inside the worktree being removed — it resolves everything (which worktree, which
+   branch, whether it's safe) from wherever you're standing, same as the rest of this session's own
+   git/gh calls; it takes no arguments. It only reaches for the double-force once HEAD is **exactly
+   a merged PR's tip** — not just "some PR for this branch merged at some point" (a merged-PR-exists
+   check alone can't tell a fully-landed branch from one with extra local commits on top of an old
+   merge, or from a branch reused for a second, still-open PR after its first one merged — see the
+   script's own comments). Claude Code locks a worktree while its session is running, so removing
+   your own always needs `--force` twice (confirmed by test: single `--force` only overrides
+   *uncommitted changes*, not a *lock* — two separate gates) — the script never reaches for that
+   without its safety check passing first. **Safe to re-run**: if an earlier run already removed
+   the worktree, the script detects it's standing in the main checkout and exits cleanly.
 
 6. **Report.** Confirm: specs synced, change archived, worktree removed, issue closed. Suggest
    `/spec-flow:board` to see the rest of the pipeline.
@@ -162,7 +130,9 @@ mid-flight from an interrupted `activate`/`implement` pass.
   otherwise-uneventful finalize.
 - **Never double-force a worktree removal without checking it's safe first.** The lock override
   and the uncommitted-changes override are two different gates; skipping the check means treating
-  a real safety mechanism as an obstacle instead of a signal.
-- **Safe to re-run at any step.** Step 3 skips the archive if it's already there; step 4 only
-  closes/comments/relabels what isn't already done; step 5 only removes what still exists.
+  a real safety mechanism as an obstacle instead of a signal. Step 5's script enforces this itself
+  — always go through it rather than running `git worktree remove --force --force` by hand.
+- **Safe to re-run at any step.** Step 3 skips the archive if it's already there (and its script
+  handles reusing an in-progress PR/branch from an earlier interrupted run); step 4 only
+  closes/comments/relabels what isn't already done; step 5's script only removes what still exists.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

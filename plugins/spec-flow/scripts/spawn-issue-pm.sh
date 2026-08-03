@@ -162,13 +162,17 @@ if [[ -n "$existing_id" ]]; then
   if [[ -n "$active_label" ]]; then
     me=$(gh api user --jq .login 2>/dev/null) || true   # can't verify -> fall through and respawn;
                                                           # we already have local evidence this is ours
-    # `// empty`, not a sentinel like "unknown" — an unassigned issue (e.g. this session crashed
-    # before `activate` got far enough to claim it) or a transient `gh` failure must NOT read as
-    # "assigned to someone else." Only refuse when assignee is a REAL, different login — otherwise
-    # this refuses the exact same-machine crash-recovery respawn is supposed to handle.
-    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null) || true
-    if [[ -n "$me" && -n "$assignee" && "$assignee" != "$me" ]]; then
-      echo "already active: issue #${issue} carries agent:active, assigned to ${assignee} (not you) —" >&2
+    # Check ALL assignees (not just assignees[0]) — consistent with the fresh-spawn path and
+    # activate's own guard, so a multi-assigned issue where you're listed second doesn't false-
+    # refuse. `// empty`-based emptiness, not a sentinel like "unknown" — an unassigned issue (e.g.
+    # this session crashed before `activate` got far enough to claim it) or a transient `gh`
+    # failure must NOT read as "assigned to someone else." Only refuse when a REAL, different login
+    # is present — otherwise this refuses the exact same-machine crash-recovery respawn exists for.
+    assignees=$(gh issue view "$issue" --json assignees --jq '[.assignees[].login]' 2>/dev/null) || true
+    if [[ -n "$me" && -n "$assignees" && "$assignees" != "[]" ]] \
+      && ! jq -e --arg me "$me" 'any(.[]; . == $me)' <<<"$assignees" >/dev/null 2>&1; then
+      other=$(jq -r '.[0] // "someone else"' <<<"$assignees" 2>/dev/null) || other="someone else"
+      echo "already active: issue #${issue} carries agent:active, assigned to ${other} (not you) —" >&2
       echo "likely a live issue-pm on another machine. Not respawning on top of it." >&2
       exit 1
     fi
@@ -281,7 +285,7 @@ else
 
   if [[ -z "$session_id" ]]; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-    echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json' after spawn" >&2
+    echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json --all' after spawn" >&2
     exit 1
   fi
 fi

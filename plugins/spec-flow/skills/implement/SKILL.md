@@ -218,11 +218,13 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —
       parse each teammate's JSON from its message to you. Merge `findings` across all five.
-      **Before computing `mustFix`: any lens that reported `approve: false` with an EMPTY
-      `findings` array** (the spec lens can do this — it requires `spec_conformance: "full"` to
-      approve, so a `"partial"` verdict alone sets `approve: false` with nothing to point at) —
+      **Before computing `mustFix`: any lens that reported `approve: false` with NO blocker/major
+      finding among what it reported** (the spec lens can do this — it requires
+      `spec_conformance: "full"` to approve, so a `"partial"` verdict alone sets `approve: false`
+      with nothing to point at; a lens can also decline with only minor/nit findings, which is
+      just as unexplained since those never enter `mustFix` on their own) —
       **synthesize a finding for it** so its non-approval has something to work from instead of
-      silently reaching the round cap with empty residual findings and no visible reason: `{id:
+      silently reaching the round cap with no must-fix findings and no visible reason: `{id:
       "unexplained-<lens>", severity: "major", location: "(<lens> lens report)", rule:
       "unexplained-non-approval", problem: "<lens> lens returned approve=false with no findings
       (summary: <its summary>)", fix: "Re-review and either approve, or report a specific blocking

@@ -122,14 +122,21 @@ retry_until_nonempty() {
 # `claude --bg` would start an unrelated, empty worktree branched from main. Confirmed empirically
 # (2026-08-03): respawn keeps the same cwd/worktree and files; a fresh --bg does not.
 # `sort_by(.startedAt) | last` picks the most recent if more than one past session shares the name.
-existing_json=$(claude agents --json --all 2>/dev/null \
-  | jq -c --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last // empty')
-# Check claude's own exit status specifically (not jq's) — pipefail alone isn't enough here,
-# since jq happily exits 0 on empty input, which would mask a real `claude agents` failure.
-if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
+# A PIPESTATUS check AFTER `existing_json=$(claude ... | jq ...)` is unreachable: under `set -e`,
+# a failing left-hand command masked by jq's success-on-empty-input (jq exits 0 even when `claude`
+# failed and produced nothing) still makes the ASSIGNMENT itself fail, via pipefail, and `set -e`
+# kills the script at that line — before any later PIPESTATUS check could ever run (confirmed by
+# test: `set -euo pipefail; v=$(false | cat); echo reached` never prints). Route `claude`'s output
+# through a temp file instead of a pipe, so its exit status can be checked directly with a plain
+# `if ! cmd; then`, with jq reading the file afterward — no pipeline, no PIPESTATUS ambiguity.
+claude_agents_out=$(mktemp)
+if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
+  rm -f "$claude_agents_out"
   echo "spawn-issue-pm: 'claude agents --json --all' failed — can't check for an existing session." >&2
   exit 1
 fi
+existing_json=$(jq -c --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last // empty' "$claude_agents_out")
+rm -f "$claude_agents_out"
 existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 
@@ -155,7 +162,7 @@ if [[ -n "$existing_id" ]]; then
   if [[ -n "$active_label" ]]; then
     me=$(gh api user --jq .login 2>/dev/null) || true   # can't verify -> fall through and respawn;
                                                           # we already have local evidence this is ours
-    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null) || true
     if [[ -n "$me" && "$assignee" != "$me" ]]; then
       echo "already active: issue #${issue} carries agent:active, assigned to ${assignee} (not you) —" >&2
       echo "likely a live issue-pm on another machine. Not respawning on top of it." >&2
@@ -188,8 +195,12 @@ if [[ -n "$existing_id" ]]; then
   fi
 
   # Respawn confirmed safe — make sure agent:active reflects it, whether or not it was already
-  # set (e.g. a human cleared it during the earlier crash, per docs/workflow.md's known gap).
-  gh issue edit "$issue" --add-label agent:active
+  # set (e.g. a human cleared it during the earlier crash, per docs/workflow.md's known gap). The
+  # session is ALREADY LIVE at this point — a transient `gh` failure here must warn and continue,
+  # not die: exiting now would abandon a healthy, running session with no label, the exact
+  # false-negative (silently-unlabeled-but-live) the label exists to prevent.
+  gh issue edit "$issue" --add-label agent:active 2>/dev/null || \
+    echo "spawn-issue-pm: warning — couldn't set agent:active on #${issue} after respawn (transient gh failure?); ${name} (${session_id}) is running regardless. Set the label manually if this persists." >&2
 else
   # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
   # an issue-pm running on someone else's machine (or yours, on a different one) is invisible to
@@ -203,7 +214,10 @@ else
     exit 1
   fi
   if [[ -n "$active_label" ]]; then
-    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
+    # Purely informational (folded into the message below, then exiting regardless) — a `gh`
+    # hiccup here should degrade to "unknown", not produce a different, more confusing failure
+    # than the "already active" message this branch is already committed to reporting.
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null) || assignee="unknown"
     echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-pm may be running on another machine, or this one hasn't set the label yet. Not spawning a duplicate." >&2
     exit 1
   fi
@@ -218,7 +232,13 @@ else
     echo "new spawn (unlike a respawn, nothing local backs the claim yet)." >&2
     exit 1
   fi
-  assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null)
+  # Fail loud, matching the `me=` check just above: this is the fresh-spawn path, nothing local
+  # backs the claim yet, so a `gh` failure here must not silently fall through to spawning.
+  if ! assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null); then
+    echo "spawn-issue-pm: couldn't check #${issue}'s assignee ('gh issue view' failed) — check" >&2
+    echo "'gh auth status'. Refusing to spawn without being able to verify it isn't someone else's." >&2
+    exit 1
+  fi
   if [[ -n "$assignee" && "$assignee" != "$me" ]]; then
     echo "issue #${issue} is already assigned to ${assignee} (not you) — not spawning; that's their claim." >&2
     exit 1

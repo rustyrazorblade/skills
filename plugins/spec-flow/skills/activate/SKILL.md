@@ -33,7 +33,10 @@ else — that's their claim, not yours to take), and confirm the choice with the
    in-flight issue shouldn't repost it every time.
    ```bash
    ME=$(gh api user --jq .login)
-   ALREADY_MINE=$(gh issue view <N> --json assignees --jq --arg me "$ME" '[.assignees[].login] | contains([$me])')
+   # gh's own --jq flag does NOT support jq's --arg passthrough (confirmed live: "accepts at most
+   # 1 arg(s), received 3") — interpolate the value straight into the jq expression string instead.
+   # GitHub logins are alphanumeric/hyphen only, so this is safe to inline without escaping issues.
+   ALREADY_MINE=$(gh issue view <N> --json assignees --jq "[.assignees[].login] | contains([\"$ME\"])")
    gh issue edit <N> --add-assignee @me --add-label agent:active
    if [[ "$ALREADY_MINE" != "true" ]]; then
      gh issue comment <N> --body "🏗️ Claimed — starting design."

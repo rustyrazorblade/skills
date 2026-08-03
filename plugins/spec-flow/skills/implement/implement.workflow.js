@@ -254,14 +254,17 @@ while (round < MAX_ROUNDS) {
   const missingLenses = reviewLenses.filter((l, i) => !lensResults[i]).map(l => l.label)
 
   const findings = reviews.flatMap(r => r.findings || [])
-  // A lens can decline without pointing at anything specific — e.g. the spec lens requires
+  // A lens can decline without pointing at anything ACTIONABLE — e.g. the spec lens requires
   // spec_conformance:"full" to approve, so a "partial" verdict alone sets approve=false with no
-  // discrete finding. Left alone that either wastes a Fix round on nothing (empty fixList) or
-  // survives silently to the round cap with EMPTY residual findings — the owner sees "not
-  // approved," no reason why. Synthesize one so it flows through the same mustFix pipeline as
-  // everything else, same as a real finding would.
+  // discrete finding; or a lens reports approve=false but only minor/nit findings, which don't
+  // enter mustFix on their own. Left alone that either wastes a Fix round on nothing (empty
+  // fixList) or survives silently to the round cap with no must-fix findings to explain it — the
+  // owner sees "not approved," no reason why. Synthesize one so it flows through the same mustFix
+  // pipeline as everything else, same as a real finding would. Condition is "no blocker/major
+  // finding", not "no findings at all" — a lens with only minor findings is just as unexplained.
   lensResults.forEach((r, i) => {
-    if (r && r.approve === false && (r.findings || []).length === 0) {
+    const hasMustFix = (r && r.findings || []).some(f => f.severity === 'blocker' || f.severity === 'major')
+    if (r && r.approve === false && !hasMustFix) {
       findings.push({
         id: `unexplained-${reviewLenses[i].label}`,
         severity: 'major',

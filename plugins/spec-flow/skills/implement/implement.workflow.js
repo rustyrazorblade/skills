@@ -16,6 +16,9 @@ export const meta = {
 // switch — the agents detect the real runner from the repo.
 // Robust to args arriving as a JSON string (some invocations stringify it) or missing.
 const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
+// base should always be passed explicitly (SKILL.md resolves the repo's actual default branch
+// and passes it) — 'origin/main' here is only a last-resort fallback if it's ever omitted, not
+// an assumption this repo uses `main`.
 const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto' } = _args
 if (!worktree || !change || issue === undefined || issue === null) {
   // Fail fast — never run a review against an empty/clean tree and report a false blocker.

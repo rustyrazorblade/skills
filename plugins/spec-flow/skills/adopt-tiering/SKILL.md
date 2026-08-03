@@ -91,6 +91,10 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    **manual owner follow-up: enable branch protection so merge is gated on green CI** — the invariant
    the whole tiering model relies on, and something this skill cannot reliably set itself.
 
+8. **Exit the worktree.** Call `ExitWorktree` once the PR is up — you're the central coordinator's
+   own session, not a per-issue one meant to live in a worktree indefinitely; don't stay parked in
+   this migration's worktree once the work is handed off.
+
 ## Rules
 
 - **One-time, per repo; idempotent.** Safe to re-run on a partially-tiered repo — only move what's

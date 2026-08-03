@@ -102,7 +102,7 @@ All skills are namespaced under the plugin:
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you. |
-| `/spec-flow:finalize <N>` | After you squash-merge: closes the issue, syncs+archives the OpenSpec change (via its own small self-merged PR), then removes the worktree. |
+| `/spec-flow:finalize <N>` | After you squash-merge: syncs+archives the OpenSpec change (via its own small self-merged PR), closes the issue, then removes the worktree. |
 
 ## Bundled agents
 

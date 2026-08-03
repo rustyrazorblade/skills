@@ -46,9 +46,12 @@ time.
    `project-manager` regardless of machine (see **Coordination signals** in `docs/workflow.md`).
    `claude agents --json` only ever reflects *this* machine's local session registry, so use it
    only to enrich a row when its `name` (`issue-pm-<N>`) happens to match one already labeled
-   `agent:active` — that's when you can offer `claude attach <id>` (`.id` from this JSON) as a
-   direct jump-in. No match is unremarkable (someone else's machine, or yours from earlier today
-   with the session evicted) — it does **not** mean stalled; only a **missing `agent:active`
+   `agent:active` **and** its `state` is `working` or `blocked`, matching `spawn-issue-pm.sh`'s own
+   definition of live — this list includes `done`/`failed` sessions too, and offering `claude
+   attach` on one of those would be misleading, not a live jump-in. That's when you can offer
+   `claude attach <id>` (`.id` from this JSON) as a direct jump-in. No match (or a match that's
+   `done`/`failed`) is unremarkable (someone else's machine, or yours from earlier today with the
+   session evicted or finished) — it does **not** mean stalled; only a **missing `agent:active`
    label** means that. An issue past `status:ready` without the label is **stalled**: nothing is
    driving it forward even though its status label says it should be — surface that, it doesn't
    happen automatically anywhere else.

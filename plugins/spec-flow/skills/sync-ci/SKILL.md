@@ -39,11 +39,14 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    TMP=$(mktemp -d)
    gh run download <run-id> -n spec-flow-failures -D "$TMP" 2>/dev/null \
      || { echo "no spec-flow-failures artifact on this run"; }
+   echo "TMP=$TMP"
    ```
    If the run failed but produced **no** `spec-flow-failures` artifact, the failure wasn't a test
    failure (e.g. a build/lint break, or CI isn't wired to the contract yet). Report that plainly —
    there's nothing to add to the flagged set — and point the owner at `references/ci/` if CI needs
-   wiring. Do not invent entries.
+   wiring. Do not invent entries. **Note the printed `$TMP` path** — like `finalize`'s `$TMPWT`,
+   it's from `mktemp` and can't be recomputed; step 4 below uses `<TMP>` as a stand-in for the
+   literal path you just saw, not the unset variable, in case it runs as a separate Bash call.
 
 3. **Ensure `.spec-flow/` is gitignored** (idempotent, one-time; the flagged set must never commit):
    ```bash
@@ -62,24 +65,28 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    mkdir -p <worktree>/.spec-flow
    FLAG=<worktree>/.spec-flow/flagged-tests
    touch "$FLAG"
-   INCOMING=$(cat "$TMP"/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | sort -u)
+   INCOMING=$(cat <TMP>/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | sort -u)
    NEW=$(comm -23 <(echo "$INCOMING") <(sort -u "$FLAG"))
    REPEAT=$(comm -12 <(echo "$INCOMING") <(sort -u "$FLAG"))
    # Merge new ids in, preserving existing, dropping blanks/duplicates:
-   cat "$FLAG" "$TMP"/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' \
+   cat "$FLAG" <TMP>/* 2>/dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' \
      | sort -u > "$FLAG.new" && mv "$FLAG.new" "$FLAG"
+   echo "NEW=$NEW"
+   echo "REPEAT=$REPEAT"
    ```
    Each line is a runner-selectable test id in the same form CI emitted (a JUnit `Class.method`, a
    nextest `test(=path)` / test path). The local gate expands these alongside the unit-tier command.
+   Note the printed `$NEW`/`$REPEAT` — step 5 references them as `<NEW>`/`<REPEAT>`, the literal
+   lists you just saw, not shell variables that may not survive to a separate Bash call.
 
-5. **Report.** Tell the owner which test ids are newly flagged (`$NEW`) and which are repeat
-   failures already in the set (`$REPEAT` — still broken or flaky, call it out explicitly), plus
+5. **Report.** Tell the owner which test ids are newly flagged (`<NEW>`) and which are repeat
+   failures already in the set (`<REPEAT>` — still broken or flaky, call it out explicitly), plus
    the total now in the flagged set, and that the next local run — `/spec-flow:implement`'s gate
    or a manual run — will include them. Then the loop is: fix on the branch (tests stay green
    locally including the flagged ones), push, CI re-runs the full suite; when it's green and the
    owner merges, the flagged set evaporates with the worktree at `/spec-flow:finalize`.
    ```bash
-   gh issue comment <N> --body "🚨 CI failed — <count of \$NEW> new test(s) flagged, <count of \$REPEAT> repeat."
+   gh issue comment <N> --body "🚨 CI failed — <count of NEW> new test(s) flagged, <count of REPEAT> repeat."
    ```
 
 ## Rules

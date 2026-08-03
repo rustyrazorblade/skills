@@ -46,8 +46,10 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    suite, which is CI's gate — and **never push or touch main**. See **Test tiering (unit /
    integration)** in `docs/workflow.md`.
 
-4. **Push the branch** (outward-facing — done here, narrated):
+4. **Push the branch** (outward-facing — done here, narrated). Re-resolve `$BR` fresh — cheap,
+   and this may be a separate Bash call from step 1's, which wouldn't have carried it over:
    ```bash
+   BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"
    ```
 

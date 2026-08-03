@@ -51,11 +51,15 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
      PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
      gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
+   echo "DEFAULT_BR=$DEFAULT_BR"
    ```
+   Note the printed `$DEFAULT_BR` — step 4 needs it as a **literal string**, not this shell
+   variable: the `Workflow` tool's JSON `args` isn't shell-interpolated, and even in Team mode
+   you may be reasoning across separate turns/Bash calls that don't share this one's variables.
    Resolve `$DEFAULT_BR` from the repo itself rather than assuming `main` — the worktree was
    already branched from whatever Claude Code resolved as the repo's actual default branch
    (`EnterWorktree` does this on its own), so this just needs to match that, not guess it. Keep
-   both `<PR>` and `$DEFAULT_BR` — step 4 needs `$DEFAULT_BR` too.
+   both `<PR>` and the printed default-branch name — step 4 needs it too, as `<DEFAULT_BR>`.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
@@ -92,8 +96,9 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    or the built-in `general-purpose`) so each teammate gets that agent's tools/model, with your
    spawn prompt appended as additional instructions. Give every teammate a **GUARDRAILS** block —
    two variants, below — so none of them push to `main`, touch another issue, or take outward
-   GitHub action; that's yours alone. `base` = `origin/$DEFAULT_BR` (resolved in step 2 — don't
-   assume `main`); the review lenses diff `base...HEAD` in the worktree, so a wrong base reviews
+   GitHub action; that's yours alone. `base` = `origin/<DEFAULT_BR>` — the literal branch name
+   printed in step 2, not a shell variable (don't assume `main`); the review lenses diff
+   `base...HEAD` in the worktree, so a wrong base reviews
    the wrong range. Track `tests_ran`, `spec_conformance`, `approve`, `review_rounds`,
    `residual_findings`, `non_blocking_findings`, and `review_summary` as you go — step 5's PR body
    needs them; there's no script returning them for you now.
@@ -213,9 +218,19 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —
       parse each teammate's JSON from its message to you. Merge `findings` across all five.
-      `mustFix` = every `blocker`/`major` finding. **Approve** only if every one of the five
-      reported AND every `approve` is `true` AND `mustFix` is empty. Either way, post the round's
-      result as a comment: `gh issue comment <N> --body "✅ Review panel approved (round <R>)."` or
+      **Before computing `mustFix`: any lens that reported `approve: false` with an EMPTY
+      `findings` array** (the spec lens can do this — it requires `spec_conformance: "full"` to
+      approve, so a `"partial"` verdict alone sets `approve: false` with nothing to point at) —
+      **synthesize a finding for it** so its non-approval has something to work from instead of
+      silently reaching the round cap with empty residual findings and no visible reason: `{id:
+      "unexplained-<lens>", severity: "major", location: "(<lens> lens report)", rule:
+      "unexplained-non-approval", problem: "<lens> lens returned approve=false with no findings
+      (summary: <its summary>)", fix: "Re-review and either approve, or report a specific blocking
+      finding."}`. Add these to `findings` alongside whatever each lens actually reported, THEN
+      compute `mustFix` = every `blocker`/`major` finding (including synthesized ones). **Approve**
+      only if every one of the five reported AND every `approve` is `true` AND `mustFix` is empty.
+      Either way, post the round's result as a comment:
+      `gh issue comment <N> --body "✅ Review panel approved (round <R>)."` or
       `gh issue comment <N> --body "🔁 Review round <R>: <M> must-fix finding(s), fixing…"`.
 
    d. **Fix — bounded, max 3 rounds.** Not approved and a round remains (start at round 1, cap at
@@ -264,7 +279,7 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
        "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
        "change":   "issue-<N>",
        "issue":    <N>,
-       "base":     "origin/$DEFAULT_BR",
+       "base":     "origin/<DEFAULT_BR>",
        "buildSystem": "auto"
      }
    }
@@ -287,8 +302,10 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    so plainly if the owner asks why this run's issue history is sparser than a Team-mode run's.
 
 5. **Mark the PR ready and report.** When step 4 approved (either mode), finalize the already-open
-   draft PR (outward-facing — done here in this session, narrated):
+   draft PR (outward-facing — done here in this session, narrated). Re-resolve `$BR` fresh here —
+   cheap, and this may be a separate Bash call from step 2's, which wouldn't have carried it over:
    ```bash
+   BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>

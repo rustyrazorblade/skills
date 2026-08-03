@@ -93,6 +93,29 @@ open_tmux() {
 
 name="issue-pm-${issue}"
 
+lookup_session_id() {
+  claude agents --json --all 2>/dev/null \
+    | jq -r --arg n "$1" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last.id // empty'
+}
+lookup_session_cwd() {
+  claude agents --json --all 2>/dev/null \
+    | jq -r --arg id "$1" '.[] | select(.id == $id) | .cwd // empty'
+}
+# `claude agents --json` registration can lag slightly behind `claude --bg`/`claude respawn`
+# returning — retry briefly instead of trusting a single immediate check either way, in either
+# direction (a false "didn't appear" removes a label that should stay; a false "unsafe" stops a
+# perfectly healthy respawn).
+retry_until_nonempty() {
+  local out="" attempts=0
+  while [[ $attempts -lt 5 ]]; do
+    out=$("$@")
+    [[ -n "$out" ]] && { echo "$out"; return 0; }
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  echo ""
+}
+
 # Local session lookup FIRST, and --all (not just live ones): a background session's worktree is
 # tied to that SESSION, not to the issue, so a crashed/stopped issue-pm can only be put back in
 # its own worktree (branch, uncommitted work, everything) by `claude respawn <id>` — a fresh
@@ -101,6 +124,12 @@ name="issue-pm-${issue}"
 # `sort_by(.startedAt) | last` picks the most recent if more than one past session shares the name.
 existing_json=$(claude agents --json --all 2>/dev/null \
   | jq -c --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last // empty')
+# Check claude's own exit status specifically (not jq's) — pipefail alone isn't enough here,
+# since jq happily exits 0 on empty input, which would mask a real `claude agents` failure.
+if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
+  echo "spawn-issue-pm: 'claude agents --json --all' failed — can't check for an existing session." >&2
+  exit 1
+fi
 existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 
@@ -120,9 +149,12 @@ if [[ -n "$existing_id" ]]; then
   # distinguishable without a real distributed lock, but the assignee is a cheap, meaningful
   # signal: if it's someone else, don't respawn on top of their claim.
   active_label=$(gh issue view "$issue" --json labels \
-    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
+    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null) || true
+  # (fail open on a `gh` hiccup here — we already have local evidence this respawn is ours,
+  # unlike the fresh-spawn path below which has nothing local to fall back on)
   if [[ -n "$active_label" ]]; then
-    me=$(gh api user --jq .login 2>/dev/null)
+    me=$(gh api user --jq .login 2>/dev/null) || true   # can't verify -> fall through and respawn;
+                                                          # we already have local evidence this is ours
     assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
     if [[ -n "$me" && "$assignee" != "$me" ]]; then
       echo "already active: issue #${issue} carries agent:active, assigned to ${assignee} (not you) —" >&2
@@ -142,8 +174,7 @@ if [[ -n "$existing_id" ]]; then
   # that happen silently: stop it immediately and surface it instead of trusting the respawn.
   # Empty/missing cwd data counts as unsafe too (-z), not just a confirmed wrong path — a
   # transient `claude agents` failure here must never be read as "must be fine, then."
-  respawned_cwd=$(claude agents --json --all 2>/dev/null \
-    | jq -r --arg id "$session_id" '.[] | select(.id == $id) | .cwd // empty')
+  respawned_cwd=$(retry_until_nonempty lookup_session_cwd "$session_id")
   if [[ -z "$respawned_cwd" || "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
     claude stop "$session_id" > /dev/null 2>&1 || true
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
@@ -164,11 +195,32 @@ else
   # an issue-pm running on someone else's machine (or yours, on a different one) is invisible to
   # the local lookup above, but not to this one. This is what actually makes it safe for two
   # developers to work the same repo without duplicating an issue-pm.
-  active_label=$(gh issue view "$issue" --json labels \
-    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
+  if ! active_label=$(gh issue view "$issue" --json labels \
+    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null); then
+    echo "spawn-issue-pm: 'gh issue view' failed — can't verify whether #${issue} is already" >&2
+    echo "active. Nothing local backs a fresh spawn, so refusing rather than guessing; check" >&2
+    echo "'gh auth status' and your network, then retry." >&2
+    exit 1
+  fi
   if [[ -n "$active_label" ]]; then
     assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
     echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-pm may be running on another machine, or this one hasn't set the label yet. Not spawning a duplicate." >&2
+    exit 1
+  fi
+
+  # Even without the label, the issue itself might already be assigned to someone else on
+  # GitHub. Spawning anyway would plant agent:active on an issue this session has no business
+  # working — activate's own multi-user guard would stop the spawned session, but nothing would
+  # ever clear the label it left behind.
+  if ! me=$(gh api user --jq .login 2>/dev/null); then
+    echo "spawn-issue-pm: couldn't verify your GitHub identity ('gh api user' failed) — check" >&2
+    echo "'gh auth status'. Refusing to spawn without being able to check the assignee: this is a" >&2
+    echo "new spawn (unlike a respawn, nothing local backs the claim yet)." >&2
+    exit 1
+  fi
+  assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null)
+  if [[ -n "$assignee" && "$assignee" != "$me" ]]; then
+    echo "issue #${issue} is already assigned to ${assignee} (not you) — not spawning; that's their claim." >&2
     exit 1
   fi
 
@@ -197,8 +249,7 @@ else
     exit 1
   fi
 
-  session_id=$(claude agents --json --all \
-    | jq -r --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last.id // empty')
+  session_id=$(retry_until_nonempty lookup_session_id "$name")
 
   if [[ -z "$session_id" ]]; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true

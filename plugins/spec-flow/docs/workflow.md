@@ -69,8 +69,8 @@ way, just split across two separate processes instead of one conversation:
         │                          ▼
         │                 ┌────────────────────────────┐
         └─────────────────│ /spec-flow:finalize <issue#>      │
-                          │   close issue, sync+archive  │
-                          │   openspec, remove worktree  │
+                          │   sync+archive openspec,     │
+                          │   close issue, remove worktree│
                           └────────────────────────────┘
 ```
 
@@ -273,7 +273,7 @@ primary checkout.
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
-| `/spec-flow:finalize` | foreground | After you squash-merge: closes the issue, syncs+archives OpenSpec (via its own small self-merged PR), removes the worktree. Never merges your feature PR. |
+| `/spec-flow:finalize` | foreground | After you squash-merge: syncs+archives OpenSpec (via its own small self-merged PR), closes the issue, removes the worktree. Never merges your feature PR. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 

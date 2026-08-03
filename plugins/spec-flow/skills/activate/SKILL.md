@@ -32,7 +32,8 @@ else — that's their claim, not yours to take), and confirm the choice with the
    claim, not a re-activation (the issue was already assigned to you): re-running this on your own
    in-flight issue shouldn't repost it every time.
    ```bash
-   ALREADY_MINE=false   # from the assignees check above — true if you were already the assignee
+   ME=$(gh api user --jq .login)
+   ALREADY_MINE=$(gh issue view <N> --json assignees --jq --arg me "$ME" '[.assignees[].login] | contains([$me])')
    gh issue edit <N> --add-assignee @me --add-label agent:active
    if [[ "$ALREADY_MINE" != "true" ]]; then
      gh issue comment <N> --body "🏗️ Claimed — starting design."

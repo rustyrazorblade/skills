@@ -1,14 +1,14 @@
 ---
 name: finalize
-description: Finalize a merged issue — close the GitHub issue, sync the OpenSpec change's delta specs into the canonical specs, archive the change via its own small PR, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the FEATURE PR in GitHub; never merges that one — the one PR this skill does merge itself is its own no-review archive-only bookkeeping PR (see step 3).
+description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs and archive the change via its own small PR, close the GitHub issue, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the FEATURE PR in GitHub; never merges that one — the one PR this skill does merge itself is its own no-review archive-only bookkeeping PR (see step 3).
 argument-hint: [issue number, with its PR already squash-merged]
 ---
 
 # finalize — sync, archive, and clean up after merge
 
 You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
-**squash-merged** the PR for issue `#N` in GitHub. Close the issue, sync and archive the OpenSpec
-change, and tear down the worktree. **This skill never merges the feature PR** — that merge is the
+**squash-merged** the PR for issue `#N` in GitHub. Sync and archive the OpenSpec change, close the
+issue, and tear down the worktree. **This skill never merges the feature PR** — that merge is the
 owner's action in GitHub, always. The one exception, scoped narrowly: step 3's archive commit lands
 via its own tiny PR that this skill opens *and* merges itself, because it's pure OpenSpec
 bookkeeping with no code and nothing to review — not a carve-out for anything else.
@@ -40,9 +40,18 @@ mid-flight from an interrupted `activate`/`implement` pass.
    git -C "$MAIN" fetch origin
    TMPWT=$(mktemp -d)
    git -C "$MAIN" worktree add --detach "$TMPWT" "origin/$DEFAULT_BR"
+   echo "TMPWT=$TMPWT"
    ```
+   **Note the printed `$TMPWT` path — it's from `mktemp`, so unlike `$MAIN`/`$DEFAULT_BR` it can't
+   be recomputed.** If step 3 runs as a separate Bash call (likely — OpenSpec's own commands sit
+   between), that call won't have this shell's variables (only cwd survives across Bash calls, not
+   variables) — so step 3 below uses `<TMPWT>` as a stand-in for the **literal path you just saw
+   printed**, not the unset variable `$TMPWT`. Get this wrong and `git -C ""` doesn't error, it
+   silently uses whatever the cwd happens to be — exactly the kind of silent wrong-tree operation
+   this skill's one self-merge exception can't afford.
 
-3. **Sync delta specs into canonical specs, then archive the change** (inside `$TMPWT`). If
+3. **Sync delta specs into canonical specs, then archive the change** (inside `<TMPWT>`, the literal
+   path from step 2 — not a shell variable). If
    `openspec/changes/archive/issue-<N>` already exists here, a previous finalize run already got
    this far — skip straight to step 4, nothing to redo. Otherwise, use the OpenSpec flow for
    change `issue-<N>`:
@@ -52,12 +61,16 @@ mid-flight from an interrupted `activate`/`implement` pass.
    Commit the archive, then land it on `main` **through a PR, not a direct push** — this repo's
    own rule against pushing straight to `main` applies to finalize too, and a repo with branch
    protection (the configuration `/spec-flow:adopt-tiering` tells owners to set up) would simply
-   reject a direct push outright:
+   reject a direct push outright. `$MAIN`/`$DEFAULT_BR` are cheap to recompute, so re-resolve them
+   fresh here rather than assume they carried over from step 2 — same reasoning as `<TMPWT>` above,
+   they just happen to be values a one-liner can reconstruct instead of needing to be inlined:
    ```bash
-   git -C "$TMPWT" add -A
-   git -C "$TMPWT" commit -m "archive: issue-<N>"
+   MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git -C <TMPWT> add -A
+   git -C <TMPWT> commit -m "archive: issue-<N>"
    ARCHIVE_BR="archive/issue-<N>"
-   git -C "$TMPWT" push origin "HEAD:$ARCHIVE_BR"
+   git -C <TMPWT> push origin "HEAD:$ARCHIVE_BR"
    gh pr create --head "$ARCHIVE_BR" --base "$DEFAULT_BR" \
      --title "archive: issue-<N>" \
      --body "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
@@ -67,7 +80,7 @@ mid-flight from an interrupted `activate`/`implement` pass.
      echo "$ARCHIVE_BR --squash --delete-branch (or in GitHub), then re-run finalize." >&2
      exit 1
    fi
-   git -C "$MAIN" worktree remove "$TMPWT"
+   git -C "$MAIN" worktree remove <TMPWT>
    ```
    This is the **one** PR this skill merges itself — see the frontmatter note on why. Don't let the
    archive PR merge silently fail and fall through to closing the issue anyway: leaving the archive

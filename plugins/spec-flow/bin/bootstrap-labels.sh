@@ -14,7 +14,7 @@ gh label create "P3" --color 0e8a16 --description "Priority 3 — low / someday"
 
 # Lifecycle.
 gh label create "status:ready"       --color 0052cc --description "Groomed; awaiting activation"                      --force || true
-gh label create "status:spec-review" --color 5319e7 --description "Spec committed; awaiting owner approval (the seam)" --force || true
+gh label create "status:spec-review" --color 5319e7 --description "Spec committed; awaiting owner approval (Seam 1 of 2)" --force || true
 gh label create "status:in-progress" --color 1d76db --description "Background team implementing"                      --force || true
 gh label create "status:in-review"   --color 006b75 --description "PR open; awaiting owner GitHub review"             --force || true
 gh label create "status:addressing"  --color e99695 --description "Resolving owner review comments"                   --force || true

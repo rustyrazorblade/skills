@@ -38,12 +38,19 @@ else — that's their claim, not yours to take), and confirm the choice with the
    *another* user's `project-manager` (or your own, from a different machine) — nothing else about
    this session is; see **Coordination signals** in `docs/workflow.md`.
 
-2. **Confirm you're isolated in your own worktree.** You run as a dedicated `issue-pm` background
-   session (spawned by `scripts/spawn-issue-pm.sh`), so Claude Code has already isolated you into
-   your own git worktree, branched from the repo's default branch — automatically, the first time
-   you touch a file (see [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
-   You don't create or name it yourself; nothing to do here except proceed knowing every file
-   change from this point lands there, not in the owner's primary checkout.
+2. **Ensure you're isolated in your own worktree — verify it, don't assume it.** Isolation is
+   **not** automatic for everything: confirmed by test, Claude Code only isolates you in front of
+   an `Edit`/`Write` tool call — never before a Bash-driven file write (`printf > f`, a heredoc,
+   an external CLI like `openspec` writing files itself), and `gh` calls (step 1) don't trigger it
+   either. If `scripts/spawn-issue-pm.sh` spawned you, its prompt already told you to call
+   `EnterWorktree` as your very first action, before step 1 — so by now you should already be
+   isolated. **Check, don't trust it:** `git rev-parse --show-toplevel` should return a path
+   containing `.claude/worktrees/`, not the repo's primary checkout. If it doesn't (started some
+   other way, or the spawn-time isolation didn't take), call `EnterWorktree` yourself right now,
+   before anything else — including before the OpenSpec commands in step 5, since those write
+   files via a Bash-invoked CLI and won't trigger isolation on their own. You don't create or name
+   the worktree yourself either way; once confirmed, every subsequent action — tool-driven or
+   Bash-driven — lands there, not in the owner's primary checkout.
 
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** Before
    generating anything, spawn the `architect` subagent with the issue's scope + acceptance
@@ -156,13 +163,16 @@ else — that's their claim, not yours to take), and confirm the choice with the
   never generate the spec before the owner has picked among the architect's options. Step 7 (spec
   approval, Seam 1) always follows step 6 (commit) — no implementation, no
   `/spec-flow:implement`, no pushing the branch, until both stops have passed.
-- Worktree managed by Claude Code's own background-session isolation, scoped to this session's
-  life — not something this skill creates, and not the Agent tool's throwaway `isolation:
-  "worktree"`. Its name is whatever Claude Code assigned and doesn't matter: there is only ever
-  one worktree per issue on a machine, and it's already where you're standing. The issue number is
-  the one thing that matters for finding anything — the OpenSpec change is named `issue-<N>`
-  directly from it, and `Closes #N` in the PR body (added at `implement`) is the durable correlator
-  for the PR — see **Naming** in `docs/workflow.md`.
+- Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
+  life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
+  "worktree"`. Its name is whatever Claude Code assigned and doesn't matter — but it's only
+  guaranteed to be where you're standing if step 2 actually confirmed it; isolation doesn't happen
+  for free. That isolation is per-**session**, not per-issue on its own — it's
+  `scripts/spawn-issue-pm.sh` respawning a past session by name instead of always starting fresh
+  that keeps this issue to one worktree in practice (see **Coordination signals** in
+  `docs/workflow.md`). The issue number is the one thing that matters for finding anything — the
+  OpenSpec change is named `issue-<N>` directly from it, and `Closes #N` in the PR body (added at
+  `implement`) is the durable correlator for the PR — see **Naming** in `docs/workflow.md`.
 - One change per issue, named `issue-<N>` — deterministic, never derived from the title.
 - Architectural / data-model decisions are the owner's, made at step 4; the architect and any
   domain-expert agent advise only, never decide.

@@ -57,22 +57,11 @@ mid-flight from an interrupted `activate`/`implement` pass.
    themselves, stop before the push and surface the commit for them instead, but say so
    explicitly.
 
-4. **Remove your own worktree and branch.** Resolve them from where you're standing — you never
-   assumed a name for either — and remove them from `$MAIN` (a worktree can't remove itself while
-   something's sitting in it):
-   ```bash
-   BR=$(git rev-parse --abbrev-ref HEAD)
-   WT=$(git rev-parse --show-toplevel)
-   git -C "$MAIN" worktree remove "$WT"
-   git -C "$MAIN" branch -D "$BR"                  # local — -D, not -d: a squash-merge commit is
-                                                    # never an ancestor of the branch tip, so -d
-                                                    # always refuses here
-   git -C "$MAIN" push origin --delete "$BR"       # remote (optional; squash-merge may have removed it)
-   ```
-
-5. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — confirm, and
+4. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — confirm, and
    close explicitly if still open). Remove the lifecycle and coordination labels — closing doesn't
-   drop them on its own, and a stray `agent:active` on a closed issue would misread as still live:
+   drop them on its own, and a stray `agent:active` on a closed issue would misread as still live.
+   **Do this before step 5, not after** — `gh issue` commands have no `-C`/path override, they
+   infer the repo from wherever you're standing, and step 5 is about to remove that:
    ```bash
    gh issue view <N> --json state,closed
    gh issue comment <N> --body "🎉 Merged, archived, and closed."
@@ -80,6 +69,34 @@ mid-flight from an interrupted `activate`/`implement` pass.
    gh issue edit <N> --remove-label status:in-review --remove-label status:addressing \
      --remove-label agent:active --remove-label blocked 2>/dev/null || true
    ```
+
+5. **Remove your own worktree and branch — only once verified clean, then a genuine double-force.**
+   Resolve them from where you're standing — you never assumed a name for either. Claude Code locks
+   a worktree while its session is running, so removing your own always needs `--force` twice
+   (confirmed by test: single `--force` only overrides *uncommitted changes*, not a *lock* — those
+   are two separate gates). **Never reach for the double-force without checking first** — it would
+   just as happily discard real, unrecoverable work as it overrides the lock. By this point
+   (PR already verified merged) there should be nothing uncommitted or unpushed left, but verify it
+   rather than assume it:
+   ```bash
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   WT=$(git rev-parse --show-toplevel)
+   DIRTY=$(git -C "$WT" status --porcelain)
+   UNPUSHED=$(git -C "$WT" log '@{u}..HEAD' --oneline 2>/dev/null)
+   if [[ -n "$DIRTY" || -n "$UNPUSHED" ]]; then
+     echo "worktree has uncommitted or unpushed work — not removing. Resolve it, then re-run finalize." >&2
+     exit 1
+   fi
+   git -C "$MAIN" worktree remove --force --force "$WT"
+   git -C "$MAIN" branch -D "$BR"                  # local — -D, not -d: a squash-merge commit is
+                                                    # never an ancestor of the branch tip, so -d
+                                                    # always refuses here
+   git -C "$MAIN" push origin --delete "$BR"       # remote (optional; squash-merge may have removed it)
+   ```
+   The directory you're standing in no longer exists once this succeeds. Confirmed by test: the
+   *next* command you run will report the shell recovering to some other directory instead of
+   doing what you asked — that's expected, not an error; just re-issue it. This is exactly why step
+   4 already ran first, before there was nothing left to run `gh` from.
 
 6. **Report.** Confirm: specs synced, change archived, worktree removed, issue closed. Suggest
    `/spec-flow:board` to see the rest of the pipeline.
@@ -91,6 +108,9 @@ mid-flight from an interrupted `activate`/`implement` pass.
 - Leave `main` clean: the only commit finalize makes to main is the OpenSpec archive, matching
   the repo's existing archive convention.
 - **This is where `agent:active` finally comes off** — `activate` set it, every stage since kept
-  it, this is the one place it's supposed to end. Don't skip step 5's label removal even on an
+  it, this is the one place it's supposed to end. Don't skip step 4's label removal even on an
   otherwise-uneventful finalize.
+- **Never double-force a worktree removal without checking it's clean first.** The lock override
+  and the uncommitted-changes override are two different gates; skipping the check means treating
+  a real safety mechanism as an obstacle instead of a signal.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

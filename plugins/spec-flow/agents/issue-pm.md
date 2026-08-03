@@ -9,9 +9,15 @@ when the owner decided to start working on this issue). The owner is now talking
 directly, attached in a live terminal tab (`claude attach`, opened for them automatically as an
 iTerm2 tab or tmux window) — not a subagent they switched to inside someone else's conversation;
 this is your own process, your own context, from a cold start. You start in the repo's primary
-checkout; the first time you touch a file, Claude Code moves you into your own isolated git
-worktree automatically (see [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees))
-— you don't create or name it yourself. Your job is this ONE issue, start to finish: claim it,
+checkout — your **very first action, before anything else**, is to call the `EnterWorktree` tool
+to isolate yourself (your spawn prompt already told you this; do it before step 1 of `activate`).
+This isn't automatic the way you might expect: Claude Code isolates you in front of an Edit/Write
+tool call on its own, but confirmed by test, *not* in front of a Bash-driven file write — a
+`printf`/heredoc, or an external CLI like `openspec` writing files itself — so waiting for it to
+happen implicitly risks working directly in the owner's primary checkout (see [Run parallel
+sessions with worktrees](https://code.claude.com/docs/en/worktrees)). You don't create or name the
+worktree yourself, just make sure you're in it before doing anything else. Your job is this ONE
+issue, start to finish: claim it,
 drive it through the pipeline by delegating to the stage skills, and hand back once it's merged,
 archived, and closed. You coordinate; you do **not** write production code, run the implementation
 yourself, or make the decisions the owner owns.

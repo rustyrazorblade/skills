@@ -24,7 +24,13 @@ done
 [[ -n "$issue" ]] || usage
 
 for bin in claude jq gh; do
-  command -v "$bin" >/dev/null 2>&1 || { echo "spawn-issue-pm: '$bin' is required but not on PATH" >&2; exit 1; }
+  command -v "$bin" >/dev/null 2>&1 || {
+    echo "spawn-issue-pm: '$bin' is required but not on PATH." >&2
+    echo "If you can't install it (jq in particular): don't run this script — an agent can replicate" >&2
+    echo "its logic directly (claude agents --json --all / gh issue view --json labels / claude respawn" >&2
+    echo "or claude --bg), reading the JSON as text instead of piping it through jq. See project-manager.md." >&2
+    exit 1
+  }
 done
 
 repo_root=$(git rev-parse --show-toplevel)
@@ -86,51 +92,100 @@ open_tmux() {
 
 name="issue-pm-${issue}"
 
-# GitHub label check FIRST: agent:active is the cross-machine, cross-user signal — an issue-pm
-# running on someone else's machine (or yours, earlier, on a different one) is invisible to the
-# local `claude agents --json` check below, but not to this one. This is what actually makes it
-# safe for two developers to work the same repo without duplicating an issue-pm.
-active_label=$(gh issue view "$issue" --json labels \
-  --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
-if [[ -n "$active_label" ]]; then
-  assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
-  echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-pm may be running on another machine. Not spawning a duplicate." >&2
+# Local session lookup FIRST, and --all (not just live ones): a background session's worktree is
+# tied to that SESSION, not to the issue, so a crashed/stopped issue-pm can only be put back in
+# its own worktree (branch, uncommitted work, everything) by `claude respawn <id>` — a fresh
+# `claude --bg` would start an unrelated, empty worktree branched from main. Confirmed empirically
+# (2026-08-03): respawn keeps the same cwd/worktree and files; a fresh --bg does not.
+# `sort_by(.startedAt) | last` picks the most recent if more than one past session shares the name.
+existing_json=$(claude agents --json --all 2>/dev/null \
+  | jq -c --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last // empty')
+existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+
+if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
+  echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})"
   exit 1
 fi
 
-# `claude agents --json` (no --all) lists only LIVE sessions on THIS machine — a narrower,
-# local-only backstop for the case where the GitHub label somehow lagged (e.g. spawned seconds
-# ago, activate hasn't set it yet).
-existing=$(claude agents --json 2>/dev/null \
-  | jq -r --arg n "$name" '.[] | select(.name == $n) | .id' | head -1)
-if [[ -n "$existing" ]]; then
-  echo "already running: ${name} ${existing} (attach: claude attach ${existing})"
-  exit 1
+if [[ -n "$existing_id" ]]; then
+  # We have a past session for this issue on THIS machine, not currently live (done/failed/
+  # stopped) — respawn it rather than starting fresh, so it lands back in its own worktree with
+  # its branch/uncommitted work intact instead of an empty one branched from main.
+  echo "resuming: ${name} was ${existing_state} — respawning ${existing_id} in its existing worktree" >&2
+  claude respawn "$existing_id" > /dev/null
+  session_id="$existing_id"
+
+  # FAIL-SAFE, confirmed by test (2026-08-03): if the worktree this session lived in has since
+  # been removed (e.g. Claude Code's own cleanupPeriodDays sweep), respawn does NOT recreate it
+  # and does NOT error — it silently falls back to the PRIMARY checkout. That means every command
+  # this issue-pm runs from here would land in the owner's own working directory. Refuse to let
+  # that happen silently: stop it immediately and surface it instead of trusting the respawn.
+  respawned_cwd=$(claude agents --json --all 2>/dev/null \
+    | jq -r --arg id "$session_id" '.[] | select(.id == $id) | .cwd // empty')
+  if [[ -n "$respawned_cwd" && "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
+    claude stop "$session_id" > /dev/null 2>&1 || true
+    gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
+    echo "spawn-issue-pm: respawned ${name} (${session_id}) landed in ${respawned_cwd}, NOT an" >&2
+    echo "isolated worktree — its original worktree is gone (likely swept). Stopped it before it" >&2
+    echo "could touch that directory. The branch is still on origin (checkpoint pushes) if this" >&2
+    echo "issue-pm ever got that far; recover manually: 'git worktree add <path> <branch>' from the" >&2
+    echo "existing branch, or start over with a fresh spawn if nothing was pushed yet." >&2
+    exit 1
+  fi
+else
+  # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
+  # an issue-pm running on someone else's machine (or yours, on a different one) is invisible to
+  # the local lookup above, but not to this one. This is what actually makes it safe for two
+  # developers to work the same repo without duplicating an issue-pm.
+  active_label=$(gh issue view "$issue" --json labels \
+    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
+  if [[ -n "$active_label" ]]; then
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
+    echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-pm may be running on another machine, or this one hasn't set the label yet. Not spawning a duplicate." >&2
+    exit 1
+  fi
+
+  # Set the label OURSELVES, right here, before spawning — don't leave it to `activate` (which
+  # only runs once the spawned session gets around to it, maybe well after spawn). That gap is
+  # exactly the window two near-simultaneous spawns on different machines could both slip through.
+  # Setting it this early narrows that window from minutes to the time this script takes to run;
+  # it isn't a true compare-and-swap (gh has no atomic label-if-absent), but it's the tightest this
+  # gets without one. Roll it back below if the spawn itself doesn't pan out.
+  gh issue edit "$issue" --add-label agent:active
+
+  # No --worktree here: --bg does not accept it. Claude Code isolates before an Edit/Write TOOL
+  # call, but confirmed by test: NOT before a Bash-driven file write (printf/heredoc/an external
+  # CLI writing files itself, e.g. `openspec`) — so the prompt below forces isolation as the very
+  # first action via EnterWorktree, before step 1 of activate even runs, rather than trusting it to
+  # happen implicitly. That's the worktree issue-pm ends up running in, named and placed by Claude
+  # Code, not by this script.
+  if ! claude --bg \
+    --agent issue-pm \
+    --name "$name" \
+    --permission-mode acceptEdits \
+    "Before doing anything else, call the EnterWorktree tool to isolate yourself into your own git worktree. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Claim it, then drive activate through finalize. Stop at both owner seams." \
+    > /dev/null; then
+    gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
+    echo "spawn-issue-pm: 'claude --bg' itself failed to launch ${name}" >&2
+    exit 1
+  fi
+
+  session_id=$(claude agents --json --all \
+    | jq -r --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last.id // empty')
+
+  if [[ -z "$session_id" ]]; then
+    gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
+    echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json' after spawn" >&2
+    exit 1
+  fi
 fi
 
-# No --worktree here: --bg does not accept it. Claude Code isolates every
-# background session into its own worktree automatically before it touches any
-# file (see docs.claude.com/en/worktrees) — that's the worktree issue-pm ends up
-# running in, named and placed by Claude Code, not by this script.
-claude --bg \
-  --agent issue-pm \
-  --name "$name" \
-  --permission-mode acceptEdits \
-  "You are the issue-pm for issue #${issue}. Claim it, then drive activate through finalize. Stop at both owner seams." \
-  > /dev/null
-
-session_id=$(claude agents --json \
-  | jq -r --arg n "$name" '.[] | select(.name == $n) | .id' | head -1)
-
-if [[ -z "$session_id" ]]; then
-  echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json' after spawn" >&2
-  exit 1
-fi
-
-state=$(claude agents --json \
-  | jq -r --arg n "$name" '.[] | select(.name == $n) | .state')
+state=$(claude agents --json --all \
+  | jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state')
 if [[ "$state" == "failed" ]]; then
-  echo "spawn-issue-pm: ${name} (${session_id}) exited immediately — check 'claude logs ${session_id}'" >&2
+  gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
+  echo "spawn-issue-pm: ${name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
   exit 1
 fi
 

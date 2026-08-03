@@ -127,15 +127,34 @@ writes — so it's the coordination surface, not `claude agents --json` (which o
 the local machine's session registry, and says nothing about another developer's `issue-pm`
 running on their own machine).
 
-- **`agent:active`** — applied by `activate` the moment it claims the issue (alongside the
-  assignee), removed by `finalize` on close, and removed by `issue-pm` itself if it hands back or
-  shuts down before finishing for any other reason. This, not `claude agents --json`, is the
-  authoritative "is anything actually working this issue" signal — `board` reads it directly (see
-  its **Steps**), and `scripts/spawn-issue-pm.sh` refuses to spawn a second `issue-pm` for an
-  issue that already carries it, which is what actually makes it safe for two developers to work
-  the same repo side by side without duplicating work. It does **not** self-heal if a process dies
-  uncleanly (a crash, `claude kill`, a lost machine) — nothing currently detects a stale label left
-  behind by a session that no longer exists.
+- **`agent:active`** — set on the fresh-spawn path by `scripts/spawn-issue-pm.sh` itself, *before*
+  it launches anything (not left for `activate` to get to once the session finally runs — that gap
+  was minutes wide and two near-simultaneous spawns on different machines could both slip through
+  it; `activate`'s own `--add-label` is now just a harmless no-op confirming what's already there).
+  Removed by `finalize` on close, and removed by `issue-pm` itself if it hands back or shuts down
+  before finishing for any other reason — and by the spawn script itself if it sets the label but
+  the launch then fails, so a bad spawn never leaves a false-positive lock behind. This, not
+  `claude agents --json`, is the authoritative "is anything actually working this issue" signal —
+  `board` reads it directly (see its **Steps**).
+
+  `scripts/spawn-issue-pm.sh` checks its **own machine's** past sessions first: a session named
+  `issue-pm-<N>` that's still live → refuse (already running here); one that exists but isn't live
+  (crashed, stopped, finished) → `claude respawn` it, landing back in its own worktree with its
+  branch and uncommitted work intact, instead of a fresh, unrelated one branched from `main` —
+  **except** when that worktree is gone (Claude Code's own cleanup swept it, or someone removed it
+  by hand): confirmed by test, `claude respawn` in that case doesn't error and doesn't recreate the
+  worktree, it silently drops the session into the **primary checkout**. The script checks for
+  exactly that after every respawn and stops the session immediately rather than letting it run
+  there, clearing `agent:active` and surfacing a recovery command instead. Only when there's no
+  local record at all does it fall back to the GitHub label — refuse if `agent:active` is set (an
+  issue-pm may be running on another machine this one can't see), spawn fresh otherwise.
+
+  What's still not airtight: label-then-spawn isn't a true compare-and-swap (GitHub's API has no
+  atomic label-if-absent), so it narrows the cross-machine race to roughly the time this script
+  takes to run rather than closing it completely; and a crash on a machine other than the one
+  you're retrying from still needs a human to clear a stale label — nothing detects that on its
+  own. A same-machine crash, the common case, now recovers on its own via respawn (or fails safe,
+  loudly, if its worktree is gone).
 - **Progress comments.** `issue-pm` posts a **new** comment (never edits one in place — the point
   is a readable timeline, not a live-updating status line) on the issue at each meaningful
   milestone: claimed, spec committed, draft PR opened, each `tasks.md` checkpoint during
@@ -153,9 +172,14 @@ running on their own machine).
 
 ## Naming
 
-The issue number is the only thing that has to be stable — on a given machine there is never more
-than one worktree per issue, so nothing else needs a human-readable name to stay unambiguous.
-Two things are derived directly from it, deterministically, no title-derived slug involved:
+The issue number is the only thing that has to be stable. Claude Code's own worktree isolation is
+per-**session**, not per-issue — nothing about it guarantees one worktree per issue on its own.
+`scripts/spawn-issue-pm.sh` is what makes that true in practice: it looks for a past local session
+named `issue-pm-<N>` before spawning, and `claude respawn`s it instead of starting fresh whenever
+one exists — see **Coordination signals** below. Skip that script and spawn `issue-pm` some other
+way and this invariant doesn't hold. With it, nothing else needs a human-readable name to stay
+unambiguous — two things are derived directly from the issue number, deterministically, no
+title-derived slug involved:
 
 ```
 GitHub issue     #N
@@ -164,9 +188,9 @@ pull request     body contains "Closes #N"
 ```
 
 The git branch and worktree are **not** part of that set, and don't need to be — Claude Code names
-and places them itself. `issue-pm` runs as a background session, and Claude Code isolates every
-background session into its own git worktree automatically, before it touches any file (see
-[Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)). A stage never
+and places them itself, via `EnterWorktree` — `issue-pm`'s spawn prompt calls it explicitly as the
+very first action rather than relying on it firing on its own (it doesn't, for Bash-driven writes —
+see **Worktree isolation** below). A stage never
 assumes a branch or worktree name; it resolves them from wherever it's already running
 (`git rev-parse --abbrev-ref HEAD`, `git rev-parse --show-toplevel`). If a stage needs to recover
 state from outside that issue's own session, it goes straight to `openspec/changes/issue-N` for
@@ -193,9 +217,11 @@ a subagent either. Instead:
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged, archived,
   and closed.
-- Several issues can be in flight at once, each its own process, each its own tab. `project-manager`
-  checks `claude agents --json` before spawning, so it never launches a duplicate for an issue that
-  already has one running; move between tabs, or back to the coordinator's, as you go.
+- Several issues can be in flight at once, each its own process, each its own tab. It's the spawn
+  script, not `project-manager` itself, that guards against duplicates — this machine's own past
+  sessions first (respawning a crashed one rather than starting fresh), the `agent:active` label
+  otherwise — so it never launches a second `issue-pm` for an issue that already has one running,
+  on this machine or another. Move between tabs, or back to the coordinator's, as you go.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
   work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
 - `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
@@ -220,10 +246,15 @@ dispatching several issues in a row; the attach command is still printed either 
 
 ### Worktree isolation
 
-`issue-pm` sessions get their file isolation from Claude Code itself, not from this plugin: every
-background session (`--bg`) is moved into its own git worktree automatically, before it edits any
-file, branched from the repo's default branch. Nothing in this plugin creates, names, or excludes
-that worktree — see **Naming** above for what that means for cross-stage state, and
+`issue-pm` sessions get their file isolation from Claude Code itself, not from this plugin — via
+the `EnterWorktree` tool, which creates the worktree and switches the session into it, branched
+from the repo's default branch. **Not automatic for everything, confirmed by test:** Claude Code
+calls `EnterWorktree` on its own in front of an `Edit`/`Write` tool call, but never in front of a
+Bash-driven file write (`printf > f`, a heredoc, an external CLI like `openspec` writing files
+itself) — so `scripts/spawn-issue-pm.sh`'s spawn prompt tells `issue-pm` to call it explicitly, as
+its very first action, rather than trusting it to happen implicitly; `activate` step 2 verifies
+this rather than assuming it. Nothing in this plugin creates, names, or excludes the worktree
+itself — see **Naming** above for what that means for cross-stage state, and
 [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees) for how Claude
 Code places, resumes, and eventually sweeps it. `finalize` still removes an issue's worktree and
 branch explicitly, on its own schedule (tied to the issue merging, not to session idleness) — see
@@ -248,8 +279,8 @@ primary checkout.
 
 **Orchestration**
 - `project-manager` — the **central coordinator**, the agent you talk to directly. It knows the
-  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running (`claude agents
-  --json`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
+  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running (`agent:active`,
+  via `board`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
   `product-manager` subagent, and any specific issue's `activate → implement → address → finalize`
   to that issue's `issue-pm`, launched as its own background process. It coordinates; it does not
   implement, does not drive an issue's stages inline, and never crosses your two seams. Wire it as

@@ -30,7 +30,12 @@ the naming/correlators, and the review panel).
 
 - **OpenSpec** — the `openspec` CLI installed and initialized in the repo (the spec backbone;
   the skills use `/opsx:*` and `openspec` commands).
-- **GitHub** — `gh` authenticated, and the repo hosted on GitHub (issues/labels/PRs backbone).
+- **GitHub** — `gh` authenticated, and the repo hosted on GitHub (issues/labels/PRs backbone). If
+  you have more than one `gh` account/host configured (common in a corporate environment running
+  both github.com and a GitHub Enterprise host), make sure the one active by default (`gh auth
+  status`) is the right one for this repo — every skill and `scripts/spawn-issue-pm.sh` shell out
+  to bare `gh` commands with no `--repo`/account override, so whichever account is active is the
+  one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.
 - **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` labels:
   ```bash
   bash bin/bootstrap-labels.sh   # cwd inside the target repo; gh authenticated

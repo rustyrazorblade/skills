@@ -26,12 +26,12 @@ never touches yours:
   (per the owner's configured display mode). Don't run `activate`/`implement`/`address`/`finalize`
   yourself, and don't pass `--display` — that's the owner's standing setting, not a per-issue
   decision. That process owns the issue from here; the owner talks to it directly in its tab.
-- Whether an issue **already has a running `issue-pm`** is answered by its `agent:active` GitHub
-  label, not by memory, by asking, or by `claude agents --json` alone — that label is what's
-  visible across machines and users; `claude agents --json` only ever reflects *this* machine's
-  local sessions, so it can't tell you about another developer's `issue-pm`. The script itself
-  checks the label first and refuses to double-spawn (exit 1); trust that rather than
-  second-guessing it locally.
+- Whether an issue **already has a running `issue-pm`** is answered by the spawn script itself,
+  not by memory or by asking — trust its exit code rather than second-guessing it. It checks this
+  machine's own past sessions for that issue first (live → refuse; crashed/stopped → `claude
+  respawn` it back into its own worktree instead of starting an unrelated fresh one) and only
+  falls back to the `agent:active` GitHub label — the cross-machine, cross-user signal — when
+  there's no local record at all.
 - Several issues can be in flight at once, each its own process, each in its own Claude-Code-
   isolated worktree. Check `/spec-flow:board` (which reads the label) before recommending or
   spawning anything, so you don't spin up a second `issue-pm` for an issue that already has one —

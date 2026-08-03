@@ -47,7 +47,7 @@ way, just split across two separate processes instead of one conversation:
         │                          ▼
         │                 ┌────────────────────────────┐
         │                 │ /spec-flow:implement <issue#>     │
-        │                 │   Workflow script in worktree:│
+        │                 │   agent team, you as lead:    │
         │                 │   tdd-developer → review panel│
         │                 │   → fix loop → build-engineer │
         │                 │   → docs polish               │
@@ -202,7 +202,7 @@ primary checkout.
 |---|---|---|
 | `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (the `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`). |
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). |
-| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while a `Workflow` script runs the team in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit `Workflow` opt-in. |
+| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` leads an **agent team** in the worktree (tdd-developer → review panel → fix loop → build-engineer → docs polish); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit opt-in to spawning that team. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
 | `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
@@ -267,10 +267,16 @@ primary checkout.
 
 ## Review panel (`/spec-flow:implement`)
 
-The review stage is not one reviewer — it is a **five-lens panel** (`reviewLenses` in
-`skills/implement/implement.workflow.js`) run **in parallel** each round. Their findings **merge**
-into one set; a fix round addresses every `blocker`/`major` from **any** lens; **approval requires
-every lens to approve with no must-fix findings.** The five lenses:
+Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (see **Prerequisites** in the README) —
+`issue-pm` can only lead a team because it's already its own top-level session, not a subagent;
+[agent teams](https://code.claude.com/docs/en/agent-teams) don't nest, so this specifically
+couldn't work the other way around.
+
+The review stage is not one reviewer — it is a **five-lens panel**, spawned as an **agent team**
+(`skills/implement/SKILL.md`, step 4) with `issue-pm` as the lead, all five teammates run **in
+parallel** each round. Their findings **merge** into one set; a fix round addresses every
+`blocker`/`major` from **any** lens; **approval requires every lens to approve with no must-fix
+findings.** The five lenses:
 
 1. **spec** (`reviewer` agent) — spec-conformance + the repo's documented rules **and**
    spec-scenario → test traceability (every `#### Scenario:` must have a backing test, else a
@@ -303,8 +309,9 @@ every lens to approve with no must-fix findings.** The five lenses:
 The code-review and security-review lenses invoke the built-in skills, so they run on a
 Skill-capable agent (`general-purpose`), not the `reviewer` agent. The merge/approval logic
 generalizes over N lenses — there is no per-lens special-casing beyond the spec lens owning
-`spec_conformance`/`tests_ran`. To add or remove a lens, edit the `reviewLenses` array; the loop
-needs no change.
+`spec_conformance`/`tests_ran`, and it's the lead's own reasoning now, not a script, so it needs
+no change to add or remove a lens. To add or remove one, edit the teammate list in
+`skills/implement/SKILL.md` step 4b.
 
 ## Test tiering (unit / integration)
 
@@ -385,9 +392,10 @@ set's blind-append safety rests on.
 ## Substrate and constraints
 
 - **Session-driven, not cron.** Everything is triggered and narrated by a session — the central
-  coordinator's, or the issue's `issue-pm` once it's launched. `/spec-flow:implement` runs as a
-  background `Workflow` (in-session, notifies on completion) — that is *not* cron; work pauses
-  when you close the session. `/spec-flow:address` is invoked by you when you return, never polled.
+  coordinator's, or the issue's `issue-pm` once it's launched. `/spec-flow:implement` spawns an
+  agent team with `issue-pm` as its lead — that is *not* cron either; the team is scoped to the
+  lead's own session and doesn't outlive it. `/spec-flow:address` is invoked by you when you
+  return, never polled.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
 - **Test tiering.** The local gate is the fast **unit** tier plus the branch's

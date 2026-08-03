@@ -34,10 +34,11 @@ exists specifically to work this issue without routing each step back through th
    domain-expert agent if one is available), stops for the owner's design choice *before* anything
    is generated, generates the spec from that choice, then stops again at Seam 1 for spec
    approval. Both stops are yours to wait on — do not proceed past either without the owner.
-2. **Implement.** Once the owner approves the spec at Seam 1 → `/spec-flow:implement <N>` (the
-   background Workflow: tdd-developer → five-lens review panel → bounded fix loop →
-   build-engineer → docs polish → PR). Invoking it is the explicit Workflow opt-in; launch it only
-   after approval.
+2. **Implement.** Once the owner approves the spec at Seam 1 → `/spec-flow:implement <N>` — you
+   lead an **agent team**: tdd-developer → five-lens review panel → bounded fix loop →
+   build-engineer → docs polish → PR. You can lead one precisely because you're your own
+   top-level session, not a subagent — a subagent can never spawn its own team. Invoking it is the
+   explicit opt-in to that team's cost; launch it only after approval.
    **If CI reports red on the PR** at any point from here on (during `implement`, or while
    waiting on the owner's review) → `/spec-flow:sync-ci <N>`, owner-invoked when they see it go
    red — never poll for it. This pulls the failures into the branch's flagged set so the local

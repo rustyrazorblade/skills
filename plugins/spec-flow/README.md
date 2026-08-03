@@ -37,6 +37,13 @@ the naming/correlators, and the review panel).
   ```
 - **Built-in skills** — `/code-review` and `/security-review` are used by two of the review
   lenses (they degrade to an inline pass if unavailable).
+- **Agent teams enabled** — `/spec-flow:implement` runs its five-lens review as an [agent
+  team](https://code.claude.com/docs/en/agent-teams) led by `issue-pm`, which requires
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by default):
+  ```json
+  { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
+  ```
+  in the consuming repo's (or your own) `settings.json`.
 - **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
   placed there automatically by Claude Code. Add `.claude/worktrees/` to the repo's `.gitignore`
   so those checkouts never show up as untracked files in your primary checkout (see
@@ -122,13 +129,14 @@ All skills are namespaced under the plugin:
   prod (logging/metrics/tracing, no silent failures, no secrets in telemetry)?
 - plus two built-in-skill lenses: **`/code-review`** (correctness) and **`/security-review`**.
 
-> **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …) when installed, but the
-> workflow resolves them **bare-first with a namespaced fallback** — it tries the bare name
-> (`reviewer`, `tdd-developer`, …) and, only if no such agent is registered, falls back to
-> `spec-flow:<name>`. So if the consuming repo defines its own agent with the same name (project
-> `.claude/agents/` or user `~/.claude/agents/`), **that one overrides the plugin's** — a deliberate
-> way to specialize an agent for a repo's stack — while the bundled namespaced agent is still found
-> when no override exists. (Resolution lives in the `agentNS()` helper in `implement.workflow.js`.)
+> **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …) when installed, but
+> `issue-pm` spawns them (as Task-tool subagents, or as `implement`'s agent-team teammates) by
+> their **bare name** (`reviewer`, `tdd-developer`, …), which Claude Code resolves against project
+> and user agent definitions before falling back to the plugin's namespaced one. So if the
+> consuming repo defines its own agent with the same bare name (project `.claude/agents/` or user
+> `~/.claude/agents/`), **that one overrides the plugin's** — a deliberate way to specialize an
+> agent for a repo's stack — while the bundled namespaced agent is still found when no override
+> exists.
 
 ## Wiring the project-manager as your default agent
 

@@ -60,6 +60,13 @@ else
     --body "$pr_body"
 fi
 
+# The worktree's job is done once its content is on origin — true in all three branches above
+# (an existing open PR, an already-pushed branch, or the fresh push just done). Remove it now,
+# BEFORE attempting the merge: a blocked merge (pending checks, branch protection) exits non-zero
+# below, and every retry re-running finalize would otherwise mint a fresh, never-cleaned-up TMPWT
+# on top of the last one.
+git -C "$main" worktree remove "$worktree"
+
 if ! gh pr merge "$archive_br" --squash --delete-branch; then
   echo "finalize-archive-pr: archive PR for issue-${issue} is open but didn't merge automatically" >&2
   echo "(required checks still pending, or branch protection needs a review) — merge it yourself:" >&2
@@ -67,5 +74,4 @@ if ! gh pr merge "$archive_br" --squash --delete-branch; then
   exit 1
 fi
 
-git -C "$main" worktree remove "$worktree"
 echo "finalize-archive-pr: archived and merged for issue #${issue}"

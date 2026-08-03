@@ -44,8 +44,15 @@ fi
 
 if [[ "$safe" != true ]]; then
   echo "finalize-remove-worktree: worktree has uncommitted changes, or HEAD doesn't match a merged" >&2
-  echo "PR's tip for ${br} (extra commits after merge, or a newer unmerged PR reusing this branch)" >&2
-  echo "— not removing. Resolve it, then re-run finalize." >&2
+  echo "PR's tip for ${br} — not removing. Possible causes: extra local commits after merge; a" >&2
+  echo "newer unmerged PR reusing this branch; or the remote branch was updated without this" >&2
+  echo "worktree ever pulling it (e.g. GitHub's 'Update branch' button before merge)." >&2
+  if [[ -n "${merged_sha:-}" ]]; then
+    echo "For that last case: git -C '$wt' fetch origin && git -C '$wt' reset --hard $merged_sha," >&2
+    echo "then re-run finalize. Otherwise resolve the mismatch and re-run." >&2
+  else
+    echo "Resolve it, then re-run finalize." >&2
+  fi
   exit 1
 fi
 

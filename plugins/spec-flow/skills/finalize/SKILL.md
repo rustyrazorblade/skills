@@ -67,7 +67,10 @@ mid-flight from an interrupted `activate`/`implement` pass.
      `openspec/changes/archive/`.
    Then hand the generic git/gh mechanics — commit, open the archive PR (or reuse one from an
    earlier interrupted run), merge it, clean up `<TMPWT>` — to the script, rather than reasoning
-   through the push-vs-reuse/non-fast-forward cases by hand every time:
+   through the push-vs-reuse/non-fast-forward cases by hand every time. **Invoke it from the issue
+   worktree, not from inside `<TMPWT>`** — the script removes `<TMPWT>` on success, and a Bash call
+   running from inside a directory that command just deleted is left in an undefined location for
+   whatever runs next (step 4's `gh issue` calls in particular):
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-archive-pr.sh <N> <TMPWT> "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
    ```

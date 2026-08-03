@@ -30,10 +30,13 @@ else — that's their claim, not yours to take), and confirm the choice with the
    do not proceed. If it's unassigned, or already assigned to the current user (the re-activation
    case), claim it before doing anything else:
    ```bash
-   gh issue edit <N> --add-assignee @me
+   gh issue edit <N> --add-assignee @me --add-label agent:active
+   gh issue comment <N> --body "🏗️ Claimed — starting design."
    ```
    This is what makes "who's working on what" visible to other users of this repo — claim before
-   anything else.
+   anything else. `agent:active` and the comment are the only things that make you visible to
+   *another* user's `project-manager` (or your own, from a different machine) — nothing else about
+   this session is; see **Coordination signals** in `docs/workflow.md`.
 
 2. **Confirm you're isolated in your own worktree.** You run as a dedicated `issue-pm` background
    session (spawned by `scripts/spawn-issue-pm.sh`), so Claude Code has already isolated you into
@@ -71,6 +74,17 @@ else — that's their claim, not yours to take), and confirm the choice with the
    ungroomed backlog item — this is the owner's explicit call, not something you do on your own
    initiative) or leave it for later. Never fold a "separate issue" item into the current change's
    scope without the owner explicitly saying so.
+
+   **If the architect's design surfaces a hard dependency on another, unmerged issue** (this one
+   genuinely can't land first, not just "would be cleaner after"), say so to the owner here, then
+   mark it on GitHub so it's visible without you:
+   ```bash
+   gh issue edit <N> --add-label blocked
+   gh issue comment <N> --body "⛔ Blocked on #<M> — <one-line reason>."
+   ```
+   Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands) —
+   `blocked` is informational, not a hard stop you enforce yourself. Remove the label and post a
+   follow-up comment once the dependency actually clears.
 
 5. **Check for existing work-in-progress, then explore + propose from the owner's chosen design.**
    Before creating anything, look for what's already in `openspec/changes/`:
@@ -115,6 +129,7 @@ else — that's their claim, not yours to take), and confirm the choice with the
 7. **Render the spec INLINE for review, then mark spec-review and STOP.**
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
+   gh issue comment <N> --body "📝 Spec committed (\`issue-<N>\`) — awaiting your review to approve implementation."
    ```
    **Show the spec in the conversation — do NOT just point at the worktree path.** The owner
    reviews here, not in an editor. This is confirmation that step 5 faithfully translated the
@@ -161,4 +176,8 @@ else — that's their claim, not yours to take), and confirm the choice with the
   owner's step-4 choice, and continue it if so.
 - **Never activate an issue assigned to someone else.** This repo may have multiple users; an
   issue's assignee is another person's claim. Stop and say so rather than proceeding.
+- **`agent:active` stays on past this skill** — `implement`/`address`/`finalize` inherit it;
+  `finalize` is what removes it. If you (this session) end for any other reason before finalize —
+  the owner tells you to stop, you're abandoning the issue — remove it yourself rather than
+  leaving a stale "active" signal for the next person to trust.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

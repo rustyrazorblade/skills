@@ -113,8 +113,43 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | | `status:in-progress` | Background team implementing. |
 | | `status:in-review` | PR open; awaiting your GitHub review (Seam 2). |
 | | `status:addressing` | Resolving your review comments. |
+| Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
+| | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why). |
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
+
+## Coordination signals
+
+Every `issue-pm` runs as an independent process — potentially on a different machine, spawned by a
+different user's `project-manager`, with no shared memory, messaging, or session state between
+them. GitHub is the only thing every one of them, and every `project-manager`, already reads and
+writes — so it's the coordination surface, not `claude agents --json` (which only ever reflects
+the local machine's session registry, and says nothing about another developer's `issue-pm`
+running on their own machine).
+
+- **`agent:active`** — applied by `activate` the moment it claims the issue (alongside the
+  assignee), removed by `finalize` on close, and removed by `issue-pm` itself if it hands back or
+  shuts down before finishing for any other reason. This, not `claude agents --json`, is the
+  authoritative "is anything actually working this issue" signal — `board` reads it directly (see
+  its **Steps**), and `scripts/spawn-issue-pm.sh` refuses to spawn a second `issue-pm` for an
+  issue that already carries it, which is what actually makes it safe for two developers to work
+  the same repo side by side without duplicating work. It does **not** self-heal if a process dies
+  uncleanly (a crash, `claude kill`, a lost machine) — nothing currently detects a stale label left
+  behind by a session that no longer exists.
+- **Progress comments.** `issue-pm` posts a **new** comment (never edits one in place — the point
+  is a readable timeline, not a live-updating status line) on the issue at each meaningful
+  milestone: claimed, spec committed, draft PR opened, each `tasks.md` checkpoint during
+  `implement`, each review round's result, addressed-comments pushed, CI flagged, merged/archived.
+  A fresh `project-manager` (yours or another user's) or the owner can read the issue's comment
+  history and know exactly where things stand without attaching to the session at all. Team mode
+  (the `implement` default) posts these at full granularity since `issue-pm` is directly driving
+  each step; workflow mode is coarser — only before and after, since the script itself has no
+  per-step hook back out to a comment.
+- **`blocked`** — added alongside a comment naming the specific blocking issue and why, whenever
+  `issue-pm` identifies a hard dependency on another unmerged issue (most likely during
+  `activate`'s design step, but not only then). Removed, with a follow-up comment, once the
+  dependency clears. A single fixed label, not one per blocking issue — the detail lives in the
+  comment, keeping the label vocabulary fixed and bootstrapped rather than growing per-issue.
 
 ## Naming
 

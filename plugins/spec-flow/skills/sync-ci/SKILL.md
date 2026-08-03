@@ -78,6 +78,9 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    or a manual run — will include them. Then the loop is: fix on the branch (tests stay green
    locally including the flagged ones), push, CI re-runs the full suite; when it's green and the
    owner merges, the flagged set evaporates with the worktree at `/spec-flow:finalize`.
+   ```bash
+   gh issue comment <N> --body "🚨 CI failed — <count of \$NEW> new test(s) flagged, <count of \$REPEAT> repeat."
+   ```
 
 ## Rules
 

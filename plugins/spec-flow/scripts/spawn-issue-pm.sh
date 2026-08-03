@@ -86,8 +86,21 @@ open_tmux() {
 
 name="issue-pm-${issue}"
 
-# `claude agents --json` (no --all) lists only LIVE sessions, so this is exactly
-# the "already running" check we want.
+# GitHub label check FIRST: agent:active is the cross-machine, cross-user signal — an issue-pm
+# running on someone else's machine (or yours, earlier, on a different one) is invisible to the
+# local `claude agents --json` check below, but not to this one. This is what actually makes it
+# safe for two developers to work the same repo without duplicating an issue-pm.
+active_label=$(gh issue view "$issue" --json labels \
+  --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
+if [[ -n "$active_label" ]]; then
+  assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
+  echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-pm may be running on another machine. Not spawning a duplicate." >&2
+  exit 1
+fi
+
+# `claude agents --json` (no --all) lists only LIVE sessions on THIS machine — a narrower,
+# local-only backstop for the case where the GitHub label somehow lagged (e.g. spawned seconds
+# ago, activate hasn't set it yet).
 existing=$(claude agents --json 2>/dev/null \
   | jq -r --arg n "$name" '.[] | select(.name == $n) | .id' | head -1)
 if [[ -n "$existing" ]]; then

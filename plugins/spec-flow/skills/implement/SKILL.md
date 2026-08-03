@@ -48,6 +48,7 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
 
    Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
      PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
+     gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
    ```
    `--base main` must match the repo's actual default branch — the same one `activate` branched
@@ -118,8 +119,12 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       test-first (RED→GREEN→REFACTOR) in `<worktree>`, honoring the repo's documented conventions
       (CLAUDE.md / CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo
       documents), marking each task `- [x]` as completed and committing with focused messages.
-      Append the TEST INSTRUCTION (step 3) and the implementer GUARDRAILS. Wait for it to report
-      and mark its task complete before moving on — nothing else can start yet.
+      Append the TEST INSTRUCTION (step 3) and the implementer GUARDRAILS. **Also instruct it to
+      message you (the lead) at each checkpoint push**, naming which `tasks.md` item(s) it just
+      completed — not only in its final report — so you can post a GitHub comment
+      (`gh issue comment <N> --body "✅ Implement: <task(s)> done, pushed \`<sha>\`."`) for each one
+      as it arrives, giving the owner a live trail instead of one comment at the very end. Wait for
+      it to report and mark its task complete before moving on — nothing else can start yet.
 
    b. **Review — five lenses, spawned together, every round.** Once Implement's task is complete,
       spawn all five teammates in one message so they run in parallel, each depending on
@@ -205,7 +210,9 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —
       parse each teammate's JSON from its message to you. Merge `findings` across all five.
       `mustFix` = every `blocker`/`major` finding. **Approve** only if every one of the five
-      reported AND every `approve` is `true` AND `mustFix` is empty.
+      reported AND every `approve` is `true` AND `mustFix` is empty. Either way, post the round's
+      result as a comment: `gh issue comment <N> --body "✅ Review panel approved (round <R>)."` or
+      `gh issue comment <N> --body "🔁 Review round <R>: <M> must-fix finding(s), fixing…"`.
 
    d. **Fix — bounded, max 3 rounds.** Not approved and a round remains (start at round 1, cap at
       3): `mustFix` non-empty → message the `tdd-developer` teammate (respawn it, named `fix-N`,
@@ -224,7 +231,8 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       Node the repo's lint+build scripts; Gradle `./gradlew spotlessApply build`; Go `gofmt -l .` →
       `go vet ./...` → `go build ./...` — use whatever the repo actually configures). Resolve
       formatting/lint/build issues WITHOUT changing behavior, commit, push. Return the final
-      format/lint/build status."* Append the implementer GUARDRAILS.
+      format/lint/build status."* Append the implementer GUARDRAILS. When it reports, comment:
+      `gh issue comment <N> --body "🔧 Build clean."`.
 
    f. **Polish.** Spawn a `tdd-developer`-type teammate, named `polish`: *"Final documentation
       polish for OpenSpec change `issue-<N>` in `<worktree>`. Ensure new modules/behaviors are
@@ -234,7 +242,7 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       accordingly (README, a docs/ tree, an mdBook, a docs site) — keep pages/examples current. No
       user-facing docs or no user-facing surface → skip and say so. Documentation/comment edits
       only; commit, push. Return a one-line note on what you documented."* Append the implementer
-      GUARDRAILS.
+      GUARDRAILS. When it reports, comment: `gh issue comment <N> --body "📚 Docs polished."`.
 
    g. **Shut down the team.** Once Build and Polish report back, ask every teammate still running
       to shut down — don't leave idle teammates running into step 5 or the owner's next round.
@@ -268,6 +276,13 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    Team mode. `base`/`buildSystem` have the same meaning as Team mode's `base` and the Build
    step's hint.
 
+   **Progress comments are coarser in this mode.** The script has no hook back out to you
+   mid-run, so you only know what it did once it returns — you can't relay per-task or per-round
+   comments the way Team mode does. When it returns, post one comment summarizing the whole
+   pass: `gh issue comment <N> --body "✅ Implemented, reviewed (round <review_rounds>), and
+   built — see PR for details."` (or, if `approved` is false, the residual findings instead). Say
+   so plainly if the owner asks why this run's issue history is sparser than a Team-mode run's.
+
 5. **Mark the PR ready and report.** When step 4 approved (either mode), finalize the already-open
    draft PR (outward-facing — done here in this session, narrated):
    ```bash
@@ -279,6 +294,7 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
 
    <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
+   gh issue comment <N> --body "👀 PR #<PR> ready for your review: <url>"
    ```
    Give the owner the PR URL for GitHub review (Seam 2). When they leave comments, the next
    step is `/spec-flow:address <N>`; after they squash-merge, `/spec-flow:finalize <N>`.

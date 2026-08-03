@@ -71,11 +71,14 @@ mid-flight from an interrupted `activate`/`implement` pass.
    ```
 
 5. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — confirm, and
-   close explicitly if still open). Remove the lifecycle label:
+   close explicitly if still open). Remove the lifecycle and coordination labels — closing doesn't
+   drop them on its own, and a stray `agent:active` on a closed issue would misread as still live:
    ```bash
    gh issue view <N> --json state,closed
+   gh issue comment <N> --body "🎉 Merged, archived, and closed."
    gh issue close <N> 2>/dev/null || true
-   gh issue edit <N> --remove-label status:in-review --remove-label status:addressing 2>/dev/null || true
+   gh issue edit <N> --remove-label status:in-review --remove-label status:addressing \
+     --remove-label agent:active --remove-label blocked 2>/dev/null || true
    ```
 
 6. **Report.** Confirm: specs synced, change archived, worktree removed, issue closed. Suggest
@@ -87,4 +90,7 @@ mid-flight from an interrupted `activate`/`implement` pass.
 - Only finalize a merged PR — finalizing an unmerged one would archive un-landed work.
 - Leave `main` clean: the only commit finalize makes to main is the OpenSpec archive, matching
   the repo's existing archive convention.
+- **This is where `agent:active` finally comes off** — `activate` set it, every stage since kept
+  it, this is the one place it's supposed to end. Don't skip step 5's label removal even on an
+  otherwise-uneventful finalize.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

@@ -6,14 +6,17 @@ description: Report status across all in-flight delivery pipelines — every iss
 # board — status across all in-flight pipelines
 
 You are the central `project-manager`. Give the owner one view of the whole pipeline, derived from
-GitHub labels + PR state + live `issue-pm` sessions. Read-only; you don't change anything.
+GitHub labels (including liveness and blocking, not just lifecycle) + PR state, cross-checked
+against this machine's local sessions where they happen to match. Read-only; you don't change
+anything.
 
 ## Steps
 
 Steps 1-4 are independent reads — issue them together (parallel tool calls) rather than one at a
 time.
 
-1. **Gather issues by lifecycle:**
+1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
+   `agent:active` and `blocked` are ordinary labels, already in this response, no separate call:
    ```bash
    gh issue list --state open --json number,title,labels,url,assignees --limit 100
    ```
@@ -35,15 +38,20 @@ time.
    (`status` ∈ QUEUED/IN_PROGRESS, or legacy `state` = PENDING), otherwise **failing**. An empty
    `statusCheckRollup` (no CI configured on the repo) counts as green — nothing to wait on.
 
-3. **Gather live `issue-pm` sessions:**
+3. **Cross-check local sessions (secondary — enriches rows, isn't the liveness signal):**
    ```bash
    claude agents --json
    ```
-   Match each session by `name` (`issue-pm-<N>`) to the issue it belongs to. A session present
-   here is **live** — the owner can jump straight into its tab via `claude attach <id>` (`.id` from
-   this JSON). An issue in `status:in-progress`, `status:in-review`, or `status:addressing` with
-   **no** matching live session is **stalled**: nothing is driving it forward even though its label
-   says it should be — surface that in the board, it doesn't happen automatically anywhere else.
+   The `agent:active` label from step 1 is the liveness signal — durable, visible to every user's
+   `project-manager` regardless of machine (see **Coordination signals** in `docs/workflow.md`).
+   `claude agents --json` only ever reflects *this* machine's local session registry, so use it
+   only to enrich a row when its `name` (`issue-pm-<N>`) happens to match one already labeled
+   `agent:active` — that's when you can offer `claude attach <id>` (`.id` from this JSON) as a
+   direct jump-in. No match is unremarkable (someone else's machine, or yours from earlier today
+   with the session evicted) — it does **not** mean stalled; only a **missing `agent:active`
+   label** means that. An issue past `status:ready` without the label is **stalled**: nothing is
+   driving it forward even though its status label says it should be — surface that, it doesn't
+   happen automatically anywhere else.
 
 4. **Gather worktrees:**
    ```bash
@@ -62,14 +70,15 @@ time.
    ## Delivery board
 
    ⛳ BLOCKED ON YOU
-     spec-review   #N P1  <title>  @you  🟢 issue-pm  → /spec-flow:activate's spec is ready to approve — attach: claude attach a1b2c3
-     in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 issue-pm → review in GitHub: <url>
+     spec-review   #N P1  <title>  @you  🟢 active (attach: claude attach a1b2c3)  → spec ready to approve
+     in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 active → review in GitHub: <url>
 
    🔧 IN FLIGHT (agents / CI)
-     in-review     #M P1  <title>  @you  PR #P  ⏳ CI  🟢 issue-pm (awaiting CI — not on you yet)
-     in-review     #M P1  <title>  @you  PR #P  ❌ CI  🟢 issue-pm (CI failing — /spec-flow:sync-ci)
-     in-progress   #K P2  <title>  @alice        🟢 issue-pm
-     addressing    #J P1  <title>  @you  PR #Q   🔴 STALLED — no live issue-pm session
+     in-review     #M P1  <title>  @you  PR #P  ⏳ CI  🟢 active (awaiting CI — not on you yet)
+     in-review     #M P1  <title>  @you  PR #P  ❌ CI  🟢 active (CI failing — /spec-flow:sync-ci)
+     in-progress   #K P2  <title>  @alice        🟢 active (no local session — probably @alice's machine)
+     addressing    #J P1  <title>  @you  PR #Q   🔴 STALLED — no agent:active label
+     in-progress   #F P2  <title>  @you           🔒 BLOCKED on #41 (see issue comments) · 🟢 active
 
    📋 READY
      ready         #L P0  <title>  (unclaimed)      → spawn: scripts/spawn-issue-pm.sh L   ← next up
@@ -78,12 +87,13 @@ time.
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
-   (live issue-pm sessions: 3 · worktrees: 3 · open PRs: 2)
+   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2)
    ```
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
-   `/spec-flow:activate` is what claims it). Show the session marker (🟢 live / 🔴 stalled) on
-   every row past `status:ready` — that's the whole point of step 3.
+   `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴
+   stalled) on every row past `status:ready`, an attach command only when step 3 found a local
+   match, and 🔒 on anything carrying `blocked` — that's the whole point of steps 1 and 3.
 
 6. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
@@ -106,9 +116,12 @@ time.
      loop), not as your action. An item in the same states but assigned to someone else is neither
      — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
      visibility, just don't claim it's actionable by you.
-   - **Stalled** — any issue assigned to you past `status:ready` with no live `issue-pm` session
+   - **Stalled** — any issue assigned to you past `status:ready` with no `agent:active` label
      (step 3). Call these out explicitly and offer the fix: `scripts/spawn-issue-pm.sh <N>` to
      resume it.
+   - **Blocked** — any issue carrying the `blocked` label, regardless of assignee (visibility
+     matters here even more than usual — someone should know a dependency exists). Name the
+     blocking issue from its most recent `⛔ Blocked on #M` comment; don't just say "blocked."
 
 ## Rules
 

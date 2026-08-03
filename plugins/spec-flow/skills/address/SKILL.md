@@ -61,6 +61,7 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
 6. **Back to in-review.**
    ```bash
    gh issue edit <N> --remove-label status:addressing --add-label status:in-review
+   gh issue comment <N> --body "🔧 Addressed <N-comments> review comment(s), pushed \`<short-sha>\`."
    ```
    Report what changed and the PR URL. The owner re-reviews; loop `/spec-flow:address` again if they
    leave more comments, or they squash-merge and you run `/spec-flow:finalize <N>`.

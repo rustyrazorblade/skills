@@ -26,13 +26,16 @@ never touches yours:
   (per the owner's configured display mode). Don't run `activate`/`implement`/`address`/`finalize`
   yourself, and don't pass `--display` — that's the owner's standing setting, not a per-issue
   decision. That process owns the issue from here; the owner talks to it directly in its tab.
-- Whether an issue **already has a running `issue-pm`** is answered by `claude agents --json`, not
-  by memory or by asking — the script itself refuses to double-spawn one it finds there (exit 1).
-  If the owner asks about an issue that's already running, surface its attach command rather than
-  spawning a second one.
+- Whether an issue **already has a running `issue-pm`** is answered by its `agent:active` GitHub
+  label, not by memory, by asking, or by `claude agents --json` alone — that label is what's
+  visible across machines and users; `claude agents --json` only ever reflects *this* machine's
+  local sessions, so it can't tell you about another developer's `issue-pm`. The script itself
+  checks the label first and refuses to double-spawn (exit 1); trust that rather than
+  second-guessing it locally.
 - Several issues can be in flight at once, each its own process, each in its own Claude-Code-
-  isolated worktree. Check `claude agents --json` before recommending or spawning anything, so you
-  don't spin up a second `issue-pm` for an issue that already has one.
+  isolated worktree. Check `/spec-flow:board` (which reads the label) before recommending or
+  spawning anything, so you don't spin up a second `issue-pm` for an issue that already has one —
+  including one running on someone else's machine.
 - **You still own:** `/spec-flow:groom` (shaping new work — no issue-pm needed, nothing is being
   actively worked yet), `/spec-flow:board` (cross-issue status), and `/spec-flow:adopt-tiering`
   (repo-wide setup, not tied to any one issue). These never move to an `issue-pm`.
@@ -114,9 +117,10 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
     its output. That process claims the issue, then drives `activate` → both owner stops →
     `implement` → `address` (looping as needed) → `finalize`, entirely in its own conversation
     with the owner, in its own tab. You do not run these skills yourself.
-  - The owner asks about an issue that **already has a running `issue-pm`** (check
-    `claude agents --json`) → surface its attach command; don't re-drive the issue here and don't
-    spawn a second one.
+  - The owner asks about an issue that **already has a running `issue-pm`** (its `agent:active`
+    label is set) → if `claude agents --json` happens to show a matching local session, surface
+    its attach command; either way, don't re-drive the issue here and don't spawn a second one —
+    it may be running on someone else's machine.
   - CI/tiering setup for the whole repo → **`/spec-flow:sync-ci`** and **`/spec-flow:adopt-tiering`**
     are normally driven by an issue's `issue-pm` (sync-ci) or run once, repo-wide, by you
     (adopt-tiering, not tied to any issue).
@@ -127,8 +131,9 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
   `issue-pm`, inside its `activate` step, not by you — see `agents/issue-pm.md`.)
 - **Run several issues at once.** Each gets its own `issue-pm` process, isolated in its own
   Claude-Code-managed worktree and its own tab; keep the owner oriented on which issues have one
-  running (`claude agents --json`), what's in flight in each, what's waiting on them, and what's
-  waiting on agents/CI. This is the main lever for throughput — use it rather than working one
+  running (`agent:active`, via `/spec-flow:board`), what's in flight in each, what's waiting on
+  them, and what's waiting on agents/CI. This is the main lever for throughput — use it rather
+  than working one
   issue to completion before starting the next.
 
 ## The owner's two seams — never cross them

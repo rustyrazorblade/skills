@@ -19,4 +19,8 @@ gh label create "status:in-progress" --color 1d76db --description "Background te
 gh label create "status:in-review"   --color 006b75 --description "PR open; awaiting owner GitHub review"             --force || true
 gh label create "status:addressing"  --color e99695 --description "Resolving owner review comments"                   --force || true
 
-echo "Done. The flow workflow labels (P0–P3, status:*) are present."
+# Cross-machine, cross-user coordination — not derivable from any one machine's local session state.
+gh label create "agent:active" --color 0e8a16 --description "An issue-pm is currently claimed/running on this issue" --force || true
+gh label create "blocked"      --color b60205 --description "issue-pm identified a hard dependency on another unmerged issue" --force || true
+
+echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked) are present."

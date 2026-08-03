@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an approved issue — spawn an agent team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish) in the issue's own worktree, with issue-pm as the team's lead, then push the branch and open a PR. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first, and CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 (see README Prerequisites). Invoking this skill is the explicit opt-in to spawning an agent team.
+description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
 argument-hint: [issue number, with its spec already approved]
 ---
 
@@ -8,11 +8,12 @@ argument-hint: [issue number, with its spec already approved]
 
 You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
 **approved the committed spec** for issue `#N`. Drive the implementation team to completion and
-open a review-ready PR. You do this as an **agent team**'s lead — several full Claude Code
-teammates, real token cost — which is exactly what running as your own top-level session (not a
-subagent) makes possible at all: a team needs a lead, only a top-level session can be one, and a
-subagent can never spawn its own team. **Invoking this skill is the owner's explicit opt-in** to
-that cost.
+open a review-ready PR — by default as an **agent team** you lead (see step 4), which is exactly
+what running as your own top-level session (not a subagent) makes possible at all: a team needs a
+lead, only a top-level session can be one, and a subagent can never spawn its own team. Where
+agent teams aren't available or wanted, the same work runs instead as the original `Workflow`-tool
+script — same five lenses, same rules, no team. **Invoking this skill is the owner's explicit
+opt-in** to that orchestration, whichever mode it resolves to.
 
 Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
 already running inside this issue's worktree — Claude Code's own background-session isolation put
@@ -72,8 +73,18 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    > suite runs in CI. If the repo has not split its tests into unit/integration tiers yet, run its
    > default test command and say so.
 
-4. **Spawn the team and drive it through Implement → Review → Fix (bounded) → Build → Polish.**
-   Every teammate is spawned from this plugin's own subagent definitions — reference them by name
+4. **Resolve the implement mode, then drive Implement → Review → Fix (bounded) → Build → Polish.**
+   `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
+   you, spawned fresh each run — richer (teammates message each other, self-claim work) but
+   experimental and token-heavier. `workflow` is the original bounded `Workflow`-tool script
+   (`implement.workflow.js`) — the same five lenses and the same merge/approve/fix-loop rules,
+   just scripted instead of reasoned through, for when agent teams aren't available or wanted. If
+   the env var is unset or `team` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is **not** set, fall
+   back to `workflow` automatically and say so — don't fail the run over a missing opt-in flag.
+   Then follow **either** "Team mode" **or** "Workflow mode" below, never both.
+
+   **Team mode (default).** Every teammate is spawned from this plugin's own subagent definitions
+   — reference them by name
    (`tdd-developer`, `reviewer`, `test-rigor-reviewer`, `observability-reviewer`, `build-engineer`,
    or the built-in `general-purpose`) so each teammate gets that agent's tools/model, with your
    spawn prompt appended as additional instructions. Give every teammate a **GUARDRAILS** block —
@@ -232,14 +243,39 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    no Build, no Polish. Shut down any teammates still running before you do (same as step g);
    leave the PR a draft and surface the residual findings to the owner.
 
-5. **Mark the PR ready and report.** When the team approved, finalize the already-open
+   **Workflow mode (fallback).** Invoke the `Workflow` tool with the script bundled in this
+   plugin and pass `args`:
+   ```json
+   {
+     "scriptPath": "${CLAUDE_PLUGIN_ROOT}/skills/implement/implement.workflow.js",
+     "args": {
+       "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
+       "repoRoot": "<abs repo root>",
+       "change":   "issue-<N>",
+       "issue":    <N>,
+       "base":     "origin/main",
+       "buildSystem": "auto"
+     }
+   }
+   ```
+   The script runs the identical sequence as Team mode above — tdd-developer implements test-first
+   → the same five-lens panel reviews the diff in parallel, each lens the same prompt and JSON
+   contract as Team mode's step b → the same bounded (3-round) fix loop → build-engineer gets the
+   build clean → docs polish — as a scripted `agent()`/`parallel()` loop instead of you reasoning
+   through it as a team lead. It returns a summary object (`tests_ran`, `spec_conformance`,
+   `approved`, `review_rounds`, `residual_findings`, `non_blocking_findings`, `review_summary`,
+   `polish`) — use those fields directly for step 5, instead of the ones you tracked yourself in
+   Team mode. `base`/`buildSystem` have the same meaning as Team mode's `base` and the Build
+   step's hint.
+
+5. **Mark the PR ready and report.** When step 4 approved (either mode), finalize the already-open
    draft PR (outward-facing — done here in this session, narrated):
    ```bash
    git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 
-   <final review_summary you tracked through step 4, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
+   <the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in Workflow mode), INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
 
    <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review

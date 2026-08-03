@@ -37,13 +37,16 @@ the naming/correlators, and the review panel).
   ```
 - **Built-in skills** — `/code-review` and `/security-review` are used by two of the review
   lenses (they degrade to an inline pass if unavailable).
-- **Agent teams enabled** — `/spec-flow:implement` runs its five-lens review as an [agent
-  team](https://code.claude.com/docs/en/agent-teams) led by `issue-pm`, which requires
-  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by default):
+- **Agent teams (optional, default mode)** — `/spec-flow:implement` defaults to running its
+  five-lens review as an [agent team](https://code.claude.com/docs/en/agent-teams) led by
+  `issue-pm`, which requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by
+  default):
   ```json
   { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
   ```
-  in the consuming repo's (or your own) `settings.json`.
+  in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
+  bundled `Workflow`-tool script automatically — same five lenses, no team. Set
+  `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
 - **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
   placed there automatically by Claude Code. Add `.claude/worktrees/` to the repo's `.gitignore`
   so those checkouts never show up as untracked files in your primary checkout (see

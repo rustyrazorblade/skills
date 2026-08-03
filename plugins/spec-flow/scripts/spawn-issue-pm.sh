@@ -162,8 +162,12 @@ if [[ -n "$existing_id" ]]; then
   if [[ -n "$active_label" ]]; then
     me=$(gh api user --jq .login 2>/dev/null) || true   # can't verify -> fall through and respawn;
                                                           # we already have local evidence this is ours
-    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null) || true
-    if [[ -n "$me" && "$assignee" != "$me" ]]; then
+    # `// empty`, not a sentinel like "unknown" — an unassigned issue (e.g. this session crashed
+    # before `activate` got far enough to claim it) or a transient `gh` failure must NOT read as
+    # "assigned to someone else." Only refuse when assignee is a REAL, different login — otherwise
+    # this refuses the exact same-machine crash-recovery respawn is supposed to handle.
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null) || true
+    if [[ -n "$me" && -n "$assignee" && "$assignee" != "$me" ]]; then
       echo "already active: issue #${issue} carries agent:active, assigned to ${assignee} (not you) —" >&2
       echo "likely a live issue-pm on another machine. Not respawning on top of it." >&2
       exit 1
@@ -233,14 +237,18 @@ else
     exit 1
   fi
   # Fail loud, matching the `me=` check just above: this is the fresh-spawn path, nothing local
-  # backs the claim yet, so a `gh` failure here must not silently fall through to spawning.
-  if ! assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // empty' 2>/dev/null); then
-    echo "spawn-issue-pm: couldn't check #${issue}'s assignee ('gh issue view' failed) — check" >&2
+  # backs the claim yet, so a `gh` failure here must not silently fall through to spawning. Check
+  # ALL assignees (not just assignees[0]) — consistent with activate's own multi-assignee guard;
+  # a real `jq --arg` here is fine (this is plain jq on a string, not routed through gh's --jq,
+  # which is the flag that doesn't support --arg passthrough).
+  if ! assignees=$(gh issue view "$issue" --json assignees --jq '[.assignees[].login]' 2>/dev/null); then
+    echo "spawn-issue-pm: couldn't check #${issue}'s assignees ('gh issue view' failed) — check" >&2
     echo "'gh auth status'. Refusing to spawn without being able to verify it isn't someone else's." >&2
     exit 1
   fi
-  if [[ -n "$assignee" && "$assignee" != "$me" ]]; then
-    echo "issue #${issue} is already assigned to ${assignee} (not you) — not spawning; that's their claim." >&2
+  if [[ "$assignees" != "[]" ]] && ! jq -e --arg me "$me" 'any(.[]; . == $me)' <<<"$assignees" >/dev/null 2>&1; then
+    other=$(jq -r '.[0] // "someone else"' <<<"$assignees")
+    echo "issue #${issue} is already assigned to ${other} (not you) — not spawning; that's their claim." >&2
     exit 1
   fi
 
@@ -278,8 +286,18 @@ else
   fi
 fi
 
-state=$(claude agents --json --all \
-  | jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state')
+# Same class as the temp-file fix above (a claude|jq pipe assignment can die under set -e via
+# pipefail, even though jq's own exit code alone wouldn't cause it) — but here the session is
+# ALREADY LIVE (spawned or respawned successfully above), so a transient failure warns and
+# continues instead of dying: exiting now would report failure for a launch that actually worked.
+state_out=$(mktemp)
+if claude agents --json --all >"$state_out" 2>/dev/null; then
+  state=$(jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state' "$state_out")
+else
+  state=""
+  echo "spawn-issue-pm: warning — couldn't confirm final state ('claude agents --json --all' failed); ${name} (${session_id}) is running regardless." >&2
+fi
+rm -f "$state_out"
 if [[ "$state" == "failed" ]]; then
   gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
   echo "spawn-issue-pm: ${name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2

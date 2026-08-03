@@ -35,7 +35,7 @@ mid-flight from an interrupted `activate`/`implement` pass.
    worktree; never switch branches or pull there. Do the archive in an isolated, detached-HEAD
    worktree instead, so finalize never touches whatever the owner has checked out or in progress:
    ```bash
-   MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
    DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
    git -C "$MAIN" fetch origin
    TMPWT=$(mktemp -d)
@@ -65,15 +65,20 @@ mid-flight from an interrupted `activate`/`implement` pass.
    fresh here rather than assume they carried over from step 2 — same reasoning as `<TMPWT>` above,
    they just happen to be values a one-liner can reconstruct instead of needing to be inlined:
    ```bash
-   MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
    DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-   git -C <TMPWT> add -A
-   git -C <TMPWT> commit -m "archive: issue-<N>"
    ARCHIVE_BR="archive/issue-<N>"
-   git -C <TMPWT> push origin "HEAD:$ARCHIVE_BR"
-   gh pr create --head "$ARCHIVE_BR" --base "$DEFAULT_BR" \
-     --title "archive: issue-<N>" \
-     --body "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
+   EXISTING_PR=$(gh pr list --head "$ARCHIVE_BR" --state open --json number --jq '.[0].number // empty')
+   if [[ -n "$EXISTING_PR" ]]; then
+     echo "archive PR #$EXISTING_PR already open for $ARCHIVE_BR — an earlier finalize run got this far and was interrupted before merging. Merging it rather than recreating (a fresh push here would be rejected as non-fast-forward anyway)." >&2
+   else
+     git -C <TMPWT> add -A
+     git -C <TMPWT> commit -m "archive: issue-<N>"
+     git -C <TMPWT> push origin "HEAD:$ARCHIVE_BR"
+     gh pr create --head "$ARCHIVE_BR" --base "$DEFAULT_BR" \
+       --title "archive: issue-<N>" \
+       --body "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
+   fi
    if ! gh pr merge "$ARCHIVE_BR" --squash --delete-branch; then
      echo "archive PR for issue-<N> is open but didn't merge automatically (required checks still" >&2
      echo "pending, or branch protection needs a review) — merge it yourself: gh pr merge" >&2
@@ -85,7 +90,9 @@ mid-flight from an interrupted `activate`/`implement` pass.
    This is the **one** PR this skill merges itself — see the frontmatter note on why. Don't let the
    archive PR merge silently fail and fall through to closing the issue anyway: leaving the archive
    commit unmerged would strand `main` without it — the branch `/spec-flow:activate` cuts every new
-   worktree from.
+   worktree from. **Re-running after an interruption between the push and the merge is safe** — the
+   `EXISTING_PR` check above reuses the already-open PR/branch instead of erroring on a duplicate or
+   a rejected non-fast-forward push.
 
 4. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — check `state`/`closed`
    from the `gh issue view` below first, and only close/comment/relabel what isn't already done —
@@ -110,21 +117,24 @@ mid-flight from an interrupted `activate`/`implement` pass.
    a worktree while its session is running, so removing your own always needs `--force` twice
    (confirmed by test: single `--force` only overrides *uncommitted changes*, not a *lock* — those
    are two separate gates). **Never reach for the double-force without checking first** — it would
-   just as happily discard real, unrecoverable work as it overrides the lock. "Safe" here means
-   HEAD is already fully landed in the default branch — check that directly rather than comparing
-   against the branch's own upstream, which GitHub may have already deleted itself (many repos
-   auto-delete a branch on merge) and would otherwise make this check fail closed on the *normal*,
-   successful case instead of the risky one. Re-resolve `$MAIN`/`$DEFAULT_BR` here rather than
-   assuming they carried over from step 2 — a fresh Bash call doesn't inherit another one's shell
-   variables, only its working directory:
+   just as happily discard real, unrecoverable work as it overrides the lock. "Safe" here means a
+   **merged PR exists for this branch** — check that directly via GitHub (the same fact step 1
+   already established, re-verified here since this may be a separate session/run) rather than git
+   ancestry: confirmed by test, a squash-merged branch's tip is **never** an ancestor of the target
+   branch — squash creates a brand-new commit on the target, so `merge-base --is-ancestor` fails
+   closed on every normal, successful squash-merge, not just the risky unlanded case (the same fact
+   is exactly why `branch -D` below needs `-D`, not `-d`). Re-resolve `$MAIN`/`$DEFAULT_BR` here
+   rather than assuming they carried over from step 2 — a fresh Bash call doesn't inherit another
+   one's shell variables, only its working directory:
    ```bash
-   MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
    DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
    BR=$(git rev-parse --abbrev-ref HEAD)
    WT=$(git rev-parse --show-toplevel)
    DIRTY=$(git -C "$WT" status --porcelain)
-   if [[ -n "$DIRTY" ]] || ! git -C "$WT" merge-base --is-ancestor HEAD "origin/$DEFAULT_BR"; then
-     echo "worktree has uncommitted changes, or HEAD isn't reachable from origin/$DEFAULT_BR yet — not removing. Resolve it, then re-run finalize." >&2
+   MERGED_PR=$(gh pr list --head "$BR" --state merged --json number --jq '.[0].number // empty')
+   if [[ -n "$DIRTY" ]] || [[ -z "$MERGED_PR" ]]; then
+     echo "worktree has uncommitted changes, or no merged PR found for $BR yet — not removing. Resolve it, then re-run finalize." >&2
      exit 1
    fi
    cd "$MAIN"    # off the worktree BEFORE removing it, so nothing below runs from a deleted cwd

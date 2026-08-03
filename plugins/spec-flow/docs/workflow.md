@@ -125,9 +125,10 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 Every `issue-pm` runs as an independent process — potentially on a different machine, spawned by a
 different user's `project-manager`, with no shared memory, messaging, or session state between
 them. GitHub is the only thing every one of them, and every `project-manager`, already reads and
-writes — so it's the coordination surface, not `claude agents --json` (which only ever reflects
-the local machine's session registry, and says nothing about another developer's `issue-pm`
-running on their own machine).
+writes — so it's the coordination surface, not `claude agents --json --all` (which only ever
+reflects the local machine's session registry, and says nothing about another developer's
+`issue-pm` running on their own machine — and needs `--all` even for that: every `issue-pm` is a
+`background` session, invisible without it, confirmed by test).
 
 - **`agent:active`** — set on the fresh-spawn path by `scripts/spawn-issue-pm.sh` itself, *before*
   it launches anything (not left for `activate` to get to once the session finally runs — that gap
@@ -136,8 +137,8 @@ running on their own machine).
   Removed by `finalize` on close, and removed by `issue-pm` itself if it hands back or shuts down
   before finishing for any other reason — and by the spawn script itself if it sets the label but
   the launch then fails, so a bad spawn never leaves a false-positive lock behind. This, not
-  `claude agents --json`, is the authoritative "is anything actually working this issue" signal —
-  `board` reads it directly (see its **Steps**).
+  `claude agents --json --all`, is the authoritative "is anything actually working this issue"
+  signal — `board` reads it directly (see its **Steps**).
 
   `scripts/spawn-issue-pm.sh` checks its **own machine's** past sessions first: a session named
   `issue-pm-<N>` that's still live → refuse (already running here); one that exists but isn't live
@@ -227,10 +228,10 @@ a subagent either. Instead:
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
   work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
 - `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
-  reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json` plus
-  GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire point of
-  running it as a separate process instead of a subagent: the coordinator's own context never
-  fills with one issue's implementation detail.
+  reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json --all`
+  plus GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire
+  point of running it as a separate process instead of a subagent: the coordinator's own context
+  never fills with one issue's implementation detail.
 
 This is the default flow, not an opt-in — every time you start work on an issue, expect
 `project-manager` to launch its `issue-pm` as a fresh process rather than driving the stages

@@ -52,14 +52,16 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
      gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
    echo "DEFAULT_BR=$DEFAULT_BR"
+   echo "PR=$PR"
    ```
    Note the printed `$DEFAULT_BR` — step 4 needs it as a **literal string**, not this shell
    variable: the `Workflow` tool's JSON `args` isn't shell-interpolated, and even in Team mode
    you may be reasoning across separate turns/Bash calls that don't share this one's variables.
    Resolve `$DEFAULT_BR` from the repo itself rather than assuming `main` — the worktree was
    already branched from whatever Claude Code resolved as the repo's actual default branch
-   (`EnterWorktree` does this on its own), so this just needs to match that, not guess it. Keep
-   both `<PR>` and the printed default-branch name — step 4 needs it too, as `<DEFAULT_BR>`.
+   (`EnterWorktree` does this on its own), so this just needs to match that, not guess it. `$PR`
+   is printed for the same reason — it's set in this same block whichever branch ran (freshly
+   created or reused), and steps 4/5 need it too, as a literal `<PR>`, not the unset variable.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration

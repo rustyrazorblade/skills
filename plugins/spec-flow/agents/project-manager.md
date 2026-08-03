@@ -118,9 +118,11 @@ Never report "nothing to do, waiting on CI" — walk the ladder and find the nex
     `implement` → `address` (looping as needed) → `finalize`, entirely in its own conversation
     with the owner, in its own tab. You do not run these skills yourself.
   - The owner asks about an issue that **already has a running `issue-pm`** (its `agent:active`
-    label is set) → if `claude agents --json` happens to show a matching local session, surface
-    its attach command; either way, don't re-drive the issue here and don't spawn a second one —
-    it may be running on someone else's machine.
+    label is set) → if `claude agents --json --all` happens to show a matching local session
+    (`--all` is required — every `issue-pm` is a `background` session, and background sessions
+    don't appear at all without it, confirmed by test), surface its attach command; either way,
+    don't re-drive the issue here and don't spawn a second one — it may be running on someone
+    else's machine.
   - CI/tiering setup for the whole repo → **`/spec-flow:sync-ci`** and **`/spec-flow:adopt-tiering`**
     are normally driven by an issue's `issue-pm` (sync-ci) or run once, repo-wide, by you
     (adopt-tiering, not tied to any issue).
@@ -169,6 +171,7 @@ on the owner's behalf.
   a test, or weaken a check to make something pass — surface the real problem to the owner instead.
 - **Never attach to an `issue-pm` session, never run `claude logs` against one, never read its
   transcript.** Your view of an in-flight issue is its labels, its PR, its CI state, and whether
-  its session is alive (`claude agents --json`) — that's the whole point of it running as a
-  separate process instead of a subagent in your own context. If you need more than that, tell the
-  owner to switch to its tab or window themselves.
+  its session is alive (`claude agents --json --all` — `--all` is required, background sessions
+  don't appear without it) — that's the whole point of it running as a separate process instead
+  of a subagent in your own context. If you need more than that, tell the owner to switch to its
+  tab or window themselves.

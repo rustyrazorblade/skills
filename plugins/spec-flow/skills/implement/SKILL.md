@@ -151,15 +151,18 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       Append the REVIEW GUARDRAILS to every one of these. The five, named `spec`, `code-review`,
       `security-review`, `test-rigor`, `observability`:
 
-      - **`spec`** (agent: `reviewer`) — *"Review the implementation of OpenSpec change `issue-<N>`
-        for issue #N. worktree: `<worktree>`. base: `<base>`. Diff is `base...HEAD` in that
-        worktree. Follow your output contract exactly (JSON only). ALSO enforce spec-scenario →
-        test traceability: enumerate every `#### Scenario:` in the change's `specs/**/spec.md`,
-        map each to the diff's test(s), and emit a `major` finding (rule `scenario→test
-        traceability`, location = the spec file + scenario name) for EVERY scenario with no
-        backing test — one finding per uncovered scenario, no nitpick spray. A `major` finding
-        withholds approval and feeds the fix loop. You MAY add a one-line scenario-coverage
-        summary to `summary`."*
+      Three of the five — `spec`, `test-rigor`, `observability` — are backed by this plugin's own
+      agent definitions (`agents/reviewer.md`, `test-rigor-reviewer.md`, `observability-reviewer.md`
+      respectively). Spawning by that agent type already applies its full mandate, process, and
+      output contract as the teammate's system prompt, so their spawn prompts below only supply the
+      concrete runtime values — restating the mandate here would just be a second copy that could
+      drift from the agent file. The other two, `code-review` and `security-review`, have no
+      dedicated agent file (they run as `general-purpose`, invoking a built-in skill), so their
+      prompts stay fully inline:
+
+      - **`spec`** (agent: `reviewer`) — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
+        change: `issue-<N>`. issue: #N. Follow your agent definition's process and output contract
+        exactly (JSON only)."*
       - **`code-review`** (agent: `general-purpose`) — *"Run a CORRECTNESS review of the diff
         `base...HEAD` in the git worktree at `<worktree>`. Invoke the built-in `/code-review`
         skill on that diff (cwd `<worktree>`) and have it hunt correctness defects ONLY: logic
@@ -184,39 +187,12 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
         finding for any real exposure. Map into exactly the JSON contract above (same
         `spec_conformance`/`tests_ran`/`approve` rules as `code-review`). If `/security-review`
         isn't invokable here, perform the same pass yourself and emit the identical contract."*
-      - **`test-rigor`** (agent: `test-rigor-reviewer`) — *"Audit TEST RIGOR for the diff
-        `base...HEAD` in the git worktree at `<worktree>` (change `issue-<N>`, issue #N). Scope to
-        the public surface the diff adds/changes (HTTP/gRPC API, CLI, library/public API) and any
-        observable side effects (emitted events, DB writes, published messages, files). For each,
-        judge whether the tests would FAIL on a regression, not merely exercise the happy path.
-        Flag (rule `test-rigor`) any missing antagonistic case: malformed/oversized/wrong-type
-        input, boundary/limit, error-contract honesty, concurrency conflicts, auth/tenant isolation
-        where applicable, already-exists/not-found, idempotency/replay. Flag (rule
-        `side-effect-coverage`) any write/op whose tests assert the direct result but not its
-        observable side effect. A happy-path-only surface, or one with no side-effect assertion, is
-        a `major` gap. ALSO run the brake, the other direction: flag (rule `over-testing`)
-        over-built tests — a fake reconstructing a well-tested dependency, a test that only
-        re-verifies a library/framework, trivial-glue tests, pure duplicates — and (rule
-        `test-practicality`) avoidable test-infrastructure churn (a Testcontainers test restarting
-        a container per test where shared/reused would do). These default to `minor`
-        (surfaced, non-blocking); escalate to `major` only for egregious, objective waste — this
-        brake is for high-confidence waste, not taste. If the diff touches no public surface,
-        observable side effect, or tests, `approve=true`, empty findings. `spec_conformance`/
-        `tests_ran` stay `"full"`."*
-      - **`observability`** (agent: `observability-reviewer`) — *"Audit OBSERVABILITY for the diff
-        `base...HEAD` in the git worktree at `<worktree>` (change `issue-<N>`, issue #N). First
-        learn the repo's existing observability stack and judge against THAT, not a foreign one.
-        Scope to new code paths and failure modes: new operations, new I/O, new error/Result/
-        exception branches, new async/concurrent work. Flag (rule `observability`): a significant
-        path/transition with no log at an appropriate level; a log missing structured context
-        (id/operation/outcome); a new failure branch swallowed/mapped-away with NO telemetry (lean
-        blocker); a new SLI-relevant operation or failure class with no metric, or unbounded label
-        cardinality; new I/O with no span/trace coverage or dropped context propagation across new
-        async boundaries; any secret/credential/PII emitted to logs/spans/metrics (blocker). A
-        silently-swallowed failure or logged secret is `blocker`; a new operation/error path with
-        no telemetry where the repo's conventions expect one is `major`. If the diff introduces no
-        new code path, I/O, or failure mode, `approve=true`, empty findings. `spec_conformance`/
-        `tests_ran` stay `"full"`."*
+      - **`test-rigor`** (agent: `test-rigor-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
+      - **`observability`** (agent: `observability-reviewer`) — *"Panel mode. worktree:
+        `<worktree>`. base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent
+        definition's process and output contract exactly (JSON only)."*
 
    c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —

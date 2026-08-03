@@ -241,11 +241,12 @@ inline.
 
 `issue-pm` opens in a live terminal tab so you can talk to it the moment it's launched. Resolution
 order: a `--display` flag on `spawn-issue-pm.sh` (`iterm`, `tmux`, or `none`), then the
-`SPEC_FLOW_DISPLAY` env var, then `display=<mode>` in the repo's `.claude/spec-flow.conf`, then
-autodetect from the current terminal (`$TMUX` set → tmux; `$TERM_PROGRAM` = `iTerm.app` → iterm;
-otherwise none). `project-manager` never passes `--display` itself — it's your standing
-preference, not a per-issue decision. `none` backgrounds the session without opening anything, for
-dispatching several issues in a row; the attach command is still printed either way.
+`SPEC_FLOW_DISPLAY` env var, then autodetect from the current terminal (`$TMUX` set → tmux;
+`$TERM_PROGRAM` = `iTerm.app` → iterm; otherwise none). No repo config file — a standing per-repo
+preference is one env var in that repo's `.claude/settings.json`. `project-manager` never passes
+`--display` itself — it's your standing preference, not a per-issue decision. `none` backgrounds
+the session without opening anything, for dispatching several issues in a row; the attach command
+is still printed either way.
 
 ### Worktree isolation
 
@@ -353,40 +354,36 @@ way via `parallel()`. Their findings **merge** into one set; a fix round address
 findings.** The five lenses:
 
 1. **spec** (`reviewer` agent) — spec-conformance + the repo's documented rules **and**
-   spec-scenario → test traceability (every `#### Scenario:` must have a backing test, else a
-   `major` finding).
+   spec-scenario → test traceability. Full mandate: `agents/reviewer.md`.
 2. **code-review** (`general-purpose` + the built-in `/code-review` skill) — a correctness-bug
    hunt: logic errors, boundary/edge cases, unhandled error paths, panics, concurrency/async
-   ordering, resource leaks, caller/callee contract violations.
+   ordering, resource leaks, caller/callee contract violations. No dedicated agent file — the full
+   prompt lives inline in both `skills/implement/SKILL.md` and `implement.workflow.js`.
 3. **security-review** (`general-purpose` + the built-in `/security-review` skill) — input
    validation, isolation, auth/authz, injection, secret/data exposure, external-surface hardening.
-   It **self-gates**: it first enumerates whether the change touches any security-relevant surface
-   and returns **approve + empty findings** when it touches none.
+   **Self-gates**: enumerates whether the change touches any security-relevant surface and returns
+   **approve + empty findings** when it touches none. Same "no agent file, inline prompt" note as
+   code-review.
 4. **test-rigor** (`test-rigor-reviewer` agent) — audits **test rigor** for the change's public
-   surface + observable side effects: does an **antagonistic, regression-exposing** test exist
-   (malformed/oversized input, boundary/limit, error-contract honesty, concurrency conflicts,
-   isolation, already-exists/not-found, idempotency/replay)? And does each write/op assert its
-   **observable side effect** (emitted event/message/row), not just the direct result? A
-   happy-path-only surface, or one with no side-effect assertion, is a `major` gap. **No-ops** off
-   any public surface or observable side effect. Also runnable **standalone** to audit the
-   existing surface.
+   surface + observable side effects, both directions (missing antagonistic coverage AND
+   over-built tests). Also runnable **standalone** to audit an existing surface. Full mandate:
+   `agents/test-rigor-reviewer.md`.
 5. **observability** (`observability-reviewer` agent) — audits whether the change's new code paths
-   and failure modes are **diagnosable in production**: logging at an appropriate level with the
-   **structured context** (id/operation/outcome) needed to act; **metrics** on new operations and
-   error classes with **bounded label cardinality**; **tracing/spans** around new I/O with context
-   propagated across new async boundaries; **no silently-swallowed failures**; and **no
-   secrets/PII** emitted to logs/spans/metrics. It judges against the repo's existing observability
-   stack, not a foreign one. A silent failure or a logged secret is a `blocker`; a new
-   operation/error path with no telemetry where conventions expect one is a `major`. It
-   **self-gates**: a diff introducing no new path/I/O/failure returns approve + empty findings.
+   and failure modes are **diagnosable in production** (logging/metrics/tracing, no silent
+   failures, no leaked secrets). **Self-gates** on a diff introducing no new path/I/O/failure. Full
+   mandate: `agents/observability-reviewer.md`.
 
-The code-review and security-review lenses invoke the built-in skills, so they run on a
-Skill-capable agent (`general-purpose`), not the `reviewer` agent. The merge/approval logic
-generalizes over N lenses — there is no per-lens special-casing beyond the spec lens owning
-`spec_conformance`/`tests_ran` — in workflow mode that's the `reviewLenses` array needing no
-change; in team mode it's the lead's own reasoning, same rule, needing no change either way. To
-add or remove a lens, edit both: the teammate list in `skills/implement/SKILL.md`'s Team mode
-step, and the `reviewLenses` array in `implement.workflow.js` for Workflow mode.
+Three of the five (spec, test-rigor, observability) are backed by this plugin's own agent
+definitions — spawning by that agent type already applies the agent file's full mandate, process,
+and output contract as the teammate's system prompt, so both `skills/implement/SKILL.md` and
+`implement.workflow.js` only send a short parameter stub (worktree/base/change/issue), not a
+restatement. The agent file is the single place their substance lives; edit it there. code-review
+and security-review have no agent file (they invoke a built-in skill from `general-purpose`), so
+their prompts stay inline and need editing in both places if they change. The merge/approval logic
+generalizes over N lenses regardless — there is no per-lens special-casing beyond the spec lens
+owning `spec_conformance`/`tests_ran`. To add or remove a lens: an agent-backed one needs an agent
+file plus a stub entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array; an
+inline one needs its full prompt written in both places.
 
 ## Test tiering (unit / integration)
 

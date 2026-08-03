@@ -138,19 +138,15 @@ const residual = []
 // they use `general-purpose` (tools: *), NOT the `reviewer` agent (Read/Bash/Grep/Glob only).
 const reviewLenses = [
   {
+    // spec is backed by agents/reviewer.md, which already carries the full mandate, process, and
+    // output contract as its own system prompt when spawned by agentType — this only needs to
+    // supply the concrete runtime values, not restate anything (that restatement is what used to
+    // drift between here, SKILL.md, the agent file, and workflow.md; see docs/workflow.md's
+    // "Review panel" section for the full per-lens description).
     label: 'spec',
     agentType: 'reviewer',
-    prompt: `Review the implementation of OpenSpec change "${change}" for issue #${issue}.
-worktree: ${worktree}
-base: ${base}
-change: ${change}
-Diff is ${base}...HEAD in that worktree. Follow your output contract exactly (JSON only).
-ALSO enforce spec-scenario → test traceability: enumerate every "#### Scenario:" in the change's
-specs/**/spec.md, map each to the diff's test(s), and emit a "major" finding (rule
-"scenario→test traceability", location = the spec file + scenario name) for EVERY scenario with no
-backing test — one finding per uncovered scenario, no nitpick spray. A "major" finding withholds
-approval and feeds the fix loop, so an uncovered scenario blocks approval until a test is added.
-You MAY add a one-line scenario-coverage summary to "summary".`,
+    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+Follow your agent definition's process and output contract exactly (JSON only).`,
   },
   {
     label: 'code-review',
@@ -190,50 +186,18 @@ If \`/security-review\` is not invokable here, perform the same security pass yo
 diff and emit the identical contract — same outcome.`,
   },
   {
+    // Backed by agents/test-rigor-reviewer.md — same reasoning as the spec lens above.
     label: 'test-rigor',
     agentType: 'test-rigor-reviewer',
-    prompt: `Audit TEST RIGOR for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
-Scope to the public surface the diff adds/changes (HTTP/gRPC API, CLI, library/public API) and any
-observable side effects it causes (emitted events, DB writes, published messages, files). For each,
-judge whether the tests would FAIL on a regression — not merely exercise the happy path. Flag (rule
-"test-rigor") any missing antagonistic case the surface can exhibit: malformed/oversized/wrong-type
-input, boundary/limit, error-contract honesty (the right error type/code/message, not a blurred
-one), concurrency conflicts, auth/tenant isolation where applicable, already-exists/not-found,
-idempotency/replay. And flag (rule "side-effect-coverage") any write/op whose tests assert the
-direct result but NOT its observable side effect (the emitted event/message/row is never asserted),
-judged surface → state → side-effect. A happy-path-only surface, or one with no side-effect
-assertion, is a "major" gap (withholds approval, feeds the fix loop).
-ALSO run the brake (the other direction). Flag (rule "over-testing") tests the diff adds that are
-over-built: a fake reconstructing a well-tested dependency to test the dependency rather than this
-change (a hand-built fake SSH/DB/HTTP server where a boundary stub would do), a test that only
-re-verifies a library/framework, a trivial-glue test with no nameable regression, or a pure
-duplicate. And flag (rule "test-practicality") avoidable test-infrastructure churn — most importantly
-a Testcontainers test that restarts a container per test where a shared/reused container would give
-the same coverage far faster. These default to "minor" (surfaced, non-blocking); escalate to "major"
-only for egregious, objective waste. The brake is for high-confidence waste, not taste.
-If the diff touches NO public surface, observable side effect, OR tests, return approve=true with
-empty findings. Follow your output contract exactly (JSON only); leave spec_conformance/tests_ran
-"full" (the spec reviewer owns them).`,
+    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+Follow your agent definition's process and output contract exactly (JSON only).`,
   },
   {
+    // Backed by agents/observability-reviewer.md — same reasoning as the spec lens above.
     label: 'observability',
     agentType: 'observability-reviewer',
-    prompt: `Audit OBSERVABILITY for the diff ${base}...HEAD in the git worktree at ${worktree} (change "${change}", issue #${issue}).
-First learn the repo's existing observability stack (its logging/metrics/tracing conventions) and
-judge against THAT, not a foreign one. Scope to the new code paths and failure modes the diff
-introduces — new operations, new I/O (network/DB/external calls), new error/Result/exception
-branches, new async/concurrent work. For each, judge whether an operator could SEE and DIAGNOSE it
-in production. Flag (rule "observability") any: significant path/transition with no log at an
-appropriate level; a log missing the structured context (id/operation/outcome) needed to act; a new
-failure branch that is swallowed/mapped-away with NO telemetry (a silent failure — lean blocker); a
-new SLI-relevant operation or failure class with no metric, or a metric with unbounded label
-cardinality (raw ids/user input/paths as labels); new I/O with no span/trace coverage or dropped
-context propagation across new async boundaries; and any secret/credential/PII emitted to
-logs/spans/metrics (blocker). A silently-swallowed failure or a logged secret is a "blocker"; a new
-operation/error path with no telemetry where the repo's conventions expect one is "major" (both
-withhold approval and feed the fix loop). If the diff introduces NO new code path, I/O, or failure
-mode, return approve=true with empty findings. Follow your output contract exactly (JSON only);
-leave spec_conformance/tests_ran "full" (the spec reviewer owns them).`,
+    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+Follow your agent definition's process and output contract exactly (JSON only).`,
   },
 ]
 

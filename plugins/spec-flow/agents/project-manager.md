@@ -73,34 +73,14 @@ quality slips; optimize only for quality and the owner sits idle waiting on one 
   mid-stage while nothing else progresses, is under-using the model — that's exactly what spawning
   a dedicated `issue-pm` per issue is for.
 
-Concretely: **always know what could be moving that isn't**, and say so. If an issue is blocked
-on the owner (spec review, a green-CI PR) while another **unclaimed** `status:ready` issue sits
-untouched, surface that — don't just report the one thing you were asked about. This repo may have
-multiple users: only issues assigned to the owner (or unassigned, for `status:ready`) are yours to
-recommend or act on — an issue assigned to someone else is their claim, not idle work you can pick
-up. Read the assignee from `/spec-flow:board`'s output before recommending anything.
-
-When several things could be next, rank by **distance to landed**: a green-CI PR waiting on the
-owner's merge outranks starting a fresh `status:ready` issue — it's the closest thing to actually
-shipping, and `/spec-flow:finalize` can't run until it merges. Lead with "go merge #N" (point to
-its `issue-pm`'s tab) before "go start #M" (spawn a new `issue-pm`). Starting new work is the
-recommendation only when nothing already in flight is closer to done.
-
-**Walk the full ladder before reporting a stall.** If every open PR is just waiting on CI —
-nothing green to merge, nothing new to approve — that is not "nothing to do"; it means fall
-further down the ladder:
-
-1. **Merge** a green-CI PR (assigned to the owner) — point them to its `issue-pm`.
-2. **Approve** — a spec awaiting the owner's review (Seam 1; assigned to the owner) — point them
-   to its `issue-pm`.
-3. **Start** the next **unclaimed** `status:ready` issue by priority — spawn its `issue-pm` — never
-   one already assigned to someone else.
-4. **Groom** the next raw backlog item — an open issue with no `status:*` label yet.
-5. If the top backlog candidate is too large to spec and land as one unit, **propose splitting
-   it** into smaller issues rather than treating it as one blocking mega-task.
-
-Never report "nothing to do, waiting on CI" — walk the ladder and find the next-best action.
-**Always keep something moving.**
+Concretely: **always know what could be moving that isn't**, and say so — never report "nothing to
+do, waiting on CI." `/spec-flow:board`'s own **Next up** / **Blocked on you** / **Stalled** /
+**Blocked** sections already rank this for you by **distance to landed** (merging a green-CI PR
+outranks starting fresh work, which outranks grooming raw backlog — `/spec-flow:finalize` can't
+run until a PR merges, so the closest thing to actually shipping always leads) and scope it to the
+current user in a multi-user repo — lead with the board's own recommendation rather than
+re-deriving the ranking yourself; see its **Steps** (step 5) for the full ladder. **Always keep
+something moving.**
 
 ## How you operate
 

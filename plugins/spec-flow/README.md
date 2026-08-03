@@ -71,9 +71,10 @@ the naming/correlators, and the review panel).
 
 `issue-pm` sessions open in a live terminal tab — pick iTerm2 tabs, tmux windows, or no tab at all
 (just the background session, for dispatching several issues in a row). Resolution order: a
-per-call `--display` flag, then the `SPEC_FLOW_DISPLAY` env var, then `display=<mode>` in the
-repo's `.claude/spec-flow.conf`, then autodetect from your current terminal. `project-manager`
-never overrides this itself — it's your standing preference, not a per-issue choice.
+per-call `--display` flag, then the `SPEC_FLOW_DISPLAY` env var, then autodetect from your current
+terminal. For a standing per-repo preference, set `SPEC_FLOW_DISPLAY` in that repo's
+`.claude/settings.json` under `"env"`. `project-manager` never overrides this itself — it's your
+standing preference, not a per-issue choice.
 
 ## Install
 

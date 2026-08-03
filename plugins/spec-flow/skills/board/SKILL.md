@@ -12,7 +12,7 @@ anything.
 
 ## Steps
 
-Steps 1-4 are independent reads — issue them together (parallel tool calls) rather than one at a
+Steps 1-3 are independent reads — issue them together (parallel tool calls) rather than one at a
 time.
 
 1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
@@ -61,16 +61,7 @@ time.
    driving it forward even though its status label says it should be — surface that, it doesn't
    happen automatically anywhere else.
 
-4. **Gather worktrees:**
-   ```bash
-   git worktree list
-   ```
-   Worktree names/branches are Claude Code's own (not derived from the issue number), so this is
-   just a rough "how many isolated checkouts exist" count now — cross-reference *which* issue a
-   session belongs to via step 3's `name`/`cwd`, not by matching this list's paths against issue
-   numbers.
-
-5. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
+4. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
    goes under **BLOCKED ON YOU only when its CI is green**; while CI is running it goes under
    **IN FLIGHT** with its CI state, because the owner has nothing to act on yet:
 
@@ -103,7 +94,7 @@ time.
    stalled) on every row past `status:ready`, an attach command only when step 3 found a local
    match, and 🔒 on anything carrying `blocked` — that's the whole point of steps 1 and 3.
 
-6. **Call out the two things that matter most — scoped to the current user, not the whole team.**
+5. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
    "next up" for you, even though it's still worth showing in the board for visibility:
    - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder

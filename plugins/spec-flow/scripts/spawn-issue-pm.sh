@@ -35,15 +35,11 @@ for bin in claude jq gh; do
 done
 
 repo_root=$(git rev-parse --show-toplevel)
-conf="${repo_root}/.claude/spec-flow.conf"
 
-# precedence: flag > env > repo config > autodetect
+# precedence: flag > env > autodetect. (No repo config file — one persistent knob is the env
+# var, set in the repo's own .claude/settings.json env block if it needs to survive per-repo;
+# a whole config-file surface for a single key wasn't worth its own parser and edge cases.)
 [[ -n "$display" ]] || display="${SPEC_FLOW_DISPLAY:-}"
-if [[ -z "$display" && -f "$conf" ]]; then
-  # Strip a trailing `# comment` before stripping quotes/spaces — confirmed live: without this,
-  # `display=tmux # comment` parses to `tmux#comment`, an "unknown display mode" the case below rejects.
-  display=$(sed -n 's/^display=//p' "$conf" | tail -1 | sed 's/[[:space:]]*#.*//' | tr -d '"'"'"' ')
-fi
 if [[ -z "$display" ]]; then
   if   [[ -n "${TMUX:-}" ]];                     then display=tmux
   elif [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then display=iterm
@@ -58,7 +54,7 @@ esac
 open_iterm() {
   local title="$1" cmd="$2"
   if [[ "$(uname -s)" != "Darwin" ]]; then
-    echo "spawn-issue-pm: --display iterm requires macOS + iTerm2. Set display=tmux instead (env SPEC_FLOW_DISPLAY, or 'display=tmux' in ${conf})." >&2
+    echo "spawn-issue-pm: --display iterm requires macOS + iTerm2. Set SPEC_FLOW_DISPLAY=tmux instead." >&2
     exit 1
   fi
   osascript <<APPLESCRIPT

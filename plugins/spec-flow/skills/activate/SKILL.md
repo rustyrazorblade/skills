@@ -27,11 +27,16 @@ else — that's their claim, not yours to take), and confirm the choice with the
    **Multi-user guard.** Check `assignees` against the authenticated user
    (`gh api user --jq .login`). If the issue is already assigned to someone else, **stop** — tell
    the owner it's claimed and let them pick a different issue or coordinate with whoever has it;
-   do not proceed. If it's unassigned, or already assigned to the current user (the re-activation
-   case), claim it before doing anything else:
+   do not proceed. Otherwise claim it before doing anything else — `--add-assignee`/
+   `--add-label` are safe to repeat, but only post the "claimed" comment on a **genuinely fresh**
+   claim, not a re-activation (the issue was already assigned to you): re-running this on your own
+   in-flight issue shouldn't repost it every time.
    ```bash
+   ALREADY_MINE=false   # from the assignees check above — true if you were already the assignee
    gh issue edit <N> --add-assignee @me --add-label agent:active
-   gh issue comment <N> --body "🏗️ Claimed — starting design."
+   if [[ "$ALREADY_MINE" != "true" ]]; then
+     gh issue comment <N> --body "🏗️ Claimed — starting design."
+   fi
    ```
    This is what makes "who's working on what" visible to other users of this repo — claim before
    anything else. `agent:active` and the comment are the only things that make you visible to

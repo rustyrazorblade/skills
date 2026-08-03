@@ -39,10 +39,11 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    reuse it rather than erroring on a duplicate:
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
    git -C <worktree> push -u origin "$BR"
    PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
    if [ -z "$PR" ]; then
-     gh pr create --draft --head "$BR" --base main \
+     gh pr create --draft --head "$BR" --base "$DEFAULT_BR" \
        --title "<issue title>" \
        --body "Closes #<N>
 
@@ -51,9 +52,10 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
      gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
    ```
-   `--base main` must match the repo's actual default branch — the same one `activate` branched
-   from (see its "if `main` is not the repo's default branch, substitute it" caveat). Keep `<PR>`
-   — step 5 needs it.
+   Resolve `$DEFAULT_BR` from the repo itself rather than assuming `main` — the worktree was
+   already branched from whatever Claude Code resolved as the repo's actual default branch
+   (`EnterWorktree` does this on its own), so this just needs to match that, not guess it. Keep
+   both `<PR>` and `$DEFAULT_BR` — step 4 needs `$DEFAULT_BR` too.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
@@ -90,11 +92,11 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    or the built-in `general-purpose`) so each teammate gets that agent's tools/model, with your
    spawn prompt appended as additional instructions. Give every teammate a **GUARDRAILS** block —
    two variants, below — so none of them push to `main`, touch another issue, or take outward
-   GitHub action; that's yours alone. `base` = `origin/main` (or whatever `activate` actually
-   branched from — same substitution caveat as step 2's `--base`); the review lenses diff
-   `base...HEAD` in the worktree, so a wrong base reviews the wrong range. Track `tests_ran`,
-   `spec_conformance`, `approve`, `review_rounds`, `residual_findings`, and `non_blocking_findings`
-   as you go — step 5's PR body needs them; there's no script returning them for you now.
+   GitHub action; that's yours alone. `base` = `origin/$DEFAULT_BR` (resolved in step 2 — don't
+   assume `main`); the review lenses diff `base...HEAD` in the worktree, so a wrong base reviews
+   the wrong range. Track `tests_ran`, `spec_conformance`, `approve`, `review_rounds`,
+   `residual_findings`, `non_blocking_findings`, and `review_summary` as you go — step 5's PR body
+   needs them; there's no script returning them for you now.
 
    **GUARDRAILS (implementer teammates — tdd-developer, build-engineer):**
    > GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY `git
@@ -108,11 +110,13 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    > them yourself. Backlog creation and prioritization are the owner's job, not yours.
 
    **REVIEW GUARDRAILS (review-lens teammates — everyone else in step b):**
-   > GUARDRAILS (strict, READ-ONLY): You are reviewing, not implementing. Operate ONLY inside the
-   > worktree, read-only. Do NOT commit, do NOT `git push`, do NOT create or edit GitHub issues, do
-   > NOT create/modify/mark-ready any PR, do NOT post GitHub comments, and do NOT take any other
-   > outward or destructive action — your output is the JSON review contract, nothing else. If you
-   > discover follow-up work, related bugs, or candidate new issues, LIST them in your
+   > GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree.
+   > Running the repo's own format/lint/build/test commands to verify your findings is fine — you
+   > need that to honestly report `tests_ran` — but you may not change the tree: do NOT commit, do
+   > NOT `git push`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR,
+   > do NOT post GitHub comments, and do NOT take any other outward or destructive action — your
+   > output is the JSON review contract, nothing else. If you discover follow-up work, related
+   > bugs, or candidate new issues, LIST them in your
    > findings/summary for the owner to triage — never file them yourself.
 
    a. **Implement.** Spawn one teammate, `tdd-developer`, named `implement`: work `tasks.md`
@@ -258,10 +262,9 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
      "scriptPath": "${CLAUDE_PLUGIN_ROOT}/skills/implement/implement.workflow.js",
      "args": {
        "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
-       "repoRoot": "<abs repo root>",
        "change":   "issue-<N>",
        "issue":    <N>,
-       "base":     "origin/main",
+       "base":     "origin/$DEFAULT_BR",
        "buildSystem": "auto"
      }
    }

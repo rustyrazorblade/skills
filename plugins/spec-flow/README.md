@@ -19,7 +19,8 @@ individual issue itself. When you're ready to start or resume an issue, it launc
 opened in a live iTerm2 tab or tmux window (your choice — see **Display mode** below) that you
 talk to directly — not a subagent in the coordinator's own context. That process owns
 `activate → implement → address → finalize` for that one issue, end to end, in its own git
-worktree (Claude Code isolates it automatically), and hands back once it's merged. Several issues
+worktree (Claude Code's `EnterWorktree` isolates it — called explicitly as its first action, not
+automatic for everything; see **Prerequisites** below), and hands back once it's merged. Several issues
 can be in flight at once, each its own process, each its own tab. Wire `project-manager` as a
 repo's **default agent** to make it your standing entry point (see below).
 
@@ -52,9 +53,12 @@ the naming/correlators, and the review panel).
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
   bundled `Workflow`-tool script automatically — same five lenses, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
-- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
-  placed there automatically by Claude Code. Add `.claude/worktrees/` to the repo's `.gitignore`
-  so those checkouts never show up as untracked files in your primary checkout (see
+- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree via
+  Claude Code's `EnterWorktree` tool, called explicitly as `issue-pm`'s first action (confirmed by
+  test: isolation is **not** automatic in front of a Bash-driven file write — only in front of an
+  Edit/Write tool call — so the spawn prompt calls it up front rather than relying on that). Add
+  `.claude/worktrees/` to the repo's `.gitignore` so those checkouts never show up as untracked
+  files in your primary checkout (see
   [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
 
 ### Display mode (optional)
@@ -98,7 +102,7 @@ All skills are namespaced under the plugin:
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you. |
-| `/spec-flow:finalize <N>` | After you squash-merge: sync+archive the OpenSpec change, remove the worktree, close the issue. |
+| `/spec-flow:finalize <N>` | After you squash-merge: closes the issue, syncs+archives the OpenSpec change (via its own small self-merged PR), then removes the worktree. |
 
 ## Bundled agents
 
@@ -178,8 +182,10 @@ they are the single source you maintain, and every repo using the plugin inherit
 
 ## Notes
 
-- The pipeline **never merges and never pushes to `main`** — it only pushes the issue branch and
-  opens a PR. The squash-merge is your action in GitHub.
+- The pipeline **never merges your feature PR and never pushes it to `main`** — it only pushes the
+  issue branch and opens a PR; the squash-merge is your action in GitHub. The one exception is
+  `finalize`'s own small, no-review, archive-only bookkeeping PR (OpenSpec sync, no code), which it
+  opens *and* merges itself — see `skills/finalize/SKILL.md`.
 - Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
   `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
   trade-offs, you decide right there before anything is generated; Seam 1 then confirms the

@@ -81,7 +81,7 @@ time.
      in-progress   #F P2  <title>  @you           🔒 BLOCKED on #41 (see issue comments) · 🟢 active
 
    📋 READY
-     ready         #L P0  <title>  (unclaimed)      → spawn: scripts/spawn-issue-pm.sh L   ← next up
+     ready         #L P0  <title>  (unclaimed)      → spawn: ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-pm.sh L   ← next up
      ready         #Q P1  <title>  @alice            (claimed by @alice)
 
    📥 BACKLOG (ungroomed)
@@ -117,7 +117,7 @@ time.
      — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
      visibility, just don't claim it's actionable by you.
    - **Stalled** — any issue assigned to you past `status:ready` with no `agent:active` label
-     (step 3). Call these out explicitly and offer the fix: `scripts/spawn-issue-pm.sh <N>` to
+     (step 3). Call these out explicitly and offer the fix: `${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-pm.sh <N>` to
      resume it.
    - **Blocked** — any issue carrying the `blocked` label, regardless of assignee (visibility
      matters here even more than usual — someone should know a dependency exists). Name the

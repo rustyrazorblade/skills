@@ -69,8 +69,8 @@ way, just split across two separate processes instead of one conversation:
         │                          ▼
         │                 ┌────────────────────────────┐
         └─────────────────│ /spec-flow:finalize <issue#>      │
-                          │   sync+archive openspec,     │
-                          │   remove worktree, close issue│
+                          │   close issue, sync+archive  │
+                          │   openspec, remove worktree  │
                           └────────────────────────────┘
 ```
 
@@ -89,10 +89,12 @@ agent** refines the raw idea into scope + testable acceptance criteria — the *
 architect then designs the *how* for.)
 
 **Seam 2 — GitHub review + merge.** The pipeline only ever pushes the issue branch and opens a
-PR. It never merges and never pushes to `main`. You review in GitHub, optionally loop through
-`/spec-flow:address`, and perform the squash-merge yourself. Merge convention: rebase + squash to a
-single commit — one clean commit per PR on a fast-forward main history (never a merge commit,
-never the branch's individual commits); rebase onto current main first so the squash fast-forwards.
+PR. It never merges *that* PR and never pushes it to `main`. You review in GitHub, optionally loop
+through `/spec-flow:address`, and perform the squash-merge yourself. Merge convention: rebase +
+squash to a single commit — one clean commit per PR on a fast-forward main history (never a merge
+commit, never the branch's individual commits); rebase onto current main first so the squash
+fast-forwards. (`finalize`'s own tiny, no-review archive-only PR afterward is the sole exception —
+it opens and merges that one itself; see **The skills** below.)
 
 ## Lifecycle and labels
 
@@ -271,7 +273,7 @@ primary checkout.
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
-| `/spec-flow:finalize` | foreground | After you squash-merge: openspec sync+archive, remove worktree, close issue. Never merges. |
+| `/spec-flow:finalize` | foreground | After you squash-merge: closes the issue, syncs+archives OpenSpec (via its own small self-merged PR), removes the worktree. Never merges your feature PR. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 
@@ -478,8 +480,9 @@ set's blind-append safety rests on.
   could collide between concurrent runs should carry a per-process-unique seed so two runs never
   name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation; TDD; significant design
-  decisions are the owner's (an advisor agent only advises); land on `main` via PR (no agent
-  merge, no push to `main`).
+  decisions are the owner's (an advisor agent only advises); the feature lands on `main` via PR,
+  merged by the owner, never pushed or merged by an agent (`finalize`'s own small archive-only
+  bookkeeping PR is the sole exception, and it's never code).
 
 ## Conventions
 

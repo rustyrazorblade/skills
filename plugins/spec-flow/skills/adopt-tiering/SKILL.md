@@ -33,7 +33,7 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    - **Gradle** — `build.gradle.kts`/`build.gradle`, `src/test`. Already tiered if a
      `src/integrationTest` source set / `integrationTest` JVM Test Suite exists.
    - **Rust** — `Cargo.toml`; unit tests in `src/**`, integration in `tests/**`. Already tiered if
-     `.config/nextest.toml` defines the tier `default-filter`s (see #20 / `references/ci/`).
+     `.config/nextest.toml` defines the tier `default-filter`s (see `references/ci/`).
    If the repo is **already tiered**, say so and stop. In a partially-tiered repo, handle only what's
    still mixed — this skill is **idempotent**.
 
@@ -104,4 +104,3 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
 - **Classify → present → execute.** Show the owner the split before moving files.
 - **Never merge; open a PR.** Enabling the green-CI merge gate (branch protection) is the owner's
   manual step — always call it out.
-- **easy-db-lab is the first consumer / validation target** for this migration.

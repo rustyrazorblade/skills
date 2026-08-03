@@ -10,7 +10,7 @@ export const meta = {
   ],
 }
 
-// args: { worktree, repoRoot, change, issue, base, buildSystem }
+// args: { worktree, change, issue, base, buildSystem }
 // buildSystem: the project's build tool, used only as a hint for the build phase (e.g. 'cargo',
 // 'gradle', 'npm', 'go', 'pytest', or 'auto' to let the agent discover it). NOT an exhaustive
 // switch — the agents detect the real runner from the repo.
@@ -60,9 +60,10 @@ const testInstruction = `Run the UNIT tier locally as your gate — the repo's f
 // priorities).
 const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints so CI runs the full suite on the already-open draft PR (push somewhat frequently — after a completed task or a few green cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
-// Review lenses are read-only critics, not implementers — they must never commit or push (unlike
-// GUARDRAILS above, which permits checkpoint pushes for the tdd-developer/build-engineer phases).
-const REVIEW_GUARDRAILS = `GUARDRAILS (strict, READ-ONLY): You are reviewing, not implementing. Operate ONLY inside the worktree, read-only. Do NOT commit, do NOT \`git push\`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR, do NOT post GitHub comments, and do NOT take any other outward or destructive action — your output is the JSON review contract, nothing else. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your findings/summary for the owner to triage — never file them yourself.`
+// Review lenses are critics, not implementers — they must never commit or push (unlike
+// GUARDRAILS above, which permits checkpoint pushes for the tdd-developer/build-engineer phases),
+// but they DO need to run the repo's own build/lint/test commands to honestly report tests_ran.
+const REVIEW_GUARDRAILS = `GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree. Running the repo's own format/lint/build/test commands to verify your findings is fine — you need that to honestly report tests_ran — but you may not change the tree: do NOT commit, do NOT \`git push\`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR, do NOT post GitHub comments, and do NOT take any other outward or destructive action — your output is the JSON review contract, nothing else. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your findings/summary for the owner to triage — never file them yourself.`
 
 // Resolve the plugin's agents BARE-FIRST, then fall back to the plugin-namespaced
 // id (`spec-flow:<name>`). This preserves the intended override mechanism — a consuming
@@ -250,6 +251,24 @@ while (round < MAX_ROUNDS) {
   const missingLenses = reviewLenses.filter((l, i) => !lensResults[i]).map(l => l.label)
 
   const findings = reviews.flatMap(r => r.findings || [])
+  // A lens can decline without pointing at anything specific — e.g. the spec lens requires
+  // spec_conformance:"full" to approve, so a "partial" verdict alone sets approve=false with no
+  // discrete finding. Left alone that either wastes a Fix round on nothing (empty fixList) or
+  // survives silently to the round cap with EMPTY residual findings — the owner sees "not
+  // approved," no reason why. Synthesize one so it flows through the same mustFix pipeline as
+  // everything else, same as a real finding would.
+  lensResults.forEach((r, i) => {
+    if (r && r.approve === false && (r.findings || []).length === 0) {
+      findings.push({
+        id: `unexplained-${reviewLenses[i].label}`,
+        severity: 'major',
+        location: `(${reviewLenses[i].label} lens report)`,
+        rule: 'unexplained-non-approval',
+        problem: `${reviewLenses[i].label} lens returned approve=false with no findings (summary: ${r.summary || 'none given'})`,
+        fix: 'Re-review and either approve, or report a specific blocking finding.',
+      })
+    }
+  })
   const mustFix = findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
   const specLens = lensResults[0] // aligned with reviewLenses[0] (the spec reviewer)
   review = {

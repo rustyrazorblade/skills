@@ -52,8 +52,9 @@ exists specifically to work this issue without routing each step back through th
 3. **Address.** When the owner leaves PR review comments in GitHub → `/spec-flow:address <N>`.
    Loop this as many times as the owner sends more comments — you don't hand back until they
    squash-merge.
-4. **Finalize.** After the owner squash-merges → `/spec-flow:finalize <N>` — sync + archive the
-   OpenSpec change, remove the worktree, close the issue.
+4. **Finalize.** After the owner squash-merges → `/spec-flow:finalize <N>` — close the issue, sync
+   + archive the OpenSpec change (via its own small PR that `finalize` opens and merges itself —
+   the one exception to never merging), remove the worktree.
 5. **Report and hand off.** Once `finalize` completes, tell the owner `#N` is done and that you
    (this process) are finished. Suggest they return to the central `project-manager`'s tab — or
    attach to another issue's `issue-pm`, if one is already running — for whatever's next. You have

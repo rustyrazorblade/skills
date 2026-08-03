@@ -22,6 +22,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -n "$issue" ]] || usage
+[[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh/osascript unvalidated
 
 for bin in claude jq gh; do
   command -v "$bin" >/dev/null 2>&1 || {
@@ -104,7 +105,7 @@ existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || tr
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 
 if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
-  echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})"
+  echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})" >&2
   exit 1
 fi
 
@@ -112,6 +113,24 @@ if [[ -n "$existing_id" ]]; then
   # We have a past session for this issue on THIS machine, not currently live (done/failed/
   # stopped) — respawn it rather than starting fresh, so it lands back in its own worktree with
   # its branch/uncommitted work intact instead of an empty one branched from main.
+  #
+  # If agent:active is already set, it's most likely OUR OWN prior claim from before the crash —
+  # but it could also mean a different machine has since spawned a live session for this same
+  # issue (e.g. after a human cleared a stale label and someone else raced in). Not fully
+  # distinguishable without a real distributed lock, but the assignee is a cheap, meaningful
+  # signal: if it's someone else, don't respawn on top of their claim.
+  active_label=$(gh issue view "$issue" --json labels \
+    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null)
+  if [[ -n "$active_label" ]]; then
+    me=$(gh api user --jq .login 2>/dev/null)
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null)
+    if [[ -n "$me" && "$assignee" != "$me" ]]; then
+      echo "already active: issue #${issue} carries agent:active, assigned to ${assignee} (not you) —" >&2
+      echo "likely a live issue-pm on another machine. Not respawning on top of it." >&2
+      exit 1
+    fi
+  fi
+
   echo "resuming: ${name} was ${existing_state} — respawning ${existing_id} in its existing worktree" >&2
   claude respawn "$existing_id" > /dev/null
   session_id="$existing_id"
@@ -121,18 +140,25 @@ if [[ -n "$existing_id" ]]; then
   # and does NOT error — it silently falls back to the PRIMARY checkout. That means every command
   # this issue-pm runs from here would land in the owner's own working directory. Refuse to let
   # that happen silently: stop it immediately and surface it instead of trusting the respawn.
+  # Empty/missing cwd data counts as unsafe too (-z), not just a confirmed wrong path — a
+  # transient `claude agents` failure here must never be read as "must be fine, then."
   respawned_cwd=$(claude agents --json --all 2>/dev/null \
     | jq -r --arg id "$session_id" '.[] | select(.id == $id) | .cwd // empty')
-  if [[ -n "$respawned_cwd" && "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
+  if [[ -z "$respawned_cwd" || "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
     claude stop "$session_id" > /dev/null 2>&1 || true
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-    echo "spawn-issue-pm: respawned ${name} (${session_id}) landed in ${respawned_cwd}, NOT an" >&2
-    echo "isolated worktree — its original worktree is gone (likely swept). Stopped it before it" >&2
-    echo "could touch that directory. The branch is still on origin (checkpoint pushes) if this" >&2
-    echo "issue-pm ever got that far; recover manually: 'git worktree add <path> <branch>' from the" >&2
-    echo "existing branch, or start over with a fresh spawn if nothing was pushed yet." >&2
+    echo "spawn-issue-pm: respawned ${name} (${session_id}) landed in '${respawned_cwd:-<empty>}'," >&2
+    echo "NOT a confirmed isolated worktree — either its original worktree is gone (likely swept)," >&2
+    echo "or the state couldn't be confirmed. Stopped it before it could touch anything. The branch" >&2
+    echo "is still on origin (checkpoint pushes) if this issue-pm ever got that far; recover" >&2
+    echo "manually: 'git worktree add <path> <branch>' from the existing branch, or start over with" >&2
+    echo "a fresh spawn if nothing was pushed yet." >&2
     exit 1
   fi
+
+  # Respawn confirmed safe — make sure agent:active reflects it, whether or not it was already
+  # set (e.g. a human cleared it during the earlier crash, per docs/workflow.md's known gap).
+  gh issue edit "$issue" --add-label agent:active
 else
   # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
   # an issue-pm running on someone else's machine (or yours, on a different one) is invisible to
@@ -164,7 +190,7 @@ else
     --agent issue-pm \
     --name "$name" \
     --permission-mode acceptEdits \
-    "Before doing anything else, call the EnterWorktree tool to isolate yourself into your own git worktree. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Claim it, then drive activate through finalize. Stop at both owner seams." \
+    "Before doing anything else, call the EnterWorktree tool to isolate yourself into your own git worktree. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \
     > /dev/null; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
     echo "spawn-issue-pm: 'claude --bg' itself failed to launch ${name}" >&2

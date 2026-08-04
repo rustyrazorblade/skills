@@ -210,7 +210,7 @@ else
   # registry lost track of) doesn't error, it re-enters and resumes that same worktree, so this is
   # safe to pass unconditionally on every spawn, not just the first.
   if ! claude --bg \
-    --agent issue-pm \
+    --agent spec-flow:issue-pm \
     --name "$name" \
     --permission-mode acceptEdits \
     "Before doing anything else, call the EnterWorktree tool with name: \"issue-${issue}\" to isolate yourself into your own git worktree — pass that literal name so this issue's worktree is predictable and, on a fresh spawn after this local registry lost track of a prior run, is resumed automatically rather than duplicated. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \

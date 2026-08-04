@@ -56,6 +56,25 @@ retry_until_nonempty() {
   done
   echo ""
 }
+# A plain non-empty check is NOT enough for the post-respawn cwd: confirmed by live repro
+# (2026-08-04) — `claude stop` reverts the registry's cwd to the session's ORIGINAL spawn
+# directory (the primary checkout), and `claude respawn` only re-applies the worktree
+# relocation ~1-2s later, asynchronously. That reverted value is immediately non-empty, so
+# retry_until_nonempty would return it on the very first check, inside the race window, every
+# time — a false positive that fired the fail-safe below on every healthy respawn. Poll for the
+# cwd to actually CONTAIN /.claude/worktrees/, not just to exist, bounded so a genuinely swept
+# worktree (which never relocates) still times out and the fail-safe still fires correctly for
+# that real case.
+retry_until_worktree_cwd() {
+  local id="$1" out="" attempts=0
+  while [[ $attempts -lt 15 ]]; do
+    out=$(lookup_session_cwd "$id")
+    [[ "$out" == *"/.claude/worktrees/"* ]] && { echo "$out"; return 0; }
+    attempts=$((attempts + 1))
+    sleep 2
+  done
+  echo "$out"
+}
 
 # Local session lookup FIRST, and --all (not just live ones): a background session's worktree is
 # tied to that SESSION, not to the issue, so a crashed/stopped issue-pm can only be put back in
@@ -124,18 +143,28 @@ if [[ -n "$existing_id" ]]; then
   # and does NOT error — it silently falls back to the PRIMARY checkout. That means every command
   # this issue-pm runs from here would land in the owner's own working directory. Refuse to let
   # that happen silently: stop it immediately and surface it instead of trusting the respawn.
-  # Empty/missing cwd data counts as unsafe too (-z), not just a confirmed wrong path — a
-  # transient `claude agents` failure here must never be read as "must be fine, then."
-  respawned_cwd=$(retry_until_nonempty lookup_session_cwd "$session_id")
+  # Use retry_until_worktree_cwd (not retry_until_nonempty) here — confirmed by live repro
+  # (2026-08-04): the stale pre-relocation cwd is non-empty, so a plain non-empty check reads it
+  # inside the race window and false-positives on every healthy respawn, not just genuinely swept
+  # ones. Empty/missing cwd data after the poll still counts as unsafe, same as a confirmed wrong
+  # path — a transient `claude agents` failure here must never be read as "must be fine, then."
+  respawned_cwd=$(retry_until_worktree_cwd "$session_id")
   if [[ -z "$respawned_cwd" || "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
     claude stop "$session_id" > /dev/null 2>&1 || true
+    # Also remove the session record, not just stop it — otherwise this stuck record is what the
+    # NEXT run's local-lookup-first finds, taking the respawn path into the identical dead end
+    # forever (confirmed by live repro: nothing else clears it, so every retry re-hits this same
+    # fail-safe). Removing it here is what makes the *next* run take the fresh-spawn path instead.
+    claude rm "$session_id" > /dev/null 2>&1 || true
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
     echo "spawn-issue-pm: respawned ${name} (${session_id}) landed in '${respawned_cwd:-<empty>}'," >&2
-    echo "NOT a confirmed isolated worktree — either its original worktree is gone (likely swept)," >&2
-    echo "or the state couldn't be confirmed. Stopped it before it could touch anything. The branch" >&2
-    echo "is still on origin (checkpoint pushes) if this issue-pm ever got that far; recover" >&2
-    echo "manually: 'git worktree add <path> <branch>' from the existing branch, or start over with" >&2
-    echo "a fresh spawn if nothing was pushed yet." >&2
+    echo "NOT a confirmed isolated worktree even after waiting — either its original worktree is" >&2
+    echo "gone (likely swept), or the state couldn't be confirmed. Stopped and removed the session" >&2
+    echo "record so the next run takes the fresh-spawn path instead of hitting this same dead end." >&2
+    echo "The branch is still on origin (checkpoint pushes) if this issue-pm ever got that far;" >&2
+    echo "recover manually: 'git worktree add <path> <branch>' from the existing branch, or just" >&2
+    echo "re-run this script to spawn fresh if nothing was pushed yet. (If the session record is" >&2
+    echo "somehow still stuck: 'claude rm ${session_id}' clears it.)" >&2
     exit 1
   fi
 

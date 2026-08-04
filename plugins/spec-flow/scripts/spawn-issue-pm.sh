@@ -257,10 +257,19 @@ else
   # EnterWorktree with a name that already exists on disk (e.g. from a prior run this local session
   # registry lost track of) doesn't error, it re-enters and resumes that same worktree, so this is
   # safe to pass unconditionally on every spawn, not just the first.
+  # --permission-mode: NOT acceptEdits — confirmed by live repro (2026-08-04, twice, both real
+  # issue-pm-872 spawns): acceptEdits only auto-approves Edit/Write TOOL calls, not Bash-invoked
+  # commands. spec-flow runs almost entirely via Bash-invoked `gh`/`git`/`openspec` (this file,
+  # every skill), so the very first `gh` call Claude Code's own classifier flags (confirmed live:
+  # `gh api user --jq .login`, activate step 1's identity check) hits an unanswerable interactive
+  # approval prompt — "Do you want to proceed?" — with nobody attached to answer it. The session
+  # then sits forever in state:blocked/status:waiting, which looks like a hang but is really a
+  # permission dialog no one can see. `auto` was verified live to run the identical command
+  # straight through with no prompt, matching this repo's own default session permission mode.
   if ! claude --bg \
     --agent spec-flow:issue-pm \
     --name "$name" \
-    --permission-mode acceptEdits \
+    --permission-mode auto \
     "Before doing anything else, call the EnterWorktree tool with name: \"issue-${issue}\" to isolate yourself into your own git worktree — pass that literal name so this issue's worktree is predictable and, on a fresh spawn after this local registry lost track of a prior run, is resumed automatically rather than duplicated. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \
     > /dev/null; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true

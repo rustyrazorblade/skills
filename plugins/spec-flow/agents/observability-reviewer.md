@@ -13,7 +13,7 @@ consumes. Prefer a few high-confidence gaps over a long nitpick list.
 ## Inputs
 
 - **Panel mode** (a flow implement lens): `worktree` (absolute path — **run all commands there**),
-  `base` (ref to diff against, usually `main`), `change` (the OpenSpec change). Scope your review
+  `base` (ref to diff against — the repo's actual default branch, not necessarily `main`), `change` (the OpenSpec change). Scope your review
   to the code paths and failure modes **touched by `git -C <worktree> diff <base>...HEAD`**.
 - **Standalone mode** (on-demand audit): a repo path and no base. Audit the **whole** surface.
 

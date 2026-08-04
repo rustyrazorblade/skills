@@ -1,81 +1,136 @@
 ---
 name: finalize
-description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs, archive the change, remove its git worktree, and close the GitHub issue. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the PR in GitHub; it never merges.
+description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs and archive the change via its own small PR, close the GitHub issue, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the FEATURE PR in GitHub; never merges that one — the one PR this skill does merge itself is its own no-review archive-only bookkeeping PR (see step 3).
 argument-hint: [issue number, with its PR already squash-merged]
 ---
 
 # finalize — sync, archive, and clean up after merge
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. The owner has **squash-merged** the PR for issue
-`#N` in GitHub. Sync and archive the OpenSpec change, tear down the worktree, and close the
-issue. **This skill never merges** — the merge is the owner's action in GitHub.
+You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
+**squash-merged** the PR for issue `#N` in GitHub. Sync and archive the OpenSpec change, close the
+issue, and tear down the worktree. **This skill never merges the feature PR** — that merge is the
+owner's action in GitHub, always. The one exception, scoped narrowly: step 3's archive commit lands
+via its own tiny PR that this skill opens *and* merges itself, because it's pure OpenSpec
+bookkeeping with no code and nothing to review — not a carve-out for anything else.
 
-Input: an issue number `#N`. Worktree `.claude/worktrees/issue-<N>-<slug>`, branch
-`issue-<N>-<slug>`, OpenSpec change `<slug>`. If `<slug>` isn't already known from context,
-recover it with `git worktree list | grep "issue-<N>-"` or
-`gh pr list --search "head:issue-<N>-" --json headRefName`.
+Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
+already running inside this issue's worktree — Claude Code's own background-session isolation put
+you there, on whatever branch it assigned, so resolve the branch with
+`git rev-parse --abbrev-ref HEAD` rather than assuming a name. If `openspec/changes/issue-<N>`
+isn't there, list `openspec/changes/` (excluding `archive/`) — one change per issue, so whatever's
+there is it — and orient yourself in it before proceeding: it may predate this naming, or be
+mid-flight from an interrupted `activate`/`implement` pass.
 
 ## Steps
 
 1. **Verify the PR is merged** (precondition — do not merge it yourself):
    ```bash
-   gh pr list --head issue-<N>-<slug> --state merged --json number,mergedAt
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   gh pr list --head "$BR" --state merged --json number,mergedAt
    ```
    If it isn't merged, stop and tell the owner the merge is theirs to do in GitHub.
 
-2. **Create a short-lived worktree from merged main.** `<repo-root>` is the owner's primary
-   checkout, not a per-issue worktree — never switch branches or pull there. Do the archive in
-   an isolated, detached-HEAD worktree instead, so finalize never touches whatever the owner has
-   checked out or in progress:
+2. **Create a short-lived worktree from merged main.** Resolve the **main** checkout first —
+   `git worktree list --porcelain`'s first entry — the owner's primary checkout, not a per-issue
+   worktree; never switch branches or pull there. Do the archive in an isolated, detached-HEAD
+   worktree instead, so finalize never touches whatever the owner has checked out or in progress:
    ```bash
-   git -C <repo-root> fetch origin
+   MAIN=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git -C "$MAIN" fetch origin
+   git -C "$MAIN" worktree prune   # opportunistic: drops any prior run's TMPWT registration whose
+                                    # temp dir the OS already cleaned up, before minting a new one
    TMPWT=$(mktemp -d)
-   git -C <repo-root> worktree add --detach "$TMPWT" origin/main
+   git -C "$MAIN" worktree add --detach "$TMPWT" "origin/$DEFAULT_BR"
+   echo "TMPWT=$TMPWT"
    ```
+   **Note the printed `$TMPWT` path — it's from `mktemp`, so unlike `$MAIN`/`$DEFAULT_BR` it can't
+   be recomputed.** If step 3 runs as a separate Bash call (likely — OpenSpec's own commands sit
+   between), that call won't have this shell's variables (only cwd survives across Bash calls, not
+   variables) — so step 3 below uses `<TMPWT>` as a stand-in for the **literal path you just saw
+   printed**, not the unset variable `$TMPWT`. Get this wrong and `git -C ""` doesn't error, it
+   silently uses whatever the cwd happens to be — exactly the kind of silent wrong-tree operation
+   this skill's one self-merge exception can't afford.
 
-3. **Sync delta specs into canonical specs, then archive the change** (inside `$TMPWT`). Use the
-   OpenSpec flow for change `<slug>`:
+3. **Sync delta specs into canonical specs, then hand off the archive-and-PR mechanics to a
+   script** (inside `<TMPWT>`, the literal path from step 2 — not a shell variable). If
+   `openspec/changes/archive/issue-<N>` already exists here, a previous finalize run already got
+   this far — remove the now-unneeded `<TMPWT>` and skip straight to step 4, nothing else to redo
+   (step 2 creates `<TMPWT>` unconditionally before this check runs, so skipping without removing
+   it would leave a registered-but-abandoned worktree behind on every re-run):
+   ```bash
+   git -C <MAIN> worktree remove <TMPWT>
+   ```
+   Otherwise, use the OpenSpec flow for change `issue-<N>` — OpenSpec is this repo's spec framework
+   today; the script below doesn't know or care which one produced the change, it just archives
+   and lands whatever's staged, so swapping frameworks later needs no change here:
    - `openspec-sync-specs` (or `/opsx:sync`) to fold the delta specs into `openspec/specs/`.
    - `openspec-archive-change` (or `/opsx:archive`) to move the change under
      `openspec/changes/archive/`.
-   Commit the archive (this is the one place finalize commits to `main`, mirroring how prior
-   changes were archived) and push it straight to `main`, then remove the temp worktree:
+   Then hand the generic git/gh mechanics — commit, open the archive PR (or reuse one from an
+   earlier interrupted run), merge it, clean up `<TMPWT>` — to the script, rather than reasoning
+   through the push-vs-reuse/non-fast-forward cases by hand every time. **Invoke it from the issue
+   worktree, not from inside `<TMPWT>`** — the script removes `<TMPWT>` on success, and a Bash call
+   running from inside a directory that command just deleted is left in an undefined location for
+   whatever runs next (step 4's `gh issue` calls in particular):
    ```bash
-   git -C "$TMPWT" add -A
-   git -C "$TMPWT" commit -m "archive: <slug> (#<N>)"
-   git -C "$TMPWT" push origin HEAD:main
-   git -C <repo-root> worktree remove "$TMPWT"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-archive-pr.sh <N> <TMPWT> "OpenSpec sync + archive for issue #<N>, now that its PR is merged. No code changes — bookkeeping only."
    ```
-   Leaving the archive commit unpushed would strand `origin/main` without it — the branch
-   `/spec-flow:activate` cuts every new worktree from. If the repo prefers the owner push it
-   themselves, stop before the push and surface the commit for them instead, but say so
-   explicitly.
+   This is the **one** PR this skill merges itself — see the frontmatter note on why. The script
+   exits non-zero if the PR doesn't merge automatically (required checks still pending, or branch
+   protection needs a review) — don't let that fall through to closing the issue anyway: leaving
+   the archive commit unmerged would strand `main` without it, the branch `/spec-flow:activate`
+   cuts every new worktree from. **Re-running after any interruption between the commit and the
+   merge is safe** — the script handles reusing an already-open PR, a pushed-but-PR-less branch, or
+   a fully fresh push, whichever the previous run got to.
 
-4. **Remove the worktree and branch:**
+4. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — check `state`/`closed`
+   from the `gh issue view` below first, and only close/comment/relabel what isn't already done —
+   this step is safe to re-run, but don't post a second "🎉" comment or re-attempt a close that
+   already happened). Remove the lifecycle and coordination labels — closing doesn't drop them on
+   its own, and a stray `agent:active` on a closed issue would misread as still live. **Do this
+   before step 5, not after** — `gh issue` commands have no `-C`/path override, they infer the repo
+   from wherever you're standing, and step 5 is about to remove that:
    ```bash
-   git -C <repo-root> worktree remove ".claude/worktrees/issue-<N>-<slug>"
-   git -C <repo-root> branch -D "issue-<N>-<slug>"        # local — -D, not -d: a squash-merge
-                                                           # commit is never an ancestor of the
-                                                           # branch tip, so -d always refuses here
-   git -C <repo-root> push origin --delete "issue-<N>-<slug>"   # remote (optional; squash-merge may have removed it)
+   STATE=$(gh issue view <N> --json state,closed)
+   if [[ "$(jq -r .closed <<<"$STATE")" != "true" ]]; then
+     gh issue comment <N> --body "🎉 Merged, archived, and closed."
+     gh issue close <N> 2>/dev/null || true
+   fi
+   gh issue edit <N> --remove-label status:in-review --remove-label status:addressing \
+     --remove-label status:in-progress --remove-label agent:active --remove-label blocked \
+     2>/dev/null || true
    ```
 
-5. **Close the issue** (a PR with `Closes #N` usually auto-closes on merge — confirm, and
-   close explicitly if still open). Remove the lifecycle label:
+5. **Remove your own worktree and branch — hand off to a script that only acts once verified
+   safe.**
    ```bash
-   gh issue view <N> --json state,closed
-   gh issue close <N> 2>/dev/null || true
-   gh issue edit <N> --remove-label status:in-review --remove-label status:addressing 2>/dev/null || true
+   ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-remove-worktree.sh
    ```
+   Run it from inside the worktree being removed — it resolves everything from where you're
+   standing; no arguments. It removes the worktree only when HEAD is exactly a merged PR's tip, and
+   only then applies the double `--force` a session-locked worktree needs — the full reasoning (why
+   exact-SHA, why two forces) lives in the script's own comments; never bypass it with a hand-run
+   `git worktree remove --force --force`. **Safe to re-run**: if already removed, it detects the
+   main checkout and exits cleanly.
 
 6. **Report.** Confirm: specs synced, change archived, worktree removed, issue closed. Suggest
    `/spec-flow:board` to see the rest of the pipeline.
 
 ## Rules
 
-- Never merge a PR. Confirm the owner already did before finalizing.
+- **Never merge the feature PR.** Confirm the owner already did before finalizing (step 1). The
+  archive-only PR in step 3 is the sole, narrow exception — see the frontmatter and step 3 for why;
+  it never extends to anything else.
 - Only finalize a merged PR — finalizing an unmerged one would archive un-landed work.
-- Leave `main` clean: the only commit finalize makes to main is the OpenSpec archive, matching
-  the repo's existing archive convention.
+- Leave `main` clean: the only change finalize lands on `main` is the OpenSpec archive, via its own
+  PR, matching the repo's existing archive convention — never a direct push.
+- **This is where `agent:active` finally comes off** — `activate` set it, every stage since kept
+  it, this is the one place it's supposed to end. Don't skip step 4's label removal even on an
+  otherwise-uneventful finalize.
+- **Never remove a worktree by hand.** Step 5's script is the only sanctioned path — it checks
+  before it forces.
+- **Safe to re-run at any step.** Step 3 skips the archive if it's already there (and its script
+  handles reusing an in-progress PR/branch from an earlier interrupted run); step 4 only
+  closes/comments/relabels what isn't already done; step 5's script only removes what still exists.
 - When you cite an issue/PR number, always pair it with a brief `(description)`.

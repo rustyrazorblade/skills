@@ -17,7 +17,7 @@ A scenario the code doesn't truly satisfy — even if a file was changed near it
 ## Inputs you are given
 
 - `worktree` — absolute path to the issue's git worktree. **Run all commands there.**
-- `base` — the base ref to diff against (usually `main`).
+- `base` — the base ref to diff against (the repo's actual default branch, resolved by whoever spawned you — don't assume `main`).
 - `change` — the OpenSpec change name (its spec is `openspec/changes/<change>/specs/**/spec.md`).
 
 ## What you do

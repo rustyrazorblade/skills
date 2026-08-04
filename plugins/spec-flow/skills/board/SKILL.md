@@ -1,19 +1,22 @@
 ---
 name: board
-description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, worktree, and PR state — and highlight what's next and what's blocked on the owner. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
+description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, live issue-pm session, and PR state — and highlight what's next, what's blocked on the owner, and what's stalled. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
 ---
 
 # board — status across all in-flight pipelines
 
-You are the PM/lead in the main session. Give the owner one view of the whole pipeline,
-derived from GitHub labels + PR state + worktrees. Read-only; you don't change anything.
+You are the central `project-manager`. Give the owner one view of the whole pipeline, derived from
+GitHub labels (including liveness and blocking, not just lifecycle) + PR state, cross-checked
+against this machine's local sessions where they happen to match. Read-only; you don't change
+anything.
 
 ## Steps
 
 Steps 1-3 are independent reads — issue them together (parallel tool calls) rather than one at a
 time.
 
-1. **Gather issues by lifecycle:**
+1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
+   `agent:active` and `blocked` are ordinary labels, already in this response, no separate call:
    ```bash
    gh issue list --state open --json number,title,labels,url,assignees --limit 100
    ```
@@ -35,10 +38,28 @@ time.
    (`status` ∈ QUEUED/IN_PROGRESS, or legacy `state` = PENDING), otherwise **failing**. An empty
    `statusCheckRollup` (no CI configured on the repo) counts as green — nothing to wait on.
 
-3. **Gather worktrees:**
+3. **Cross-check local sessions (secondary — enriches rows, isn't the liveness signal):**
    ```bash
-   git worktree list
+   claude agents --json --all
    ```
+   **`--all` is required, not optional** — confirmed by test: every `issue-pm` is a `background`
+   session, and `claude agents --json` without `--all` excludes background sessions entirely
+   (0 results, regardless of state), only ever returning `interactive` ones. Omitting `--all` here
+   doesn't narrow the list to live sessions, it silently empties it, and this whole cross-check
+   step would never find a match. The `agent:active` label from step 1 is the liveness signal —
+   durable, visible to every user's `project-manager` regardless of machine (see **Coordination
+   signals** in `docs/workflow.md`). `claude agents --json --all` only ever reflects *this*
+   machine's local session registry, so use it only to enrich a row when its `name`
+   (`issue-pm-<N>`) happens to match one already labeled `agent:active` **and** its `state` is
+   `working` or `blocked`, matching `spawn-issue-pm.sh`'s own definition of live — `--all` also
+   pulls in `done`/`failed` sessions, and offering `claude attach` on one of those would be
+   misleading, not a live jump-in. That's when you can offer
+   `claude attach <id>` (`.id` from this JSON) as a direct jump-in. No match (or a match that's
+   `done`/`failed`) is unremarkable (someone else's machine, or yours from earlier today with the
+   session evicted or finished) — it does **not** mean stalled; only a **missing `agent:active`
+   label** means that. An issue past `status:ready` without the label is **stalled**: nothing is
+   driving it forward even though its status label says it should be — surface that, it doesn't
+   happen automatically anywhere else.
 
 4. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
    goes under **BLOCKED ON YOU only when its CI is green**; while CI is running it goes under
@@ -48,27 +69,30 @@ time.
    ## Delivery board
 
    ⛳ BLOCKED ON YOU
-     spec-review   #N P1  <title>  @you             → review spec in worktree, then /spec-flow:implement <N>
-     in-review     #M P0  <title>  @you  PR #P  ✅ CI → review in GitHub: <url>
+     spec-review   #N P1  <title>  @you  🟢 active (attach: claude attach a1b2c3)  → spec ready to approve
+     in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 active → review in GitHub: <url>
 
    🔧 IN FLIGHT (agents / CI)
-     in-review     #M P1  <title>  @you  PR #P  ⏳ CI (awaiting CI — not on you yet)
-     in-review     #M P1  <title>  @you  PR #P  ❌ CI (CI failing — /spec-flow:sync-ci)
-     in-progress   #K P2  <title>  @alice           (worktree present)
-     addressing    #J P1  <title>  @you  PR #Q      (resolving your comments)
+     in-review     #M P1  <title>  @you  PR #P  ⏳ CI  🟢 active (awaiting CI — not on you yet)
+     in-review     #M P1  <title>  @you  PR #P  ❌ CI  🟢 active (CI failing — /spec-flow:sync-ci)
+     in-progress   #K P2  <title>  @alice        🟢 active (no local session — probably @alice's machine)
+     addressing    #J P1  <title>  @you  PR #Q   🔴 STALLED — no agent:active label
+     in-progress   #F P2  <title>  @you           🔒 BLOCKED on #41 (see issue comments) · 🟢 active
 
    📋 READY
-     ready         #L P0  <title>  (unclaimed)      → /spec-flow:activate <L>   ← next up
+     ready         #L P0  <title>  (unclaimed)      → spawn: ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-pm.sh L   ← next up
      ready         #Q P1  <title>  @alice            (claimed by @alice)
 
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
-   (worktrees: 3 active · open PRs: 2)
+   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2)
    ```
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
-   `/spec-flow:activate` is what claims it).
+   `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴
+   stalled) on every row past `status:ready`, an attach command only when step 3 found a local
+   match, and 🔒 on anything carrying `blocked` — that's the whole point of steps 1 and 3.
 
 5. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
@@ -91,6 +115,12 @@ time.
      loop), not as your action. An item in the same states but assigned to someone else is neither
      — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
      visibility, just don't claim it's actionable by you.
+   - **Stalled** — any issue assigned to you past `status:ready` with no `agent:active` label
+     (step 3). Call these out explicitly and offer the fix: `${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-pm.sh <N>` to
+     resume it.
+   - **Blocked** — any issue carrying the `blocked` label, regardless of assignee (visibility
+     matters here even more than usual — someone should know a dependency exists). Name the
+     blocking issue from its most recent `⛔ Blocked on #M` comment; don't just say "blocked."
 
 ## Rules
 

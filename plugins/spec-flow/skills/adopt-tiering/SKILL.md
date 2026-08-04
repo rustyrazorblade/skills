@@ -13,13 +13,12 @@ integration)** in `docs/workflow.md`). This is a **one-time migration per repo**
 PR and **never merges**.
 
 This is repo **infrastructure**, not a feature — so it is **not** tied to a GitHub issue and does
-**not** go through `groom → activate → implement`. Create a dedicated worktree + branch, e.g.:
-```bash
-git -C <repo-root> fetch origin
-git -C <repo-root> worktree add ".claude/worktrees/chore-adopt-test-tiering" -b "chore/adopt-test-tiering" origin/main
-```
-All work happens inside that worktree from here on — `git worktree` managed (long-lived), never
-the Agent throwaway isolation, same as the other stages.
+**not** go through `groom → activate → implement`. Move into a dedicated worktree using Claude
+Code's own isolation rather than creating one by hand — call the `EnterWorktree` tool (or simply
+ask to "work in a worktree") with a name like `adopt-test-tiering`. All work happens inside that
+worktree from here on; its branch name is whatever Claude Code assigns, not something this skill
+picks — that's fine, this migration isn't correlated back to anything by branch name the way an
+issue's work is.
 
 ## Why the split has to be structural
 
@@ -34,7 +33,7 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    - **Gradle** — `build.gradle.kts`/`build.gradle`, `src/test`. Already tiered if a
      `src/integrationTest` source set / `integrationTest` JVM Test Suite exists.
    - **Rust** — `Cargo.toml`; unit tests in `src/**`, integration in `tests/**`. Already tiered if
-     `.config/nextest.toml` defines the tier `default-filter`s (see #20 / `references/ci/`).
+     `.config/nextest.toml` defines the tier `default-filter`s (see `references/ci/`).
    If the repo is **already tiered**, say so and stop. In a partially-tiered repo, handle only what's
    still mixed — this skill is **idempotent**.
 
@@ -92,6 +91,12 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    **manual owner follow-up: enable branch protection so merge is gated on green CI** — the invariant
    the whole tiering model relies on, and something this skill cannot reliably set itself.
 
+8. **Exit the worktree.** Call `ExitWorktree` with `action: "keep"` once the PR is up — `"remove"`
+   would delete the branch backing the still-open PR from step 7. You're the central coordinator's
+   own session, not a per-issue one meant to live in a worktree indefinitely; don't stay parked in
+   this migration's worktree once the work is handed off, but the worktree/branch themselves stay
+   on disk until the PR merges.
+
 ## Rules
 
 - **One-time, per repo; idempotent.** Safe to re-run on a partially-tiered repo — only move what's
@@ -105,4 +110,3 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
 - **Classify → present → execute.** Show the owner the split before moving files.
 - **Never merge; open a PR.** Enabling the green-CI merge gate (branch protection) is the owner's
   manual step — always call it out.
-- **easy-db-lab is the first consumer / validation target** for this migration.

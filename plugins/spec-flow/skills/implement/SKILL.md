@@ -1,21 +1,25 @@
 ---
 name: implement
-description: Implement an approved issue — run the background subagent team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish) via a Workflow script in the issue's worktree, then push the branch and open a PR. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to multi-agent Workflow orchestration.
+description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
 argument-hint: [issue number, with its spec already approved]
 ---
 
 # implement — build the approved spec, open a PR
 
-You are the PM/lead for this issue — typically that issue's `issue-pm` subagent, or the central
-coordinator if invoked directly. The owner has **approved the committed spec** for
-issue `#N`. Drive the implementation team to completion and open a review-ready PR. The team
-runs as a background `Workflow` — **invoking this skill is the owner's explicit opt-in to
-that orchestration** (it may spawn several subagents).
+You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
+**approved the committed spec** for issue `#N`. Drive the implementation team to completion and
+open a review-ready PR — by default as an **agent team** you lead (see step 4), which is exactly
+what running as your own top-level session (not a subagent) makes possible at all: a team needs a
+lead, only a top-level session can be one, and a subagent can never spawn its own team. Where
+agent teams aren't available or wanted, the same work runs instead as the original `Workflow`-tool
+script — same five lenses, same rules, no team. **Invoking this skill is the owner's explicit
+opt-in** to that orchestration, whichever mode it resolves to.
 
-Input: an issue number `#N`. Its worktree is `.claude/worktrees/issue-<N>-<slug>`, branch
-`issue-<N>-<slug>`, OpenSpec change `<slug>`. `<slug>` was a one-time judgment call `activate`
-made from the issue title — if it's not already known from context, recover it with
-`git worktree list | grep "issue-<N>-"` or `gh pr list --search "head:issue-<N>-" --json headRefName`.
+Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
+already running inside this issue's worktree — Claude Code's own background-session isolation put
+you there, on whatever branch it assigned; resolve it with `git rev-parse --abbrev-ref HEAD`
+rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `openspec/changes/`
+(excluding `archive/`) and orient yourself in whatever is — it may predate this naming.
 
 ## Steps
 
@@ -34,70 +38,246 @@ made from the issue title — if it's not already known from context, recover it
    after residual findings, or after the owner sends you back) — check for an existing PR first and
    reuse it rather than erroring on a duplicate:
    ```bash
-   git -C <worktree> push -u origin issue-<N>-<slug>
-   PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git -C <worktree> push -u origin "$BR"
+   PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
    if [ -z "$PR" ]; then
-     gh pr create --draft --head issue-<N>-<slug> --base main \
+     gh pr create --draft --head "$BR" --base "$DEFAULT_BR" \
        --title "<issue title>" \
        --body "Closes #<N>
 
    Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
-     PR=$(gh pr list --head issue-<N>-<slug> --json number --jq '.[0].number // empty')
+     PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
+     gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
+   echo "DEFAULT_BR=$DEFAULT_BR"
+   echo "PR=$PR"
    ```
-   `--base main` must match the repo's actual default branch — the same one `activate` branched
-   from (see its "if `main` is not the repo's default branch, substitute it" caveat). Keep `<PR>`
-   — step 5 needs it.
+   Steps 4/5 use `<DEFAULT_BR>` and `<PR>` as the literal values printed here, never as shell
+   variables — variables don't survive separate Bash calls, and the `Workflow` tool's JSON `args`
+   isn't shell-interpolated. Resolve `$DEFAULT_BR` from the repo, never assume `main`: it must
+   match what `EnterWorktree` branched this worktree from.
 
 3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
    **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
    suite is CI's gate and is never run locally. See **Test tiering (unit / integration)** in
-   `docs/workflow.md`. No stack probe, no full-vs-degraded decision — the workflow handles this. If
-   the repo hasn't split its tests into unit/integration tiers yet, the team runs the repo's default
-   test command and says so; the tiering degrades gracefully.
+   `docs/workflow.md`. No stack probe, no full-vs-degraded decision — every teammate below just
+   follows the instruction verbatim. If the repo hasn't split its tests into unit/integration tiers
+   yet, the team runs the repo's default test command and says so; the tiering degrades gracefully.
 
-4. **Run the implementation Workflow.** Invoke the `Workflow` tool with the script bundled in
-   this plugin and pass `args`:
+   Every teammate you spawn below gets this **TEST INSTRUCTION** appended to its prompt whenever
+   it runs tests:
+   > Run the UNIT tier locally as your gate — the repo's fast, no-container / no-I/O unit tests,
+   > i.e. the runner's default fast selection (e.g. `cargo nextest run`, `./gradlew test`,
+   > `npm test`, `go test -short ./...`, `pytest -m 'not integration'`). ALSO run any tests listed
+   > in `.spec-flow/flagged-tests` at the worktree root if that file exists (one runner-selectable
+   > test id per line; `#` and blank lines ignored) — these are tests CI flagged on this branch,
+   > guarded locally. Do NOT run the full/integration suite locally — that is CI's gate. State
+   > plainly in your summary that the unit tier (plus any flagged tests) ran locally and the full
+   > suite runs in CI. If the repo has not split its tests into unit/integration tiers yet, run its
+   > default test command and say so.
+
+4. **Resolve the implement mode, then drive Implement → Review → Fix (bounded) → Build → Polish.**
+   `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
+   you, spawned fresh each run — richer (teammates message each other, self-claim work) but
+   experimental and token-heavier. `workflow` is the original bounded `Workflow`-tool script
+   (`implement.workflow.js`) — the same five lenses and the same merge/approve/fix-loop rules,
+   just scripted instead of reasoned through, for when agent teams aren't available or wanted. If
+   the env var is unset or `team` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is **not** set, fall
+   back to `workflow` automatically and say so — don't fail the run over a missing opt-in flag.
+   Then follow **either** "Team mode" **or** "Workflow mode" below, never both.
+
+   **Team mode (default).** Every teammate is spawned from this plugin's own subagent definitions
+   — reference them by name (`tdd-developer`, `reviewer`, `code-reviewer`, `security-reviewer`,
+   `test-rigor-reviewer`, `observability-reviewer`, `build-engineer`) so each teammate gets that
+   agent's tools/model, with your spawn prompt appended as additional instructions. **If a
+   bare-name spawn fails "not found"**
+   (no repo/user override registered under that name, and the plugin's own bundled agent isn't
+   reachable by its bare name in this environment — Claude Code does not fall back to the plugin's
+   namespaced form on its own), retry as `spec-flow:<name>` yourself; see the README's Override
+   note and `implement.workflow.js`'s `agentNS()`, which applies this same fallback automatically
+   in Workflow mode. Give every teammate a **GUARDRAILS** block —
+   two variants, below — so none of them push to `main`, touch another issue, or take outward
+   GitHub action; that's yours alone. `base` = `origin/<DEFAULT_BR>` — the literal branch name
+   printed in step 2, not a shell variable (don't assume `main`); the review lenses diff
+   `base...HEAD` in the worktree, so a wrong base reviews
+   the wrong range. Track `tests_ran`, `spec_conformance`, `approve`, `review_rounds`,
+   `residual_findings`, `non_blocking_findings`, and `review_summary` as you go — step 5's PR body
+   needs them; there's no script returning them for you now.
+
+   **GUARDRAILS (implementer teammates — tdd-developer, build-engineer):**
+   > GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY `git
+   > push` the issue branch to its own remote at checkpoints so CI runs the full suite on the
+   > already-open draft PR (push somewhat frequently — after a completed task or a few green
+   > cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/
+   > mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub
+   > comments, do NOT push to `main` or any branch other than the issue branch, and do NOT take
+   > any other outward or destructive action. If you discover follow-up work, related bugs, or
+   > candidate new issues, LIST them in your final report for the owner to triage — never file
+   > them yourself. Backlog creation and prioritization are the owner's job, not yours.
+
+   **REVIEW GUARDRAILS (review-lens teammates — everyone else in step b):**
+   > GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree.
+   > Running the repo's own format/lint/build/test commands to verify your findings is fine — you
+   > need that to honestly report `tests_ran` — but you may not change the tree: do NOT commit, do
+   > NOT `git push`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR,
+   > do NOT post GitHub comments, and do NOT take any other outward or destructive action — your
+   > output is the JSON review contract, nothing else. If you discover follow-up work, related
+   > bugs, or candidate new issues, LIST them in your
+   > findings/summary for the owner to triage — never file them yourself.
+
+   a. **Implement.** Spawn one teammate, `tdd-developer`, named `implement`: work `tasks.md`
+      test-first (RED→GREEN→REFACTOR) in `<worktree>`, honoring the repo's documented conventions
+      (CLAUDE.md / CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo
+      documents), marking each task `- [x]` as completed and committing with focused messages.
+      Append the TEST INSTRUCTION (step 3) and the implementer GUARDRAILS. **Also instruct it to
+      message you (the lead) at each checkpoint push**, naming which `tasks.md` item(s) it just
+      completed — not only in its final report — so you can post a GitHub comment
+      (`gh issue comment <N> --body "✅ Implement: <task(s)> done, pushed \`<sha>\`."`) for each one
+      as it arrives, giving the owner a live trail instead of one comment at the very end. Wait for
+      it to report and mark its task complete before moving on — nothing else can start yet.
+
+   b. **Review — five lenses, spawned together, every round.** Once Implement's task is complete,
+      spawn all five teammates in one message so they run in parallel, each depending on
+      Implement's task in the shared task list (so none can start early), each told to reply to
+      you with **exactly** this JSON contract in its final message before marking its task
+      complete — and nothing else:
+      ```
+      {"summary":"…","spec_conformance":"full|partial|failing","tests_ran":"full|unit|degraded|none",
+       "findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"…","rule":"…","problem":"…","fix":"…"}],
+       "approve":true|false}
+      ```
+      Append the REVIEW GUARDRAILS to every one of these. The five, named `spec`, `code-review`,
+      `security-review`, `test-rigor`, `observability`:
+
+      All five are backed by this plugin's own agent definitions (`agents/reviewer.md`,
+      `code-reviewer.md`, `security-reviewer.md`, `test-rigor-reviewer.md`,
+      `observability-reviewer.md`). Spawning by that agent type already applies its full mandate,
+      process, and output contract as the teammate's system prompt, so every spawn prompt below
+      only supplies the concrete runtime values — restating the mandate here would just be a second
+      copy that could drift from the agent file. `code-reviewer`/`security-reviewer` need Skill-tool
+      access to invoke the built-in `/code-review`/`/security-review` skills, which their agent
+      files grant by omitting a restrictive `tools:` line (unlike `reviewer`'s Read/Bash/Grep/Glob):
+
+      - **`spec`** (agent: `reviewer`) — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
+        change: `issue-<N>`. issue: #N. Follow your agent definition's process and output contract
+        exactly (JSON only)."*
+      - **`code-review`** (agent: `code-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
+      - **`security-review`** (agent: `security-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
+      - **`test-rigor`** (agent: `test-rigor-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
+      - **`observability`** (agent: `observability-reviewer`) — *"Panel mode. worktree:
+        `<worktree>`. base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent
+        definition's process and output contract exactly (JSON only)."*
+
+   c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
+      reporting, which counts exactly like a missing lens, never silently dropped from the vote —
+      parse each teammate's JSON from its message to you. Merge `findings` across all five.
+      **Before computing `mustFix`: any lens that reported `approve: false` with NO blocker/major
+      finding among what it reported** (the spec lens can do this — it requires
+      `spec_conformance: "full"` to approve, so a `"partial"` verdict alone sets `approve: false`
+      with nothing to point at; a lens can also decline with only minor/nit findings, which is
+      just as unexplained since those never enter `mustFix` on their own) —
+      **synthesize a finding for it** so its non-approval has something to work from instead of
+      silently reaching the round cap with no must-fix findings and no visible reason: `{id:
+      "unexplained-<lens>", severity: "major", location: "(<lens> lens report)", rule:
+      "unexplained-non-approval", problem: "<lens> lens returned approve=false with no findings
+      (summary: <its summary>)", fix: "Re-review and either approve, or report a specific blocking
+      finding."}`. Add these to `findings` alongside whatever each lens actually reported, THEN
+      compute `mustFix` = every `blocker`/`major` finding (including synthesized ones). **Approve**
+      only if every one of the five reported AND every `approve` is `true` AND `mustFix` is empty.
+      Either way, post the round's result as a comment:
+      `gh issue comment <N> --body "✅ Review panel approved (round <R>)."` or
+      `gh issue comment <N> --body "🔁 Review round <R>: <M> must-fix finding(s), fixing…"`.
+
+   d. **Fix — bounded, max 3 rounds.** Not approved and a round remains (start at round 1, cap at
+      3): `mustFix` non-empty → message the `tdd-developer` teammate (respawn it, named `fix-N`,
+      if it already shut down) with the consolidated `mustFix` list (severity, location, rule,
+      problem, suggested fix for each), the TEST INSTRUCTION, and the implementer GUARDRAILS —
+      resolve each, test-first where behavior changes, commit, push at checkpoints. Then go back
+      to step b for a fresh review round. `mustFix` empty but a lens is simply missing → skip
+      straight back to step b, nothing to fix yet. At round 3 with still no approval: stop,
+      collect the outstanding `mustFix` findings (plus which lens(es) never reported) as
+      **residual**, and skip straight to step 5 — do not run Build/Polish on a tree that's going
+      through another round regardless.
+
+   e. **Build** (only once approved). Spawn `build-engineer`, named `build`: get format/lint/build
+      clean in `<worktree>` — *"Discover and run the repo's format, lint, and build steps
+      (examples: Rust `cargo fmt` → `cargo clippy --all-targets -- -D warnings` → `cargo build`;
+      Node the repo's lint+build scripts; Gradle `./gradlew spotlessApply build`; Go `gofmt -l .` →
+      `go vet ./...` → `go build ./...` — use whatever the repo actually configures). Resolve
+      formatting/lint/build issues WITHOUT changing behavior, commit, push. Return the final
+      format/lint/build status."* Append the implementer GUARDRAILS. When it reports, comment:
+      `gh issue comment <N> --body "🔧 Build clean."`.
+
+   f. **Polish.** Spawn a `tdd-developer`-type teammate, named `polish`: *"Final documentation
+      polish for OpenSpec change `issue-<N>` in `<worktree>`. Ensure new modules/behaviors are
+      documented consistently with the repo's conventions (module/responsibility comments,
+      architecture/index docs, doc comments on public items). If this change alters user-facing
+      behavior (public API, CLI, config, how the service runs), update the repo's user-facing docs
+      accordingly (README, a docs/ tree, an mdBook, a docs site) — keep pages/examples current. No
+      user-facing docs or no user-facing surface → skip and say so. Documentation/comment edits
+      only; commit, push. Return a one-line note on what you documented."* Append the implementer
+      GUARDRAILS. When it reports, comment: `gh issue comment <N> --body "📚 Docs polished."`.
+
+   g. **Shut down the team.** Once Build and Polish report back, ask every teammate still running
+      to shut down — don't leave idle teammates running into step 5 or the owner's next round.
+
+   If the panel never approved within the bounded loop, skip straight from step d to step 5 —
+   no Build, no Polish. Shut down any teammates still running before you do (same as step g);
+   leave the PR a draft and surface the residual findings to the owner.
+
+   **Workflow mode (fallback).** Invoke the `Workflow` tool with the script bundled in this
+   plugin and pass `args`:
    ```json
    {
      "scriptPath": "${CLAUDE_PLUGIN_ROOT}/skills/implement/implement.workflow.js",
      "args": {
-       "worktree": "<abs path>/.claude/worktrees/issue-<N>-<slug>",
-       "repoRoot": "<abs repo root>",
-       "change":   "<slug>",
+       "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
+       "change":   "issue-<N>",
        "issue":    <N>,
-       "base":     "origin/main",
+       "base":     "origin/<DEFAULT_BR>",
        "buildSystem": "auto"
      }
    }
    ```
-   `base` must match the repo's actual default branch (same substitution caveat as step 2's
-   `--base`) — the review lenses diff `base...HEAD` in the worktree, so a wrong base reviews the
-   wrong range. `buildSystem` is a hint for the build phase — the project's build tool (`cargo`,
-   `gradle`, `npm`, `go`, `pytest`, …) or `"auto"` to let the build-engineer discover the real
-   runner from the repo. It is NOT an exhaustive switch; the agents detect the actual commands.
-   The script: tdd-developer applies the OpenSpec tasks test-first → a **five-lens review panel**
-   reviews the diff in parallel (spec-conformance + repo rules; the built-in `/code-review`
-   correctness lens; the built-in `/security-review` lens, which self-gates to security-relevant
-   surfaces; the `test-rigor-reviewer` lens for antagonistic/regression-exposing test coverage; the
-   `observability-reviewer` lens for prod-diagnosability of new paths/failures, which self-gates) →
-   fix loop until **every** lens approves with no blocker/major (bounded) → build-engineer gets the
-   build clean (format/lint/build) → docs polish. It returns a summary (unit tier ran locally / full
-   suite runs in CI, review verdict, residual findings). See `docs/workflow.md` ("Review panel") for the lens
-   semantics. The team **commits and pushes the branch at checkpoints**, so CI runs the full suite on
-   the draft PR throughout implementation rather than only at the end.
+   The script runs the identical sequence as Team mode above — tdd-developer implements test-first
+   → the same five-lens panel reviews the diff in parallel, each lens the same prompt and JSON
+   contract as Team mode's step b → the same bounded (3-round) fix loop → build-engineer gets the
+   build clean → docs polish — as a scripted `agent()`/`parallel()` loop instead of you reasoning
+   through it as a team lead. It returns a summary object (`tests_ran`, `spec_conformance`,
+   `approved`, `review_rounds`, `residual_findings`, `non_blocking_findings`, `review_summary`,
+   `polish`) — use those fields directly for step 5, instead of the ones you tracked yourself in
+   Team mode. `base`/`buildSystem` have the same meaning as Team mode's `base` and the Build
+   step's hint.
 
-5. **Mark the PR ready and report.** When the workflow returns approved, finalize the already-open
-   draft PR (outward-facing — done here in this session, narrated):
+   **Progress comments are coarser in this mode.** The script has no hook back out to you
+   mid-run, so you only know what it did once it returns — you can't relay per-task or per-round
+   comments the way Team mode does. When it returns, post one comment summarizing the whole
+   pass: `gh issue comment <N> --body "✅ Implemented, reviewed (round <review_rounds>), and
+   built — see PR for details."` (or, if `approved` is false, the residual findings instead). Say
+   so plainly if the owner asks why this run's issue history is sparser than a Team-mode run's.
+
+5. **Mark the PR ready and report.** When step 4 approved (either mode), finalize the already-open
+   draft PR (outward-facing — done here in this session, narrated). Re-resolve `$BR` fresh here —
+   cheap, and this may be a separate Bash call from step 2's, which wouldn't have carried it over:
    ```bash
-   git -C <worktree> push origin issue-<N>-<slug>          # ensure the final state is pushed
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 
-   <final summary from the workflow, INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
+   <the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in Workflow mode), INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
 
    <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
+   gh issue comment <N> --body "👀 PR #<PR> ready for your review: <url>"
    ```
    Give the owner the PR URL for GitHub review (Seam 2). When they leave comments, the next
    step is `/spec-flow:address <N>`; after they squash-merge, `/spec-flow:finalize <N>`.

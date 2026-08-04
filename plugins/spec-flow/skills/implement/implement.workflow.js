@@ -72,8 +72,8 @@ const REVIEW_GUARDRAILS = `GUARDRAILS (strict): You are reviewing, not implement
 // id (`spec-flow:<name>`). This preserves the intended override mechanism — a consuming
 // repo that defines its own `tdd-developer`/`reviewer`/etc. wins — while still working
 // in environments where only the namespaced agent is registered (the common case when the
-// plugin is installed). Bare ids containing ':' (already namespaced) and built-ins like
-// `general-purpose` resolve on the first try and never hit the fallback.
+// plugin is installed). A bare id already containing ':' (already namespaced), or a built-in
+// agent type not defined by this plugin, resolves on the first try and never hits the fallback.
 async function agentNS(prompt, opts = {}) {
   const want = opts.agentType
   try {

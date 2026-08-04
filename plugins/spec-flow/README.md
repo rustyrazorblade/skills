@@ -15,14 +15,15 @@ refine     design                                  5-lens review panel
 Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
 directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
 individual issue itself. When you're ready to start or resume an issue, it launches a dedicated
-**`issue-pm`** (named `issue-pm-<N>`) as its **own separate background Claude Code process**,
-opened in a live iTerm2 tab or tmux window (your choice — see **Display mode** below) that you
-talk to directly — not a subagent in the coordinator's own context. That process owns
+**`issue-pm`** (named `issue-pm-<N>`) as its **own separate background Claude Code process** —
+you attach to it yourself (`claude agents` to list, `claude attach <id>`) rather than having a tab
+or window opened for you — not a subagent in the coordinator's own context. That process owns
 `activate → implement → address → finalize` for that one issue, end to end, in its own git
 worktree (Claude Code's `EnterWorktree` isolates it — called explicitly as its first action, not
-automatic for everything; see **Prerequisites** below), and hands back once it's merged. Several issues
-can be in flight at once, each its own process, each its own tab. Wire `project-manager` as a
-repo's **default agent** to make it your standing entry point (see below).
+automatic for everything; see **Prerequisites** below), and hands back once it's merged. Several
+issues can be in flight at once, each its own process, attach to whichever one you want to talk to.
+Wire `project-manager` as a repo's **default agent** to make it your standing entry point (see
+below).
 
 See [`docs/workflow.md`](docs/workflow.md) for the full design (the two seams, lifecycle/labels,
 the naming/correlators, and the review panel).
@@ -66,15 +67,6 @@ the naming/correlators, and the review panel).
   on a red run, so `sync-ci` has something to pull into the branch's local flagged set. Run
   `/spec-flow:adopt-tiering` once per repo to split an existing suite and wire this; see
   `references/ci/` for the CI templates and **Test tiering** in `docs/workflow.md` for the model.
-
-### Display mode (optional)
-
-`issue-pm` sessions open in a live terminal tab — pick iTerm2 tabs, tmux windows, or no tab at all
-(just the background session, for dispatching several issues in a row). Resolution order: a
-per-call `--display` flag, then the `SPEC_FLOW_DISPLAY` env var, then autodetect from your current
-terminal. For a standing per-repo preference, set `SPEC_FLOW_DISPLAY` in that repo's
-`.claude/settings.json` under `"env"`. `project-manager` never overrides this itself — it's your
-standing preference, not a per-issue choice.
 
 ## Install
 
@@ -122,10 +114,10 @@ All skills are namespaced under the plugin:
   your two seams. Wire it as your repo's **default agent** (next section).
 - **`issue-pm`** — the **per-issue delivery lead**. `project-manager` launches one (named
   `issue-pm-<N>`) as its own background process — via `scripts/spawn-issue-pm.sh` — when you start
-  or resume work on issue `#N`; you talk to it directly in the tab that opens. It owns that issue
-  alone, end to end: claims it, drives `activate` (both owner stops) → `implement` →
-  `sync-ci`/`address` as needed → `finalize`, then hands back. This is the default flow for working
-  an issue, not an opt-in.
+  or resume work on issue `#N`; attach to it yourself (`claude attach <id>`, printed by the spawn
+  script) to talk to it directly. It owns that issue alone, end to end: claims it, drives
+  `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
+  hands back. This is the default flow for working an issue, not an opt-in.
 
 **Front of pipeline (refine → design → proposal)**
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
@@ -177,9 +169,9 @@ pipeline. Set it **per-project** in the consuming repo's `.claude/settings.json`
 
 Now opening that project drops you into the coordinator: it reads the board and tells you what's
 next. When you tell it to start (or resume) a specific issue, it launches that issue's `issue-pm`
-as its own process and opens a tab for it — talk to it there to drive that issue directly, and
-return to the coordinator's tab (or another issue's `issue-pm`) whenever you want the cross-issue
-view again.
+as its own background process and reports how to attach (`claude attach <id>`) — attach there to
+drive that issue directly, and switch back to the coordinator's own session (or another issue's
+`issue-pm`) whenever you want the cross-issue view again.
 
 > **Why per-project and not in the plugin?** The plugin deliberately ships **no** root
 > `settings.json` with an `agent` field. A plugin that sets a default agent hijacks the main thread

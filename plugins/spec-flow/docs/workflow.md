@@ -4,9 +4,9 @@ A session-driven, multi-agent delivery pipeline. You (the owner) spend hands-on 
 two things a human should own — **defining/prioritizing work** and **final review + merge** — and
 the middle runs as a repeatable, agent-driven pipeline. A central coordinator handles cross-issue
 state and grooming; the moment you start working a specific issue, it launches a dedicated
-per-issue agent as its own separate background Claude Code process — opened in a live iTerm2 tab
-or tmux window — that drives that issue's pipeline turn-by-turn with you, in its own context,
-until it merges.
+per-issue agent as its own separate background Claude Code process — you attach to it yourself
+(`claude attach <id>`) — that drives that issue's pipeline turn-by-turn with you, in its own
+context, until it merges.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board`) plus a roster of agents: a
@@ -213,18 +213,20 @@ a subagent either. Instead:
 
 - When you want to start or resume work on a specific issue, `project-manager` runs
   `scripts/spawn-issue-pm.sh <N>`, which launches a dedicated **`issue-pm`** (named `issue-pm-<N>`)
-  as its **own separate background Claude Code process** — `claude --bg` — and opens a live,
-  attached view of it in an iTerm2 tab or tmux window (your configured **display mode**, below).
-  You talk to that process directly, in its own context; it never shares the coordinator's.
+  as its **own separate background Claude Code process** — `claude --bg` — and prints the session
+  id and the `claude attach <id>` command. **Background-only, deliberately**: you manage running
+  sessions yourself via `claude agents` (list) / `claude attach <id>`, not a tab or window opened
+  for you on every spawn. You talk to that process directly, in its own context, once attached; it
+  never shares the coordinator's.
 - That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged, archived,
   and closed.
-- Several issues can be in flight at once, each its own process, each its own tab. It's the spawn
-  script, not `project-manager` itself, that guards against duplicates — this machine's own past
-  sessions first (respawning a crashed one rather than starting fresh), the `agent:active` label
-  otherwise — so it never launches a second `issue-pm` for an issue that already has one running,
-  on this machine or another. Move between tabs, or back to the coordinator's, as you go.
+- Several issues can be in flight at once, each its own process — `claude agents` lists them all,
+  attach to whichever one you want to talk to. It's the spawn script, not `project-manager` itself,
+  that guards against duplicates — this machine's own past sessions first (respawning a crashed one
+  rather than starting fresh), the `agent:active` label otherwise — so it never launches a second
+  `issue-pm` for an issue that already has one running, on this machine or another.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
   work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
 - `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
@@ -236,17 +238,6 @@ a subagent either. Instead:
 This is the default flow, not an opt-in — every time you start work on an issue, expect
 `project-manager` to launch its `issue-pm` as a fresh process rather than driving the stages
 inline.
-
-### Display mode
-
-`issue-pm` opens in a live terminal tab so you can talk to it the moment it's launched. Resolution
-order: a `--display` flag on `spawn-issue-pm.sh` (`iterm`, `tmux`, or `none`), then the
-`SPEC_FLOW_DISPLAY` env var, then autodetect from the current terminal (`$TMUX` set → tmux;
-`$TERM_PROGRAM` = `iTerm.app` → iterm; otherwise none). No repo config file — a standing per-repo
-preference is one env var in that repo's `.claude/settings.json`. `project-manager` never passes
-`--display` itself — it's your standing preference, not a per-issue decision. `none` backgrounds
-the session without opening anything, for dispatching several issues in a row; the attach command
-is still printed either way.
 
 ### Worktree isolation
 
@@ -294,9 +285,9 @@ primary checkout.
   that installs it.
 - `issue-pm` — the **per-issue delivery lead**, launched by `project-manager` (named
   `issue-pm-<N>`, via `scripts/spawn-issue-pm.sh`) as its own separate background Claude Code
-  process when you start or resume work on issue `#N`. You talk to it directly in the iTerm2 tab
-  or tmux window that opens for it — not a subagent you switch to inside another conversation. It
-  becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
+  process when you start or resume work on issue `#N`. You attach to it yourself (`claude attach
+  <id>`, printed by the spawn script) — not a subagent you switch to inside another conversation.
+  It becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
   stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
   **Coordinator and issue leads** above.
 

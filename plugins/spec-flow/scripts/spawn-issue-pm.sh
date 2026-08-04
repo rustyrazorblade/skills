@@ -1,28 +1,26 @@
 #!/usr/bin/env bash
-# Launch a dedicated issue-pm as a separate background Claude Code process, then
-# open a live, attached view of it in an iTerm2 tab or tmux window (per the owner's
-# configured display mode). Invoked by the project-manager agent — never by a human
-# directly, though it's safe to run by hand too.
+# Launch a dedicated issue-pm as a separate background Claude Code process. Prints the session id
+# and the `claude attach` command — nothing more. Invoked by the project-manager agent — never by
+# a human directly, though it's safe to run by hand too. Background-only, deliberately: the owner
+# manages running sessions themselves via `claude agents` / `claude attach <id>`, not a tab/window
+# opened automatically on every spawn.
 set -euo pipefail
 
 usage() {
-  echo "usage: spawn-issue-pm.sh <issue-number> [--display iterm|tmux|none]" >&2
+  echo "usage: spawn-issue-pm.sh <issue-number>" >&2
   exit 2
 }
 
 issue=""
-display=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --display)   display="${2:?--display needs a value}"; shift 2 ;;
-    --display=*) display="${1#*=}"; shift ;;
-    -*)          usage ;;
-    *)           issue="$1"; shift ;;
+    -*) usage ;;
+    *)  issue="$1"; shift ;;
   esac
 done
 [[ -n "$issue" ]] || usage
-[[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh/osascript unvalidated
+[[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh unvalidated
 
 for bin in claude jq gh; do
   command -v "$bin" >/dev/null 2>&1 || {
@@ -33,61 +31,6 @@ for bin in claude jq gh; do
     exit 1
   }
 done
-
-repo_root=$(git rev-parse --show-toplevel)
-
-# precedence: flag > env > autodetect. (No repo config file — one persistent knob is the env
-# var, set in the repo's own .claude/settings.json env block if it needs to survive per-repo;
-# a whole config-file surface for a single key wasn't worth its own parser and edge cases.)
-[[ -n "$display" ]] || display="${SPEC_FLOW_DISPLAY:-}"
-if [[ -z "$display" ]]; then
-  if   [[ -n "${TMUX:-}" ]];                     then display=tmux
-  elif [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then display=iterm
-  else display=none
-  fi
-fi
-case "$display" in
-  iterm|tmux|none) ;;
-  *) echo "spawn-issue-pm: unknown display mode: ${display}" >&2; exit 2 ;;
-esac
-
-open_iterm() {
-  local title="$1" cmd="$2"
-  if [[ "$(uname -s)" != "Darwin" ]]; then
-    echo "spawn-issue-pm: --display iterm requires macOS + iTerm2. Set SPEC_FLOW_DISPLAY=tmux instead." >&2
-    exit 1
-  fi
-  osascript <<APPLESCRIPT
-tell application "iTerm2"
-  if (count of windows) = 0 then
-    create window with default profile
-  else
-    tell current window to create tab with default profile
-  end if
-  tell current session of current window
-    set name to "${title}"
-    write text "${cmd}"
-  end tell
-  activate
-end tell
-APPLESCRIPT
-}
-
-open_tmux() {
-  local title="$1" cmd="$2"
-  if [[ -n "${TMUX:-}" ]]; then
-    tmux new-window -n "$title" "$cmd"
-    return
-  fi
-  local sess
-  sess="spec-flow-$(basename "$repo_root")"
-  if tmux has-session -t "$sess" 2>/dev/null; then
-    tmux new-window -t "$sess" -n "$title" "$cmd"
-  else
-    tmux new-session -d -s "$sess" -n "$title" "$cmd"
-  fi
-  echo "detached: tmux attach -t ${sess}" >&2
-}
 
 name="issue-pm-${issue}"
 
@@ -304,10 +247,4 @@ fi
 
 attach_cmd="claude attach ${session_id}"
 
-case "$display" in
-  iterm) open_iterm "$name" "$attach_cmd" ;;
-  tmux)  open_tmux  "$name" "$attach_cmd" ;;
-  none)  ;;
-esac
-
-echo "${name} ${session_id} (${display}) attach: ${attach_cmd}"
+echo "${name} ${session_id} — attach: ${attach_cmd}"

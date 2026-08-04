@@ -57,11 +57,14 @@ else — that's their claim, not yours to take), and confirm the choice with the
    either. If `scripts/spawn-issue-pm.sh` spawned you, its prompt already told you to call
    `EnterWorktree` as your very first action, before step 1 — so by now you should already be
    isolated. **Check, don't trust it:** `git rev-parse --show-toplevel` should return a path
-   containing `.claude/worktrees/`, not the repo's primary checkout. If it doesn't (started some
-   other way, or the spawn-time isolation didn't take), call `EnterWorktree` yourself right now,
-   before anything else — including before the OpenSpec commands in step 5, since those write
-   files via a Bash-invoked CLI and won't trigger isolation on their own. You don't create or name
-   the worktree yourself either way; once confirmed, every subsequent action — tool-driven or
+   containing `.claude/worktrees/issue-<N>`, not the repo's primary checkout. If it doesn't
+   (started some other way, or the spawn-time isolation didn't take), call `EnterWorktree` yourself
+   right now with `name: "issue-<N>"` — the same literal name the spawn prompt uses — before
+   anything else, including before the OpenSpec commands in step 5, since those write files via a
+   Bash-invoked CLI and won't trigger isolation on their own. Passing the name is what keeps this
+   deterministic and, if a worktree named `issue-<N>` already exists (a prior run this local
+   session registry lost track of), resumes it automatically instead of erroring or creating a
+   second one — confirmed by test. Once confirmed, every subsequent action — tool-driven or
    Bash-driven — lands there, not in the owner's primary checkout.
 
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** Before
@@ -177,11 +180,14 @@ else — that's their claim, not yours to take), and confirm the choice with the
   `/spec-flow:implement`, no pushing the branch, until both stops have passed.
 - Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
   life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
-  "worktree"`. Its name is whatever Claude Code assigned and doesn't matter — but it's only
-  guaranteed to be where you're standing if step 2 actually confirmed it; isolation doesn't happen
-  for free. That isolation is per-**session**, not per-issue on its own — it's
-  `scripts/spawn-issue-pm.sh` respawning a past session by name instead of always starting fresh
-  that keeps this issue to one worktree in practice (see **Coordination signals** in
+  "worktree"`. Named `issue-<N>` explicitly (both the spawn prompt and step 2's fallback pass that
+  as `EnterWorktree`'s `name`) — deterministic, matching the OpenSpec change and PR-body correlator
+  below, and it's what makes a fresh spawn resume an existing-but-untracked worktree automatically
+  instead of duplicating it (confirmed by test). It's only guaranteed to be where you're standing
+  if step 2 actually confirmed it; isolation doesn't happen for free. That isolation is per-
+  **session**, not per-issue on its own — it's `scripts/spawn-issue-pm.sh` respawning a past
+  session by name instead of always starting fresh, plus the worktree name itself now being
+  deterministic, that keeps this issue to one worktree in practice (see **Coordination signals** in
   `docs/workflow.md`). The issue number is the one thing that matters for finding anything — the
   OpenSpec change is named `issue-<N>` directly from it, and `Closes #N` in the PR body (added at
   `implement`) is the durable correlator for the PR — see **Naming** in `docs/workflow.md`.

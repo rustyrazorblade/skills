@@ -205,13 +205,15 @@ else
   # call, but confirmed by test: NOT before a Bash-driven file write (printf/heredoc/an external
   # CLI writing files itself, e.g. `openspec`) — so the prompt below forces isolation as the very
   # first action via EnterWorktree, before step 1 of activate even runs, rather than trusting it to
-  # happen implicitly. That's the worktree issue-pm ends up running in, named and placed by Claude
-  # Code, not by this script.
+  # happen implicitly. Passed explicitly with name: "issue-${issue}" — confirmed by test:
+  # EnterWorktree with a name that already exists on disk (e.g. from a prior run this local session
+  # registry lost track of) doesn't error, it re-enters and resumes that same worktree, so this is
+  # safe to pass unconditionally on every spawn, not just the first.
   if ! claude --bg \
     --agent issue-pm \
     --name "$name" \
     --permission-mode acceptEdits \
-    "Before doing anything else, call the EnterWorktree tool to isolate yourself into your own git worktree. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \
+    "Before doing anything else, call the EnterWorktree tool with name: \"issue-${issue}\" to isolate yourself into your own git worktree — pass that literal name so this issue's worktree is predictable and, on a fresh spawn after this local registry lost track of a prior run, is resumed automatically rather than duplicated. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \
     > /dev/null; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
     echo "spawn-issue-pm: 'claude --bg' itself failed to launch ${name}" >&2

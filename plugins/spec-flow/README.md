@@ -55,12 +55,12 @@ the naming/correlators, and the review panel).
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
   bundled `Workflow`-tool script automatically — same five lenses, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
-- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree via
-  Claude Code's `EnterWorktree` tool, called explicitly as `issue-pm`'s first action (confirmed by
-  test: isolation is **not** automatic in front of a Bash-driven file write — only in front of an
-  Edit/Write tool call — so the spawn prompt calls it up front rather than relying on that). Add
-  `.claude/worktrees/` to the repo's `.gitignore` so those checkouts never show up as untracked
-  files in your primary checkout (see
+- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
+  named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool, called explicitly as
+  `issue-pm`'s first action (confirmed by test: isolation is **not** automatic in front of a
+  Bash-driven file write — only in front of an Edit/Write tool call — so the spawn prompt calls it
+  up front rather than relying on that). Add `.claude/worktrees/` to the repo's `.gitignore` so
+  those checkouts never show up as untracked files in your primary checkout (see
   [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
 - **CI contract (for `/spec-flow:sync-ci`)** — the consuming repo's CI needs to run a fast **unit**
   tier plus a full/integration tier, and upload failing test ids as a `spec-flow-failures` artifact

@@ -15,9 +15,11 @@ This isn't automatic the way you might expect: Claude Code isolates you in front
 tool call on its own, but confirmed by test, *not* in front of a Bash-driven file write — a
 `printf`/heredoc, or an external CLI like `openspec` writing files itself — so waiting for it to
 happen implicitly risks working directly in the owner's primary checkout (see [Run parallel
-sessions with worktrees](https://code.claude.com/docs/en/worktrees)). You don't create or name the
-worktree yourself, just make sure you're in it before doing anything else. Your job is this ONE
-issue, start to finish: claim it,
+sessions with worktrees](https://code.claude.com/docs/en/worktrees)). Call it with
+`name: "issue-<N>"` — your spawn prompt already tells you this — not left unnamed: deterministic,
+matching the OpenSpec change's own `issue-<N>` naming, and confirmed by test to safely re-enter and
+resume an existing worktree of that name rather than error if one's already there (a prior run this
+local session registry lost track of). Your job is this ONE issue, start to finish: claim it,
 drive it through the pipeline by delegating to the stage skills, and hand back once it's merged,
 archived, and closed. You coordinate; you do **not** write production code, run the implementation
 yourself, or make the decisions the owner owns.

@@ -175,34 +175,36 @@ reflects the local machine's session registry, and says nothing about another de
 
 ## Naming
 
-The issue number is the only thing that has to be stable. Claude Code's own worktree isolation is
-per-**session**, not per-issue — nothing about it guarantees one worktree per issue on its own.
-`scripts/spawn-issue-pm.sh` is what makes that true in practice: it looks for a past local session
-named `issue-pm-<N>` before spawning, and `claude respawn`s it instead of starting fresh whenever
-one exists — see **Coordination signals** below. Skip that script and spawn `issue-pm` some other
-way and this invariant doesn't hold. With it, nothing else needs a human-readable name to stay
-unambiguous — two things are derived directly from the issue number, deterministically, no
-title-derived slug involved:
+The issue number is the only thing that has to be stable. Three things are derived directly from
+it, deterministically, no title-derived slug involved:
 
 ```
 GitHub issue     #N
 OpenSpec change  issue-N
+worktree         issue-N   (EnterWorktree, passed this name explicitly)
 pull request     body contains "Closes #N"
 ```
 
-The git branch and worktree are **not** part of that set, and don't need to be — Claude Code names
-and places them itself, via `EnterWorktree` — `issue-pm`'s spawn prompt calls it explicitly as the
-very first action rather than relying on it firing on its own (it doesn't, for Bash-driven writes —
-see **Worktree isolation** below). A stage never
-assumes a branch or worktree name; it resolves them from wherever it's already running
-(`git rev-parse --abbrev-ref HEAD`, `git rev-parse --show-toplevel`). If a stage needs to recover
-state from outside that issue's own session, it goes straight to `openspec/changes/issue-N` for
-the change or `Closes #N` in a PR's body for the PR — computed directly from the issue number, not
-discovered. (`activate` still orients itself at whatever it finds in `openspec/changes/` before
-assuming that name is free — see its **Re-activation** rule — in case older work predates this
-convention.) Worktrees are long-lived (one per issue, across many stages and sessions, resumed
-automatically by Claude Code across restarts) — **not** the Agent tool's throwaway
-`isolation:"worktree"`.
+The worktree's name is passed explicitly, not left to Claude Code's default random one:
+`issue-pm`'s spawn prompt, and `activate` step 2's fallback check, both call `EnterWorktree` with
+`name: "issue-<N>"`. This isn't just cosmetic — confirmed by test, `EnterWorktree` called with a
+name that already exists on disk does **not** error, it re-enters and resumes that same worktree.
+So a fresh spawn whose local session registry lost track of a prior run (the session evicted, or a
+different run on this machine) still lands back in the same worktree instead of duplicating it.
+This reinforces, rather than replaces, `scripts/spawn-issue-pm.sh`'s own respawn logic (looking for
+a past local session named `issue-pm-<N>` and `claude respawn`ing it — see **Coordination signals**
+below): respawn recovers the session's own history when a local record exists; the deterministic
+worktree name recovers the *files* even when it doesn't.
+
+The git branch itself is still Claude Code's own naming — a stage never assumes a branch name; it
+resolves it from wherever it's already running (`git rev-parse --abbrev-ref HEAD`). If a stage
+needs to recover state from outside that issue's own session, it goes straight to
+`openspec/changes/issue-N` for the change or `Closes #N` in a PR's body for the PR — computed
+directly from the issue number, not discovered. (`activate` still orients itself at whatever it
+finds in `openspec/changes/` before assuming that name is free — see its **Re-activation** rule —
+in case older work predates this convention.) Worktrees are long-lived (one per issue, across many
+stages and sessions, resumed automatically by Claude Code across restarts) — **not** the Agent
+tool's throwaway `isolation:"worktree"`.
 
 ## Coordinator and issue leads
 
@@ -247,9 +249,11 @@ from the repo's default branch. **Not automatic for everything, confirmed by tes
 calls `EnterWorktree` on its own in front of an `Edit`/`Write` tool call, but never in front of a
 Bash-driven file write (`printf > f`, a heredoc, an external CLI like `openspec` writing files
 itself) — so `scripts/spawn-issue-pm.sh`'s spawn prompt tells `issue-pm` to call it explicitly, as
-its very first action, rather than trusting it to happen implicitly; `activate` step 2 verifies
-this rather than assuming it. Nothing in this plugin creates, names, or excludes the worktree
-itself — see **Naming** above for what that means for cross-stage state, and
+its very first action, with `name: "issue-<N>"`, rather than trusting it to happen implicitly or
+letting it generate a random name; `activate` step 2 verifies isolation happened rather than
+assuming it, and passes the same name if it has to call `EnterWorktree` itself as a fallback. This
+plugin names the worktree, deterministically — see **Naming** above for why that matters — but
+still doesn't create or exclude it directly; see
 [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees) for how Claude
 Code places, resumes, and eventually sweeps it. `finalize` still removes an issue's worktree and
 branch explicitly, on its own schedule (tied to the issue merging, not to session idleness) — see

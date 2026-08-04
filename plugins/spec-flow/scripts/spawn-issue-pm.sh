@@ -7,16 +7,32 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: spawn-issue-pm.sh <issue-number>" >&2
+  echo "usage: spawn-issue-pm.sh <issue-number> [owner-instructions]" >&2
   exit 2
 }
 
+# owner-instructions is free text, not a flag/enum: issue-pm is itself an LLM reading its own
+# spawn prompt, so it just follows whatever's said there the same way it follows every other line
+# — no parsing needed on this end. Omitted → the default clause below (stop and wait at both
+# approval points, today's behavior) is used verbatim. Given → it REPLACES that default clause in
+# the spawn prompt, in the owner's own words (see project-manager.md, which composes this from
+# what the owner said for this issue or a standing preference in CLAUDE.md — never invented here).
 issue=""
+owner_instructions=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -*) usage ;;
-    *)  issue="$1"; shift ;;
+    *)
+      if [[ -z "$issue" ]]; then
+        issue="$1"
+      elif [[ -z "$owner_instructions" ]]; then
+        owner_instructions="$1"
+      else
+        usage   # more than two positional args
+      fi
+      shift
+      ;;
   esac
 done
 [[ -n "$issue" ]] || usage
@@ -194,6 +210,18 @@ if [[ -n "$existing_id" ]]; then
   # false-negative (silently-unlabeled-but-live) the label exists to prevent.
   gh issue edit "$issue" --add-label agent:active 2>/dev/null || \
     echo "spawn-issue-pm: warning — couldn't set agent:active on #${issue} after respawn (transient gh failure?); ${name} (${session_id}) is running regardless. Set the label manually if this persists." >&2
+
+  # `claude respawn` sends NO new prompt — it just resumes the session's prior context — so an
+  # owner-instructions arg given on a respawn would otherwise never reach the session at all.
+  # Write it directly into the (now-confirmed) worktree instead: issue-pm re-reads this file fresh
+  # at each seam check rather than trusting its own memory of the original spawn prompt (see
+  # agents/issue-pm.md), so this is picked up the next time it hits one. No arg given here means
+  # "no change" — leave whatever's already on disk (from an earlier spawn/respawn) alone.
+  if [[ -n "$owner_instructions" ]]; then
+    mkdir -p "${respawned_cwd}/.spec-flow"
+    printf '%s\n' "$owner_instructions" > "${respawned_cwd}/.spec-flow/owner-instructions"
+    echo "spawn-issue-pm: updated .spec-flow/owner-instructions for ${name} (${session_id}) — it reads this fresh at its next seam check." >&2
+  fi
 else
   # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
   # an issue-pm running on someone else's machine (or yours, on a different one) is invisible to
@@ -266,11 +294,23 @@ else
   # then sits forever in state:blocked/status:waiting, which looks like a hang but is really a
   # permission dialog no one can see. `auto` was verified live to run the identical command
   # straight through with no prompt, matching this repo's own default session permission mode.
+  # Free text, substituted as-is into the double-quoted prompt below via plain parameter
+  # expansion — safe regardless of what characters owner_instructions contains (quotes,
+  # semicolons, …): this is bash string interpolation, not re-parsed or eval'd.
+  instructions_clause="Stop at both owner approval points, exactly as your agent instructions describe."
+  persist_clause=""
+  if [[ -n "$owner_instructions" ]]; then
+    instructions_clause="The owner has given you these instructions for this run — they take precedence over your default of stopping and waiting at both approval points, wherever they say to proceed instead. Follow them exactly; where they're silent on a given point, the default (stop and wait) still applies: \"${owner_instructions}\""
+    # Told here, not written by this script: the worktree doesn't exist yet (EnterWorktree hasn't
+    # run), so only the spawned session itself can create the file, right after it isolates.
+    persist_clause=" Immediately after that, write these owner autonomy instructions verbatim to .spec-flow/owner-instructions inside that worktree (create the .spec-flow directory if needed) — this makes them durable across a future respawn, which sends you no new prompt of its own. From here on, re-read that file fresh at each seam-check point described in your agent instructions rather than relying on memory of this spawn prompt: a later respawn may update it directly."
+  fi
+
   if ! claude --bg \
     --agent spec-flow:issue-pm \
     --name "$name" \
     --permission-mode auto \
-    "Before doing anything else, call the EnterWorktree tool with name: \"issue-${issue}\" to isolate yourself into your own git worktree — pass that literal name so this issue's worktree is predictable and, on a fresh spawn after this local registry lost track of a prior run, is resumed automatically rather than duplicated. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout. Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. Stop at both owner seams." \
+    "Before doing anything else, call the EnterWorktree tool with name: \"issue-${issue}\" to isolate yourself into your own git worktree — pass that literal name so this issue's worktree is predictable and, on a fresh spawn after this local registry lost track of a prior run, is resumed automatically rather than duplicated. Do this first, even though nothing has been written yet — every action after this point, tool-driven or Bash-driven (including gh/git/openspec commands), must happen inside that worktree, not the primary checkout.${persist_clause} Once isolated: you are the issue-pm for issue #${issue}. Run /spec-flow:activate ${issue} to start (it claims the issue as its own first step — don't claim it yourself here), then drive through finalize. ${instructions_clause}" \
     > /dev/null; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
     echo "spawn-issue-pm: 'claude --bg' itself failed to launch ${name}" >&2

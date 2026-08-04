@@ -88,13 +88,36 @@ first time you see the decision. (Upstream of both stops, at `groom`, the **`pro
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for.)
 
-**Seam 2 — GitHub review + merge.** The pipeline only ever pushes the issue branch and opens a
-PR. It never merges *that* PR and never pushes it to `main`. You review in GitHub, optionally loop
-through `/spec-flow:address`, and perform the squash-merge yourself. Merge convention: rebase +
-squash to a single commit — one clean commit per PR on a fast-forward main history (never a merge
-commit, never the branch's individual commits); rebase onto current main first so the squash
-fast-forwards. (`finalize`'s own tiny, no-review archive-only PR afterward is the sole exception —
-it opens and merges that one itself; see **The skills** below.)
+**Seam 2 — GitHub review + merge.** By default, the pipeline only ever pushes the issue branch and
+opens a PR — it never merges *that* PR and never pushes it to `main`. You review in GitHub,
+optionally loop through `/spec-flow:address`, and perform the squash-merge yourself. Merge
+convention: rebase + squash to a single commit — one clean commit per PR on a fast-forward main
+history (never a merge commit, never the branch's individual commits); rebase onto current main
+first so the squash fast-forwards. (`finalize`'s own tiny, no-review archive-only PR afterward is
+a separate, standing exception — it opens and merges that one itself; see **The skills** below.)
+
+**Overriding either seam's default.** Both seams default to always stopping. `project-manager`
+composes a free-text instruction — from whatever you said for that issue, or a standing preference
+you wrote in `CLAUDE.md`, in your own words (never a fixed vocabulary like "Seam 1"/"Seam 2" —
+that's internal to these docs, not something you need to say) — and passes it to
+`scripts/spawn-issue-pm.sh <N> [owner-instructions]`. Whatever the instruction doesn't address
+still stops and waits, by default; nothing is ever inferred or carried over from a different
+issue's spawn. Seam 2's auto-merge path only actually merges once the PR's required CI checks
+report green — an instruction to merge automatically doesn't skip that; a hard dependency the
+architect flags always stops Seam 1 regardless, even under a full auto-approve instruction.
+
+The instruction doesn't just live in the spawn prompt — it's persisted to
+**`.spec-flow/owner-instructions`** at the issue's worktree root — gitignored via the one-time,
+trunk-branch `.gitignore` entry every issue's worktree already inherits (see **Prerequisites** in
+the README; the same entry also covers `.spec-flow/flagged-tests` below) — which `issue-pm`
+re-reads fresh at each approval point rather than trusting memory of its original spawn prompt.
+This is what makes updating it work across a crash: `claude respawn` (used to recover a
+stopped/crashed `issue-pm`, see **Coordination
+signals** below) sends no new prompt of its own, so `spawn-issue-pm.sh <N> "<new instructions>"`
+on that same issue instead writes the new text directly into the already-resolved worktree. A
+currently **live** `issue-pm` is untouched by any of this — the spawn script refuses to respawn
+over a running session; changing a live session's instructions means attaching and saying so
+directly.
 
 ## Lifecycle and labels
 
@@ -270,7 +293,7 @@ primary checkout.
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
-| `/spec-flow:finalize` | foreground | After you squash-merge: syncs+archives OpenSpec (via its own small self-merged PR), closes the issue, removes the worktree. Never merges your feature PR. |
+| `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives OpenSpec (via its own small self-merged PR), closes the issue, removes the worktree. Never merges the feature PR itself. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 
@@ -282,7 +305,9 @@ primary checkout.
   via `board`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
   `product-manager` subagent, and any specific issue's `activate → implement → address → finalize`
   to that issue's `issue-pm`, launched as its own background process. It coordinates; it does not
-  implement, does not drive an issue's stages inline, and never crosses your two seams. Wire it as
+  implement, does not drive an issue's stages inline, and only crosses your two seams when you
+  explicitly instruct it to for that run (see **Overriding either seam's default**, above; neither
+  it nor the `issue-pm` it launches ever infers or assumes one). Wire it as
   a repo's **default agent** (in that repo's `.claude/settings.json`) to make it your standing
   entry point. The plugin ships **no** root `settings.json` with an `agent` field — opting your
   repos in is your choice, per repo, so the plugin never hijacks the main thread of every project
@@ -408,8 +433,9 @@ full CI round-trip.
 
 - A gitignored file, **`.spec-flow/flagged-tests`** inside the issue's worktree. One
   runner-selectable test id per line; `#` comments and blank lines ignored. Ignored via a
-  `.spec-flow/` entry in the repo's `.gitignore` (added once; `/spec-flow:sync-ci` ensures it), so it
-  never commits.
+  `.spec-flow/` entry in the repo's `.gitignore` — the one-time, trunk-branch entry from
+  **Prerequisites** in the README (also covers `owner-instructions` above); `/spec-flow:sync-ci`
+  additionally double-checks it's there on each run, so it never commits either way.
 - **Starts empty on every new branch.** No bootstrap, no diff-based guessing.
 - **Populated only by CI failures on that branch** (via `/spec-flow:sync-ci`). Because a branch
   starts from green `main` (merge is gated on green CI), any CI failure on it is by definition a real
@@ -462,8 +488,10 @@ set's blind-append safety rests on.
   name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation; TDD; significant design
   decisions are the owner's (an advisor agent only advises); the feature lands on `main` via PR,
-  merged by the owner, never pushed or merged by an agent (`finalize`'s own small archive-only
-  bookkeeping PR is the sole exception, and it's never code).
+  merged by the owner by default. An `issue-pm` merges it itself only when explicitly instructed
+  to for that run (see **Overriding either seam's default**, above), never on its own initiative,
+  and only after required CI checks are green (`finalize`'s own small archive-only bookkeeping PR
+  is a separate, standing exception, and it's never code).
 
 ## Conventions
 

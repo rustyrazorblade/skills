@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints — the design choice, then the spec approval (Seam 1); it never implements.
+description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints by default — the design choice, then the spec approval (Seam 1) — either auto-approvable per this run's `.spec-flow/owner-instructions`; it never implements itself regardless.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -10,8 +10,12 @@ You are this issue's `issue-pm`, running as your own dedicated background sessio
 `status:ready` issue and produce a committed,
 owner-approvable OpenSpec change on an isolated worktree. This skill stops for the owner **twice**:
 once at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam
-1** — to approve the resulting spec. Neither stop is optional; when the spec is committed and
-approved you hand back — you do not implement, and you do not start `/spec-flow:implement`.
+1** — to approve the resulting spec. Neither stop is optional by default; you hand back once the
+spec is committed and approved — you do not implement, and you do not start
+`/spec-flow:implement`. The only exception: if `.spec-flow/owner-instructions` at the worktree
+root (read fresh at each stop, not just once from your spawn prompt — see `agents/issue-pm.md`)
+explicitly says to auto-approve the design and/or the spec for this run, follow that instead of
+waiting — see steps 4 and 7 below for exactly how.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
 unassigned or already assigned to you (`gh issue list --label status:ready --json
@@ -95,7 +99,10 @@ else — that's their claim, not yours to take), and confirm the choice with the
    separate issue," ask the owner whether to file it now (if so, `gh issue create` it as its own
    ungroomed backlog item — this is the owner's explicit call, not something you do on your own
    initiative) or leave it for later. Never fold a "separate issue" item into the current change's
-   scope without the owner explicitly saying so.
+   scope without the owner explicitly saying so. **In auto mode (below), there's no owner to ask —
+   never fold ANY flagged debt item into scope on your own, "fold into this change" or not. List
+   every item, exactly as the architect recommended it, in the auto-approval comment instead, for
+   the owner to triage once they're back.**
 
    **If the architect's design surfaces a hard dependency on another, unmerged issue** (this one
    genuinely can't land first, not just "would be cleaner after"), say so to the owner here, then
@@ -106,7 +113,18 @@ else — that's their claim, not yours to take), and confirm the choice with the
    ```
    Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands) —
    `blocked` is informational, not a hard stop you enforce yourself. Remove the label and post a
-   follow-up comment once the dependency actually clears.
+   follow-up comment once the dependency actually clears. **This is the one thing auto mode never
+   skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
+   decision — label it, comment, and stop for the owner regardless of what
+   `.spec-flow/owner-instructions` says for this run. Continuing anyway risks unmergeable work;
+   "drive this to completion" isn't licence to override a genuine blocker.
+
+   **Absent a hard dependency, and only if `.spec-flow/owner-instructions` (read fresh at this
+   point) explicitly says to auto-approve the design for this run**, skip the wait instead of
+   pausing: take the architect's recommended option, and post a comment naming what was chosen and
+   why, alongside the debt-item list above:
+   `gh issue comment <N> --body "Design auto-approved per this run's instructions: <recommended option, one line>."`
+   Then proceed to step 5. Absent that explicit instruction, this is always a real pause.
 
 5. **Check for existing work-in-progress, then explore + propose from the owner's chosen design.**
    Before creating anything, look for what's already in `openspec/changes/`:
@@ -170,14 +188,23 @@ else — that's their claim, not yours to take), and confirm the choice with the
    that nothing will be implemented until they approve. **Do not proceed to implementation.** When
    the owner approves, the next step is `/spec-flow:implement <N>`.
 
+   **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
+   auto-approve the spec for this run.** If so, still render the spec in full as above (posted as
+   a comment, not just shown inline, since there's no owner in the conversation to see it) so the
+   decision is auditable after the fact, then proceed directly to `/spec-flow:implement <N>`
+   yourself instead of waiting:
+   `gh issue comment <N> --body "Spec auto-approved per this run's instructions — proceeding to implement."`
+   Absent that explicit instruction, this stop always waits for the owner.
+
 ## Rules
 
 - **Show, don't link.** At either stop, render inline in the conversation; never hand back only a
   file path and expect the owner to open it. The owner is not in an editor.
-- **Two real stops, in order.** Step 4 (design choice) always precedes step 5 (generation) —
-  never generate the spec before the owner has picked among the architect's options. Step 7 (spec
-  approval, Seam 1) always follows step 6 (commit) — no implementation, no
-  `/spec-flow:implement`, no pushing the branch, until both stops have passed.
+- **Two real stops, in order, by default.** Step 4 (design choice) always precedes step 5
+  (generation) — never generate the spec before the owner has picked (or `.spec-flow/owner-instructions`
+  auto-picked) among the architect's options. Step 7 (spec approval, Seam 1) always follows step 6
+  (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until both stops
+  have passed or been explicitly auto-approved per that file's current contents.
 - Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
   life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
   "worktree"`. Named `issue-<N>` explicitly (both the spawn prompt and step 2's fallback pass that

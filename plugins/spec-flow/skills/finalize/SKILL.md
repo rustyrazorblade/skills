@@ -1,17 +1,20 @@
 ---
 name: finalize
-description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs and archive the change via its own small PR, close the GitHub issue, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs after the owner squash-merges the FEATURE PR in GitHub; never merges that one — the one PR this skill does merge itself is its own no-review archive-only bookkeeping PR (see step 3).
+description: Finalize a merged issue — sync the OpenSpec change's delta specs into the canonical specs and archive the change via its own small PR, close the GitHub issue, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs once the FEATURE PR has merged — by the owner's squash-merge by default, or by `implement` itself if this run's `.spec-flow/owner-instructions` said to auto-merge; this skill itself never merges that PR either way — the one PR it does merge itself is its own no-review archive-only bookkeeping PR (see step 3).
 argument-hint: [issue number, with its PR already squash-merged]
 ---
 
 # finalize — sync, archive, and clean up after merge
 
-You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
-**squash-merged** the PR for issue `#N` in GitHub. Sync and archive the OpenSpec change, close the
-issue, and tear down the worktree. **This skill never merges the feature PR** — that merge is the
-owner's action in GitHub, always. The one exception, scoped narrowly: step 3's archive commit lands
-via its own tiny PR that this skill opens *and* merges itself, because it's pure OpenSpec
-bookkeeping with no code and nothing to review — not a carve-out for anything else.
+You are this issue's `issue-pm`, running as your own dedicated background session. The PR for
+issue `#N` has **merged** — the owner's squash-merge in GitHub by default, or `implement`'s own
+auto-merge if this run's `.spec-flow/owner-instructions` said to (see its SKILL.md step 5); either
+way, by the time this runs the merge has already happened. Sync and archive the OpenSpec change,
+close the issue, and tear down the worktree. **This skill itself never merges the feature PR** —
+that already happened, by whichever path, before this skill starts. The one exception, scoped
+narrowly: step 3's archive commit lands via its own tiny PR that this skill opens *and* merges
+itself, because it's pure OpenSpec bookkeeping with no code and nothing to review — not a carve-out
+for anything else.
 
 Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
 already running inside this issue's worktree — Claude Code's own background-session isolation put
@@ -28,7 +31,8 @@ mid-flight from an interrupted `activate`/`implement` pass.
    BR=$(git rev-parse --abbrev-ref HEAD)
    gh pr list --head "$BR" --state merged --json number,mergedAt
    ```
-   If it isn't merged, stop and tell the owner the merge is theirs to do in GitHub.
+   If it isn't merged, stop — it hasn't happened yet, whether that's the owner's squash-merge in
+   GitHub (default) or `implement`'s own auto-merge (only if this run was instructed to).
 
 2. **Create a short-lived worktree from merged main.** Resolve the **main** checkout first —
    `git worktree list --porcelain`'s first entry — the owner's primary checkout, not a per-issue

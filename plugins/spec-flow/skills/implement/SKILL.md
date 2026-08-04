@@ -279,13 +279,38 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <url>"
    ```
-   Give the owner the PR URL for GitHub review (Seam 2). When they leave comments, the next
-   step is `/spec-flow:address <N>`; after they squash-merge, `/spec-flow:finalize <N>`.
+   **If `.spec-flow/owner-instructions` at the worktree root (read fresh at this point, not just
+   from memory of the spawn prompt) explicitly says to merge automatically for this run** (e.g.
+   "merge on green"), don't stop here:
+   ```bash
+   gh pr checks <PR> --required --watch
+   ```
+   `--required` scopes this to the PR's *required* status checks, not every check reported;
+   `--watch` blocks until they finish and exits non-zero if any failed — treat a non-zero exit as
+   a stop-and-surface-to-the-owner case, not a merge. **If it reports no required checks at all,
+   don't conclude that immediately** — `gh` can't tell "nothing's configured" apart from "required
+   checks are configured but haven't posted a check run yet" (e.g. right after this session's own
+   push, before CI has started); both give the identical response. Wait a short interval and
+   re-check once before deciding. If it's still reporting none, **that's a configuration gap, not
+   a green light** — refuse to auto-merge and tell the owner (e.g. "no required checks configured
+   on this repo/branch — configure branch protection for auto-merge to be safe, or merge this one
+   manually"). Never treat "no required checks" as equivalent to "all checks passed." Only once
+   required checks are confirmed to have actually run and passed:
+   ```bash
+   gh pr merge <PR> --squash --delete-branch=false
+   gh issue comment <N> --body "Merged automatically per this run's instructions (CI green)."
+   ```
+   and continue straight to `/spec-flow:finalize <N>` yourself — there's no review round to wait
+   on. **Absent that explicit instruction, this is always the stop:** give the owner the PR URL
+   for GitHub review (Seam 2) and wait. When they leave comments, the next step is
+   `/spec-flow:address <N>`; after they squash-merge, `/spec-flow:finalize <N>`.
 
 ## Rules
 
-- **Never merge, never push to `main`.** This skill pushes only the issue branch, opens a *draft*
-  PR, and later marks it ready — it never merges.
+- **Never merge, never push to `main` — by default.** This skill pushes only the issue branch,
+  opens a *draft* PR, and later marks it ready. It merges on its own only when
+  `.spec-flow/owner-instructions` explicitly said to, and even then only after the PR's required
+  checks report green, via a squash-merge of that one PR — never a direct push to `main`.
 - **If a PR already exists for the branch (re-run), reuse it rather than erroring.** Common after
   a resumed/interrupted run, residual findings sent back for another pass, or the owner asking for
   another round.

@@ -55,13 +55,18 @@ the naming/correlators, and the review panel).
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
   bundled `Workflow`-tool script automatically — same five lenses, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
-- **`.claude/worktrees/` gitignored** — every `issue-pm` runs isolated in its own git worktree,
-  named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool, called explicitly as
-  `issue-pm`'s first action (confirmed by test: isolation is **not** automatic in front of a
-  Bash-driven file write — only in front of an Edit/Write tool call — so the spawn prompt calls it
-  up front rather than relying on that). Add `.claude/worktrees/` to the repo's `.gitignore` so
-  those checkouts never show up as untracked files in your primary checkout (see
-  [Run parallel sessions with worktrees](https://code.claude.com/docs/en/worktrees)).
+- **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-pm` runs isolated in its
+  own git worktree, named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool,
+  called explicitly as `issue-pm`'s first action (confirmed by test: isolation is **not**
+  automatic in front of a Bash-driven file write — only in front of an Edit/Write tool call — so
+  the spawn prompt calls it up front rather than relying on that). Add both `.claude/worktrees/`
+  and `.spec-flow/` to the repo's `.gitignore`, once, on your trunk branch — every issue's worktree
+  branches from trunk and inherits the entry automatically, so this never needs repeating per
+  issue. `.claude/worktrees/` keeps those checkouts from showing up as untracked files in your
+  primary checkout (see [Run parallel sessions with
+  worktrees](https://code.claude.com/docs/en/worktrees)); `.spec-flow/` keeps per-branch runtime
+  state — the flagged-test set (`/spec-flow:sync-ci`) and, if you use it, an issue's
+  `owner-instructions` autonomy override — from ever being committed.
 - **CI contract (for `/spec-flow:sync-ci`)** — the consuming repo's CI needs to run a fast **unit**
   tier plus a full/integration tier, and upload failing test ids as a `spec-flow-failures` artifact
   on a red run, so `sync-ci` has something to pull into the branch's local flagged set. Run
@@ -102,7 +107,7 @@ All skills are namespaced under the plugin:
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Owner-invoked, never polls. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you. |
-| `/spec-flow:finalize <N>` | After you squash-merge: syncs+archives the OpenSpec change (via its own small self-merged PR), closes the issue, then removes the worktree. |
+| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives the OpenSpec change (via its own small self-merged PR), closes the issue, then removes the worktree. |
 | `/spec-flow:adopt-tiering` | One-time, repo-wide: split an existing test suite into the unit/integration tiers the pipeline assumes, and wire CI to the `spec-flow-failures` artifact contract. Run once per repo, before relying on `sync-ci`/the tiered gate. |
 
 ## Bundled agents
@@ -110,8 +115,9 @@ All skills are namespaced under the plugin:
 **Orchestration**
 - **`project-manager`** — the **central coordinator**, the agent you talk to directly. Runs the
   board, grooms new work, tracks which issues have an `issue-pm` running, and decides what's next.
-  It coordinates; it never implements, never drives an issue's stages itself, and never crosses
-  your two seams. Wire it as your repo's **default agent** (next section).
+  It coordinates; it never implements, never drives an issue's stages itself, and only crosses
+  your two seams when you explicitly instruct it to for that run (see `docs/workflow.md`'s
+  "Overriding either seam's default"). Wire it as your repo's **default agent** (next section).
 - **`issue-pm`** — the **per-issue delivery lead**. `project-manager` launches one (named
   `issue-pm-<N>`) as its own background process — via `scripts/spawn-issue-pm.sh` — when you start
   or resume work on issue `#N`; attach to it yourself (`claude attach <id>`, printed by the spawn
@@ -187,10 +193,13 @@ they are the single source you maintain, and every repo using the plugin inherit
 
 ## Notes
 
-- The pipeline **never merges your feature PR and never pushes it to `main`** — it only pushes the
-  issue branch and opens a PR; the squash-merge is your action in GitHub. The one exception is
-  `finalize`'s own small, no-review, archive-only bookkeeping PR (OpenSpec sync, no code), which it
-  opens *and* merges itself — see `skills/finalize/SKILL.md`.
+- By default, the pipeline **never merges your feature PR and never pushes it to `main`** — it
+  only pushes the issue branch and opens a PR; the squash-merge is your action in GitHub. An
+  `issue-pm` merges the feature PR itself only when you explicitly instruct it to for that run
+  (see `docs/workflow.md`'s "Overriding either seam's default"), and even then only after the
+  PR's required CI checks are green. Separately, `finalize`'s own small, no-review, archive-only
+  bookkeeping PR (OpenSpec sync, no code) always opens *and* merges itself, regardless of that
+  setting — see `skills/finalize/SKILL.md`.
 - Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
   `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
   trade-offs, you decide right there before anything is generated; Seam 1 then confirms the

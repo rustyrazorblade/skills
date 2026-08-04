@@ -80,7 +80,12 @@ retry_until_worktree_cwd() {
 # tied to that SESSION, not to the issue, so a crashed/stopped issue-pm can only be put back in
 # its own worktree (branch, uncommitted work, everything) by `claude respawn <id>` — a fresh
 # `claude --bg` would start an unrelated, empty worktree branched from main. Confirmed empirically
-# (2026-08-03): respawn keeps the same cwd/worktree and files; a fresh --bg does not.
+# (2026-08-03): respawn keeps the same cwd/worktree and files; a fresh --bg does not. Also
+# confirmed (2026-08-04, a session stopped mid-autonomous-task then respawned): respawn resumes
+# the session's own in-progress work on its own, with no new prompt needed — not just a live
+# process sitting idle waiting for input. (The one thing respawn genuinely can't recover is a
+# session whose owner ran `/clear` before stopping it — that wipes the conversation itself, which
+# is a separate, narrower case; see agents/issue-pm.md's warning against `/clear`.)
 # `sort_by(.startedAt) | last` picks the most recent if more than one past session shares the name.
 # Never `v=$(claude ... | jq ...)` under `set -euo pipefail`: pipefail fails the ASSIGNMENT when
 # `claude` fails (jq exits 0 on empty input), and `set -e` kills the script at that line — a later
@@ -98,8 +103,22 @@ existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || tr
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 
 if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
-  echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})" >&2
-  exit 1
+  # The registry's own `state` can go stale — confirmed by real-world observation (2026-08-04):
+  # a session whose process had already exited (its pid recycled into Claude Code's own
+  # background-worker pool) still reported state:"working" long after. `claude logs <id>` is a
+  # cheap, independent probe: exits 0 for a genuinely live session, exits 1 ("job not found — it
+  # may have already exited") for one that's actually gone — confirmed by test. This can only
+  # ever ADD a way to unstick a stale "already running" block, never remove the existing
+  # protection: if `claude logs` also reports success on some stale case this probe doesn't catch,
+  # behavior is unchanged from before (refuse, as it already did). Only fall through — to the
+  # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
+  # `claude logs` positively says the process is gone.
+  if claude logs "$existing_id" > /dev/null 2>&1; then
+    echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})" >&2
+    exit 1
+  fi
+  echo "spawn-issue-pm: ${name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
+  echo "'claude logs' says it's gone — stale entry. Proceeding as if it's not live." >&2
 fi
 
 if [[ -n "$existing_id" ]]; then

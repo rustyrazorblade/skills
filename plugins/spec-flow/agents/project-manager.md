@@ -32,6 +32,12 @@ never touches yours:
   respawn` it back into its own worktree instead of starting an unrelated fresh one) and only
   falls back to the `agent:active` GitHub label — the cross-machine, cross-user signal — when
   there's no local record at all.
+- **If the script fails, relay its error verbatim and stop — never hand-roll a replacement
+  spawn.** Don't improvise your own `claude --bg`/`claude stop`/label edits to work around a
+  failure; that duplicates the script's own logic outside of it, can race with what it was
+  already doing, and hides the real error from the owner instead of surfacing it. Report exactly
+  what it said and let the owner decide how to proceed — including telling you to just re-run it,
+  which is safe.
 - Several issues can be in flight at once, each its own process, each in its own Claude-Code-
   isolated worktree. Check `/spec-flow:board` (which reads the label) before recommending or
   spawning anything, so you don't spin up a second `issue-pm` for an issue that already has one —

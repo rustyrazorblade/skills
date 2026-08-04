@@ -317,20 +317,9 @@ primary checkout.
   `references/kotlin-style-guide.md` when the project is Kotlin, and holds itself to the matching
   guide.
 
-**Review panel** (run in parallel during `/spec-flow:implement` — see the Review panel below)
-- `reviewer` — the authority on **does the implementation match the spec**: reviews the branch diff
-  against its committed spec and **the repo's own documented conventions** (its CLAUDE.md /
-  CONTRIBUTING / style guide). Complements, does not duplicate, the built-in `/code-review` skill.
-  Also **enforces spec-scenario → test traceability**: every `#### Scenario:` in the change's
-  `specs/**/spec.md` must have a backing test, and an uncovered scenario is a `major` finding that
-  withholds approval and feeds the bounded fix loop until a test is added.
-- `test-rigor-reviewer` — audits whether the change's public surface + observable side effects
-  have antagonistic, regression-exposing tests.
-- `observability-reviewer` — audits whether the change's new code paths + failure modes are
-  diagnosable in production (logging at the right level with structured context, metrics on
-  operations + errors with bounded label cardinality, tracing/spans around new I/O, no
-  silently-swallowed failures, no secrets/PII in telemetry). Self-gates when the diff adds no new
-  path/I/O/failure.
+**Review panel** — `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer`,
+`observability-reviewer`; the five lenses run in parallel during `/spec-flow:implement`. Their
+individual mandates are described once, in full, in **Review panel** below — not repeated here.
 
 > If the consuming repo defines its own agent with one of these names (project or user scope),
 > that one **overrides** the plugin's. Use that to specialize a reviewer for a repo's stack.
@@ -355,15 +344,15 @@ findings.** The five lenses:
 
 1. **spec** (`reviewer` agent) — spec-conformance + the repo's documented rules **and**
    spec-scenario → test traceability. Full mandate: `agents/reviewer.md`.
-2. **code-review** (`general-purpose` + the built-in `/code-review` skill) — a correctness-bug
-   hunt: logic errors, boundary/edge cases, unhandled error paths, panics, concurrency/async
-   ordering, resource leaks, caller/callee contract violations. No dedicated agent file — the full
-   prompt lives inline in both `skills/implement/SKILL.md` and `implement.workflow.js`.
-3. **security-review** (`general-purpose` + the built-in `/security-review` skill) — input
-   validation, isolation, auth/authz, injection, secret/data exposure, external-surface hardening.
-   **Self-gates**: enumerates whether the change touches any security-relevant surface and returns
-   **approve + empty findings** when it touches none. Same "no agent file, inline prompt" note as
-   code-review.
+2. **code-review** (`code-reviewer` agent, invoking the built-in `/code-review` skill) — a
+   correctness-bug hunt: logic errors, boundary/edge cases, unhandled error paths, panics,
+   concurrency/async ordering, resource leaks, caller/callee contract violations. Full mandate:
+   `agents/code-reviewer.md`.
+3. **security-review** (`security-reviewer` agent, invoking the built-in `/security-review` skill)
+   — input validation, isolation, auth/authz, injection, secret/data exposure, external-surface
+   hardening. **Self-gates**: enumerates whether the change touches any security-relevant surface
+   and returns **approve + empty findings** when it touches none. Full mandate:
+   `agents/security-reviewer.md`.
 4. **test-rigor** (`test-rigor-reviewer` agent) — audits **test rigor** for the change's public
    surface + observable side effects, both directions (missing antagonistic coverage AND
    over-built tests). Also runnable **standalone** to audit an existing surface. Full mandate:
@@ -373,17 +362,16 @@ findings.** The five lenses:
    failures, no leaked secrets). **Self-gates** on a diff introducing no new path/I/O/failure. Full
    mandate: `agents/observability-reviewer.md`.
 
-Three of the five (spec, test-rigor, observability) are backed by this plugin's own agent
-definitions — spawning by that agent type already applies the agent file's full mandate, process,
-and output contract as the teammate's system prompt, so both `skills/implement/SKILL.md` and
-`implement.workflow.js` only send a short parameter stub (worktree/base/change/issue), not a
-restatement. The agent file is the single place their substance lives; edit it there. code-review
-and security-review have no agent file (they invoke a built-in skill from `general-purpose`), so
-their prompts stay inline and need editing in both places if they change. The merge/approval logic
-generalizes over N lenses regardless — there is no per-lens special-casing beyond the spec lens
-owning `spec_conformance`/`tests_ran`. To add or remove a lens: an agent-backed one needs an agent
-file plus a stub entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array; an
-inline one needs its full prompt written in both places.
+All five are backed by this plugin's own agent definitions — spawning by that agent type already
+applies the agent file's full mandate, process, and output contract as the teammate's system
+prompt, so both `skills/implement/SKILL.md` and `implement.workflow.js` only send a short
+parameter stub (worktree/base/change/issue), not a restatement. The agent file is the single place
+each lens's substance lives; edit it there. `code-reviewer`/`security-reviewer` need Skill-tool
+access to invoke their built-in skills, which they keep by omitting a restrictive `tools:` line
+(unlike `reviewer`'s Read/Bash/Grep/Glob). The merge/approval logic generalizes over N lenses
+regardless — there is no per-lens special-casing beyond the spec lens owning
+`spec_conformance`/`tests_ran`. To add or remove a lens: write its agent file, then add a stub
+entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array.
 
 ## Test tiering (unit / integration)
 

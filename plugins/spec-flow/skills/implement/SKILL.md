@@ -89,10 +89,10 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    Then follow **either** "Team mode" **or** "Workflow mode" below, never both.
 
    **Team mode (default).** Every teammate is spawned from this plugin's own subagent definitions
-   — reference them by name
-   (`tdd-developer`, `reviewer`, `test-rigor-reviewer`, `observability-reviewer`, `build-engineer`,
-   or the built-in `general-purpose`) so each teammate gets that agent's tools/model, with your
-   spawn prompt appended as additional instructions. **If a bare-name spawn fails "not found"**
+   — reference them by name (`tdd-developer`, `reviewer`, `code-reviewer`, `security-reviewer`,
+   `test-rigor-reviewer`, `observability-reviewer`, `build-engineer`) so each teammate gets that
+   agent's tools/model, with your spawn prompt appended as additional instructions. **If a
+   bare-name spawn fails "not found"**
    (no repo/user override registered under that name, and the plugin's own bundled agent isn't
    reachable by its bare name in this environment — Claude Code does not fall back to the plugin's
    namespaced form on its own), retry as `spec-flow:<name>` yourself; see the README's Override
@@ -151,42 +151,24 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       Append the REVIEW GUARDRAILS to every one of these. The five, named `spec`, `code-review`,
       `security-review`, `test-rigor`, `observability`:
 
-      Three of the five — `spec`, `test-rigor`, `observability` — are backed by this plugin's own
-      agent definitions (`agents/reviewer.md`, `test-rigor-reviewer.md`, `observability-reviewer.md`
-      respectively). Spawning by that agent type already applies its full mandate, process, and
-      output contract as the teammate's system prompt, so their spawn prompts below only supply the
-      concrete runtime values — restating the mandate here would just be a second copy that could
-      drift from the agent file. The other two, `code-review` and `security-review`, have no
-      dedicated agent file (they run as `general-purpose`, invoking a built-in skill), so their
-      prompts stay fully inline:
+      All five are backed by this plugin's own agent definitions (`agents/reviewer.md`,
+      `code-reviewer.md`, `security-reviewer.md`, `test-rigor-reviewer.md`,
+      `observability-reviewer.md`). Spawning by that agent type already applies its full mandate,
+      process, and output contract as the teammate's system prompt, so every spawn prompt below
+      only supplies the concrete runtime values — restating the mandate here would just be a second
+      copy that could drift from the agent file. `code-reviewer`/`security-reviewer` need Skill-tool
+      access to invoke the built-in `/code-review`/`/security-review` skills, which their agent
+      files grant by omitting a restrictive `tools:` line (unlike `reviewer`'s Read/Bash/Grep/Glob):
 
       - **`spec`** (agent: `reviewer`) — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
         change: `issue-<N>`. issue: #N. Follow your agent definition's process and output contract
         exactly (JSON only)."*
-      - **`code-review`** (agent: `general-purpose`) — *"Run a CORRECTNESS review of the diff
-        `base...HEAD` in the git worktree at `<worktree>`. Invoke the built-in `/code-review`
-        skill on that diff (cwd `<worktree>`) and have it hunt correctness defects ONLY: logic
-        errors, off-by-one / boundary / edge-case mistakes, unhandled error paths, panics / unwrap
-        on fallible values, incorrect concurrency or async ordering, resource leaks, and contract
-        violations between caller and callee. Do NOT re-review spec conformance or style — the
-        other lenses own those. If you find no correctness defect, return `approve=true` with an
-        empty findings array. Map the skill's result into exactly the JSON contract above and
-        output nothing else (leave `spec_conformance`/`tests_ran` `"full"` — the spec lens owns
-        them; a blocker/major finding MUST set `approve=false`). If `/code-review` isn't invokable
-        here, perform the same correctness pass yourself by reading the diff and emit the
-        identical contract."*
-      - **`security-review`** (agent: `general-purpose`) — *"Run a SECURITY review of the diff
-        `base...HEAD` in the git worktree at `<worktree>`. Invoke the built-in `/security-review`
-        skill on that diff (cwd `<worktree>`). This lens SELF-GATES: first enumerate whether the
-        change touches ANY of (1) input parsing / untrusted-input handling, (2) multi-tenant
-        isolation / cross-tenant data access, (3) authentication or authorization, (4) external
-        endpoints / network surfaces, (5) secrets, credentials, or sensitive-data exposure. Touches
-        none → `approve=true`, empty findings, say so in `summary`. Touches one or more → review
-        for missing/weak input validation, injection (SQL/CQL/command/log), tenant-isolation
-        bypass, broken authz, unsafe external calls, leaked secrets/data; emit a blocker/major
-        finding for any real exposure. Map into exactly the JSON contract above (same
-        `spec_conformance`/`tests_ran`/`approve` rules as `code-review`). If `/security-review`
-        isn't invokable here, perform the same pass yourself and emit the identical contract."*
+      - **`code-review`** (agent: `code-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
+      - **`security-review`** (agent: `security-reviewer`) — *"Panel mode. worktree: `<worktree>`.
+        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
+        output contract exactly (JSON only)."*
       - **`test-rigor`** (agent: `test-rigor-reviewer`) — *"Panel mode. worktree: `<worktree>`.
         base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
         output contract exactly (JSON only)."*

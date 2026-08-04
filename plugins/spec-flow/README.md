@@ -144,11 +144,13 @@ All skills are namespaced under the plugin:
 **Review panel (the 5 lenses run in parallel during `implement`)**
 - **`reviewer`** — the authority on "does the implementation match the spec?" — spec-conformance +
   the repo's own documented rules + spec-scenario→test traceability.
+- **`code-reviewer`** — a correctness-only pass via the built-in `/code-review` skill.
+- **`security-reviewer`** — a security pass via the built-in `/security-review` skill; self-gates
+  (approve + empty findings) on a change touching no security-relevant surface.
 - **`test-rigor-reviewer`** — antagonistic, regression-exposing test coverage of the change's
   public surface and its observable side effects.
 - **`observability-reviewer`** — are the change's new code paths + failure modes diagnosable in
   prod (logging/metrics/tracing, no silent failures, no secrets in telemetry)?
-- plus two built-in-skill lenses: **`/code-review`** (correctness) and **`/security-review`**.
 
 > **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …) when installed.
 > `issue-pm` spawns them (as Task-tool subagents, or as `implement`'s agent-team teammates) by

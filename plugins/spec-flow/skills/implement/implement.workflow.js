@@ -112,37 +112,18 @@ let review = null
 let round = 0
 const residual = []
 
-// Review is a PANEL of FIVE lenses, run in parallel each round:
-//   1. spec            — the project reviewer (spec-conformance + the repo's documented rules +
-//                        scenario→test traceability).
-//   2. code-review     — correctness-bug hunt (logic errors, edge cases, panics, concurrency/error
-//                        handling), via the built-in /code-review skill.
-//   3. security-review — security pass (input validation, auth/tenant isolation, injection,
-//                        secret/data exposure, external-surface hardening), via /security-review;
-//                        SELF-GATES (approve+empty) on changes touching no relevant surface.
-//   4. test-rigor      — TEST-rigor (test-rigor-reviewer): bidirectional. Does the diff's touched
-//                        public surface + observable side effects have ANTAGONISTIC, regression-
-//                        exposing tests (happy-path-only / no side-effect assertion = a gap)? AND
-//                        the brake: over-built tests (fakes reconstructing a dependency, library
-//                        re-verification) + test churn (per-test container restarts) = minor unless
-//                        egregious. No-ops off any public surface, side effect, or added tests.
-//   5. observability   — OBSERVABILITY (observability-reviewer): are the diff's new code paths +
-//                        failure modes diagnosable in prod? Logging at the right level w/ structured
-//                        context, metrics on ops + errors (bounded label cardinality), tracing/spans
-//                        around new I/O, no silently-swallowed failures, no secrets in telemetry.
-//                        SELF-GATES (approve+empty) on changes introducing no new path/I/O/failure.
-// Findings from all five merge; a fix round addresses blocker/major from ANY lens; approval requires
-// every lens to approve with no must-fix findings. The merge/approval logic generalizes over N
-// lenses — adding or removing a lens needs NO change to the loop below.
-// The code-review/security-review lenses INVOKE the built-in skills, so they need Skill-tool access:
-// they use `general-purpose` (tools: *), NOT the `reviewer` agent (Read/Bash/Grep/Glob only).
+// Review is a PANEL of FIVE lenses (spec, code-review, security-review, test-rigor,
+// observability), run in parallel each round. Findings merge; a fix round addresses blocker/major
+// from ANY lens; approval requires every lens to approve with no must-fix findings. The
+// merge/approval logic generalizes over N lenses — adding or removing a lens needs NO change to
+// the loop below. Full per-lens mandate: docs/workflow.md's "Review panel" section, or each
+// lens's own agents/<name>.md — not restated here. Every lens is backed by its own agent
+// definition, which already carries the full mandate/process/output-contract as its own system
+// prompt when spawned by agentType, so each prompt below sends only the runtime values, never a
+// restatement (that restatement is exactly what used to drift between here, SKILL.md, the agent
+// file, and workflow.md).
 const reviewLenses = [
   {
-    // spec is backed by agents/reviewer.md, which already carries the full mandate, process, and
-    // output contract as its own system prompt when spawned by agentType — this only needs to
-    // supply the concrete runtime values, not restate anything (that restatement is what used to
-    // drift between here, SKILL.md, the agent file, and workflow.md; see docs/workflow.md's
-    // "Review panel" section for the full per-lens description).
     label: 'spec',
     agentType: 'reviewer',
     prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
@@ -150,50 +131,23 @@ Follow your agent definition's process and output contract exactly (JSON only).`
   },
   {
     label: 'code-review',
-    agentType: 'general-purpose',
-    prompt: `Run a CORRECTNESS review of the diff ${base}...HEAD in the git worktree at ${worktree}.
-Invoke the built-in \`/code-review\` skill on that diff (cwd ${worktree}) and have it hunt correctness
-defects ONLY: logic errors, off-by-one / boundary / edge-case mistakes, unhandled error paths,
-panics / unwrap on fallible values, incorrect concurrency or async ordering, resource leaks, and
-contract violations between caller and callee. Do NOT re-review spec conformance or style — the
-other lenses own those. If you find no correctness defect, return approve=true with an empty
-findings array.
-Then MAP the skill's result into EXACTLY this JSON contract and output nothing else:
-{"summary":"…","spec_conformance":"full","tests_ran":"full","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line","rule":"correctness","problem":"…","fix":"…"}],"approve":true|false}.
-(spec_conformance/tests_ran are owned by the spec reviewer — leave them "full". A blocker/major
-finding MUST set approve=false.)
-If \`/code-review\` is not invokable here, perform the same correctness pass yourself by reading the
-diff and emit the identical contract — same outcome.`,
+    agentType: 'code-reviewer',
+    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+Follow your agent definition's process and output contract exactly (JSON only).`,
   },
   {
     label: 'security-review',
-    agentType: 'general-purpose',
-    prompt: `Run a SECURITY review of the diff ${base}...HEAD in the git worktree at ${worktree}.
-Invoke the built-in \`/security-review\` skill on that diff (cwd ${worktree}).
-This lens SELF-GATES. First enumerate whether the change touches ANY of these security-relevant
-surfaces: (1) input parsing / untrusted-input handling, (2) multi-tenant isolation / cross-tenant
-data access, (3) authentication or authorization, (4) external endpoints / network surfaces, (5)
-secrets, credentials, or sensitive-data exposure. If the change touches NONE of them, return
-approve=true with an EMPTY findings array (state in the summary that no security-relevant surface
-was found). If it touches one or more, review them for: missing/weak input validation, injection
-(SQL/CQL/command/log), tenant-isolation bypass, broken authz, unsafe external calls, and leaked
-secrets/data. Emit a blocker/major finding for any real exposure.
-MAP the result into EXACTLY this JSON contract and output nothing else:
-{"summary":"…","spec_conformance":"full","tests_ran":"full","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line","rule":"security","problem":"…","fix":"…"}],"approve":true|false}.
-(spec_conformance/tests_ran are owned by the spec reviewer — leave them "full". A blocker/major
-finding MUST set approve=false.)
-If \`/security-review\` is not invokable here, perform the same security pass yourself by reading the
-diff and emit the identical contract — same outcome.`,
+    agentType: 'security-reviewer',
+    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+Follow your agent definition's process and output contract exactly (JSON only).`,
   },
   {
-    // Backed by agents/test-rigor-reviewer.md — same reasoning as the spec lens above.
     label: 'test-rigor',
     agentType: 'test-rigor-reviewer',
     prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
 Follow your agent definition's process and output contract exactly (JSON only).`,
   },
   {
-    // Backed by agents/observability-reviewer.md — same reasoning as the spec lens above.
     label: 'observability',
     agentType: 'observability-reviewer',
     prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.

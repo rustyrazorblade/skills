@@ -30,6 +30,10 @@ the naming/correlators, and the review panel).
 
 ## Prerequisites (in the consuming repo)
 
+**Fastest path: run `/spec-flow:setup`** once you've installed the plugin — it explores which of
+the items below are already true and only walks you through what's missing, one at a time with a
+recommended default, instead of you self-diagnosing this list by hand. The list itself:
+
 - **OpenSpec** — the `openspec` CLI installed and initialized in the repo (the spec backbone;
   the skills use `/opsx:*` and `openspec` commands).
 - **GitHub** — `gh` authenticated, and the repo hosted on GitHub (issues/labels/PRs backbone). If
@@ -101,14 +105,16 @@ All skills are namespaced under the plugin:
 
 | Command | Does |
 |---|---|
-| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). |
-| `/spec-flow:activate <N>` | Worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). |
-| `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. |
+| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Grills shape-defining ambiguity one question at a time with a recommended default; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
+| `/spec-flow:activate <N>` | Worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue skips straight to spec generation. |
+| `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Owner-invoked, never polls. |
-| `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you. |
-| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives the OpenSpec change (via its own small self-merged PR), closes the issue, then removes the worktree. |
+| `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how much is queued for `/spec-flow:archive`. |
+| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives the OpenSpec change, appends the archive commit onto the shared queue branch, closes the issue, then removes the worktree. Never opens a PR of its own. |
+| `/spec-flow:archive` | Flush the shared OpenSpec archive queue into one batch PR and merge it. Owner-invoked, on your own schedule — not automatic. |
 | `/spec-flow:adopt-tiering` | One-time, repo-wide: split an existing test suite into the unit/integration tiers the pipeline assumes, and wire CI to the `spec-flow-failures` artifact contract. Run once per repo, before relying on `sync-ci`/the tiered gate. |
+| `/spec-flow:setup` | One-time, re-runnable: explore this repo's Prerequisites state and walk through only what's missing, one item at a time with a recommended default. The fastest way to onboard a new repo. |
 
 ## Bundled agents
 
@@ -196,10 +202,13 @@ they are the single source you maintain, and every repo using the plugin inherit
 - By default, the pipeline **never merges your feature PR and never pushes it to `main`** — it
   only pushes the issue branch and opens a PR; the squash-merge is your action in GitHub. An
   `issue-pm` merges the feature PR itself only when you explicitly instruct it to for that run
-  (see `docs/workflow.md`'s "Overriding either seam's default"), and even then only after the
-  PR's required CI checks are green. Separately, `finalize`'s own small, no-review, archive-only
-  bookkeeping PR (OpenSpec sync, no code) always opens *and* merges itself, regardless of that
-  setting — see `skills/finalize/SKILL.md`.
+  (see `docs/workflow.md`'s "Overriding either seam's default") — the `merge-on-green` label is
+  the simplest way to say so, settable any time in GitHub itself, no session involved — and even
+  then only after the PR's required CI checks are green. Separately, `finalize`'s own OpenSpec
+  sync/archive (no code,
+  nothing to review) never opens its own PR either — it appends onto a shared queue branch that
+  `/spec-flow:archive` batches into one PR, on your own schedule — see **Archive queue** in
+  `docs/workflow.md`.
 - Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
   `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
   trade-offs, you decide right there before anything is generated; Seam 1 then confirms the

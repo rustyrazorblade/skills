@@ -26,24 +26,27 @@ never touches yours:
   tab or window for the owner — they attach themselves when they're ready. Don't run
   `activate`/`implement`/`address`/`finalize` yourself. That process owns the issue from here; the
   owner talks to it directly once attached.
-- **Compose the spawn instructions before launching.** `spawn-issue-pm.sh` takes an optional
-  second argument — free-text instructions for that one run, substituted into the spawned
-  `issue-pm`'s prompt in place of the default "stop and wait at both approval points" line. Before
-  spawning, check for a stated autonomy preference: something the owner just told you for this
-  issue ("drive #123 fully, merge on green"; "auto-approve the spec but let me QA before merge"),
-  or a standing one written in this repo's (or their global) `CLAUDE.md`. Pass it through
-  **verbatim**, in the owner's own words — never translate it into internal terms like "Seam
-  1"/"Seam 2" (the owner shouldn't have to know that vocabulary to use this), and never invent or
-  infer an instruction that wasn't actually stated anywhere. Nothing found → call the script with
-  just the issue number; its own default (stop and wait at both, as always) applies.
-  **This persists past the spawn itself** — whatever you pass gets written into the issue's
-  worktree (`.spec-flow/owner-instructions`), which `issue-pm` re-reads at each approval point
-  rather than only remembering its original spawn prompt. That's also what makes updating it on a
-  respawn work: `spawn-issue-pm.sh <N> "<new instructions>"` on an issue whose `issue-pm` crashed
-  or stopped overwrites that file directly (a respawn sends the session no new prompt of its own,
-  so this is the only way a changed instruction actually reaches it). If the issue's `issue-pm` is
-  currently **live**, none of this applies — the spawn script refuses to touch a running session;
-  updating its instructions means telling the owner to attach and say it directly.
+- **If the owner wants auto-merge specifically, just set the `merge-on-green` label** —
+  `gh issue edit <N> --add-label merge-on-green` — rather than composing a spawn instruction for
+  it. Works any time (before spawn, after spawn, even on a live `issue-pm`), no spawn/respawn
+  delivery to think about; see **The two human seams** in `docs/workflow.md`.
+- **Compose the spawn instructions before launching, for anything else.** `spawn-issue-pm.sh`
+  takes an optional second argument — free-text instructions for that one run, substituted into the
+  spawned `issue-pm`'s prompt in place of the default "stop and wait at both approval points" line.
+  Before spawning, check for a stated autonomy preference beyond auto-merge: something the owner
+  just told you for this issue ("auto-approve the spec but let me QA before merge"), or a standing
+  one written in this repo's (or their global) `CLAUDE.md`. Pass it through **verbatim**, in the
+  owner's own words — never translate it into internal terms like "Seam 1"/"Seam 2" (the owner
+  shouldn't have to know that vocabulary to use this), and never invent or infer an instruction
+  that wasn't actually stated anywhere. Nothing found → call the script with just the issue number;
+  its own default (stop and wait at both, as always) applies.
+  **This persists past the spawn itself** — it's written into the issue's worktree
+  (`.spec-flow/owner-instructions`), which `issue-pm` re-reads at each approval point rather than
+  only remembering its original spawn prompt. Updating it later works the same way the spawn
+  script itself works (see below): `spawn-issue-pm.sh <N> "<new instructions>"` overwrites the
+  file directly on a crashed/stopped session (respawn sends no new prompt, so this is the only way
+  a changed instruction reaches it); on a **live** session the script refuses to touch it —
+  updating it means attaching and telling it directly.
 - Whether an issue **already has a running `issue-pm`** is answered by the spawn script itself,
   not by memory or by asking — trust its exit code rather than second-guessing it. It checks this
   machine's own past sessions for that issue first (live → refuse; crashed/stopped → `claude
@@ -61,8 +64,10 @@ never touches yours:
   spawning anything, so you don't spin up a second `issue-pm` for an issue that already has one —
   including one running on someone else's machine.
 - **You still own:** `/spec-flow:groom` (shaping new work — no issue-pm needed, nothing is being
-  actively worked yet), `/spec-flow:board` (cross-issue status), and `/spec-flow:adopt-tiering`
-  (repo-wide setup, not tied to any one issue). These never move to an `issue-pm`.
+  actively worked yet), `/spec-flow:board` (cross-issue status), `/spec-flow:adopt-tiering`
+  (repo-wide setup, not tied to any one issue), and `/spec-flow:archive` (flushing the shared
+  OpenSpec archive queue every `finalize` feeds — also not tied to any one issue). These never move
+  to an `issue-pm`.
 
 ## The pipeline
 
@@ -157,8 +162,8 @@ over to another's; each run's instructions apply to that run alone.
 2. **Seam 2 — review + merge.** The pipeline only pushes the issue branch and opens a PR. By
    default it **never merges, never pushes to `main`** — the owner reviews in GitHub and performs
    the squash-merge themselves; `issue-pm` may loop them through `address`. It merges on its own
-   only when this run's instructions explicitly said to (e.g. "merge on green"), and even then
-   only after the PR's required checks report green.
+   only when the `merge-on-green` label is set, or this run's spawn instructions explicitly said
+   to, and even then only after the PR's required checks report green.
 
 ## Decisions are the owner's
 

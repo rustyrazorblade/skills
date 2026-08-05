@@ -10,6 +10,12 @@ acceptance criteria**. You own the **what** and the **why** — never the **how*
 architect) and never the flow mechanics (that's the project-manager). You don't write code, design
 the implementation, or pick a priority — you make the work *clear*.
 
+If this is a bug, `groom` will have already attempted a read-only reproduction before spawning you
+and hands you the verdict (confirmed with repro details, couldn't reproduce, or flagged
+unverified) — carry that verdict into your **Context** section verbatim rather than re-deriving or
+softening it; the acceptance criteria for an unconfirmed bug should still be written, just clearly
+scoped to "if the report is accurate," not stated as settled fact.
+
 ## What you produce
 
 A refinement the project-manager relays to the owner for editing:
@@ -25,8 +31,10 @@ A refinement the project-manager relays to the owner for editing:
    make them concrete, behavioral, and verifiable — not vague goals. Cover the unhappy paths
    (errors, limits, empty/oversized input, conflicts) the owner will care about, not just success.
 4. **Open questions / assumptions.** Anything genuinely ambiguous that changes the scope, stated as
-   a specific question with the assumption you'd make if unanswered. Keep this short — prefer a
-   sensible default the owner can correct over a long interrogation.
+   a specific question with the assumption you'd make if unanswered — the same recommended-default
+   convention `groom` uses in its own step-1 interview, so keep this in the owner's terms, not
+   internal jargon. Keep this short — prefer a sensible default the owner can correct over a long
+   interrogation.
 5. **Context.** Related code (`file:line`), related issues, constraints, links — whatever helps the
    next stage. Search the repo for prior art and the issue tracker for duplicates; flag any.
 

@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints by default — the design choice, then the spec approval (Seam 1) — either auto-approvable per this run's `.spec-flow/owner-instructions`; it never implements itself regardless.
+description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints by default — the design choice, then the spec approval (Seam 1) — either auto-approvable per this run's `.spec-flow/owner-instructions`; it never implements itself regardless. A `type:docs` issue skips the architect consult and design-choice stop entirely (see docs/workflow.md's Docs fast path) but still stops for spec approval. Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -71,8 +71,13 @@ else — that's their claim, not yours to take), and confirm the choice with the
    second one — confirmed by test. Once confirmed, every subsequent action — tool-driven or
    Bash-driven — lands there, not in the owner's primary checkout.
 
-3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** Before
-   generating anything, spawn the `architect` subagent with the issue's scope + acceptance
+3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** **Skip
+   this step and step 4 entirely if the issue carries `type:docs`** — a docs-only change has no
+   architecture to decide. Go straight to step 5 and spec the doc change plainly (see **Docs fast
+   path** in `docs/workflow.md`); the doc-writing pass in `implement` can still consult `architect`
+   on demand if it hits a real question about whether the documentation matches the intended
+   design — available, just not a mandatory gate here. Otherwise: before generating anything, spawn
+   the `architect` subagent with the issue's scope + acceptance
    criteria. If a domain-expert agent is available in the consuming repo (e.g. a database or
    domain expert), spawn it **at the same time** — one message, two tool calls — with the same
    scope + acceptance criteria; both are independent read-only advisors working from the same
@@ -83,7 +88,8 @@ else — that's their claim, not yours to take), and confirm the choice with the
    raises a specific domain question neither agent already answered, follow up with a second,
    targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
 
-4. **Stop and route the decision to the owner — before generating anything.** Every consequential
+4. **Stop and route the decision to the owner — before generating anything.** (Skipped entirely for
+   `type:docs`, per step 3.) Every consequential
    design / data-model choice the architect surfaced (new tables / partition or clustering keys /
    indexes / schema changes / a new public interface / a concurrency model) is the **owner's** to
    make. Present the architect's (and domain-expert's) options inline — recommended choice +
@@ -106,18 +112,31 @@ else — that's their claim, not yours to take), and confirm the choice with the
 
    **If the architect's design surfaces a hard dependency on another, unmerged issue** (this one
    genuinely can't land first, not just "would be cleaner after"), say so to the owner here, then
-   mark it on GitHub so it's visible without you:
+   mark it on GitHub so it's visible without you — both the `blocked` label (queryable, what
+   `board` filters on) and GitHub's **native issue dependency** (renders directly in the GitHub UI,
+   which the label alone doesn't — the two are additive, not a replacement for each other):
    ```bash
    gh issue edit <N> --add-label blocked
    gh issue comment <N> --body "⛔ Blocked on #<M> — <one-line reason>."
+   # Native blocked_by link (verified live). issue_id = the BLOCKING issue's database `.id`, NOT
+   # its `.number` — different values. -F, not -f: the API wants an integer, not a string.
+   BLOCKING_ID=$(gh api "repos/{owner}/{repo}/issues/<M>" --jq .id)
+   DEP_ERR=$(gh api "repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by" -F issue_id="$BLOCKING_ID" -X POST 2>&1) || \
+     echo "spec-flow: couldn't create the native blocked_by link — the blocked label + comment above still stand regardless, but don't assume this was transient: ${DEP_ERR}" >&2
    ```
    Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands) —
-   `blocked` is informational, not a hard stop you enforce yourself. Remove the label and post a
-   follow-up comment once the dependency actually clears. **This is the one thing auto mode never
+   `blocked` is informational, not a hard stop you enforce yourself. Once the dependency actually
+   clears, remove the label, remove the native link, and post a follow-up comment:
+   ```bash
+   gh api "repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by/$BLOCKING_ID" -X DELETE 2>/dev/null || true
+   gh issue edit <N> --remove-label blocked
+   gh issue comment <N> --body "✅ Unblocked — #<M> landed."
+   ```
+   (`$BLOCKING_ID` won't survive a separate Bash call — re-resolve it with the same `gh api
+   .../issues/<M> --jq .id` command if this runs later than the block above.) **This is the one thing auto mode never
    skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
    decision — label it, comment, and stop for the owner regardless of what
-   `.spec-flow/owner-instructions` says for this run. Continuing anyway risks unmergeable work;
-   "drive this to completion" isn't licence to override a genuine blocker.
+   `.spec-flow/owner-instructions` says for this run.
 
    **Absent a hard dependency, and only if `.spec-flow/owner-instructions` (read fresh at this
    point) explicitly says to auto-approve the design for this run**, skip the wait instead of
@@ -188,6 +207,9 @@ else — that's their claim, not yours to take), and confirm the choice with the
    that nothing will be implemented until they approve. **Do not proceed to implementation.** When
    the owner approves, the next step is `/spec-flow:implement <N>`.
 
+   **For a `type:docs` issue** (steps 3/4 skipped), there's no step-4 design to restate — omit that
+   part of the render and show the rest as normal: proposal, requirements/scenarios, tasks.
+
    **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
    auto-approve the spec for this run.** If so, still render the spec in full as above (posted as
    a comment, not just shown inline, since there's no owner in the conversation to see it) so the
@@ -204,7 +226,9 @@ else — that's their claim, not yours to take), and confirm the choice with the
   (generation) — never generate the spec before the owner has picked (or `.spec-flow/owner-instructions`
   auto-picked) among the architect's options. Step 7 (spec approval, Seam 1) always follows step 6
   (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until both stops
-  have passed or been explicitly auto-approved per that file's current contents.
+  have passed or been explicitly auto-approved per that file's current contents. The one structural
+  exception: `type:docs` skips step 4 (there's no design to choose) entirely, not just
+  auto-approves it — but step 7 (Seam 1) still always applies.
 - Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
   life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
   "worktree"`. Named `issue-<N>` explicitly (both the spawn prompt and step 2's fallback pass that

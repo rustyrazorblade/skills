@@ -9,7 +9,7 @@ per-issue agent as its own separate background Claude Code process — you attac
 context, until it merges.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
-(`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board`) plus a roster of agents: a
+(`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board|archive|setup`) plus a roster of agents: a
 `project-manager` central coordinator you talk to directly for cross-issue state and grooming, an
 `issue-pm` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
 issue leads** below); `product-manager` and `architect` at the front of the pipeline (refine →
@@ -86,15 +86,20 @@ from your chosen design and committing it. Nothing is implemented until you expl
 This stop confirms the spec faithfully reflects the design you already picked — it is not the
 first time you see the decision. (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
-architect then designs the *how* for.)
+architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
+question at a time, its own recommended answer stated alongside each one, dependent questions
+ordered before what depends on them — rather than drafting around it and hoping you redline the
+right things; see `skills/groom/SKILL.md` step 1. For a bug report, it also attempts a read-only
+repro before drafting acceptance criteria, so an unconfirmed report never quietly becomes a settled
+spec — see that skill's step 2.)
 
 **Seam 2 — GitHub review + merge.** By default, the pipeline only ever pushes the issue branch and
 opens a PR — it never merges *that* PR and never pushes it to `main`. You review in GitHub,
 optionally loop through `/spec-flow:address`, and perform the squash-merge yourself. Merge
 convention: rebase + squash to a single commit — one clean commit per PR on a fast-forward main
 history (never a merge commit, never the branch's individual commits); rebase onto current main
-first so the squash fast-forwards. (`finalize`'s own tiny, no-review archive-only PR afterward is
-a separate, standing exception — it opens and merges that one itself; see **The skills** below.)
+first so the squash fast-forwards. (`finalize`'s own OpenSpec archive commit afterward is separate,
+no-review bookkeeping — it queues rather than opening its own PR; see **Archive queue** below.)
 
 **Overriding either seam's default.** Both seams default to always stopping. `project-manager`
 composes a free-text instruction — from whatever you said for that issue, or a standing preference
@@ -105,6 +110,16 @@ still stops and waits, by default; nothing is ever inferred or carried over from
 issue's spawn. Seam 2's auto-merge path only actually merges once the PR's required CI checks
 report green — an instruction to merge automatically doesn't skip that; a hard dependency the
 architect flags always stops Seam 1 regardless, even under a full auto-approve instruction.
+
+**Seam 2's auto-merge specifically can also be set with the `merge-on-green` label** — it's a
+binary, GitHub-native "how to handle this issue" setting (metadata about what's being built, not
+code), so it lives as a label rather than needing to go through the spawn-time instruction above:
+apply it directly in GitHub, or tell `project-manager`, any time — before spawn, after spawn, even
+on a live `issue-pm` — and `implement` checks it fresh at step 5, no worktree/file involved. The
+free-text instruction still works too (either one triggers auto-merge); the label just doesn't
+require composing a sentence or waiting for a spawn/respawn to deliver it. Other, less binary
+instructions (Seam 1 auto-approve, anything not reducible to a yes/no) still go through the
+file below.
 
 The instruction doesn't just live in the spawn prompt — it's persisted to
 **`.spec-flow/owner-instructions`** at the issue's worktree root — gitignored via the one-time,
@@ -118,6 +133,26 @@ on that same issue instead writes the new text directly into the already-resolve
 currently **live** `issue-pm` is untouched by any of this — the spawn script refuses to respawn
 over a running session; changing a live session's instructions means attaching and saying so
 directly.
+
+**Docs fast path.** A purely documentation issue (README, a docs/mdBook tree, comments — no
+behavior change) doesn't need an architect's design or a design-choice stop to decide between. Set
+`type:docs` at `groom` (offered, never inferred silently — see its step 3) and `activate` skips
+straight past the architect/domain-expert consult and the design-choice stop to spec generation;
+`implement` runs a single lightweight doc-writing pass instead of tdd-developer + the five-lens
+panel + build + polish, with `architect` available **on demand** if the doc writer hits a real
+architecture question (not a mandatory gate). Seam 1 (spec approval) and Seam 2 (review/merge)
+still apply exactly as normal either way — the fast path only ever skips machinery that doesn't
+apply to a docs-only change, never an owner stop. See `skills/activate/SKILL.md` step 3 and
+`skills/implement/SKILL.md` step 4 for the mechanics.
+
+**Hard dependencies use GitHub's native issue-dependencies API, alongside the `blocked` label.**
+When `activate` step 4 finds a hard dependency on another unmerged issue, it sets `blocked` (what
+`board` filters on) **and** creates a native `blocked_by` link (`gh api
+repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by`, keyed on the blocking issue's numeric
+database id, not its repo-scoped number — confirmed live against this plugin's own repo) so the
+relationship renders directly in GitHub's own UI, not just in a comment. Additive, not a
+replacement — the label stays queryable (`gh issue list --label blocked`) in a way the native link
+alone isn't.
 
 ## Lifecycle and labels
 
@@ -139,7 +174,9 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | | `status:in-review` | PR open; awaiting your GitHub review (Seam 2). |
 | | `status:addressing` | Resolving your review comments. |
 | Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
-| | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why). |
+| | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
+| Fast path | `type:docs` | Documentation-only — `activate`/`implement` skip the architect consult, design-choice stop, and review panel. Offered by `groom`, never inferred silently. |
+| Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
 
@@ -192,9 +229,12 @@ reflects the local machine's session registry, and says nothing about another de
   per-step hook back out to a comment.
 - **`blocked`** — added alongside a comment naming the specific blocking issue and why, whenever
   `issue-pm` identifies a hard dependency on another unmerged issue (most likely during
-  `activate`'s design step, but not only then). Removed, with a follow-up comment, once the
-  dependency clears. A single fixed label, not one per blocking issue — the detail lives in the
-  comment, keeping the label vocabulary fixed and bootstrapped rather than growing per-issue.
+  `activate`'s design step, but not only then), **and** a native GitHub issue dependency (see **The
+  two human seams** above) — the label is what's queryable/bootstrapped like every other label in
+  the fixed vocabulary; the native link is what actually renders in GitHub's UI. Both removed, with
+  a follow-up comment, once the dependency clears. A single fixed label, not one per blocking issue
+  — the detail lives in the comment (and the native link itself), keeping the label vocabulary
+  fixed rather than growing per-issue.
 
 ## Naming
 
@@ -253,7 +293,8 @@ a subagent either. Instead:
   rather than starting fresh), the `agent:active` label otherwise — so it never launches a second
   `issue-pm` for an issue that already has one running, on this machine or another.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
-  work spans all issues), and `adopt-tiering` (repo-wide, not tied to any issue).
+  work spans all issues), and `adopt-tiering`, `setup`, and `archive` (repo-wide, not tied to any
+  issue).
 - `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
   reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json --all`
   plus GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire
@@ -284,18 +325,37 @@ branch explicitly, on its own schedule (tied to the issue merging, not to sessio
 **Prerequisites** in the README) so these checkouts never show up as untracked files in your
 primary checkout.
 
+## Archive queue
+
+`finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — but landing it via
+its own PR was still one PR per issue for zero review value. Instead, every `/spec-flow:finalize`
+appends its issue's archive commit onto a single shared branch, **`spec-flow/archive-queue`**
+(fetch/rebase/push, retrying if a concurrent finalize's append wins the race —
+`scripts/finalize-queue-archive.sh`), and stops there. Nothing lands on the default branch until
+you run **`/spec-flow:archive`**, which opens (or reuses) one batch PR from that branch and merges
+it — squash, so however many issues fed into it, it lands as one clean commit — then deletes the
+queue branch so the next `finalize` starts fresh (`scripts/archive-flush.sh`).
+
+This is **session-driven, not cron** (see **Substrate and constraints** below) — nothing runs
+`/spec-flow:archive` automatically or on a timer; you decide when. `board` surfaces how many
+issues are queued so you notice, but never triggers the flush itself. An issue's own `finalize` —
+closing it, removing its worktree — never waits on the queue actually landing; queuing is enough
+for that issue to be done from `issue-pm`'s point of view.
+
 ## The skills
 
 | Skill | Phase | Does |
 |---|---|---|
-| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue (the `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`). |
-| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). |
-| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. Invoking this skill is the explicit opt-in to that orchestration. |
+| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Grills shape-defining ambiguity (recommended default per question); for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`. |
+| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue skips straight to spec generation — see **Docs fast path** above. |
+| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (architect on demand), skipping the panel/build/polish. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
-| `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives OpenSpec (via its own small self-merged PR), closes the issue, removes the worktree. Never merges the feature PR itself. |
-| `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next and what's blocked on you. |
+| `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives OpenSpec, appends the archive commit onto the shared queue branch, closes the issue, removes the worktree. Never merges the feature PR, and never opens a PR of its own either — see **Archive queue** above. |
+| `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how much is queued for the next `/spec-flow:archive`. |
+| `/spec-flow:archive` | foreground-invoked | Flush the shared archive queue into one batch PR and merge it. Owner-invoked, whenever you want it landed — see **Archive queue** above. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
+| `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 
 ## Agents
 
@@ -488,10 +548,11 @@ set's blind-append safety rests on.
   name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation; TDD; significant design
   decisions are the owner's (an advisor agent only advises); the feature lands on `main` via PR,
-  merged by the owner by default. An `issue-pm` merges it itself only when explicitly instructed
-  to for that run (see **Overriding either seam's default**, above), never on its own initiative,
-  and only after required CI checks are green (`finalize`'s own small archive-only bookkeeping PR
-  is a separate, standing exception, and it's never code).
+  merged by the owner by default. An `issue-pm` merges it itself only when the `merge-on-green`
+  label is set or explicitly instructed to for that run (see **Overriding either seam's default**,
+  above), never on its own initiative, and only after required CI checks are green. Separately,
+  `finalize`'s own OpenSpec archive commit is never code, and never even opens its own PR — it
+  queues onto a shared branch that `/spec-flow:archive` batches and merges (see **Archive queue**).
 
 ## Conventions
 
@@ -502,7 +563,9 @@ set's blind-append safety rests on.
 
 ## Bootstrap
 
-The label vocabulary is created once per repo (idempotent — safe to re-run):
+**`/spec-flow:setup`** walks through the full Prerequisites checklist interactively (see the
+README) and is the recommended way to bring a repo onto this plugin. The label vocabulary alone —
+one piece of that checklist — is created idempotently, safe to re-run on its own too:
 
 ```bash
 bash bin/bootstrap-labels.sh   # from the plugin dir, with the cwd inside the target repo

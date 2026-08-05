@@ -23,4 +23,12 @@ gh label create "status:addressing"  --color e99695 --description "Resolving own
 gh label create "agent:active" --color 0e8a16 --description "An issue-pm is currently claimed/running on this issue" --force || true
 gh label create "blocked"      --color b60205 --description "issue-pm identified a hard dependency on another unmerged issue" --force || true
 
-echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked) are present."
+# Fast-path trigger — set by groom, read by activate/implement to skip the architect consult,
+# design-choice stop, and 5-lens review panel for documentation-only work.
+gh label create "type:docs" --color c5def5 --description "Documentation-only change — fast-tracked by activate/implement" --force || true
+
+# Owner-approval signal, set directly by the owner (in GitHub or via project-manager) any time —
+# this is metadata about how to handle the issue, so it lives in GitHub, not a worktree file.
+gh label create "merge-on-green" --color 0e8a16 --description "Merge this PR automatically once required CI checks pass — no review wait" --force || true
+
+echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, type:docs, merge-on-green) are present."

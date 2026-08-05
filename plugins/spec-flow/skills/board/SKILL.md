@@ -12,7 +12,7 @@ anything.
 
 ## Steps
 
-Steps 1-3 are independent reads — issue them together (parallel tool calls) rather than one at a
+Steps 1-4 are independent reads — issue them together (parallel tool calls) rather than one at a
 time.
 
 1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
@@ -61,7 +61,19 @@ time.
    driving it forward even though its status label says it should be — surface that, it doesn't
    happen automatically anywhere else.
 
-4. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
+4. **Check the archive queue (cheap, independent — issue it alongside steps 1-3).** Every
+   `/spec-flow:finalize` appends its issue's OpenSpec archive commit onto a shared branch instead
+   of opening its own PR; nothing lands on the default branch until `/spec-flow:archive` flushes
+   it:
+   ```bash
+   git ls-remote --heads origin spec-flow/archive-queue
+   ```
+   Empty output → nothing queued, omit it from the render entirely. Non-empty → something's
+   waiting; if you want a count, `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`
+   then `git rev-list --count origin/<that>..origin/spec-flow/archive-queue`, but even "archives
+   pending" without a precise count is enough to surface.
+
+5. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
    goes under **BLOCKED ON YOU only when its CI is green**; while CI is running it goes under
    **IN FLIGHT** with its CI state, because the owner has nothing to act on yet:
 
@@ -86,15 +98,17 @@ time.
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
-   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2)
+   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2 · archive queue: 3 issues pending → /spec-flow:archive)
    ```
+   Drop the `archive queue` clause from that summary line entirely when step 4 found nothing
+   queued — don't render "archive queue: 0," just omit it.
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
    `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴
    stalled) on every row past `status:ready`, an attach command only when step 3 found a local
    match, and 🔒 on anything carrying `blocked` — that's the whole point of steps 1 and 3.
 
-5. **Call out the two things that matter most — scoped to the current user, not the whole team.**
+6. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
    "next up" for you, even though it's still worth showing in the board for visibility:
    - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder

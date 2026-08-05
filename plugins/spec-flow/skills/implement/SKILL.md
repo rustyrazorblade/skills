@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
+description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
 argument-hint: [issue number, with its spec already approved]
 ---
 
@@ -79,6 +79,32 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    > default test command and say so.
 
 4. **Resolve the implement mode, then drive Implement → Review → Fix (bounded) → Build → Polish.**
+
+   **Docs fast path.** If the issue carries `type:docs` (set at `groom`, carried through
+   `activate` — see **Docs fast path** in `docs/workflow.md`), skip everything else in this step —
+   Team/Workflow mode, the five-lens panel, the fix loop, Build, Polish — entirely and run this
+   instead. **Mode-independent**: it's one plain subagent spawn (the Agent tool, `tdd-developer`
+   agent type, same mechanism `activate` step 3 uses for `architect`), not an agent-team teammate,
+   so `SPEC_FLOW_IMPLEMENT_MODE`/`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` don't apply here.
+   a. Spawn ONE `tdd-developer` subagent, in `<worktree>`: work `tasks.md`, updating exactly the
+      documentation the spec describes (README, a docs/mdBook tree, comments — no behavior
+      change). Append the implementer GUARDRAILS (below). **If it hits a real question about
+      whether the documentation matches the intended architecture/design** (not just wording),
+      have it stop and report the specific question back to you rather than guessing — it should
+      not try to reach `architect` itself.
+   b. **If it reports back with an architecture question**, spawn `architect` yourself — read-only,
+      same as `activate` step 3 — with that specific question, then spawn a **fresh**
+      `tdd-developer` subagent with the answer plus everything from step a's prompt to finish the
+      work (spawn fresh — plain subagents can't be resumed). Architect-on-demand, not a mandatory
+      gate; most `type:docs` runs never trigger it.
+   c. Once the docs pass reports done (commit + push are already its job per the GUARDRAILS):
+      comment `gh issue comment <N> --body "📚 Docs updated."`, note a one-line summary of what was
+      documented (step 5 uses it in place of `review_summary`), then go straight to step 5 — no
+      review panel, no build step. A docs-only change has no code to lint/build/review through five
+      lenses built for behavior.
+   This is the ONLY thing that skips the five-lens panel — every other issue, however small, still
+   goes through it in full. Otherwise, for every non-`type:docs` issue:
+
    `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
    you, spawned fresh each run — richer (teammates message each other, self-claim work) but
    experimental and token-heavier. `workflow` is the original bounded `Workflow`-tool script
@@ -264,9 +290,11 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    built — see PR for details."` (or, if `approved` is false, the residual findings instead). Say
    so plainly if the owner asks why this run's issue history is sparser than a Team-mode run's.
 
-5. **Mark the PR ready and report.** When step 4 approved (either mode), finalize the already-open
-   draft PR (outward-facing — done here in this session, narrated). Re-resolve `$BR` fresh here —
-   cheap, and this may be a separate Bash call from step 2's, which wouldn't have carried it over:
+5. **Mark the PR ready and report.** When step 4 approved (either mode) or the docs fast path
+   reported done (using its one-line summary from step 4c in place of
+   `review_summary`/`tests_ran`/`non_blocking_findings` below), finalize the already-open draft PR
+   (outward-facing — done here in this session, narrated). Re-resolve `$BR` fresh here — cheap, and
+   this may be a separate Bash call from step 2's, which wouldn't have carried it over:
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
@@ -279,9 +307,12 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <url>"
    ```
-   **If `.spec-flow/owner-instructions` at the worktree root (read fresh at this point, not just
-   from memory of the spawn prompt) explicitly says to merge automatically for this run** (e.g.
-   "merge on green"), don't stop here:
+   Check whether to auto-merge — the `merge-on-green` label (checked fresh, not assumed) or
+   `.spec-flow/owner-instructions` (also read fresh, not from memory of the spawn prompt) saying so:
+   ```bash
+   gh issue view <N> --json labels --jq '[.labels[].name] | any(. == "merge-on-green")'
+   ```
+   **If that printed `true`, or the file says so — don't stop here:**
    ```bash
    gh pr checks <PR> --required --watch
    ```
@@ -290,27 +321,27 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    a stop-and-surface-to-the-owner case, not a merge. **If it reports no required checks at all,
    don't conclude that immediately** — `gh` can't tell "nothing's configured" apart from "required
    checks are configured but haven't posted a check run yet" (e.g. right after this session's own
-   push, before CI has started); both give the identical response. Wait a short interval and
-   re-check once before deciding. If it's still reporting none, **that's a configuration gap, not
-   a green light** — refuse to auto-merge and tell the owner (e.g. "no required checks configured
-   on this repo/branch — configure branch protection for auto-merge to be safe, or merge this one
-   manually"). Never treat "no required checks" as equivalent to "all checks passed." Only once
-   required checks are confirmed to have actually run and passed:
+   push, before CI has started). Wait a short interval and re-check once before deciding; still
+   none → **that's a configuration gap, not a green light** — refuse to auto-merge and tell the
+   owner (e.g. "no required checks configured — configure branch protection for auto-merge to be
+   safe, or merge this one manually"). Only once required checks are confirmed to have actually run
+   and passed:
    ```bash
    gh pr merge <PR> --squash --delete-branch=false
-   gh issue comment <N> --body "Merged automatically per this run's instructions (CI green)."
+   gh issue comment <N> --body "Merged automatically (merge-on-green, CI green)."
    ```
    and continue straight to `/spec-flow:finalize <N>` yourself — there's no review round to wait
-   on. **Absent that explicit instruction, this is always the stop:** give the owner the PR URL
-   for GitHub review (Seam 2) and wait. When they leave comments, the next step is
-   `/spec-flow:address <N>`; after they squash-merge, `/spec-flow:finalize <N>`.
+   on. **Absent either trigger, this is always the stop:** give the owner the PR URL for GitHub
+   review (Seam 2) and wait. When they leave comments, the next step is `/spec-flow:address <N>`;
+   after they squash-merge, `/spec-flow:finalize <N>`.
 
 ## Rules
 
 - **Never merge, never push to `main` — by default.** This skill pushes only the issue branch,
-  opens a *draft* PR, and later marks it ready. It merges on its own only when
-  `.spec-flow/owner-instructions` explicitly said to, and even then only after the PR's required
-  checks report green, via a squash-merge of that one PR — never a direct push to `main`.
+  opens a *draft* PR, and later marks it ready. It merges on its own only when the `merge-on-green`
+  label is set, or `.spec-flow/owner-instructions` explicitly said to — and even then only after
+  the PR's required checks report green, via a squash-merge of that one PR — never a direct push
+  to `main`.
 - **If a PR already exists for the branch (re-run), reuse it rather than erroring.** Common after
   a resumed/interrupted run, residual findings sent back for another pass, or the owner asking for
   another round.

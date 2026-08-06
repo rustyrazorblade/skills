@@ -48,6 +48,34 @@ for bin in claude jq gh git; do
   }
 done
 
+# Refuse a parent/epic issue outright, before anything else — GitHub's native sub-issues make an
+# issue's own scope purely a rollup of its children; there's nothing coherent to activate/spec
+# against it directly. Confirmed by real use (2026-08-06): without this check, a broad parent
+# issue got claimed and spawned into its own worktree anyway. Check here, before the worktree,
+# before agent:active, before anything — this is the earliest point that can catch it.
+# subIssuesSummary/subIssues require a reasonably current gh (confirmed present on 2.97.0) — an
+# older gh reports "Unknown JSON field" here, which the message below already relays verbatim.
+issue_view_err=$(mktemp)
+if ! issue_view_json=$(gh issue view "$issue" --json title,subIssuesSummary 2>"$issue_view_err"); then
+  echo "spawn-issue-pm: 'gh issue view' failed while checking #${issue} for sub-issues." >&2
+  echo "gh said: $(cat "$issue_view_err")" >&2
+  echo "(If gh is complaining about an unknown field 'subIssuesSummary', it's too old — upgrade gh.)" >&2
+  rm -f "$issue_view_err"
+  exit 1
+fi
+rm -f "$issue_view_err"
+issue_title=$(jq -r '.title' <<<"$issue_view_json")
+sub_issue_total=$(jq -r '.subIssuesSummary.total // 0' <<<"$issue_view_json")
+if [[ "$sub_issue_total" -gt 0 ]]; then
+  echo "spawn-issue-pm: #${issue} (\"${issue_title}\") has ${sub_issue_total} sub-issue(s) — it's a" >&2
+  echo "parent/epic, not directly workable. Pick one of its sub-issues instead:" >&2
+  # Redirect order matters: >&2 first dups stdout to the CURRENT stderr target, then 2>/dev/null
+  # only silences a second, later failure — swapped, it would silence stdout too and print nothing.
+  gh issue view "$issue" --json subIssues --jq \
+    '.subIssues.nodes[] | "  #\(.number) (\(.state)) \(.title)"' >&2 2>/dev/null || true
+  exit 1
+fi
+
 # Every session-name lookup below is scoped to THIS repo via REPO_ROOT — "issue-pm-<N>" is only
 # unique within one repo (GitHub issue numbers are per-repo), but `claude agents --json --all`
 # returns every session on the machine, unscoped. On a machine running spec-flow in more than one
@@ -381,4 +409,7 @@ fi
 
 attach_cmd="claude attach ${session_id}"
 
-echo "${name} ${session_id} — attach: ${attach_cmd}"
+# issue_title was resolved by the sub-issue check above (both fresh-spawn and respawn paths run
+# it), so it's available here for free — surfacing it lets whoever reads this line (a human, or
+# project-manager relaying it) identify the session/tab without attaching first.
+echo "${name} ${session_id} (\"${issue_title}\") — attach: ${attach_cmd}"

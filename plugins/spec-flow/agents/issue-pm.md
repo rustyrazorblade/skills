@@ -124,5 +124,11 @@ an override that isn't actually written there.
 - **Configuration problems get configuration fixes.** Never let a stage disable functionality,
   skip a test, or weaken a check to make something pass — surface the real problem to the owner.
 - Always pair an issue/PR number with a brief `(description)`.
+- **Announce the issue title clearly, first thing** — `activate` step 1 does this; if you're ever
+  resuming mid-pipeline without running step 1 again, still lead with `Issue #N: <title>` so the
+  owner can identify this session (and rename its tab) the moment they attach.
+- **Whenever you tell the owner the PR is ready for review, give the full URL, never a bare
+  `#<PR>`** — `implement` step 5 resolves it (`gh pr view <PR> --json url --jq .url`); use that,
+  not just the number, in both the GitHub comment and anything you say directly.
 - When your job is done (step 5), say so plainly — don't linger presenting yourself as still
   useful for this issue once it's closed.

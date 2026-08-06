@@ -305,8 +305,16 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
 
    <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
-   gh issue comment <N> --body "👀 PR #<PR> ready for your review: <url>"
+   gh pr view <PR> --json url --jq .url
    ```
+   Use the printed URL as `<PR_URL>` below — same convention as `<DEFAULT_BR>`/`<PR>` above,
+   a literal value from this output, not a shell variable carried across separate Bash calls:
+   ```bash
+   gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>"
+   ```
+   **Always the full URL, never a bare PR number** — `<PR_URL>` resolved above, both in this
+   comment and whenever you tell the owner directly (in this conversation, not just GitHub) that
+   the PR is ready for review, further down in this step.
    Check whether to auto-merge — the `merge-on-green` label (checked fresh, not assumed) or
    `.spec-flow/owner-instructions` (also read fresh, not from memory of the spawn prompt) saying so:
    ```bash
@@ -331,8 +339,9 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    gh issue comment <N> --body "Merged automatically (merge-on-green, CI green)."
    ```
    and continue straight to `/spec-flow:finalize <N>` yourself — there's no review round to wait
-   on. **Absent either trigger, this is always the stop:** give the owner the PR URL for GitHub
-   review (Seam 2) and wait. When they leave comments, the next step is `/spec-flow:address <N>`;
+   on. **Absent either trigger, this is always the stop:** give the owner the full PR URL
+   (`<PR_URL>` resolved above — never just `#<PR>` or "the PR") for GitHub review (Seam 2) and
+   wait. When they leave comments, the next step is `/spec-flow:address <N>`;
    after they squash-merge, `/spec-flow:finalize <N>`.
 
 ## Rules

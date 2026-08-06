@@ -183,6 +183,13 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
 
+**Epics / parent issues are never directly workable.** An issue with GitHub native sub-issues
+(`subIssuesSummary.total > 0`) is a rollup of its children, not its own unit of work — there's
+nothing to spec or implement against the epic itself. `scripts/spawn-issue-pm.sh` checks this
+before doing anything else and refuses to spawn against one (listing its sub-issues instead), and
+`board` pulls epics into their own informational section rather than ever surfacing one as READY
+or "next up," whatever `status:*` label it happens to carry. Work the sub-issues individually.
+
 ## Coordination signals
 
 Every `issue-pm` runs as an independent process — potentially on a different machine, spawned by a

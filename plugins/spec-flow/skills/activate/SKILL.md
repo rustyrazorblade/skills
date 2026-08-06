@@ -19,14 +19,30 @@ waiting — see steps 4 and 7 below for exactly how.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
 unassigned or already assigned to you (`gh issue list --label status:ready --json
-number,title,labels,assignees` and choose `P0` over `P1` …, skipping any issue assigned to someone
-else — that's their claim, not yours to take), and confirm the choice with the owner.
+number,title,labels,assignees,subIssuesSummary` and choose `P0` over `P1` …, skipping any issue
+assigned to someone else — that's their claim, not yours to take — **and skipping any epic**
+(`subIssuesSummary.total > 0`; see step 1's epic guard below — pick its highest-priority
+`status:ready` sub-issue instead, or the next `status:ready` issue if none of its sub-issues
+qualify), and confirm the choice with the owner.
 
 ## Steps
 
-1. **Load the issue and claim it.** `gh issue view <N> --json number,title,body,labels,assignees`.
-   The OpenSpec change for this issue is named `issue-<N>` — deterministic, nothing to derive from
-   the title.
+1. **Load the issue and claim it.** `gh issue view <N> --json
+   number,title,body,labels,assignees,subIssuesSummary`. The OpenSpec change for this issue is
+   named `issue-<N>` — deterministic, nothing to derive from the title.
+
+   **Announce it clearly, first thing.** Before anything else, output a one-line header —
+   `Issue #N: <title>` — as your first visible text. This is what the owner sees first when they
+   attach; with several `issue-pm` sessions possibly running at once, it's how they tell this tab
+   apart from the others and rename it.
+
+   **Epic guard.** If `subIssuesSummary.total > 0`, this is a parent/epic issue — its own scope is
+   just a rollup of its sub-issues, nothing to spec or implement directly. `scripts/spawn-issue-pm.sh`
+   already refuses to spawn against one, so reaching this point on a real epic should be rare (a
+   respawn of a stale session, or activate invoked some other way) — refuse here too rather than
+   claiming it: list its sub-issues (`gh issue view <N> --json subIssues --jq '.subIssues.nodes[] |
+   "#\(.number) \(.title)"'`) and tell the owner to activate one of those instead. Do not proceed
+   to the multi-user guard or claim below.
 
    **Multi-user guard.** Check `assignees` against the authenticated user
    (`gh api user --jq .login`). If the issue is already assigned to someone else, **stop** — tell

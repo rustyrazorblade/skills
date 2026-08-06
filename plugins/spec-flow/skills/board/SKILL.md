@@ -16,15 +16,27 @@ Steps 1-4 are independent reads — issue them together (parallel tool calls) ra
 time.
 
 1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
-   `agent:active` and `blocked` are ordinary labels, already in this response, no separate call:
+   `agent:active` and `blocked` are ordinary labels, already in this response, no separate call.
+   `subIssuesSummary` is what tells an epic (a parent issue rolled up from GitHub native
+   sub-issues) apart from a directly-workable issue — see the epics note below:
    ```bash
-   gh issue list --state open --json number,title,labels,url,assignees --limit 100
+   gh issue list --state open --json number,title,labels,url,assignees,subIssuesSummary --limit 100
    ```
    Bucket by the `status:*` label; read the `P?` label as priority. Issues carrying **no
    `status:*` label** are the raw backlog — not yet groomed, so no `P?` either. Keep them
    separate; they're the fallback when nothing labeled is actionable. Also fetch the current user
    (`gh api user --jq .login`) once, to tell "assigned to you" apart from "claimed by someone
    else" — this repo may have multiple users.
+
+   **Epics are never directly workable — pull them out of every actionable bucket.** Any issue
+   with `subIssuesSummary.total > 0` is a parent/epic: its own scope is just a rollup of its
+   children, so it has nothing to spec or implement on its own —
+   `scripts/spawn-issue-pm.sh` refuses to spawn against one (confirmed by real use, 2026-08-06:
+   without this, a broad parent issue got claimed and spawned into its own worktree with nothing
+   coherent to build). Set them aside into their own section (below) regardless of what
+   `status:*` label they happen to carry, and never let one win "next up" or show as an
+   activatable `status:ready` item — point at its sub-issues (`gh issue view <N> --json
+   subIssues --jq '.subIssues.nodes[] | "#\(.number) \(.title)"'`) instead.
 
 2. **Gather PR state AND CI state in one call.** `statusCheckRollup` carries every check for
    every open PR, so there's no need to loop `gh pr checks` per PR:
@@ -98,10 +110,17 @@ time.
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
+   📦 EPICS (not directly workable — see sub-issues)
+     status:ready  #E P1  <title>  (unclaimed)  3 sub-issues (1 done)  → #E1 (login retry), #E2 (token refresh), #E3 (session cleanup)
+
    (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2 · specs pending archive: 3 → /spec-flow:archive)
    ```
    Drop the `specs pending archive` clause from that summary line entirely when step 4 found
-   nothing pending — don't render "specs pending archive: 0," just omit it.
+   nothing pending — don't render "specs pending archive: 0," just omit it. Drop the **EPICS**
+   section entirely when step 1 found none. An epic keeps whatever `status:*` label it happens to
+   carry (shown as-is, informational only) but is never counted toward READY, BLOCKED ON YOU, IN
+   FLIGHT, or **Next up** below — list its sub-issue numbers so the owner can pick one directly
+   instead of spawning against the epic itself.
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
    `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴
@@ -113,10 +132,12 @@ time.
    "next up" for you, even though it's still worth showing in the board for visibility:
    - **Next up** — ranked by **distance to landed**, not just priority label, walking this ladder
      until something applies, considering only items assigned to **you** (or unclaimed, for
-     `status:ready`): (1) a `status:in-review` PR **whose CI is green** and assigned to you — one
-     merge away from shipping, and `/spec-flow:finalize` can't run until it merges; (2) the
-     highest-priority `status:ready` issue that's **unclaimed** to activate — never one already
-     assigned to someone else; (3) if nothing is `status:ready` either, the highest-value
+     `status:ready`) **and never an epic** (step 1's `subIssuesSummary` check — an epic can't be
+     "next up," only its sub-issues can): (1) a `status:in-review` PR **whose CI is green** and
+     assigned to you — one merge away from shipping, and `/spec-flow:finalize` can't run until it
+     merges; (2) the highest-priority `status:ready` issue that's **unclaimed** to activate — never
+     one already assigned to someone else, and never an epic (offer its highest-priority unclaimed
+     sub-issue instead); (3) if nothing is `status:ready` either, the highest-value
      **BACKLOG** issue to groom — and if it looks too large to spec and land as one unit, say so
      and suggest splitting it into smaller issues instead. **Keep the train moving** — landing
      what's already close beats starting something new, and starting something small beats

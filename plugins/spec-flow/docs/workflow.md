@@ -69,8 +69,9 @@ way, just split across two separate processes instead of one conversation:
         │                          ▼
         │                 ┌────────────────────────────┐
         └─────────────────│ /spec-flow:finalize <issue#>      │
-                          │   sync+archive openspec,     │
                           │   close issue, remove worktree│
+                          │   (spec archived later, in    │
+                          │   bulk, by project-manager)   │
                           └────────────────────────────┘
 ```
 
@@ -98,8 +99,10 @@ opens a PR — it never merges *that* PR and never pushes it to `main`. You revi
 optionally loop through `/spec-flow:address`, and perform the squash-merge yourself. Merge
 convention: rebase + squash to a single commit — one clean commit per PR on a fast-forward main
 history (never a merge commit, never the branch's individual commits); rebase onto current main
-first so the squash fast-forwards. (`finalize`'s own OpenSpec archive commit afterward is separate,
-no-review bookkeeping — it queues rather than opening its own PR; see **Archive queue** below.)
+first so the squash fast-forwards. (`finalize` itself only closes the issue and removes its
+worktree afterward — it doesn't touch the OpenSpec archive at all; that's separate, no-review
+bookkeeping `project-manager` does in bulk across several issues at once, see **Bulk spec
+archiving** below.)
 
 **Overriding either seam's default.** Both seams default to always stopping. `project-manager`
 composes a free-text instruction — from whatever you said for that issue, or a standing preference
@@ -200,10 +203,13 @@ reflects the local machine's session registry, and says nothing about another de
   `claude agents --json --all`, is the authoritative "is anything actually working this issue"
   signal — `board` reads it directly (see its **Steps**).
 
-  `scripts/spawn-issue-pm.sh` checks its **own machine's** past sessions first: a session named
-  `issue-pm-<N>` that's still live → refuse (already running here); one that exists but isn't live
-  (crashed, stopped, finished) → `claude respawn` it, landing back in its own worktree with its
-  branch and uncommitted work intact, instead of a fresh, unrelated one branched from `main` —
+  `scripts/spawn-issue-pm.sh` checks its **own machine's, this repo's** past sessions first — a
+  session named `issue-pm-<N>` is only unique within one repo (GitHub issue numbers are per-repo),
+  so the lookup is scoped to sessions whose `cwd` falls under this repo's own root, not by name
+  alone; otherwise a same-numbered issue in a different repo on this machine could match. A match
+  that's still live → refuse (already running here); one that exists but isn't live (crashed,
+  stopped, finished) → `claude respawn` it, landing back in its own worktree with its branch and
+  uncommitted work intact, instead of a fresh, unrelated one branched from `main` —
   **except** when that worktree is gone (Claude Code's own cleanup swept it, or someone removed it
   by hand): confirmed by test, `claude respawn` in that case doesn't error and doesn't recreate the
   worktree, it silently drops the session into the **primary checkout**. The script checks for
@@ -221,9 +227,11 @@ reflects the local machine's session registry, and says nothing about another de
 - **Progress comments.** `issue-pm` posts a **new** comment (never edits one in place — the point
   is a readable timeline, not a live-updating status line) on the issue at each meaningful
   milestone: claimed, spec committed, draft PR opened, each `tasks.md` checkpoint during
-  `implement`, each review round's result, addressed-comments pushed, CI flagged, merged/archived.
-  A fresh `project-manager` (yours or another user's) or the owner can read the issue's comment
-  history and know exactly where things stand without attaching to the session at all. Team mode
+  `implement`, each review round's result, addressed-comments pushed, CI flagged, merged and
+  closed. `archive-batch` adds one more, later and separately: a comment on each issue once its
+  spec is actually archived, as part of whatever batch it landed in. A fresh `project-manager`
+  (yours or another user's) or the owner can read the issue's comment history and know exactly
+  where things stand without attaching to the session at all. Team mode
   (the `implement` default) posts these at full granularity since `issue-pm` is directly driving
   each step; workflow mode is coarser — only before and after, since the script itself has no
   per-step hook back out to a comment.
@@ -285,8 +293,9 @@ a subagent either. Instead:
   never shares the coordinator's.
 - That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
-  you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged, archived,
-  and closed.
+  you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged and closed
+  — its OpenSpec change is archived later, in bulk, by `project-manager` (see **Bulk spec
+  archiving**), not by `issue-pm` itself.
 - Several issues can be in flight at once, each its own process — `claude agents` lists them all,
   attach to whichever one you want to talk to. It's the spawn script, not `project-manager` itself,
   that guards against duplicates — this machine's own past sessions first (respawning a crashed one
@@ -325,22 +334,50 @@ branch explicitly, on its own schedule (tied to the issue merging, not to sessio
 **Prerequisites** in the README) so these checkouts never show up as untracked files in your
 primary checkout.
 
-## Archive queue
+## Bulk spec archiving
 
-`finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — but landing it via
-its own PR was still one PR per issue for zero review value. Instead, every `/spec-flow:finalize`
-appends its issue's archive commit onto a single shared branch, **`spec-flow/archive-queue`**
-(fetch/rebase/push, retrying if a concurrent finalize's append wins the race —
-`scripts/finalize-queue-archive.sh`), and stops there. Nothing lands on the default branch until
-you run **`/spec-flow:archive`**, which opens (or reuses) one batch PR from that branch and merges
-it — squash, so however many issues fed into it, it lands as one clean commit — then deletes the
-queue branch so the next `finalize` starts fresh (`scripts/archive-flush.sh`).
+`finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — and doing it
+per-issue, inline in each `issue-pm`, meant a git worktree and a set of `gh`/OpenSpec commands
+every single time, for zero review value each time. So `finalize` doesn't touch it at all anymore:
+once an issue's PR merges, its `openspec/changes/issue-<N>` change just sits on the default branch,
+unarchived, until `project-manager` sweeps up a batch of them at once.
+
+`project-manager` **watches for the buildup and checks in with you** — it never archives on its own
+initiative. `/spec-flow:archive` counts every `openspec/changes/*` directory (excluding `archive/`)
+on the default branch, compares it against a threshold (**default 5**, overridable — state a
+standing preference once, in this conversation or in `CLAUDE.md`, or override ad hoc for just one
+run: "archive these 3 now"), and — only once you've confirmed the specific batch — spawns a
+dedicated **`archive-batch`** worker as its own separate background Claude Code process (via
+`scripts/spawn-archive-batch.sh`), the same delegation pattern as `issue-pm`: `project-manager`
+coordinates, it doesn't do the archiving itself. You can attach to that worker
+(`claude attach <id>`) to watch it, same as any `issue-pm`.
+
+The worker (`agents/archive-batch.md`) does the whole batch in one pass: one short-lived worktree
+cut from the default branch, `openspec-sync-specs`/`openspec-archive-change` for every pending
+change in the batch, one combined commit, one PR (`scripts/archive-batch-pr.sh` handles the
+push/open/merge mechanics), a progress comment on each archived issue, then it reports and
+finishes — no looping, no respawn support, since nothing owner-valuable is at risk if it crashes
+(worst case, an abandoned worktree; re-running `/spec-flow:archive` just recomputes the buildup
+fresh from the default branch and spawns a new worker).
+
+**Once you've confirmed the batch, the rest is fully autonomous — including the merge.** There's no
+second upfront check-in before landing the PR; that would defeat the point of batching in the first
+place. Two things still involve you, and neither is a silent guess: a PR that can't merge
+automatically (required checks pending, branch protection) stops the worker and reports —
+mechanical, the same way `implement`'s own auto-merge reports a blocked merge. A genuine content
+conflict while reconciling two changes' delta specs is different: rather than stopping and handing
+back for you to resolve separately later, the worker **pauses and works it out with you
+interactively**, right there in that session — the same way `issue-pm` waits at a design or spec
+seam — then continues the batch from where it left off once you've resolved it together. It posts
+a comment on every issue involved first, so there's a trail (and an attach pointer) even if you're
+not watching when it happens.
 
 This is **session-driven, not cron** (see **Substrate and constraints** below) — nothing runs
-`/spec-flow:archive` automatically or on a timer; you decide when. `board` surfaces how many
-issues are queued so you notice, but never triggers the flush itself. An issue's own `finalize` —
-closing it, removing its worktree — never waits on the queue actually landing; queuing is enough
-for that issue to be done from `issue-pm`'s point of view.
+`/spec-flow:archive` automatically or on a timer; you decide when, or `project-manager` offers when
+it notices the count while doing something else. `board` surfaces how many specs are pending so you
+notice, but never triggers anything itself. An issue's own `finalize` — closing it, removing its
+worktree — never waits on its archive actually landing; the OpenSpec change sitting unarchived on
+the default branch is expected, normal state between batches, not a problem to fix per-issue.
 
 ## The skills
 
@@ -351,9 +388,9 @@ for that issue to be done from `issue-pm`'s point of view.
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (architect on demand), skipping the panel/build/polish. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
-| `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives OpenSpec, appends the archive commit onto the shared queue branch, closes the issue, removes the worktree. Never merges the feature PR, and never opens a PR of its own either — see **Archive queue** above. |
-| `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how much is queued for the next `/spec-flow:archive`. |
-| `/spec-flow:archive` | foreground-invoked | Flush the shared archive queue into one batch PR and merge it. Owner-invoked, whenever you want it landed — see **Archive queue** above. |
+| `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
+| `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
+| `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 | `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 
@@ -379,6 +416,11 @@ for that issue to be done from `issue-pm`'s point of view.
   It becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
   stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
   **Coordinator and issue leads** above.
+- `archive-batch` — the **one-shot bulk archiver**, launched by `project-manager` (named
+  `archive-batch`, via `scripts/spawn-archive-batch.sh`) as its own separate background process
+  once you've confirmed a pending batch of OpenSpec changes should be archived. Not tied to any
+  issue and not long-running: does the batch, opens and merges one PR, comments on each archived
+  issue, reports, and finishes. See **Bulk spec archiving** above.
 
 **Front of pipeline (refine → design → proposal)**
 - `product-manager` — refines a rough idea into a tight problem statement, in/out scope, and
@@ -551,8 +593,8 @@ set's blind-append safety rests on.
   merged by the owner by default. An `issue-pm` merges it itself only when the `merge-on-green`
   label is set or explicitly instructed to for that run (see **Overriding either seam's default**,
   above), never on its own initiative, and only after required CI checks are green. Separately,
-  `finalize`'s own OpenSpec archive commit is never code, and never even opens its own PR — it
-  queues onto a shared branch that `/spec-flow:archive` batches and merges (see **Archive queue**).
+  the OpenSpec archive is never code and never touched by any single issue's `finalize` — it's
+  `project-manager`'s bulk job, batched and confirmed with the owner (see **Bulk spec archiving**).
 
 ## Conventions
 

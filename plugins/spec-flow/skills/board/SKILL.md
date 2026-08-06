@@ -61,17 +61,17 @@ time.
    driving it forward even though its status label says it should be — surface that, it doesn't
    happen automatically anywhere else.
 
-4. **Check the archive queue (cheap, independent — issue it alongside steps 1-3).** Every
-   `/spec-flow:finalize` appends its issue's OpenSpec archive commit onto a shared branch instead
-   of opening its own PR; nothing lands on the default branch until `/spec-flow:archive` flushes
-   it:
+4. **Check the OpenSpec archive buildup (cheap, independent — issue it alongside steps 1-3).**
+   `finalize` closes an issue but never archives its OpenSpec change — that's `project-manager`'s
+   job, batched, once enough have piled up on the default branch (`/spec-flow:archive`):
    ```bash
-   git ls-remote --heads origin spec-flow/archive-queue
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git ls-tree --name-only "origin/$DEFAULT_BR:openspec/changes" 2>/dev/null | grep -v '^archive$'
    ```
-   Empty output → nothing queued, omit it from the render entirely. Non-empty → something's
-   waiting; if you want a count, `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`
-   then `git rev-list --count origin/<that>..origin/spec-flow/archive-queue`, but even "archives
-   pending" without a precise count is enough to surface.
+   Empty output → nothing pending, omit it from the render entirely. Non-empty → count the lines;
+   this is purely informational here (`/spec-flow:archive` does its own threshold check against
+   this same count when actually asked to run) — just surface the number, don't decide whether
+   it's "enough" yourself.
 
 5. **Render a board** grouped by stage, priority-sorted within each group. An `in-review` PR
    goes under **BLOCKED ON YOU only when its CI is green**; while CI is running it goes under
@@ -98,10 +98,10 @@ time.
    📥 BACKLOG (ungroomed)
      (no labels)   #H     <title>                  → /spec-flow:groom <H>
 
-   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2 · archive queue: 3 issues pending → /spec-flow:archive)
+   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2 · specs pending archive: 3 → /spec-flow:archive)
    ```
-   Drop the `archive queue` clause from that summary line entirely when step 4 found nothing
-   queued — don't render "archive queue: 0," just omit it.
+   Drop the `specs pending archive` clause from that summary line entirely when step 4 found
+   nothing pending — don't render "specs pending archive: 0," just omit it.
    Show the assignee on every row (`@you`, `@<other-user>`, or `(unclaimed)` for `status:ready`
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
    `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴

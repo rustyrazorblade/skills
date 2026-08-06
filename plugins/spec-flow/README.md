@@ -110,9 +110,9 @@ All skills are namespaced under the plugin:
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Owner-invoked, never polls. |
-| `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how much is queued for `/spec-flow:archive`. |
-| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): syncs+archives the OpenSpec change, appends the archive commit onto the shared queue branch, closes the issue, then removes the worktree. Never opens a PR of its own. |
-| `/spec-flow:archive` | Flush the shared OpenSpec archive queue into one batch PR and merge it. Owner-invoked, on your own schedule — not automatic. |
+| `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
+| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, then removes the worktree. Never opens a PR; never touches the OpenSpec archive — that's `project-manager`'s job, batched. |
+| `/spec-flow:archive` | Counts un-archived OpenSpec changes against a threshold (default 5, overridable) and, once you confirm the batch, spawns a dedicated background worker to sync+archive them all and land one PR. Not automatic — you (or project-manager noticing the buildup) trigger it. |
 | `/spec-flow:adopt-tiering` | One-time, repo-wide: split an existing test suite into the unit/integration tiers the pipeline assumes, and wire CI to the `spec-flow-failures` artifact contract. Run once per repo, before relying on `sync-ci`/the tiered gate. |
 | `/spec-flow:setup` | One-time, re-runnable: explore this repo's Prerequisites state and walk through only what's missing, one item at a time with a recommended default. The fastest way to onboard a new repo. |
 
@@ -130,6 +130,11 @@ All skills are namespaced under the plugin:
   script) to talk to it directly. It owns that issue alone, end to end: claims it, drives
   `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
   hands back. This is the default flow for working an issue, not an opt-in.
+- **`archive-batch`** — the **one-shot bulk archiver**. `project-manager` launches one (named
+  `archive-batch`) as its own background process — via `scripts/spawn-archive-batch.sh` — once
+  you've confirmed a pending batch of OpenSpec changes should be archived. Not tied to an issue,
+  not long-running: syncs+archives the whole batch, opens and merges one PR, comments on each
+  archived issue, reports, and finishes.
 
 **Front of pipeline (refine → design → proposal)**
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
@@ -204,11 +209,10 @@ they are the single source you maintain, and every repo using the plugin inherit
   `issue-pm` merges the feature PR itself only when you explicitly instruct it to for that run
   (see `docs/workflow.md`'s "Overriding either seam's default") — the `merge-on-green` label is
   the simplest way to say so, settable any time in GitHub itself, no session involved — and even
-  then only after the PR's required CI checks are green. Separately, `finalize`'s own OpenSpec
-  sync/archive (no code,
-  nothing to review) never opens its own PR either — it appends onto a shared queue branch that
-  `/spec-flow:archive` batches into one PR, on your own schedule — see **Archive queue** in
-  `docs/workflow.md`.
+  then only after the PR's required CI checks are green. Separately, `finalize` never touches the
+  OpenSpec archive at all (no code, nothing to review either way) — that's `project-manager`'s job,
+  batched across however many issues have piled up and confirmed with you first — see **Bulk spec
+  archiving** in `docs/workflow.md`.
 - Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
   `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
   trade-offs, you decide right there before anything is generated; Seam 1 then confirms the

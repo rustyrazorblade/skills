@@ -65,9 +65,38 @@ never touches yours:
   including one running on someone else's machine.
 - **You still own:** `/spec-flow:groom` (shaping new work — no issue-pm needed, nothing is being
   actively worked yet), `/spec-flow:board` (cross-issue status), `/spec-flow:adopt-tiering`
-  (repo-wide setup, not tied to any one issue), and `/spec-flow:archive` (flushing the shared
-  OpenSpec archive queue every `finalize` feeds — also not tied to any one issue). These never move
-  to an `issue-pm`.
+  (repo-wide setup, not tied to any one issue), `/spec-flow:setup` (interactive onboarding), and
+  `/spec-flow:archive` (checking the OpenSpec archive buildup against a threshold and, once
+  confirmed, spawning a dedicated `archive-batch` worker — see below). These never move to an
+  `issue-pm`.
+
+## Watching for archive buildup: you check and confirm, `archive-batch` does the work
+
+`finalize` closes an issue but never archives its OpenSpec change — that change sits on the default
+branch, unarchived, until you sweep up a batch. This is the same two-tier split as `issue-pm`:
+you notice and confirm, a dedicated background process does the actual work.
+
+- **Notice the buildup.** Whenever you're already looking (e.g. during `board`, or when the owner
+  asks), count the pending `openspec/changes/*` directories (excluding `archive/`) on the default
+  branch — `/spec-flow:archive`'s own step 1 has the exact command. You don't need to run the full
+  archive skill just to know the number.
+- **Threshold: default 5, never invented.** Check for a stated standing preference first — in this
+  conversation, or written in this repo's (or the owner's global) `CLAUDE.md` — before falling back
+  to 5. The owner can also override ad hoc for one run ("archive these 3 now") without changing the
+  standing threshold.
+- **Below threshold → mention it, don't act.** "3 of 5 pending — not archiving yet" is enough;
+  don't run `/spec-flow:archive`'s spawn step over a count that hasn't been reached and wasn't
+  overridden.
+- **At or above threshold (or overridden) → always confirm the specific batch with the owner
+  before spawning anything.** List which issues, by number and description. This mirrors the
+  owner's two seams in spirit even though it isn't one of them structurally — landing a real PR is
+  still real, and the owner should see what's in it before it's built.
+- **Once confirmed, delegate — don't do the archiving yourself.** Run
+  `${CLAUDE_PLUGIN_ROOT}/scripts/spawn-archive-batch.sh` and report its one-line output (session id
+  + attach command), same as you would for `spawn-issue-pm.sh`. If you catch yourself creating a
+  worktree, running `openspec-sync-specs`/`openspec-archive-change`, or opening a PR inline here,
+  stop — that's `archive-batch`'s job, running as its own process specifically so it never becomes
+  work in your own context. Full detail: `skills/archive/SKILL.md` and `agents/archive-batch.md`.
 
 ## The pipeline
 
@@ -183,8 +212,8 @@ on the owner's behalf.
   `issue-pm`). Your output is coordination: the state, the decision, the delegation, the result.
 - **Configuration problems get configuration fixes.** Never let a stage disable functionality, skip
   a test, or weaken a check to make something pass — surface the real problem to the owner instead.
-- **Never attach to an `issue-pm` session, never run `claude logs` against one, never read its
-  transcript.** Your view of an in-flight issue is its labels, its PR, its CI state, and whether
-  its session is alive (`claude agents --json --all` — `--all` required, see above) — that's the
-  whole point of it running as a separate process instead of a subagent in your own context. If
-  you need more than that, tell the owner to attach to it themselves.
+- **Never attach to an `issue-pm` or `archive-batch` session, never run `claude logs` against one,
+  never read its transcript.** Your view of an in-flight issue is its labels, its PR, its CI state,
+  and whether its session is alive (`claude agents --json --all` — `--all` required, see above) —
+  that's the whole point of running these as separate processes instead of subagents in your own
+  context. If you need more than that, tell the owner to attach to it themselves.

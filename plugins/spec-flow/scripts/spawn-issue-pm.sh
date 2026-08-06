@@ -38,7 +38,7 @@ done
 [[ -n "$issue" ]] || usage
 [[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh unvalidated
 
-for bin in claude jq gh; do
+for bin in claude jq gh git; do
   command -v "$bin" >/dev/null 2>&1 || {
     echo "spawn-issue-pm: '$bin' is required but not on PATH." >&2
     echo "If you can't install it (jq in particular): don't run this script — an agent can replicate" >&2
@@ -48,11 +48,38 @@ for bin in claude jq gh; do
   }
 done
 
+# Every session-name lookup below is scoped to THIS repo via REPO_ROOT — "issue-pm-<N>" is only
+# unique within one repo (GitHub issue numbers are per-repo), but `claude agents --json --all`
+# returns every session on the machine, unscoped. On a machine running spec-flow in more than one
+# repo, a same-numbered issue in a different repo would otherwise match by name alone — either a
+# false "already running" refusal, or worse, silently respawning the WRONG repo's session. This
+# script already assumes "cwd inside the target repo" (every gh call already relies on it), so
+# resolving the root here just makes that assumption explicit and checkable. Specifically the
+# PRIMARY checkout, not an existing worktree — run from inside `.claude/worktrees/issue-<N>` and
+# `--show-toplevel` returns that worktree's own root instead, so a genuine same-repo session
+# would fail to match (fails toward "no local record" → the GitHub-label fallback path, not a
+# silent wrong-repo respawn — but respawn recovery would be missed). project-manager, the normal
+# caller, always runs from the primary checkout.
+git_root_err=$(mktemp)
+if ! REPO_ROOT=$(git rev-parse --show-toplevel 2>"$git_root_err"); then
+  echo "spawn-issue-pm: couldn't resolve the repo root ('git rev-parse --show-toplevel' failed)." >&2
+  echo "git said: $(cat "$git_root_err")" >&2
+  echo "Run this from inside the target repo's primary checkout." >&2
+  rm -f "$git_root_err"
+  exit 1
+fi
+rm -f "$git_root_err"
+
 name="issue-pm-${issue}"
 
 lookup_session_id() {
+  # $1 = session name, $2 = repo root to scope the match to (see the REPO_ROOT comment above) —
+  # cwd == root covers a stopped session whose registry entry reverted to the primary checkout;
+  # cwd under root/ covers one still isolated in (or relocating into) its worktree, wherever
+  # Claude Code actually places that — this never hardcodes ".claude/worktrees/" itself.
   claude agents --json --all 2>/dev/null \
-    | jq -r --arg n "$1" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last.id // empty'
+    | jq -r --arg n "$1" --arg root "$2" \
+        '[.[] | select(.name == $n) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last.id // empty'
 }
 lookup_session_cwd() {
   claude agents --json --all 2>/dev/null \
@@ -74,18 +101,20 @@ retry_until_nonempty() {
 }
 # A plain non-empty check is NOT enough for the post-respawn cwd: confirmed by live repro
 # (2026-08-04) — `claude stop` reverts the registry's cwd to the session's ORIGINAL spawn
-# directory (the primary checkout), and `claude respawn` only re-applies the worktree
-# relocation ~1-2s later, asynchronously. That reverted value is immediately non-empty, so
-# retry_until_nonempty would return it on the very first check, inside the race window, every
-# time — a false positive that fired the fail-safe below on every healthy respawn. Poll for the
-# cwd to actually CONTAIN /.claude/worktrees/, not just to exist, bounded so a genuinely swept
-# worktree (which never relocates) still times out and the fail-safe still fires correctly for
-# that real case.
+# directory (the primary checkout, i.e. exactly $REPO_ROOT), and `claude respawn` only
+# re-applies the worktree relocation ~1-2s later, asynchronously. That reverted value is
+# immediately non-empty, so retry_until_nonempty would return it on the very first check, inside
+# the race window, every time — a false positive that fired the fail-safe below on every healthy
+# respawn. Poll for the cwd to actually MOVE to a strict subdirectory of the repo root, not just
+# to exist — bounded so a genuinely swept worktree (which never relocates, so cwd stays exactly
+# $REPO_ROOT) still times out and the fail-safe still fires correctly for that real case. This
+# deliberately doesn't assert ".claude/worktrees/" as a literal substring — only Claude Code
+# decides where under the root a worktree actually lands, and this doesn't need to know.
 retry_until_worktree_cwd() {
-  local id="$1" out="" attempts=0
+  local id="$1" root="$2" out="" attempts=0
   while [[ $attempts -lt 15 ]]; do
     out=$(lookup_session_cwd "$id")
-    [[ "$out" == *"/.claude/worktrees/"* ]] && { echo "$out"; return 0; }
+    [[ -n "$out" && "$out" != "$root" && "$out" == "$root"/* ]] && { echo "$out"; return 0; }
     attempts=$((attempts + 1))
     sleep 2
   done
@@ -113,7 +142,13 @@ if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
   echo "spawn-issue-pm: 'claude agents --json --all' failed — can't check for an existing session." >&2
   exit 1
 fi
-existing_json=$(jq -c --arg n "$name" '[.[] | select(.name == $n)] | sort_by(.startedAt) | last // empty' "$claude_agents_out")
+# Scoped to REPO_ROOT (see its own comment above) — otherwise a same-numbered issue-pm session
+# from a different repo on this machine would match by name alone. `.cwd // ""` guards a
+# registry entry with a missing/null cwd: bare `startswith()` on null aborts jq (confirmed by
+# test) rather than just not matching, which would kill this script under `set -e`.
+existing_json=$(jq -c --arg n "$name" --arg root "$REPO_ROOT" \
+  '[.[] | select(.name == $n) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
+  "$claude_agents_out")
 rm -f "$claude_agents_out"
 existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
@@ -183,8 +218,8 @@ if [[ -n "$existing_id" ]]; then
   # inside the race window and false-positives on every healthy respawn, not just genuinely swept
   # ones. Empty/missing cwd data after the poll still counts as unsafe, same as a confirmed wrong
   # path — a transient `claude agents` failure here must never be read as "must be fine, then."
-  respawned_cwd=$(retry_until_worktree_cwd "$session_id")
-  if [[ -z "$respawned_cwd" || "$respawned_cwd" != *"/.claude/worktrees/"* ]]; then
+  respawned_cwd=$(retry_until_worktree_cwd "$session_id" "$REPO_ROOT")
+  if [[ -z "$respawned_cwd" || "$respawned_cwd" == "$REPO_ROOT" || "$respawned_cwd" != "$REPO_ROOT"/* ]]; then
     claude stop "$session_id" > /dev/null 2>&1 || true
     # Also remove the session record, not just stop it — otherwise this stuck record is what the
     # NEXT run's local-lookup-first finds, taking the respawn path into the identical dead end
@@ -317,7 +352,7 @@ else
     exit 1
   fi
 
-  session_id=$(retry_until_nonempty lookup_session_id "$name")
+  session_id=$(retry_until_nonempty lookup_session_id "$name" "$REPO_ROOT")
 
   if [[ -z "$session_id" ]]; then
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true

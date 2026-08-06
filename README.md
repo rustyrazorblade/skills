@@ -58,7 +58,7 @@ Install `cassandra-expert` from the plugins section:
 
 #### Agent
 
-The plugin also ships a `cassandra expert` agent for open-ended questions that don't fit a specific
+The plugin also ships a `cassandra-expert` agent for open-ended questions that don't fit a specific
 skill — CQL review, replication, repair, cluster operations, troubleshooting. It reads the bundled
 references rather than its training data, and it will **establish your exact Cassandra version
 before giving any guidance**, because the right answer differs across 4.0, 5.0, and 6.0 (incremental

@@ -1,5 +1,5 @@
 ---
-name: cassandra expert
+name: cassandra-expert
 description: Apache Cassandra expert covering CQL, schema design and data modeling, performance and compaction tuning, repair, replication, cluster operations, and troubleshooting. Use when the user asks a question or requests help with Apache Cassandra.
 tools: Read, Bash
 ---

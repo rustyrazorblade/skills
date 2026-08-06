@@ -1,6 +1,6 @@
 {
   "name": "cassandra-expert",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Expert guidance for Apache Cassandra development, including schema design, query optimization, performance tuning, and operational best practices.",
   "author": {
     "name": "Jon Haddad"

@@ -1,20 +1,28 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, delegate the design to the architect agent (concurrently with a domain-expert agent, if one is available), stop for the owner's design decision BEFORE generating anything, then run OpenSpec explore+propose to produce a committed spec from the chosen design and stop again for the owner's spec approval. Second stage of the flow delivery workflow (see docs/workflow.md). Two owner touchpoints by default — the design choice, then the spec approval (Seam 1) — either auto-approvable per this run's `.spec-flow/owner-instructions`; it never implements itself regardless. A `type:docs` issue skips the architect consult and design-choice stop entirely (see docs/workflow.md's Docs fast path) but still stops for spec approval. Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, run architect + domain-expert design concurrently, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
 # activate — decide the design, spec the work, then stop for approval
 
 You are this issue's `issue-pm`, running as your own dedicated background session. Take a
-`status:ready` issue and produce a committed,
-owner-approvable OpenSpec change on an isolated worktree. This skill stops for the owner **twice**:
-once at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam
-1** — to approve the resulting spec. Neither stop is optional by default; you hand back once the
-spec is committed and approved — you do not implement, and you do not start
-`/spec-flow:implement`. The only exception: if `.spec-flow/owner-instructions` at the worktree
-root (read fresh at each stop, not just once from your spawn prompt — see `agents/issue-pm.md`)
-explicitly says to auto-approve the design and/or the spec for this run, follow that instead of
+`status:ready` issue and produce an owner-approvable plan on an isolated worktree — normally a
+committed OpenSpec change, but a content-only `type:docs` issue (the common case) skips that
+artifact entirely and the plan is just its own scope + acceptance criteria (see step 5), and a
+`type:tech-debt` issue skips it too — its plan is the Direction already confirmed when the issue
+was filed, plus whatever existing specified behavior nearby must be preserved (see step 5's
+tech-debt branch). This skill stops for the owner **twice** in the normal case: once at step 4 to
+pick the design, before anything is generated, and again at step 7 — **Seam 1** — to approve
+whatever step 5 produced. Step 4's wait is skipped for every `type:docs` issue (no design to
+choose) and, by default, for `type:tech-debt` too (the architect still runs at step 3, but
+auto-adopts the issue's confirmed Direction instead of waiting — see step 4's tech-debt branch);
+Step 7 always still applies, in whichever lightweight form matches what was actually produced.
+Neither applicable stop is optional by default beyond that; you hand back once the plan is
+committed (if applicable) and approved — you do not implement, and you do not start
+`/spec-flow:implement`. The only exception: if `.spec-flow/owner-instructions` at the worktree root
+(read fresh at each stop, not just once from your spawn prompt — see `agents/issue-pm.md`)
+explicitly says to auto-approve the design and/or the plan for this run, follow that instead of
 waiting — see steps 4 and 7 below for exactly how.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
@@ -89,10 +97,29 @@ qualify), and confirm the choice with the owner.
 
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** **Skip
    this step and step 4 entirely if the issue carries `type:docs`** — a docs-only change has no
-   architecture to decide. Go straight to step 5 and spec the doc change plainly (see **Docs fast
-   path** in `docs/workflow.md`); the doc-writing pass in `implement` can still consult `architect`
-   on demand if it hits a real question about whether the documentation matches the intended
-   design — available, just not a mandatory gate here. Otherwise: before generating anything, spawn
+   architecture to decide, structural or not. Go straight to step 5, which further decides whether
+   this particular docs change needs a spec at all (see **Docs fast path** in `docs/workflow.md`);
+   the doc-writing pass in `implement` can still consult `architect` on demand if it hits a real
+   question about whether the documentation matches the intended design — available, just not a
+   mandatory gate here.
+
+   **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
+   **Tech-debt fast path** in `docs/workflow.md`). The issue body already carries a `## Direction`
+   from `/spec-flow:tech-debt` — a concrete shape, not a design brief — so spawn `architect` with a
+   **narrowed charter** instead of the normal design-from-scratch mandate: *"Direction (already
+   confirmed by the owner when this issue was filed): `<the issue's Direction section, verbatim>`.
+   Don't design from scratch — verify this specific fix still applies (the finding's file:line
+   evidence may be stale — an intervening change may already have addressed it, or shifted the
+   right shape) and turn it into a brief: confirmed shape (or a corrected one, if the code moved),
+   risks & blast radius, and whether it can be done **without changing any observable behavior**
+   (public signatures, error contracts, CLI/config/serialized output, or any existing test's
+   asserted behavior) — if not, say so plainly rather than forcing a behavior-preserving frame onto
+   a fix that isn't one."* No domain-expert consult needed here — this is a structural read, not a
+   domain-facts question. If the `architect` reports the finding is stale/already-fixed or genuinely
+   can't be done behavior-preserving, that's exactly what step 4's tech-debt branch escalates to the
+   owner.
+
+   Otherwise (a normal issue): before generating anything, spawn
    the `architect` subagent with the issue's scope + acceptance
    criteria. If a domain-expert agent is available in the consuming repo (e.g. a database or
    domain expert), spawn it **at the same time** — one message, two tool calls — with the same
@@ -105,7 +132,38 @@ qualify), and confirm the choice with the owner.
    targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
 
 4. **Stop and route the decision to the owner — before generating anything.** (Skipped entirely for
-   `type:docs`, per step 3.) Every consequential
+   `type:docs`, per step 3.)
+
+   **For a `type:tech-debt` issue, auto-adopt by default — don't wait for the owner** unless one of
+   three specific problems fires, each of which stops exactly like the hard-dependency case below
+   always has:
+   - **Architect flagged a hard dependency** on another unmerged issue — handled identically to the
+     normal case further down this step (label, comment, native link, stop for the owner). Never
+     skipped, tech-debt or not.
+   - **Architect reports a material deviation** from the issue's confirmed Direction (the code moved
+     enough that the original shape no longer fits, or the "corrected" shape from step 3 changes
+     what the fix actually does, not just where it touches).
+   - **Architect reports the fix can't be done without changing observable behavior.** This is the
+     single most important check in the whole fast path — it's what stops a "pure refactor" that
+     turns out not to be one from silently proceeding without ever going through spec approval.
+   Any of the three → **stop and present it to the owner** exactly like a real design decision (what
+   architect found, why it changed the picture, and the owner's options — proceed anyway with the
+   corrected shape, narrow the fix to what *is* behavior-preserving, or treat this as a real feature
+   change and route it through the full pipeline instead, generating a real spec for the behavior
+   delta). **None of these three ever auto-approve, even if `.spec-flow/owner-instructions` says to
+   auto-approve this run** — they're facts architect determined, not a stylistic choice, same as the
+   hard-dependency rule below.
+
+   **None of the three fired** → adopt architect's confirmed (or corrected) shape without waiting,
+   and post a comment naming what was adopted, same auditability as the docs/design auto-approve
+   comments elsewhere in this step:
+   `gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."`
+   Then go straight to step 5's tech-debt branch. This is the *default* for `type:tech-debt`, not
+   conditional on `.spec-flow/owner-instructions` — the owner already made this decision once, item
+   by item, when they confirmed the finding in `/spec-flow:tech-debt`; step 4 here is a safety check
+   against staleness/scope-creep, not a second design-choice gate.
+
+   **Otherwise (a normal issue):** every consequential
    design / data-model choice the architect surfaced (new tables / partition or clustering keys /
    indexes / schema changes / a new public interface / a concurrency model) is the **owner's** to
    make. Present the architect's (and domain-expert's) options inline — recommended choice +
@@ -161,8 +219,45 @@ qualify), and confirm the choice with the owner.
    `gh issue comment <N> --body "Design auto-approved per this run's instructions: <recommended option, one line>."`
    Then proceed to step 5. Absent that explicit instruction, this is always a real pause.
 
-5. **Check for existing work-in-progress, then explore + propose from the owner's chosen design.**
-   Before creating anything, look for what's already in `openspec/changes/`:
+5. **For a `type:docs` issue, first decide whether it needs a spec at all — most don't.** A
+   generated OpenSpec spec that just restates the book's own content in `#### Scenario:` blocks is
+   pure duplication; only generate one when there's an actual structural or technical decision to
+   record:
+   - **Content edit (the default — assume this unless the issue clearly says otherwise):**
+     expanding, correcting, or clarifying existing pages, adding examples, fixing wording — the
+     docs' own organization isn't changing and nothing behavioral is being documented for the first
+     time. **Skip OpenSpec entirely for this issue** — no `openspec/changes/issue-<N>` directory,
+     nothing to commit at step 6. Say so plainly in the conversation (step 7 posts the one GitHub
+     comment for this decision — no need to duplicate it here), then skip to step 7's lightweight
+     form below.
+   - **Structural, or documenting an accompanying tech change:** the docs' own layout/organization
+     is changing (new chapter, reorganized `SUMMARY.md`/table of contents, splitting or merging
+     sections) — that's a real decision worth a committed, reviewable record, same as any other
+     issue. Continue below exactly as normal, but keep what you generate **surface-level**:
+     describe the structural approach and which pages/sections are affected; never transcribe the
+     prose that's actually going into the book into the spec itself.
+
+   **For a `type:tech-debt` issue: always skip OpenSpec entirely** — no `openspec/changes/issue-<N>`
+   directory, nothing to commit at step 6, unconditionally (unlike docs, there's no structural
+   sub-case that generates one; a fix that turns out to need a real spec was already routed there by
+   step 4's escalation, before reaching this step at all). In its place, do the one piece of real
+   work this step contributes for a tech-debt issue — a **read-only surface listing**, not a spec:
+   grep `openspec/specs/**` for requirement titles/sections whose subject matter overlaps the
+   finding's touched files/modules (match on the module/capability name, not just filename — a spec
+   describes behavior, not file layout), and append what you find directly to the issue body so it's
+   durably available to `implement`'s review panel later, not just this conversation:
+   ```bash
+   gh issue edit <N> --body "$(gh issue view <N> --json body --jq .body)
+
+   ## Adjacent specified behavior (must be preserved)
+   <matching requirement titles + spec file paths, one per line — or 'None found — no committed spec covers this surface.' if the grep turns up nothing>"
+   ```
+   Say so plainly in the conversation (step 7 posts the one GitHub comment for this decision — no
+   need to duplicate it here), then skip to step 7's tech-debt branch below.
+
+   If it's not `type:docs` or `type:tech-debt`, or it is `type:docs` but needs a spec per the above,
+   run the OpenSpec flow below. Before creating anything, look for what's already in
+   `openspec/changes/`:
    ```bash
    ls openspec/changes/ 2>/dev/null | grep -v '^archive$'
    ```
@@ -195,13 +290,41 @@ qualify), and confirm the choice with the owner.
      intentional exclusion with a one-line reason. Never let a criterion silently drop out with no
      scenario and no explanation. This mapping is rendered for the owner at step 7.
 
-6. **Commit the spec on the branch:**
+6. **Commit the spec on the branch** — **skip this step entirely for a content-only `type:docs`
+   issue, or any `type:tech-debt` issue** (step 5 above), since there's no `openspec/changes/issue-<N>`
+   to commit either way:
    ```bash
    git -C <worktree> add openspec/changes/issue-<N>
    git -C <worktree> commit -m "issue-<N>: spec (proposal/design/specs/tasks)"
    ```
 
-7. **Render the spec INLINE for review, then mark spec-review and STOP.**
+7. **Render for review, then mark spec-review and STOP.** **For a content-only `type:docs` issue**
+   (step 5 decided no spec is needed, so step 6's commit never ran) render the issue's own scope +
+   acceptance criteria instead of a spec — it was already scoped once at `groom`, so this is a
+   quick confirmation, not a first
+   read — then mark spec-review the same way:
+   ```bash
+   gh issue edit <N> --remove-label status:ready --add-label status:spec-review
+   gh issue comment <N> --body "📝 Content-only docs change — no spec, ready for a quick review of the plan."
+   ```
+   State plainly that nothing will be written until they approve, same as the full form below, then
+   skip the rest of this step (there's no spec to render) and go straight to the auto-approve
+   paragraph.
+
+   **For a `type:tech-debt` issue** (step 5's tech-debt branch — no spec, no step-6 commit), render
+   instead: the issue's `## Direction` (as confirmed or corrected by step 3's architect brief), the
+   `## Adjacent specified behavior (must be preserved)` section step 5 appended, and architect's
+   risks/blast-radius from its brief. This is genuinely quick — the owner already confirmed this
+   exact Direction, item by item, in `/spec-flow:tech-debt`; this stop exists to catch staleness and
+   let them see the adjacent-behavior list before implementation starts, not to re-litigate the
+   fix:
+   ```bash
+   gh issue edit <N> --remove-label status:ready --add-label status:spec-review
+   gh issue comment <N> --body "📝 Tech-debt fix confirmed (\`type:tech-debt\`) — no spec; ready for a quick review before implementation."
+   ```
+   State plainly that nothing will be written until they approve, then skip the rest of this step
+   and go straight to the auto-approve paragraph. **Otherwise** (a spec was generated — either a
+   non-docs, non-tech-debt issue, or a structural/tech-accompanying `type:docs` one):
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
    gh issue comment <N> --body "📝 Spec committed (\`issue-<N>\`) — awaiting your review to approve implementation."
@@ -223,16 +346,26 @@ qualify), and confirm the choice with the owner.
    that nothing will be implemented until they approve. **Do not proceed to implementation.** When
    the owner approves, the next step is `/spec-flow:implement <N>`.
 
-   **For a `type:docs` issue** (steps 3/4 skipped), there's no step-4 design to restate — omit that
-   part of the render and show the rest as normal: proposal, requirements/scenarios, tasks.
+   **For a structural/tech-accompanying `type:docs` issue** (steps 3/4 skipped), there's no step-4
+   design to restate — omit that part of the render and show the rest as normal: proposal,
+   requirements/scenarios, tasks, kept surface-level per step 5. (A **content-only** `type:docs`
+   issue, or any `type:tech-debt` issue, never reaches this paragraph at all — both took a
+   lightweight branch above instead.)
 
    **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
-   auto-approve the spec for this run.** If so, still render the spec in full as above (posted as
-   a comment, not just shown inline, since there's no owner in the conversation to see it) so the
-   decision is auditable after the fact, then proceed directly to `/spec-flow:implement <N>`
+   auto-approve the spec for this run.** If so, still render in full as above — the spec for a
+   structural/tech-accompanying `type:docs` issue or any other, or the scope + acceptance criteria
+   (or, for tech-debt, the Direction + adjacent-behavior list) for a content-only/tech-debt one —
+   posted as a comment, not just shown inline, since there's no owner in the conversation to see it,
+   so the decision is auditable after the fact, then proceed directly to `/spec-flow:implement <N>`
    yourself instead of waiting:
    `gh issue comment <N> --body "Spec auto-approved per this run's instructions — proceeding to implement."`
-   Absent that explicit instruction, this stop always waits for the owner.
+   (for a content-only docs issue, `"Docs plan auto-approved per this run's instructions —
+   proceeding to implement."`; for a tech-debt issue, `"Tech-debt fix auto-approved per this run's
+   instructions — proceeding to implement."`) Absent that explicit instruction, this stop always
+   waits for the owner. Note this is a **separate** auto-approve gate from step 4's tech-debt
+   auto-adopt above — step 4 auto-adopts *by default*, unconditionally; this one (Seam 1 itself)
+   still needs an explicit `.spec-flow/owner-instructions` opt-in, same as every other issue.
 
 ## Rules
 
@@ -242,23 +375,40 @@ qualify), and confirm the choice with the owner.
   (generation) — never generate the spec before the owner has picked (or `.spec-flow/owner-instructions`
   auto-picked) among the architect's options. Step 7 (spec approval, Seam 1) always follows step 6
   (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until both stops
-  have passed or been explicitly auto-approved per that file's current contents. The one structural
-  exception: `type:docs` skips step 4 (there's no design to choose) entirely, not just
-  auto-approves it — but step 7 (Seam 1) still always applies.
+  have passed or been explicitly auto-approved per that file's current contents. **Two structural
+  exceptions**, each triggered by a distinct label — never combine, see the collision rule below:
+  - **`type:docs`**: always skips step 4 (there's no design to choose) entirely, not just
+    auto-approves it; a **content-only** one also skips the OpenSpec-generation portion of step 5
+    and all of step 6 (no spec generated or committed — see step 5's docs branch).
+  - **`type:tech-debt`**: step 4 still runs, but auto-adopts the confirmed Direction by default
+    instead of waiting — a real (if narrower) safety check, not a full skip, and it still stops for
+    a hard dependency, a material deviation, or infeasibility (see step 4's tech-debt branch); step
+    5's OpenSpec-generation portion and all of step 6 are always skipped, unconditionally (see step
+    5's tech-debt branch).
+  Either way, step 7 (Seam 1) still always applies, in whichever lightweight form (spec, scope +
+  acceptance criteria, or Direction + adjacent-behavior list) matches what was actually produced —
+  neither exception ever removes Seam 1 itself.
+- **`type:docs` and `type:tech-debt` never combine.** If an issue somehow carries both (hand-edited
+  in GitHub — `/spec-flow:tech-debt` and `groom` each only ever apply one), don't silently pick
+  either fast path: say so to the owner and fall back to the full pipeline (design stop + real
+  spec) — the safer default when the labeling itself is ambiguous about what kind of change this
+  actually is.
 - Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
   life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
   "worktree"`. Named `issue-<N>` explicitly (both the spawn prompt and step 2's fallback pass that
-  as `EnterWorktree`'s `name`) — deterministic, matching the OpenSpec change and PR-body correlator
-  below, and it's what makes a fresh spawn resume an existing-but-untracked worktree automatically
-  instead of duplicating it (confirmed by test). It's only guaranteed to be where you're standing
-  if step 2 actually confirmed it; isolation doesn't happen for free. That isolation is per-
-  **session**, not per-issue on its own — it's `scripts/spawn-issue-pm.sh` respawning a past
-  session by name instead of always starting fresh, plus the worktree name itself now being
-  deterministic, that keeps this issue to one worktree in practice (see **Coordination signals** in
-  `docs/workflow.md`). The issue number is the one thing that matters for finding anything — the
-  OpenSpec change is named `issue-<N>` directly from it, and `Closes #N` in the PR body (added at
-  `implement`) is the durable correlator for the PR — see **Naming** in `docs/workflow.md`.
-- One change per issue, named `issue-<N>` — deterministic, never derived from the title.
+  as `EnterWorktree`'s `name`) — deterministic, matching the OpenSpec change (when one exists — see
+  below) and PR-body correlator, and it's what makes a fresh spawn resume an existing-but-untracked
+  worktree automatically instead of duplicating it (confirmed by test). It's only guaranteed to be
+  where you're standing if step 2 actually confirmed it; isolation doesn't happen for free. That
+  isolation is per-**session**, not per-issue on its own — it's `scripts/spawn-issue-pm.sh`
+  respawning a past session by name instead of always starting fresh, plus the worktree name itself
+  now being deterministic, that keeps this issue to one worktree in practice (see **Coordination
+  signals** in `docs/workflow.md`). The issue number is the one thing that matters for finding
+  anything — `Closes #N` in the PR body (added at `implement`) is the durable correlator for the
+  PR regardless — see **Naming** in `docs/workflow.md`.
+- One change per issue, named `issue-<N>` — deterministic, never derived from the title. **Not
+  every issue gets one** — a content-only `type:docs` issue, or any `type:tech-debt` issue (step 5),
+  generates no OpenSpec change at all, by design; don't treat its absence as a skipped step.
 - Architectural / data-model decisions are the owner's, made at step 4; the architect and any
   domain-expert agent advise only, never decide.
 - **Nearby structural debt is a recommendation, not scope creep.** Never bundle a "recommend as a

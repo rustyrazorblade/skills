@@ -54,10 +54,12 @@ refines. Stay in the foreground — no worktrees, no implementation.
    mdBook tree, comments, no behavior change — say so and offer to label it `type:docs` (recommend
    yes; a low-stakes default the owner can accept in one word). `activate` and `implement` both
    skip most of their heavyweight machinery for a `type:docs` issue — no architect design consult,
-   no design-choice stop, no 5-lens review panel — while still stopping at both owner seams as
-   normal; see **Docs fast path** in `docs/workflow.md`. Not sure it's docs-only, or it touches
-   behavior at all (even indirectly — e.g. a config example that has to stay in sync with real
-   defaults)? Leave it unlabeled; the full pipeline is the safe default.
+   no design-choice stop, no 5-lens review panel, and (for most content-only docs work — the label
+   alone doesn't decide this; `activate` step 5 judges it from the issue's own scope) no OpenSpec
+   spec generated at all — while still stopping at both owner seams as normal; see **Docs fast
+   path** in `docs/workflow.md`. Not sure it's docs-only, or it touches behavior at all (even
+   indirectly — e.g. a config example that has to stay in sync with real defaults)? Leave it
+   unlabeled; the full pipeline is the safe default.
 
 4. **Delegate the refinement to the `product-manager` agent.** Spawn the `product-manager`
    subagent with the owner's raw idea, any clarifications from step 1, and the verification verdict
@@ -70,12 +72,15 @@ refines. Stay in the foreground — no worktrees, no implementation.
 5. **Draft the issue body** from the refinement, with these sections:
    - **Scope** — what's in, and explicitly what's out.
    - **Acceptance criteria** — a checklist of observable outcomes (these become the spec's
-     scenarios later, so make them testable).
+     scenarios later, when a spec gets generated at all — see the Docs fast path exception below —
+     so make them testable).
    - **Notes / context** — links, constraints, related code (`file:line`), related issues, and —
      for a bug — the step-2 verification verdict (confirmed repro, or flagged unverified/couldn't
      reproduce).
-   Keep it tight. The full spec comes later in `/spec-flow:activate`; this is the contract for *what*
-   and *why*, not *how*.
+   Keep it tight. A full spec usually comes later in `/spec-flow:activate` (a content-only
+   `type:docs` issue skips that artifact — see **Docs fast path** in `docs/workflow.md` — but still
+   reviews this same scope + acceptance criteria at Seam 1); either way, this is the contract for
+   *what* and *why*, not *how*.
 
 6. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
@@ -100,8 +105,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
 - Exactly one priority label. If the owner doesn't pick, recommend one and confirm before creating.
 - Don't groom the same idea twice — search open issues first (`gh issue list --search`) if it
   might already exist.
-- Acceptance criteria are the seed of the spec's `#### Scenario:` blocks — write them as
-  observable WHEN/THEN outcomes where you can.
+- Acceptance criteria are the seed of the spec's `#### Scenario:` blocks (when a spec gets
+  generated at all — see the Docs fast path exception above) — write them as observable WHEN/THEN
+  outcomes where you can.
 - Keep titles concrete and short — the OpenSpec change name is `issue-<N>` (deterministic, not
   derived from the title), so the title only has to be a good title, not double as a slug source.
 - When you cite an issue/PR number, always pair it with a brief `(description)` — the owner does

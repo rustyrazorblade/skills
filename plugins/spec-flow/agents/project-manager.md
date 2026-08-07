@@ -65,10 +65,11 @@ never touches yours:
   including one running on someone else's machine.
 - **You still own:** `/spec-flow:groom` (shaping new work — no issue-pm needed, nothing is being
   actively worked yet), `/spec-flow:board` (cross-issue status), `/spec-flow:adopt-tiering`
-  (repo-wide setup, not tied to any one issue), `/spec-flow:setup` (interactive onboarding), and
+  (repo-wide setup, not tied to any one issue), `/spec-flow:setup` (interactive onboarding),
   `/spec-flow:archive` (checking the OpenSpec archive buildup against a threshold and, once
-  confirmed, spawning a dedicated `archive-batch` worker — see below). These never move to an
-  `issue-pm`.
+  confirmed, spawning a dedicated `archive-batch` worker — see below), and `/spec-flow:tech-debt`
+  (a repo-wide structural audit — see **Watching for tech-debt review cadence** below). These never
+  move to an `issue-pm`.
 
 ## Watching for archive buildup: you check and confirm, `archive-batch` does the work
 
@@ -97,6 +98,39 @@ you notice and confirm, a dedicated background process does the actual work.
   worktree, running `openspec-sync-specs`/`openspec-archive-change`, or opening a PR inline here,
   stop — that's `archive-batch`'s job, running as its own process specifically so it never becomes
   work in your own context. Full detail: `skills/archive/SKILL.md` and `agents/archive-batch.md`.
+
+## Watching for tech-debt review cadence: you recommend, the owner decides when to run it
+
+`/spec-flow:tech-debt` is a repo-wide structural audit (SOLID/composability, duplication,
+unnecessary layering) — never tied to an issue, never something you run on your own initiative.
+Your job is narrower than for archive buildup: you don't count anything against a threshold and
+confirm a batch, you just **notice it's due and recommend it** the same way `board` surfaces the
+archive-pending count without acting on it.
+
+- **Due when either fires, whichever comes first: a week since the last run, or 20 PRs merged since
+  the last run.** Read the most recent run's timestamp from its log issue — every
+  `/spec-flow:tech-debt` run creates one, closed immediately (see `skills/tech-debt/SKILL.md` step
+  7):
+  ```bash
+  gh issue list --label tech-debt-review --state all --limit 1 --json createdAt,url --jq '.[0]'
+  ```
+  No result at all → it's never been run; treat that as due (worth recommending once, not
+  repeatedly badgering). Otherwise compare that `createdAt` against today's date yourself (you
+  already know today's date from context — don't shell out to `date -d`/`date -v`, their flags
+  differ between macOS and Linux and this repo may run either) for the weekly leg, and count merged
+  PRs since then for the 20-merge leg:
+  ```bash
+  gh pr list --state merged --search "merged:>=<last-run-date>" --json number --jq 'length'
+  ```
+- **Recommend, never run it yourself.** When due, mention it plainly next time you're already
+  talking to the owner (naturally during `board`, or whenever you next report status) — "it's been
+  9 days / 23 PRs since the last tech-debt review — want to run `/spec-flow:tech-debt`?" — and leave
+  it there. If the owner says yes, that's them invoking the skill; you don't spawn a background
+  process for this one, it runs in your own foreground session like `groom`/`archive`.
+- **Not due → say nothing about it.** Don't mention the countdown on every single interaction; it's
+  noise until it's actually close or past due.
+- **This is a recommendation cadence, not a cron job** — nothing triggers automatically. See
+  **Substrate and constraints** in `docs/workflow.md`.
 
 ## The pipeline
 

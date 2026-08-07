@@ -14,6 +14,9 @@ export const meta = {
 // buildSystem: the project's build tool, used only as a hint for the build phase (e.g. 'cargo',
 // 'gradle', 'npm', 'go', 'pytest', or 'auto' to let the agent discover it). NOT an exhaustive
 // switch — the agents detect the real runner from the repo.
+// change: normally 'issue-<N>' (a real OpenSpec change). For a type:tech-debt issue (no spec —
+// see "Tech-debt fast path" in docs/workflow.md), SKILL.md passes the literal sentinel
+// 'none — type:tech-debt fast path' instead — see TECH_DEBT_CHANGE below.
 // Robust to args arriving as a JSON string (some invocations stringify it) or missing.
 const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // base should always be passed explicitly (SKILL.md resolves the repo's actual default branch
@@ -26,6 +29,15 @@ if (!worktree || !change || issue === undefined || issue === null) {
     `flow-implement: missing required args (worktree/change/issue). Got: ${JSON.stringify(_args)}`,
   )
 }
+
+// A type:tech-debt issue has no OpenSpec change — activate skipped generation entirely (see
+// "Tech-debt fast path" in docs/workflow.md) — so SKILL.md passes this exact sentinel as `change`
+// instead of a real change name. Every reviewLens prompt below just interpolates ${change} as
+// informational text either way, and agents/reviewer.md itself is what switches to
+// behavior-preservation mode on seeing this string — only the Implement phase needs its own branch
+// here, since the normal prompt assumes tasks.md exists.
+const TECH_DEBT_CHANGE = 'none — type:tech-debt fast path'
+const isTechDebt = change === TECH_DEBT_CHANGE
 
 const REVIEW_SCHEMA = {
   type: 'object',
@@ -88,9 +100,32 @@ async function agentNS(prompt, opts = {}) {
 }
 
 // ── Phase: Implement ───────────────────────────────────────────────────────
+// Tech-debt mode permits ONE exception to GUARDRAILS: opening the draft PR itself. Normally
+// SKILL.md's step 2 (the lead, outside this script) opens it before this phase ever runs — but a
+// tech-debt issue commits no spec, so there's nothing to push until THIS agent's first commit
+// lands, and nothing outside this script regains control mid-run to open it the way the docs fast
+// path's lead does. This agent is the first (and only) actor with a commit to push.
+const GUARDRAILS_TECH_DEBT_IMPLEMENT = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints. Because no PR exists yet for this branch (no spec was committed for this type:tech-debt issue), you MAY also open ONE draft PR for it — after your first commit, check for an existing one first (\`gh pr list --head <branch> --json number\`); if none exists, open it (mechanics in the prompt above). This is the one exception to "don't touch PRs," specific to this no-spec case — do NOT mark it ready or edit it again after opening it. Do NOT create or edit GitHub issues, do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
+
 phase('Implement')
-await agentNS(
-  `You are implementing an approved OpenSpec change in an existing git worktree.
+if (isTechDebt) {
+  await agentNS(
+    `You are implementing a BEHAVIOR-PRESERVING structural fix in an existing git worktree. This is a type:tech-debt fast path issue — no OpenSpec change exists, so there is no tasks.md to follow.
+WORKTREE (run everything here, cwd): ${worktree}
+ISSUE: #${issue} — read its body for the plan: \`gh issue view ${issue} --json title,body\`. Its '## Direction' section is the shape of the fix; '## Acceptance criteria' states the behavior-preservation bar explicitly; '## Adjacent specified behavior (must be preserved)' (if present) names existing openspec/specs/ requirements this surface touches — do not contradict them.
+
+Implement exactly that Direction, test-first (RED→GREEN→REFACTOR) wherever you touch anything non-trivial, honoring the repo's documented conventions (CLAUDE.md / CONTRIBUTING / style guide). This is BEHAVIOR-PRESERVING: if achieving the Direction cleanly would require changing any observable behavior (a public signature, an error contract, CLI/config/serialized output, or an existing test's asserted behavior), STOP and report the specific behavior delta instead of implementing it — do not silently make the change. Commit with focused messages.
+
+After your first commit, push the branch (\`git push -u origin <branch>\`) and open a DRAFT PR — title "<issue title>", body "Closes #${issue}\\n\\nDraft — tech-debt fix in progress. Behavior-preserving — see issue body for Direction. The unit tier runs locally; the full suite runs in CI on each push.", base = the repo's actual default branch (resolve via \`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name\`, never assume main).
+${testInstruction}
+Return a short summary of what you implemented (or the behavior-delta question, if you stopped for one) and the test outcome.
+
+${GUARDRAILS_TECH_DEBT_IMPLEMENT}`,
+    { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
+  )
+} else {
+  await agentNS(
+    `You are implementing an approved OpenSpec change in an existing git worktree.
 WORKTREE (run everything here, cwd): ${worktree}
 CHANGE: ${change}  — tasks at openspec/changes/${change}/tasks.md, spec at openspec/changes/${change}/specs/**/spec.md
 ISSUE: #${issue}
@@ -103,8 +138,9 @@ ${testInstruction}
 Return a short summary of what you implemented and the test outcome.
 
 ${GUARDRAILS}`,
-  { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
-)
+    { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
+  )
+}
 
 // ── Phases: Review → Fix (bounded loop) ──────────────────────────────────────
 const MAX_ROUNDS = 3

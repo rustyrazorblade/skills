@@ -93,7 +93,7 @@ time.
    ## Delivery board
 
    ⛳ BLOCKED ON YOU
-     spec-review   #N P1  <title>  @you  🟢 active (attach: claude attach a1b2c3)  → spec ready to approve
+     spec-review   #N P1  <title>  @you  🟢 active (attach: claude attach a1b2c3)  → ready to approve (spec, or for a content-only docs issue, its plan)
      in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 active → review in GitHub: <url>
 
    🔧 IN FLIGHT (agents / CI)
@@ -143,11 +143,14 @@ time.
      what's already close beats starting something new, and starting something small beats
      reporting a stall.
    - **Blocked on you** — your seams, and only items **assigned to you**: anything in
-     `status:spec-review` (approve the spec) and any `status:in-review` PR **whose CI is green**
+     `status:spec-review` (approve the spec, or for a content-only `type:docs`/`type:tech-debt`
+     issue, its plan) and any `status:in-review` PR **whose CI is green**
      (review/merge in GitHub). An `in-review` PR with CI still **running** is NOT blocked on you —
      surface it under IN FLIGHT as awaiting CI, and a PR with **failing** CI as needing
      `/spec-flow:sync-ci` (pull the failures into the branch's flagged set, then re-run the fix
-     loop), not as your action. An item in the same states but assigned to someone else is neither
+     loop) — surface it under IN FLIGHT too, since it isn't gating anything else, but `sync-ci` is
+     owner-invoked and never polls, so you're still the one who has to run it once you notice it
+     here. An item in the same states but assigned to someone else is neither
      — it's their seam, not yours; still show it (in IN FLIGHT or its own section) so the team has
      visibility, just don't claim it's actionable by you.
    - **Stalled** — any issue assigned to you past `status:ready` with no `agent:active` label

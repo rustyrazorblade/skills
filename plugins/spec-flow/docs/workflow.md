@@ -80,12 +80,14 @@ way, just split across two separate processes instead of one conversation:
 **domain-expert agent**, if one is available, consulted *concurrently* and adding deeper facts) —
 **you decide** among the options *before anything is generated*, so a chosen alternative can never
 leave stale traces of the rejected recommendation in the generated spec/tasks. The agents never
-make the call.
+make the call. (A `type:docs` issue skips this design stop entirely — see **Docs fast path** below.)
 
 **Seam 1 — spec approval.** Second, `/spec-flow:activate` stops again after generating the spec
 from your chosen design and committing it. Nothing is implemented until you explicitly approve.
 This stop confirms the spec faithfully reflects the design you already picked — it is not the
-first time you see the decision. (Upstream of both stops, at `groom`, the **`product-manager`
+first time you see the decision. (For a content-only `type:docs` issue there's no spec to generate
+or commit — this stop instead reviews the issue's own scope + acceptance criteria; see **Docs fast
+path** below.) (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
 question at a time, its own recommended answer stated alongside each one, dependent questions
@@ -139,14 +141,31 @@ directly.
 
 **Docs fast path.** A purely documentation issue (README, a docs/mdBook tree, comments — no
 behavior change) doesn't need an architect's design or a design-choice stop to decide between. Set
-`type:docs` at `groom` (offered, never inferred silently — see its step 3) and `activate` skips
-straight past the architect/domain-expert consult and the design-choice stop to spec generation;
-`implement` runs a single lightweight doc-writing pass instead of tdd-developer + the five-lens
-panel + build + polish, with `architect` available **on demand** if the doc writer hits a real
-architecture question (not a mandatory gate). Seam 1 (spec approval) and Seam 2 (review/merge)
-still apply exactly as normal either way — the fast path only ever skips machinery that doesn't
-apply to a docs-only change, never an owner stop. See `skills/activate/SKILL.md` step 3 and
-`skills/implement/SKILL.md` step 4 for the mechanics.
+`type:docs` at `groom` (offered, never inferred silently — see its step 3); `activate` always skips
+the architect/domain-expert consult and the design-choice stop for it. Whether it *also* gets a
+committed OpenSpec spec is a second, separate decision — most docs changes shouldn't get one at
+all, because translating a page's own prose into OpenSpec `#### Scenario:` blocks just duplicates
+the book:
+
+- **Content edit (the default, assumed unless the issue says otherwise)** — expanding, correcting,
+  or clarifying existing pages, adding examples, fixing wording; the docs' own organization isn't
+  changing and nothing behavioral is being documented for the first time. `activate` skips spec
+  generation entirely — no `openspec/changes/issue-<N>` directory — and Seam 1 becomes a quick
+  review of the issue's own scope + acceptance criteria (already reviewed once at `groom`) instead
+  of a generated spec.
+- **Structural, or documenting an accompanying tech change** — the docs' own layout/organization is
+  changing (new chapter, reorganized `SUMMARY.md`/table of contents, split or merged sections), or
+  the issue documents real new behavior. That's a decision worth a committed, reviewable record —
+  `activate` runs the normal OpenSpec flow, but keeps it **surface-level**: the structural approach
+  and affected pages, never the prose that's actually going into the book.
+
+`implement` runs a single lightweight doc-writing pass either way instead of tdd-developer + the
+five-lens panel + build + polish — working `tasks.md` when a spec exists, or the issue's own
+acceptance criteria directly when it doesn't — with `architect` available **on demand** if the doc
+writer hits a real architecture question (not a mandatory gate). Seam 1 (spec approval, whichever
+form it took) and Seam 2 (review/merge) still apply exactly as normal either way — the fast path
+only ever skips machinery that doesn't apply to a docs-only change, never an owner stop. See
+`skills/activate/SKILL.md` steps 3 and 5 and `skills/implement/SKILL.md` step 4 for the mechanics.
 
 **Hard dependencies use GitHub's native issue-dependencies API, alongside the `blocked` label.**
 When `activate` step 4 finds a hard dependency on another unmerged issue, it sets `blocked` (what
@@ -172,14 +191,16 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 |---|---|---|
 | Priority | `P0` `P1` `P2` `P3` | Exactly one per issue. `P0` = drop everything. |
 | Lifecycle | `status:ready` | Groomed; awaiting activation. |
-| | `status:spec-review` | Spec committed; awaiting your approval (Seam 1). |
+| | `status:spec-review` | Spec committed and awaiting your approval (Seam 1) — or, for a content-only `type:docs` issue or any `type:tech-debt` issue, no spec at all, just a quick review of its own scope + acceptance criteria (or Direction). |
 | | `status:in-progress` | Background team implementing. |
 | | `status:in-review` | PR open; awaiting your GitHub review (Seam 2). |
 | | `status:addressing` | Resolving your review comments. |
 | Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
 | | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
-| Fast path | `type:docs` | Documentation-only — `activate`/`implement` skip the architect consult, design-choice stop, and review panel. Offered by `groom`, never inferred silently. |
+| Fast path | `type:docs` | Documentation-only — `activate`/`implement` always skip the architect consult, design-choice stop, and review panel, and skip spec generation too unless the docs' own layout is changing or it documents a tech change (see **Docs fast path** above). Offered by `groom`, never inferred silently. |
+| | `type:tech-debt` | Structural, behavior-preserving fix filed by `/spec-flow:tech-debt` (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** above). |
 | Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
+| Audit | `tech-debt-review` | Marks a closed, immediately-created log issue for one completed `/spec-flow:tech-debt` run — not a work item, just the durable timestamp `project-manager` reads for the once-a-week/20-merges cadence check. See **Tech-debt review cadence** above. |
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
 
@@ -258,7 +279,7 @@ it, deterministically, no title-derived slug involved:
 
 ```
 GitHub issue     #N
-OpenSpec change  issue-N
+OpenSpec change  issue-N   (not always present — skipped for content-only type:docs issues, see Docs fast path, and unconditionally for type:tech-debt issues, see Tech-debt fast path)
 worktree         issue-N   (EnterWorktree, passed this name explicitly)
 pull request     body contains "Closes #N"
 ```
@@ -301,16 +322,17 @@ a subagent either. Instead:
 - That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged and closed
-  — its OpenSpec change is archived later, in bulk, by `project-manager` (see **Bulk spec
-  archiving**), not by `issue-pm` itself.
+  — if it committed one (not every issue does, see **Docs fast path** and **Tech-debt fast path**),
+  its OpenSpec change is archived later, in bulk, by `project-manager` (see **Bulk spec archiving**),
+  not by `issue-pm` itself.
 - Several issues can be in flight at once, each its own process — `claude agents` lists them all,
   attach to whichever one you want to talk to. It's the spawn script, not `project-manager` itself,
   that guards against duplicates — this machine's own past sessions first (respawning a crashed one
   rather than starting fresh), the `agent:active` label otherwise — so it never launches a second
   `issue-pm` for an issue that already has one running, on this machine or another.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
-  work spans all issues), and `adopt-tiering`, `setup`, and `archive` (repo-wide, not tied to any
-  issue).
+  work spans all issues), and `adopt-tiering`, `setup`, `archive`, and `tech-debt` (repo-wide, not
+  tied to any issue).
 - `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
   reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json --all`
   plus GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire
@@ -346,8 +368,9 @@ primary checkout.
 `finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — and doing it
 per-issue, inline in each `issue-pm`, meant a git worktree and a set of `gh`/OpenSpec commands
 every single time, for zero review value each time. So `finalize` doesn't touch it at all anymore:
-once an issue's PR merges, its `openspec/changes/issue-<N>` change just sits on the default branch,
-unarchived, until `project-manager` sweeps up a batch of them at once.
+once an issue's PR merges, its `openspec/changes/issue-<N>` change (when one exists — a
+content-only `type:docs` issue commits none, see **Docs fast path** above) just sits on the default
+branch, unarchived, until `project-manager` sweeps up a batch of them at once.
 
 `project-manager` **watches for the buildup and checks in with you** — it never archives on its own
 initiative. `/spec-flow:archive` counts every `openspec/changes/*` directory (excluding `archive/`)
@@ -386,18 +409,118 @@ notice, but never triggers anything itself. An issue's own `finalize` — closin
 worktree — never waits on its archive actually landing; the OpenSpec change sitting unarchived on
 the default branch is expected, normal state between batches, not a problem to fix per-issue.
 
+## Tech-debt review cadence
+
+Structural debt otherwise only surfaces as a side effect of touching nearby code — `architect`'s
+"Nearby structural debt" step during `activate` flags what a change happens to brush up against, and
+even then only ever *recommends* a separate issue, never files one itself. `/spec-flow:tech-debt` is
+the deliberate, repo-wide counterpart: a team of review agents reads the whole codebase (or a scoped
+path) for nothing else — SOLID/composability, code duplication, unnecessary layering — ranks the 10
+most impactful findings, drops anything that duplicates an already-open issue, and walks you through
+what's left **one at a time, full context each time** — you decide per finding whether it's worth a
+`type:tech-debt` issue. Same shape as every other owner-facing decision in this pipeline: the agents
+surface candidates, they never file anything on their own.
+
+**`project-manager` recommends running it, on a cadence — it never runs it itself and never spawns a
+background process for it.** Due whenever either fires, whichever comes first: **a week since the
+last run, or 20 PRs merged since the last run.** Every `/spec-flow:tech-debt` run creates a
+`tech-debt-review`-labeled log issue, closed immediately, purely as a durable timestamp — that's what
+lets `project-manager` compute "due" without guessing (see **Watching for tech-debt review cadence**
+in `agents/project-manager.md`). When due, it's mentioned plainly the next time you're already
+talking to `project-manager` (typically alongside `board`); not due, it says nothing — this is a
+recommendation cadence, not a background timer (see **Substrate and constraints** below), and running
+it is still entirely your call.
+
+## Tech-debt fast path
+
+A `type:tech-debt` issue (filed by `/spec-flow:tech-debt`, confirmed by you one finding at a time
+before it ever became an issue) skips OpenSpec entirely — there's no behavior change to spec, so
+generating one would just be ceremony around a decision already made. It's still a real code
+change, so it still gets the full five-lens review panel at `implement` and a real PR at Seam 2;
+only the OpenSpec-generation-and-approval machinery is what's skipped, replaced by narrower,
+cheaper checks that exist specifically to catch the one way this fast path could go wrong: a "pure
+refactor" that turns out not to be one.
+
+- **`activate` step 3-4: a narrowed, auto-adopting `architect` consult, not a skip.** Unlike
+  `type:docs` (which skips the design consult entirely — there's no architecture to a prose
+  change), a structural fix genuinely benefits from a fresh read: the finding's file:line evidence
+  may be stale by the time the issue is activated. `architect` verifies the confirmed `##
+  Direction` still applies (or corrects it) and checks whether it's achievable **without changing
+  any observable behavior**. The owner-decision *stop* is still skipped by default — you already
+  confirmed this specific fix once, item by item, in `/spec-flow:tech-debt` — but only when nothing
+  went wrong: a hard dependency, a material deviation from the confirmed Direction, or the fix
+  turning out not to be behavior-preserving all still stop for you, same as a hard dependency
+  always has. See **Escalation** below for what happens then.
+- **`activate` step 5: no spec, but a read-only surface listing against what's already spec'd.**
+  Instead of generating a change, `activate` greps `openspec/specs/**` for requirements whose
+  subject matter overlaps the finding's touched files/modules and appends what it finds to the
+  issue body under `## Adjacent specified behavior (must be preserved)` — so both the lightweight
+  Seam 1 review and `implement`'s review panel have it without re-deriving it.
+- **Seam 1, lightweight but not skipped.** Same principle as the docs fast path: no spec to
+  approve, but still a real stop showing the confirmed Direction and the adjacent-behavior list
+  before implementation starts — cheap, since you already reviewed the substance once at filing
+  time.
+- **`implement`: full panel, in behavior-preservation mode.** `tdd-developer` works from the
+  issue's Direction (no `tasks.md` exists) with an explicit instruction to stop and report, not
+  implement, if the clean fix would require a real behavior change. The `spec` lens (`reviewer`
+  agent) switches to a documented **tech-debt fast path mode** (see `agents/reviewer.md`) whose
+  contract is behavior-preservation, not spec conformance: any change to a public
+  signature/error-contract/CLI/config/serialized output is a `blocker` regardless of whether a
+  canonical spec covers it, and — the check that catches what the adjacent-specs list can't — a
+  **deleted existing test or a changed assertion is automatic evidence of a behavior change**, since
+  committed specs are an incomplete map of what the software actually does and the pre-existing
+  test suite is the more complete oracle. The other four lenses run exactly as normal. Because no
+  spec exists yet when this fast path starts, the branch also has no commits and thus no draft PR
+  at `implement` step 2 — `implement`'s Implement phase opens it itself, right after the first
+  commit lands (see `skills/implement/SKILL.md` step 2/4a and `implement.workflow.js`).
+
+**Escalation, when it turns out not to be behavior-preserving.** Two catch points, same three
+options either way — proceed with a corrected still-preserving shape, narrow the fix to what
+genuinely is preserving, or split the behavior change into its own freshly groomed issue and run
+the full pipeline for it: `architect`'s consult at `activate` (before anything is implemented), or
+`tdd-developer`/the `spec` lens mid-`implement` (after some of it already is). Full detail in
+`agents/issue-pm.md`'s **Escalation** section — never silently pick an option; this is exactly the
+kind of consequential call that belongs to you.
+
+**`type:docs` and `type:tech-debt` never combine** — an issue is either a documentation change or a
+structural code change, never both; `activate` falls back to the full pipeline if it ever finds
+both labels on the same issue (labeling ambiguity is reason enough not to trust either fast path).
+
+## Tech-debt review cadence
+
+Structural debt otherwise only surfaces as a side effect of touching nearby code — `architect`'s
+"Nearby structural debt" step during `activate` flags what a change happens to brush up against, and
+even then only ever *recommends* a separate issue, never files one itself. `/spec-flow:tech-debt` is
+the deliberate, repo-wide counterpart: a team of review agents reads the whole codebase (or a scoped
+path) for nothing else — SOLID/composability, code duplication, unnecessary layering — ranks the 10
+most impactful findings, drops anything that duplicates an already-open issue, and walks you through
+what's left **one at a time, full context each time** — you decide per finding whether it's worth a
+`type:tech-debt` issue. Same shape as every other owner-facing decision in this pipeline: the agents
+surface candidates, they never file anything on their own.
+
+**`project-manager` recommends running it, on a cadence — it never runs it itself and never spawns a
+background process for it.** Due whenever either fires, whichever comes first: **a week since the
+last run, or 20 PRs merged since the last run.** Every `/spec-flow:tech-debt` run creates a
+`tech-debt-review`-labeled log issue, closed immediately, purely as a durable timestamp — that's what
+lets `project-manager` compute "due" without guessing (see **Watching for tech-debt review cadence**
+in `agents/project-manager.md`). When due, it's mentioned plainly the next time you're already
+talking to `project-manager` (typically alongside `board`); not due, it says nothing — this is a
+recommendation cadence, not a background timer (see **Substrate and constraints** below), and running
+it is still entirely your call.
+
 ## The skills
 
 | Skill | Phase | Does |
 |---|---|---|
 | `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Grills shape-defining ambiguity (recommended default per question); for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`. |
-| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue skips straight to spec generation — see **Docs fast path** above. |
-| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (architect on demand), skipping the panel/build/polish. Invoking this skill is the explicit opt-in to that orchestration. |
+| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue always skips spec generation and, by default, the design-choice stop too (`architect` auto-adopts the confirmed Direction unless something's wrong) — see **Tech-debt fast path** above. |
+| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Owner-invoked when CI reports red; never polls. See **Test tiering** below. |
 | `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
+| `/spec-flow:tech-debt` | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** below. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 | `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 
@@ -491,16 +614,12 @@ findings.** The five lenses:
    failures, no leaked secrets). **Self-gates** on a diff introducing no new path/I/O/failure. Full
    mandate: `agents/observability-reviewer.md`.
 
-All five are backed by this plugin's own agent definitions — spawning by that agent type already
-applies the agent file's full mandate, process, and output contract as the teammate's system
-prompt, so both `skills/implement/SKILL.md` and `implement.workflow.js` only send a short
-parameter stub (worktree/base/change/issue), not a restatement. The agent file is the single place
-each lens's substance lives; edit it there. `code-reviewer`/`security-reviewer` need Skill-tool
-access to invoke their built-in skills, which they keep by omitting a restrictive `tools:` line
-(unlike `reviewer`'s Read/Bash/Grep/Glob). The merge/approval logic generalizes over N lenses
-regardless — there is no per-lens special-casing beyond the spec lens owning
-`spec_conformance`/`tests_ran`. To add or remove a lens: write its agent file, then add a stub
-entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array.
+Each lens's full substance lives only in its agent file — `skills/implement/SKILL.md` and
+`implement.workflow.js` send only a short parameter stub (worktree/base/change/issue), never a
+restated mandate. `code-reviewer`/`security-reviewer` keep Skill-tool access (omit a restrictive
+`tools:` line) to invoke their built-in skills. Merge/approval logic generalizes over N lenses —
+only the spec lens owns `spec_conformance`/`tests_ran`. To add or remove a lens: write its agent
+file, then add a stub entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array.
 
 ## Test tiering (unit / integration)
 
@@ -586,7 +705,9 @@ set's blind-append safety rests on.
   `issue-pm`'s own session either way — as an agent team it leads (default) or a background
   `Workflow` it invokes (fallback) — that is *not* cron either; both are scoped to the lead's own
   session and don't outlive it. `/spec-flow:address` is invoked by you when you return, never
-  polled.
+  polled. `/spec-flow:tech-debt`'s once-a-week/20-merges cadence (see above) is the same shape —
+  `project-manager` only ever *recommends* it when you're already talking to it; nothing runs it on
+  a timer.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
 - **Test tiering.** The local gate is the fast **unit** tier plus the branch's
@@ -595,7 +716,11 @@ set's blind-append safety rests on.
   the full suite runs in CI. See **Test tiering (unit / integration)** above. Test resources that
   could collide between concurrent runs should carry a per-process-unique seed so two runs never
   name the same resource.
-- **Owner rules, structurally enforced.** OpenSpec before implementation; TDD; significant design
+- **Owner rules, structurally enforced.** OpenSpec before implementation for anything with a design
+  decision to record (a content-only `type:docs` issue has none — see **Docs fast path** — and
+  implements straight from its scope + acceptance criteria; a `type:tech-debt` issue has none
+  either — see **Tech-debt fast path** — and implements straight from its confirmed Direction,
+  behavior-preservation checked in place of spec conformance); TDD; significant design
   decisions are the owner's (an advisor agent only advises); the feature lands on `main` via PR,
   merged by the owner by default. An `issue-pm` merges it itself only when the `merge-on-green`
   label is set or explicitly instructed to for that run (see **Overriding either seam's default**,

@@ -1,13 +1,15 @@
 ---
 name: implement
-description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the committed spec first. Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
-argument-hint: [issue number, with its spec already approved]
+description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. A type:tech-debt issue runs the full review panel as normal (behavior-preservation mode, no spec) but works from the issue's own Direction instead of tasks.md, and opens its own draft PR after the first commit since none exists yet. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the plan first — a committed spec, or for a content-only type:docs/type:tech-debt issue, its scope + acceptance criteria (or Direction). Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
+argument-hint: [issue number, with its plan already approved]
 ---
 
 # implement — build the approved spec, open a PR
 
 You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
-**approved the committed spec** for issue `#N`. Drive the implementation team to completion and
+**approved the plan** for issue `#N` — a committed spec, or for a content-only `type:docs` issue,
+its scope + acceptance criteria, or for a `type:tech-debt` issue, its confirmed Direction (see Input
+below). Drive the implementation team to completion and
 open a review-ready PR — by default as an **agent team** you lead (see step 4), which is exactly
 what running as your own top-level session (not a subagent) makes possible at all: a team needs a
 lead, only a top-level session can be one, and a subagent can never spawn its own team. Where
@@ -15,28 +17,46 @@ agent teams aren't available or wanted, the same work runs instead as the origin
 script — same five lenses, same rules, no team. **Invoking this skill is the owner's explicit
 opt-in** to that orchestration, whichever mode it resolves to.
 
-Input: an issue number `#N`, OpenSpec change `issue-<N>` — deterministic, from `activate`. You're
-already running inside this issue's worktree — Claude Code's own background-session isolation put
-you there, on whatever branch it assigned; resolve it with `git rev-parse --abbrev-ref HEAD`
-rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `openspec/changes/`
+Input: an issue number `#N`, normally with an OpenSpec change `issue-<N>` — deterministic, from
+`activate`. You're already running inside this issue's worktree — Claude Code's own
+background-session isolation put you there, on whatever branch it assigned; resolve it with `git
+rev-parse --abbrev-ref HEAD` rather than assuming a name. If `openspec/changes/issue-<N>` isn't
+there: for a `type:docs` issue this is expected (a content-only docs change generates no spec —
+see step 4's docs fast path); for a `type:tech-debt` issue this is **always** expected — the fast
+path never generates one (see step 4's tech-debt handling); otherwise, list `openspec/changes/`
 (excluding `archive/`) and orient yourself in whatever is — it may predate this naming.
 
 ## Steps
 
-1. **Confirm the precondition.** The issue must be `status:spec-review` AND the owner must
-   have approved. If you can't confirm approval from the conversation, ask before proceeding.
-   Flip the label to in-progress:
+1. **Confirm the precondition.** The issue must be `status:spec-review` AND the owner must have
+   approved — either in the conversation, or, if `.spec-flow/owner-instructions` (read fresh here)
+   explicitly auto-approved the spec/plan for this run, that counts too (the normal case when
+   `activate` launched you directly per its own auto-approve path). If you can't confirm either,
+   ask before proceeding. Flip the label to in-progress:
    ```bash
    gh issue edit <N> --remove-label status:spec-review --add-label status:in-progress
    ```
 
-2. **Open a draft PR early — keep CI warm.** Push the branch (it already carries the committed spec)
-   and open a **draft** PR *now*, before implementation runs. CI triggers on `pull_request` and runs
-   on draft PRs, so from here every checkpoint push during implementation exercises the full suite in
-   parallel with local work — CI is the slow backstop the tiering model relies on, and this keeps it
-   busy instead of idle until the end. **Re-running this skill is normal** (resuming after a crash,
-   after residual findings, or after the owner sends you back) — check for an existing PR first and
-   reuse it rather than erroring on a duplicate:
+2. **Open a draft PR early — keep CI warm.** **Skip this step entirely if `openspec/changes/issue-<N>`
+   doesn't exist AND the issue carries `type:docs` or `type:tech-debt`** — neither fast path commits
+   a spec, so the branch has no commits ahead of the default branch yet and `gh pr create` would
+   fail outright (GitHub rejects a PR with no diff). For `type:docs`, step 4c opens the PR itself,
+   using this exact mechanics, right after its own first commit lands. For `type:tech-debt`, step
+   4a's Implement teammate/agent makes the first commit — **you** (the lead) open the PR yourself,
+   same mechanics, right after it reports back and before moving to step 4b's review panel, in Team
+   mode; in Workflow mode the script's Implement-phase agent opens it itself (the one narrow
+   exception to its own GUARDRAILS — see `implement.workflow.js`), since nothing outside the script
+   regains control mid-run to do it the way the Team-mode lead can.
+   (A missing `openspec/changes/issue-<N>` on an issue carrying **neither** label means something
+   else — most likely a legacy change predating this naming; see the Input note above — not
+   "nothing to push yet," so don't skip this step for that case.) **Otherwise** push the branch (it already
+   carries the committed spec) and open a **draft** PR *now*, before
+   implementation runs. CI triggers on `pull_request` and runs on draft PRs, so from here every
+   checkpoint push during implementation exercises the full suite in parallel with local work — CI
+   is the slow backstop the tiering model relies on, and this keeps it busy instead of idle until
+   the end. **Re-running this skill is normal** (resuming after a crash, after residual findings, or
+   after the owner sends you back) — check for an existing PR first and reuse it rather than
+   erroring on a duplicate:
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
    DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
@@ -86,24 +106,49 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
    instead. **Mode-independent**: it's one plain subagent spawn (the Agent tool, `tdd-developer`
    agent type, same mechanism `activate` step 3 uses for `architect`), not an agent-team teammate,
    so `SPEC_FLOW_IMPLEMENT_MODE`/`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` don't apply here.
-   a. Spawn ONE `tdd-developer` subagent, in `<worktree>`: work `tasks.md`, updating exactly the
-      documentation the spec describes (README, a docs/mdBook tree, comments — no behavior
-      change). Append the implementer GUARDRAILS (below). **If it hits a real question about
-      whether the documentation matches the intended architecture/design** (not just wording),
-      have it stop and report the specific question back to you rather than guessing — it should
-      not try to reach `architect` itself.
+   a. Spawn ONE `tdd-developer` subagent, in `<worktree>`. **Check for a spec first** —
+      `ls openspec/changes/issue-<N> 2>/dev/null`: **present** (a structural/tech-accompanying
+      `type:docs` issue, per `activate` step 5) → work `tasks.md`, updating exactly the
+      documentation the spec describes. **Absent** (the common case — `activate` skipped spec
+      generation for a content-only docs change) → work directly from the issue's own scope and
+      acceptance criteria instead (`gh issue view <N> --json title,body`) — there is no `tasks.md`
+      for this issue, and there won't be one; that's expected, not a sign something's missing.
+      Either way: updating exactly the documentation described (README, a docs/mdBook tree,
+      comments — no behavior change). Append the implementer GUARDRAILS (below). **If it hits a
+      real question about whether the documentation matches the intended architecture/design**
+      (not just wording), have it stop and report the specific question back to you rather than
+      guessing — it should not try to reach `architect` itself.
    b. **If it reports back with an architecture question**, spawn `architect` yourself — read-only,
       same as `activate` step 3 — with that specific question, then spawn a **fresh**
       `tdd-developer` subagent with the answer plus everything from step a's prompt to finish the
       work (spawn fresh — plain subagents can't be resumed). Architect-on-demand, not a mandatory
       gate; most `type:docs` runs never trigger it.
-   c. Once the docs pass reports done (commit + push are already its job per the GUARDRAILS):
+   c. Once the docs pass reports done: **re-resolve `BR` fresh here** — `BR=$(git -C <worktree>
+      rev-parse --abbrev-ref HEAD)` — variables from step 2's Bash call don't survive to this one,
+      and step 2 may not have run at all on this path. **First confirm the branch is pushed** — the
+      GUARDRAILS only say the teammate *may* push, not must, so `git -C <worktree> push -u origin
+      "$BR"` yourself if it hasn't happened. **If step 2 was skipped** (no spec existed when this
+      run started), open the draft PR now using step 2's *full* mechanics — including its
+      existing-PR reuse check (`gh pr list --head "$BR" --json number`; only `gh pr create --draft`
+      if none found), since this may be a re-run where 4c already opened it once — there's a real
+      commit to open it against now. Then
       comment `gh issue comment <N> --body "📚 Docs updated."`, note a one-line summary of what was
       documented (step 5 uses it in place of `review_summary`), then go straight to step 5 — no
       review panel, no build step. A docs-only change has no code to lint/build/review through five
       lenses built for behavior.
    This is the ONLY thing that skips the five-lens panel — every other issue, however small, still
-   goes through it in full. Otherwise, for every non-`type:docs` issue:
+   goes through it in full. **A `type:tech-debt` issue does NOT take this docs branch** — it still
+   needs real code review, so it goes through the normal Implement → Review → Fix → Build → Polish
+   sequence below like any other issue; the only difference is what `CHANGE_PARAM` resolves to.
+   Otherwise, for every non-`type:docs` issue:
+
+   **Resolve `CHANGE_PARAM` before anything else in this step** (used in step 4a's Implement prompt
+   and step 4b's identical review-panel prompt below, both modes): `ls openspec/changes/issue-<N>
+   2>/dev/null`. **Present** → `CHANGE_PARAM = "issue-<N>"`, the normal case. **Absent** — only ever
+   valid for a `type:tech-debt` issue (see the Input note above; any other issue with no change
+   directory is the legacy-naming case, not this) — `CHANGE_PARAM = "none — type:tech-debt fast
+   path"`, the literal sentinel `agents/reviewer.md` and `implement.workflow.js` both key off of to
+   switch into behavior-preservation mode.
 
    `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
    you, spawned fresh each run — richer (teammates message each other, self-claim work) but
@@ -134,35 +179,59 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
 
    **GUARDRAILS (implementer teammates — tdd-developer, build-engineer):**
    > GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY `git
-   > push` the issue branch to its own remote at checkpoints so CI runs the full suite on the
-   > already-open draft PR (push somewhat frequently — after a completed task or a few green
-   > cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/
-   > mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub
-   > comments, do NOT push to `main` or any branch other than the issue branch, and do NOT take
-   > any other outward or destructive action. If you discover follow-up work, related bugs, or
+   > push` the issue branch to its own remote at checkpoints — usually so CI runs the full suite on
+   > an already-open draft PR (push somewhat frequently — after a completed task or a few green
+   > cycles — not on every commit); on your very first push there may be no PR yet (the lead opens
+   > it right after), which is expected, not an error. Do NOT create or edit GitHub issues, do NOT
+   > create/modify/mark-ready any PR yourself even if none exists yet — that's the lead's job, not
+   > yours — do NOT post GitHub comments, do NOT push to `main` or any branch other than the issue
+   > branch, and do NOT take any other outward or destructive action. If you discover follow-up
+   > work, related bugs, or
    > candidate new issues, LIST them in your final report for the owner to triage — never file
    > them yourself. Backlog creation and prioritization are the owner's job, not yours.
 
    **REVIEW GUARDRAILS (review-lens teammates — everyone else in step b):**
    > GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree.
-   > Running the repo's own format/lint/build/test commands to verify your findings is fine — you
-   > need that to honestly report `tests_ran` — but you may not change the tree: do NOT commit, do
-   > NOT `git push`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR,
+   > Running the repo's own format/lint/build/test commands to verify your findings is fine — the
+   > `spec` lens needs that to honestly report `tests_ran`/`spec_conformance` (the other four
+   > lenses leave those two fields as their own agent file directs) — but you may not change the
+   > tree: do NOT commit, do NOT `git push`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR,
    > do NOT post GitHub comments, and do NOT take any other outward or destructive action — your
    > output is the JSON review contract, nothing else. If you discover follow-up work, related
    > bugs, or candidate new issues, LIST them in your
    > findings/summary for the owner to triage — never file them yourself.
 
-   a. **Implement.** Spawn one teammate, `tdd-developer`, named `implement`: work `tasks.md`
-      test-first (RED→GREEN→REFACTOR) in `<worktree>`, honoring the repo's documented conventions
-      (CLAUDE.md / CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo
-      documents), marking each task `- [x]` as completed and committing with focused messages.
-      Append the TEST INSTRUCTION (step 3) and the implementer GUARDRAILS. **Also instruct it to
-      message you (the lead) at each checkpoint push**, naming which `tasks.md` item(s) it just
-      completed — not only in its final report — so you can post a GitHub comment
-      (`gh issue comment <N> --body "✅ Implement: <task(s)> done, pushed \`<sha>\`."`) for each one
-      as it arrives, giving the owner a live trail instead of one comment at the very end. Wait for
-      it to report and mark its task complete before moving on — nothing else can start yet.
+   a. **Implement.** Spawn one teammate, `tdd-developer`, named `implement`.
+
+      **`CHANGE_PARAM = "issue-<N>"` (normal case):** work `tasks.md` test-first
+      (RED→GREEN→REFACTOR) in `<worktree>`, honoring the repo's documented conventions (CLAUDE.md /
+      CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo documents), marking each
+      task `- [x]` as completed and committing with focused messages. Append the TEST INSTRUCTION
+      (step 3) and the implementer GUARDRAILS. **Also instruct it to message you (the lead) at each
+      checkpoint push**, naming which `tasks.md` item(s) it just completed — not only in its final
+      report — so you can post a GitHub comment (`gh issue comment <N> --body "✅ Implement:
+      <task(s)> done, pushed \`<sha>\`."`) for each one as it arrives, giving the owner a live trail
+      instead of one comment at the very end.
+
+      **`CHANGE_PARAM = "none — type:tech-debt fast path"`:** there is no `tasks.md` — work directly
+      from the issue's own body instead (`gh issue view <N> --json title,body`): its `## Direction`
+      is the shape of the fix, its `## Acceptance criteria` states the behavior-preservation bar
+      explicitly, and its `## Adjacent specified behavior (must be preserved)` section (if present)
+      names existing `openspec/specs/**` requirements this surface touches — don't contradict them.
+      Implement exactly that Direction, test-first wherever you touch anything non-trivial. **This
+      is behavior-preserving** — append this explicit instruction on top of the TEST INSTRUCTION:
+      *"If achieving the Direction cleanly would require changing any observable behavior (a public
+      signature, an error contract, CLI/config/serialized output, or an existing test's asserted
+      behavior), STOP and report the specific behavior delta instead of implementing it — do not
+      silently make the change."* Append the implementer GUARDRAILS as normal (this teammate does
+      NOT open the PR itself — you do, right below, since Team mode's lead can).
+
+      Either way: wait for it to report and mark its task complete before moving on — nothing else
+      can start yet. **Then, only for the tech-debt case, if step 2 was skipped** (no PR yet — this
+      is always true the first time through for a `type:tech-debt` issue): open the draft PR
+      yourself now, using step 2's full mechanics (existing-PR reuse check included) — there's a
+      real commit to open it against. Do this before moving to step b, so CI starts running while
+      the panel reviews.
 
    b. **Review — five lenses, spawned together, every round.** Once Implement's task is complete,
       spawn all five teammates in one message so they run in parallel, each depending on
@@ -186,21 +255,22 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
       access to invoke the built-in `/code-review`/`/security-review` skills, which their agent
       files grant by omitting a restrictive `tools:` line (unlike `reviewer`'s Read/Bash/Grep/Glob):
 
-      - **`spec`** (agent: `reviewer`) — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
-        change: `issue-<N>`. issue: #N. Follow your agent definition's process and output contract
-        exactly (JSON only)."*
-      - **`code-review`** (agent: `code-reviewer`) — *"Panel mode. worktree: `<worktree>`.
-        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
-        output contract exactly (JSON only)."*
-      - **`security-review`** (agent: `security-reviewer`) — *"Panel mode. worktree: `<worktree>`.
-        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
-        output contract exactly (JSON only)."*
-      - **`test-rigor`** (agent: `test-rigor-reviewer`) — *"Panel mode. worktree: `<worktree>`.
-        base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent definition's process and
-        output contract exactly (JSON only)."*
-      - **`observability`** (agent: `observability-reviewer`) — *"Panel mode. worktree:
-        `<worktree>`. base: `<base>`. change: `issue-<N>`. issue: #N. Follow your agent
-        definition's process and output contract exactly (JSON only)."*
+      Spawn each with the identical prompt — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
+      change: `<CHANGE_PARAM>`. issue: #N. Follow your agent definition's process and output
+      contract exactly (JSON only)."* — `<CHANGE_PARAM>` is exactly the value resolved at the top of
+      this step (`"issue-<N>"`, or the tech-debt sentinel), never hardcoded as `issue-<N>` — that
+      sentinel is what switches `reviewer` into its behavior-preservation mode (see
+      `agents/reviewer.md`'s "Tech-debt fast path mode"); the other four lenses just treat it as
+      informational context, same as any other diff-review run. Only the teammate name and backing
+      agent type vary otherwise:
+
+      | Teammate | Agent |
+      |---|---|
+      | `spec` | `reviewer` |
+      | `code-review` | `code-reviewer` |
+      | `security-review` | `security-reviewer` |
+      | `test-rigor` | `test-rigor-reviewer` |
+      | `observability` | `observability-reviewer` |
 
    c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —
@@ -266,7 +336,7 @@ rather than assuming a name. If `openspec/changes/issue-<N>` isn't there, list `
      "scriptPath": "${CLAUDE_PLUGIN_ROOT}/skills/implement/implement.workflow.js",
      "args": {
        "worktree": "<abs path — $(git rev-parse --show-toplevel), Claude Code's own isolated checkout for this session>",
-       "change":   "issue-<N>",
+       "change":   "<CHANGE_PARAM — resolved at the top of this step: \"issue-<N>\", or the tech-debt sentinel>",
        "issue":    <N>,
        "base":     "origin/<DEFAULT_BR>",
        "buildSystem": "auto"

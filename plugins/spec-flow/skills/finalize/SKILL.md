@@ -12,11 +12,14 @@ auto-merge if `merge-on-green` was set or this run's `.spec-flow/owner-instructi
 its SKILL.md step 5); either way, by the time this runs the merge has already happened. Close the
 issue and tear down your worktree — that's the whole job. **This skill itself never merges the
 feature PR** — that already happened, by whichever path, before this skill starts — **and it never
-touches the OpenSpec archive either.** The `openspec/changes/issue-<N>` change this issue committed
+touches the OpenSpec archive either.** When this issue committed an `openspec/changes/issue-<N>`
+change (every issue except a content-only `type:docs` one, or any `type:tech-debt` one — see **Docs
+fast path** and **Tech-debt fast path** in `docs/workflow.md`, neither of which generates one), it
 already landed on the default branch as part of the merge; syncing it into canonical specs and
-moving it under `openspec/changes/archive/` is `project-manager`'s job, batched across however many
-issues have piled up since the last pass (see **Bulk spec archiving** in `docs/workflow.md`) — not
-something any single issue's finalize waits on or does itself.
+moving it under `openspec/changes/archive/` is
+`project-manager`'s job, batched across however many issues have piled up since the last pass (see
+**Bulk spec archiving** in `docs/workflow.md`) — not something any single issue's finalize waits on
+or does itself.
 
 Input: an issue number `#N`. You're already running inside this issue's worktree — Claude Code's
 own background-session isolation put you there, on whatever branch it assigned, so resolve the
@@ -42,7 +45,15 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    ```bash
    STATE=$(gh issue view <N> --json state,closed)
    if [[ "$(jq -r .closed <<<"$STATE")" != "true" ]]; then
-     gh issue comment <N> --body "🎉 Merged and closed. Its spec will be archived in a later batch — see /spec-flow:board."
+     # A content-only type:docs issue, or any type:tech-debt issue, committed no
+     # openspec/changes/issue-<N> at all (see Docs fast path / Tech-debt fast path in
+     # docs/workflow.md) — nothing for a later archive batch to pick up, so say so accurately
+     # instead of promising an archive that will never happen.
+     if [[ -d "openspec/changes/issue-<N>" ]]; then
+       gh issue comment <N> --body "🎉 Merged and closed. Its spec will be archived in a later batch — see /spec-flow:board."
+     else
+       gh issue comment <N> --body "🎉 Merged and closed."
+     fi
      gh issue close <N> 2>/dev/null || true
    fi
    gh issue edit <N> --remove-label status:in-review --remove-label status:addressing \
@@ -52,7 +63,9 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    ```
 
 3. **Remove your own worktree and branch — hand off to a script that only acts once verified
-   safe.**
+   safe.** **Before running it, note whether this issue had an OpenSpec change** —
+   `[[ -d "openspec/changes/issue-<N>" ]]` — for step 4's report; the worktree (and anywhere you
+   could still run that check) is gone once this script finishes:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/finalize-remove-worktree.sh
    ```
@@ -63,10 +76,12 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    `git worktree remove --force --force`. **Safe to re-run**: if already removed, it detects the
    main checkout and exits cleanly.
 
-4. **Report.** Confirm: issue closed, worktree removed. Note that the OpenSpec change is still
-   sitting on the default branch, unarchived, until `project-manager` runs a bulk archive pass —
-   this is expected, not something to wait on here. Suggest `/spec-flow:board` to see the rest of
-   the pipeline.
+4. **Report.** Confirm: issue closed, worktree removed. If step 3's check found
+   `openspec/changes/issue-<N>`, note it's still sitting on the default branch, unarchived, until
+   `project-manager` runs a bulk archive
+   pass — this is expected, not something to wait on here. A content-only `type:docs` issue, or any
+   `type:tech-debt` issue, has none — nothing pending for either. Suggest `/spec-flow:board` to see
+   the rest of the pipeline.
 
 ## Rules
 

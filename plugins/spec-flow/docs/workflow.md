@@ -198,9 +198,9 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
 | | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
 | Fast path | `type:docs` | Documentation-only — `activate`/`implement` always skip the architect consult, design-choice stop, and review panel, and skip spec generation too unless the docs' own layout is changing or it documents a tech change (see **Docs fast path** above). Offered by `groom`, never inferred silently. |
-| | `type:tech-debt` | Structural, behavior-preserving fix filed by `/spec-flow:tech-debt` (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** above). |
+| | `type:tech-debt` | Structural, behavior-preserving fix filed by `/spec-flow:tech-debt` (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** below). |
 | Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
-| Audit | `tech-debt-review` | Marks a closed, immediately-created log issue for one completed `/spec-flow:tech-debt` run — not a work item, just the durable timestamp `project-manager` reads for the once-a-week/20-merges cadence check. See **Tech-debt review cadence** above. |
+| Audit | `tech-debt-review` | Marks a closed, immediately-created log issue for one completed `/spec-flow:tech-debt` run — not a work item, just the durable timestamp `project-manager` reads for the once-a-week/20-merges cadence check. See **Tech-debt review cadence** below. |
 
 **"What's next" rule:** the highest-priority issue (`P0` over `P1` …) carrying `status:ready`.
 
@@ -486,28 +486,6 @@ kind of consequential call that belongs to you.
 structural code change, never both; `activate` falls back to the full pipeline if it ever finds
 both labels on the same issue (labeling ambiguity is reason enough not to trust either fast path).
 
-## Tech-debt review cadence
-
-Structural debt otherwise only surfaces as a side effect of touching nearby code — `architect`'s
-"Nearby structural debt" step during `activate` flags what a change happens to brush up against, and
-even then only ever *recommends* a separate issue, never files one itself. `/spec-flow:tech-debt` is
-the deliberate, repo-wide counterpart: a team of review agents reads the whole codebase (or a scoped
-path) for nothing else — SOLID/composability, code duplication, unnecessary layering — ranks the 10
-most impactful findings, drops anything that duplicates an already-open issue, and walks you through
-what's left **one at a time, full context each time** — you decide per finding whether it's worth a
-`type:tech-debt` issue. Same shape as every other owner-facing decision in this pipeline: the agents
-surface candidates, they never file anything on their own.
-
-**`project-manager` recommends running it, on a cadence — it never runs it itself and never spawns a
-background process for it.** Due whenever either fires, whichever comes first: **a week since the
-last run, or 20 PRs merged since the last run.** Every `/spec-flow:tech-debt` run creates a
-`tech-debt-review`-labeled log issue, closed immediately, purely as a durable timestamp — that's what
-lets `project-manager` compute "due" without guessing (see **Watching for tech-debt review cadence**
-in `agents/project-manager.md`). When due, it's mentioned plainly the next time you're already
-talking to `project-manager` (typically alongside `board`); not due, it says nothing — this is a
-recommendation cadence, not a background timer (see **Substrate and constraints** below), and running
-it is still entirely your call.
-
 ## The skills
 
 | Skill | Phase | Does |
@@ -520,7 +498,7 @@ it is still entirely your call.
 | `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
-| `/spec-flow:tech-debt` | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** below. |
+| `/spec-flow:tech-debt` | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** above. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
 | `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 

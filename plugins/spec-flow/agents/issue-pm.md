@@ -142,6 +142,26 @@ Two places catch this, at different points, and each has a **written** next step
   Splitting off the behavior change (option c) here means it becomes its own **new**, separately
   groomed issue — never silently folded into this one's scope after the fact.
 
+## Stuck outside a defined seam — `needs-attention`
+
+The two owner seams above, and the hard-dependency case in **Escalation**, each already have a
+written next step. This covers everything else: you hit something with **no** defined next step —
+an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a merge/rebase conflict you
+can't cleanly reconcile, a build or test failure that keeps repeating past the point retrying makes
+sense, anything where guessing would be worse than waiting. Don't guess and don't silently retry in
+a loop:
+
+1. Post a comment on the issue naming **exactly** what you're stuck on and what you need from the
+   owner to proceed — specific enough that they can act on it without attaching first.
+2. Add the `needs-attention` label (`gh issue edit <N> --add-label needs-attention`).
+3. Stop and wait, the same as at either seam — this is a real stop, not a heads-up you keep working
+   past.
+
+Once the owner resolves it (in a reply, a comment, or after you attach), remove the label and post
+a follow-up comment confirming what changed before resuming
+(`gh issue edit <N> --remove-label needs-attention`). Never combine this with `blocked` — a hard
+dependency on another issue is `blocked`'s job, not this one's.
+
 ## Rules
 
 - **If the owner questions whether you're really a separate background process, verify — don't

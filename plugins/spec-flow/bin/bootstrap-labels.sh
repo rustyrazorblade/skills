@@ -20,8 +20,9 @@ gh label create "status:in-review"   --color 006b75 --description "PR open; awai
 gh label create "status:addressing"  --color e99695 --description "Resolving owner review comments"                   --force || true
 
 # Cross-machine, cross-user coordination — not derivable from any one machine's local session state.
-gh label create "agent:active" --color 0e8a16 --description "An issue-pm is currently claimed/running on this issue" --force || true
-gh label create "blocked"      --color b60205 --description "issue-pm identified a hard dependency on another unmerged issue" --force || true
+gh label create "agent:active"     --color 0e8a16 --description "An issue-pm is currently claimed/running on this issue" --force || true
+gh label create "blocked"          --color b60205 --description "issue-pm identified a hard dependency on another unmerged issue" --force || true
+gh label create "needs-attention"  --color e11d21 --description "issue-pm hit something only the owner can resolve — see issue comments" --force || true
 
 # Fast-path trigger — set by groom, read by activate/implement to skip the architect consult,
 # design-choice stop, and 5-lens review panel for documentation-only work.
@@ -36,4 +37,4 @@ gh label create "merge-on-green" --color 0e8a16 --description "Merge this PR aut
 gh label create "type:tech-debt"    --color fef2c0 --description "Structural improvement filed by /spec-flow:tech-debt — SOLID, duplication, or layering" --force || true
 gh label create "tech-debt-review"  --color ededed --description "Marks a closed log issue for a completed /spec-flow:tech-debt run — audit trail, not a work item" --force || true
 
-echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, type:docs, merge-on-green, type:tech-debt, tech-debt-review) are present."
+echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, needs-attention, type:docs, merge-on-green, type:tech-debt, tech-debt-review) are present."

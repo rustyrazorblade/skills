@@ -197,6 +197,7 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | | `status:addressing` | Resolving your review comments. |
 | Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
 | | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
+| | `needs-attention` | `issue-pm` hit something outside the two defined owner seams that only you can resolve — an ambiguous call, a conflict it can't cleanly reconcile, a repeated failure — and is waiting (see the issue's comments for what). Distinct from `blocked`, which is specifically a hard dependency on another issue. See **Coordination signals** below. |
 | Fast path | `type:docs` | Documentation-only — `activate`/`implement` always skip the architect consult, design-choice stop, and review panel, and skip spec generation too unless the docs' own layout is changing or it documents a tech change (see **Docs fast path** above). Offered by `groom`, never inferred silently. |
 | | `type:tech-debt` | Structural, behavior-preserving fix filed by `/spec-flow:tech-debt` (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** below). |
 | Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
@@ -271,6 +272,14 @@ reflects the local machine's session registry, and says nothing about another de
   a follow-up comment, once the dependency clears. A single fixed label, not one per blocking issue
   — the detail lives in the comment (and the native link itself), keeping the label vocabulary
   fixed rather than growing per-issue.
+- **`needs-attention`** — added alongside a comment naming exactly what's needed, whenever
+  `issue-pm` is genuinely stuck on something with no defined next step of its own: not one of **The
+  two human seams** (those are scheduled stops, already surfaced their own way — spec approval,
+  review + merge) and not a hard dependency on another issue (that's `blocked`, above). Covers the
+  ad hoc case — an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a conflict it
+  can't reconcile on its own, a failure that repeats past the point retrying makes sense — where
+  guessing would be worse than waiting. `issue-pm` stops and waits once it's set, the same as at
+  either seam. Removed, with a follow-up comment, once the owner resolves it and work resumes.
 
 ## Naming
 

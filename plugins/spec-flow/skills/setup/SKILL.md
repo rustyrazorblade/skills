@@ -25,7 +25,7 @@ later question moot.
    - **Labels**: `gh label list --json name --jq '[.[].name]'` — compare against the full set
      `bin/bootstrap-labels.sh` creates (`P0`-`P3`, `status:ready`, `status:spec-review`,
      `status:in-progress`, `status:in-review`, `status:addressing`, `agent:active`, `blocked`,
-     `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
+     `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`

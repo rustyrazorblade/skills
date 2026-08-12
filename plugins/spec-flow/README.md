@@ -42,8 +42,8 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   status`) is the right one for this repo — every skill and `scripts/spawn-issue-pm.sh` shell out
   to bare `gh` commands with no `--repo`/account override, so whichever account is active is the
   one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.
-- **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` + `agent:active`/`blocked`
-  labels:
+- **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` +
+  `agent:active`/`blocked`/`needs-attention` labels:
   ```bash
   bash bin/bootstrap-labels.sh   # cwd inside the target repo; gh authenticated
   ```

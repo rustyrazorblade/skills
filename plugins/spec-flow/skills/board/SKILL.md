@@ -16,7 +16,8 @@ Steps 1-4 are independent reads — issue them together (parallel tool calls) ra
 time.
 
 1. **Gather issues by lifecycle.** This one call is also where liveness and blocking come from —
-   `agent:active` and `blocked` are ordinary labels, already in this response, no separate call.
+   `agent:active`, `blocked`, and `needs-attention` are ordinary labels, already in this response,
+   no separate call.
    `subIssuesSummary` is what tells an epic (a parent issue rolled up from GitHub native
    sub-issues) apart from a directly-workable issue — see the epics note below:
    ```bash
@@ -95,6 +96,7 @@ time.
    ⛳ BLOCKED ON YOU
      spec-review   #N P1  <title>  @you  🟢 active (attach: claude attach a1b2c3)  → ready to approve (spec, or for a content-only docs issue, its plan)
      in-review     #M P0  <title>  @you  PR #P  ✅ CI  🟢 active → review in GitHub: <url>
+     in-progress   #F P1  <title>  @you  🆘 NEEDS ATTENTION — see issue comments · 🟢 active
 
    🔧 IN FLIGHT (agents / CI)
      in-review     #M P1  <title>  @you  PR #P  ⏳ CI  🟢 active (awaiting CI — not on you yet)
@@ -113,7 +115,7 @@ time.
    📦 EPICS (not directly workable — see sub-issues)
      status:ready  #E P1  <title>  (unclaimed)  3 sub-issues (1 done)  → #E1 (login retry), #E2 (token refresh), #E3 (session cleanup)
 
-   (agent:active: 4 · blocked: 1 · local sessions matched: 2 · open PRs: 2 · specs pending archive: 3 → /spec-flow:archive)
+   (agent:active: 4 · blocked: 1 · needs-attention: 1 · local sessions matched: 2 · open PRs: 2 · specs pending archive: 3 → /spec-flow:archive)
    ```
    Drop the `specs pending archive` clause from that summary line entirely when step 4 found
    nothing pending — don't render "specs pending archive: 0," just omit it. Drop the **EPICS**
@@ -125,7 +127,8 @@ time.
    issues with no assignee — everything before `status:ready` is unclaimed by design, since
    `/spec-flow:activate` is what claims it). Show the liveness marker (🟢 `agent:active` / 🔴
    stalled) on every row past `status:ready`, an attach command only when step 3 found a local
-   match, and 🔒 on anything carrying `blocked` — that's the whole point of steps 1 and 3.
+   match, 🔒 on anything carrying `blocked`, and 🆘 on anything carrying `needs-attention` — that's
+   the whole point of steps 1 and 3.
 
 6. **Call out the two things that matter most — scoped to the current user, not the whole team.**
    With multiple users on this repo, an item assigned to someone else is never "blocked on you" or
@@ -159,6 +162,11 @@ time.
    - **Blocked** — any issue carrying the `blocked` label, regardless of assignee (visibility
      matters here even more than usual — someone should know a dependency exists). Name the
      blocking issue from its most recent `⛔ Blocked on #M` comment; don't just say "blocked."
+   - **Needs attention** — any issue carrying the `needs-attention` label and assigned to you:
+     `issue-pm` is stopped and waiting on something outside the two seams above (not a dependency —
+     that's `blocked`). Treat it as blocked on you regardless of what `status:*` label it carries,
+     and name what it's actually waiting on from its most recent comment, not just "needs
+     attention."
 
 ## Rules
 

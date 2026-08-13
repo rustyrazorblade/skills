@@ -49,7 +49,14 @@ exists specifically to work this issue without routing each step back through th
 ## Steps you drive, in order
 
 1. **Activate.** `/spec-flow:activate <N>` — claims the issue for the owner (refusing if someone
-   else already has it). For a non-`type:docs`, non-`type:tech-debt` issue, or a
+   else already has it), then reviews it with them directly: whether the scope/acceptance criteria
+   from `groom` still hold, and whether anything else open in the backlog overlaps, duplicates, or
+   depends on it — up to five issue-specific questions, drafted from what a backlog search actually
+   turns up and asked one at a time, never a fixed checklist. Runs unconditionally, every issue
+   type, unless `.spec-flow/owner-instructions` (read fresh at that point) says to skip it for this
+   run — not one of the owner stops below, a lighter check that happens before either of them (see
+   `skills/activate/SKILL.md` step 1 and **Owner review, right after claiming** in
+   `docs/workflow.md`). For a non-`type:docs`, non-`type:tech-debt` issue, or a
    structural/tech-accompanying `type:docs` one: delegates the design to the `architect` subagent
    (concurrently with a domain-expert agent if one is available), stops for the owner's design
    choice *before* anything is generated, generates the spec from that choice, then stops again at

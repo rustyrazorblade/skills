@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, run architect + domain-expert design concurrently, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -12,8 +12,12 @@ committed OpenSpec change, but a content-only `type:docs` issue (the common case
 artifact entirely and the plan is just its own scope + acceptance criteria (see step 5), and a
 `type:tech-debt` issue skips it too — its plan is the Direction already confirmed when the issue
 was filed, plus whatever existing specified behavior nearby must be preserved (see step 5's
-tech-debt branch). This skill stops for the owner **twice** in the normal case: once at step 4 to
-pick the design, before anything is generated, and again at step 7 — **Seam 1** — to approve
+tech-debt branch). Right after claiming, step 1 also reviews the issue with the owner — scope/
+acceptance-criteria freshness plus a backlog overlap check, up to five issue-specific questions —
+unconditionally, for every issue type; skippable only via `.spec-flow/owner-instructions` for this
+run, not one of the stops below. This skill stops for the owner **twice** in the normal case: once
+at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam 1** — to
+approve
 whatever step 5 produced. Step 4's wait is skipped for every `type:docs` issue (no design to
 choose) and, by default, for `type:tech-debt` too (the architect still runs at step 3, but
 auto-adopts the issue's confirmed Direction instead of waiting — see step 4's tech-debt branch);
@@ -77,6 +81,54 @@ qualify), and confirm the choice with the owner.
    anything else. `agent:active` and the comment are the only things that make you visible to
    *another* user's `project-manager` (or your own, from a different machine) — nothing else about
    this session is; see **Coordination signals** in `docs/workflow.md`.
+
+   **Review the issue with the owner, right after claiming, before anything else runs.** Skip this
+   entirely if `.spec-flow/owner-instructions` (already written by your first actions, before this
+   skill started — see `agents/issue-pm.md`) says to skip the review for this run; absent that, it
+   always runs, for every issue type — `type:docs` and `type:tech-debt` included, since their fast
+   paths only ever skip the design/spec machinery further down in this skill, never this. Not a
+   third seam alongside the two below — a lighter, unconditional check before either of them (see
+   **Owner review, right after claiming** in `docs/workflow.md`).
+
+   Two things are worth confirming before design work starts: whether the scope and acceptance
+   criteria written at `groom` still hold — this issue may have sat in the backlog a while — and
+   whether anything else open in the backlog overlaps, duplicates, or depends on it, which `groom`
+   had no way to check since it only ever saw the backlog as it stood when this issue was filed.
+   Search for that overlap yourself before drafting anything:
+   ```bash
+   gh issue list --state open --json number,title,labels,body --limit 100
+   ```
+   Scan titles and bodies for the same subject matter, touched files/modules, or capability — not
+   just keyword overlap in the title. Then draft **up to five** issue-specific questions from what
+   you actually find — never a fixed checklist recited regardless of the issue, and never more than
+   the ambiguity actually calls for; a straightforward issue with no backlog overlap may earn zero
+   questions, and saying so plainly and moving on is the right outcome, not a shortfall. Typical
+   shapes, only when the issue or the backlog search actually raises them: does the scope/acceptance
+   criteria in front of you still match what the owner wants; is this still the right priority given
+   what else is in flight; a backlog hit that looks like the same area — ask whether it's related, a
+   duplicate, or a dependency, or just coincidentally similar; anything that's changed since this
+   was filed that the acceptance criteria doesn't capture.
+
+   Ask them **one at a time** — never dump the whole list on the owner at once — and follow up on
+   whatever the answer actually raises rather than moving mechanically to the next scripted
+   question. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
+   the architect-flagged case at step 4 below (`blocked` label + native GitHub issue dependency +
+   comment) — don't invent a second mechanism for the same fact. If an answer changes the scope or
+   acceptance criteria, update the issue body before continuing so the change is durable, not just
+   live in this conversation:
+   ```bash
+   gh issue edit <N> --body "<updated body>"
+   ```
+   Close with one comment either way, so the review is visible to anyone reading the issue without
+   attaching to this session:
+   ```bash
+   gh issue comment <N> --body "🔎 Reviewed with owner — confirmed as filed."
+   # or, if anything changed:
+   gh issue comment <N> --body "🔎 Reviewed with owner — updated: <what changed, one line>."
+   ```
+   **If `.spec-flow/owner-instructions` skips this review for the run**, post that plainly instead,
+   same auditability as every other auto-approved step: `gh issue comment <N> --body "Owner review
+   skipped per this run's instructions."`
 
 2. **Ensure you're isolated in your own worktree — verify it, don't assume it.** Isolation is
    **not** automatic for everything: confirmed by test, Claude Code only isolates you in front of

@@ -33,6 +33,8 @@ way, just split across two separate processes instead of one conversation:
  │ /spec-flow:groom  rough idea     │
  │   → scoped GitHub issue      │
  │ /spec-flow:activate <issue#>      │
+ │   → review w/ owner          │
+ │     (scope + backlog check)  │
  │   → worktree + branch        │
  │   → architect + domain expert│
  │     design (concurrently)    │
@@ -74,6 +76,20 @@ way, just split across two separate processes instead of one conversation:
                           │   bulk, by project-manager)   │
                           └────────────────────────────┘
 ```
+
+**Owner review, right after claiming — not a third seam.** Before any design work starts,
+`/spec-flow:activate` reviews the issue with you directly: is the scope/acceptance criteria you
+wrote at `groom` still what you want, and does anything else open in the backlog overlap, duplicate,
+or depend on it — a check `groom` can't have made, since it only ever saw the backlog as it stood
+when this issue was filed. `issue-pm` searches open issues itself and drafts **up to five**
+issue-specific questions from what it actually finds, asked **one at a time**, never a fixed
+checklist — a simple issue may earn none at all. This runs for every issue, `type:docs` and
+`type:tech-debt` included (their fast paths only ever skip the design/spec machinery further down,
+never this). It's not counted as one of the two seams below — it's a lighter, unconditional check
+that happens before either of them, not a third owner-approval gate — but it uses the same
+override mechanism: `.spec-flow/owner-instructions` (see **Overriding either seam's default** below)
+can tell it to skip this review for the run, same free-text, owner's-own-words instruction the
+seams already read.
 
 **Design decision, before Seam 1.** `/spec-flow:activate` stops **twice**. First, right after the
 **`architect` agent** designs the work and surfaces options + trade-offs (with a relevant

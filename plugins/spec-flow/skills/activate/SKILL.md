@@ -324,9 +324,10 @@ qualify), and confirm the choice with the owner.
      then assess whether it already reflects the design the owner just chose at step 4. If it
      does, continue from it rather than regenerating from scratch. If it doesn't (the owner picked
      differently this time, or it's stale/partial), say so and regenerate the affected parts.
-     **If `ac-coverage.md` is missing** (a change dir from before this file existed) — build and
-     write it now from the existing specs, even when nothing else about the change needs touching;
-     step 7 depends on it being present, and re-activation is exactly the moment to retrofit it.
+     **If `ac-coverage.md` and/or `overrides.md` are missing** (a change dir from before these
+     files existed) — build and write whichever is missing now, even when nothing else about the
+     change needs touching; step 7 depends on both being present, and re-activation is exactly the
+     moment to retrofit them.
    - **Something else is there** (an older change predating this naming, or one you don't
      recognize): same orientation — read what's there before deciding whether to continue it,
      rename it to `issue-<N>`, or start fresh. Never silently create a second, competing change
@@ -343,6 +344,44 @@ qualify), and confirm the choice with the owner.
      explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
      the decision and the generated plan.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
+   - **Check whether this change overrides the current baseline, or conflicts with another
+     in-flight change — write `openspec/changes/issue-<N>/overrides.md`, always, even when there's
+     nothing to report** (an explicit "none found" is a checked answer; a missing file would leave
+     the owner unable to tell "checked, clean" from "never checked"):
+     - **Overrides existing behavior.** For every `## MODIFIED Requirements` / `## REMOVED
+       Requirements` section this change's delta specs contain, find the corresponding requirement
+       in the CURRENT baseline — `openspec/specs/<capability>/spec.md`, the already-merged,
+       currently-true spec (not another open change's delta) — and show the actual before → after:
+       the baseline requirement's existing text against what this change replaces it with, or
+       "removed entirely, no replacement" for a `REMOVED` section. Don't make the owner infer this
+       from a `MODIFIED` header; spell out exactly what's changing from what's true today:
+       ```markdown
+       ## Overrides existing behavior
+       ### <capability>: <requirement title>
+       **Currently:** <baseline requirement text>
+       **This change:** <new requirement text, or "Removed — no replacement">
+       ```
+       No `MODIFIED`/`REMOVED` sections at all → write `## Overrides existing behavior\n\nNone —
+       this change only adds new requirements.` rather than omitting the section.
+     - **Conflicts with other in-flight changes.** List every OTHER open change directory —
+       `ls openspec/changes/ 2>/dev/null | grep -v '^archive$' | grep -v '^issue-<N>$'` — that
+       touches the same capability (same `specs/<capability>/` path) as this one. For each, read
+       its delta spec for that capability and judge whether it actually modifies/removes the SAME
+       requirement this change touches, or otherwise asserts something incompatible — not just
+       that the folder names overlap:
+       ```markdown
+       ## Conflicts with other in-flight changes
+       - `issue-<M>` also touches `<capability>` — <either "modifies the same '<requirement
+         title>' requirement, incompatibly: <one-line why>" or "no actual conflict — touches a
+         different requirement in the same capability">
+       ```
+       No other open change touches any of this change's capabilities → `## Conflicts with other
+       in-flight changes\n\nNone found.`
+     - **A genuine hard conflict is a real blocker** — the same class as an architect-flagged hard
+       dependency (step 4): if another in-flight change modifies the same requirement in a way this
+       change can't cleanly coexist with, that always stops Seam 1 for the owner, even under a full
+       `.spec-flow/owner-instructions` auto-approve for this run. Say so plainly when it happens —
+       don't silently proceed past a real conflict because the run was told to auto-approve.
    - **Build an explicit AC→scenario mapping, as a real committed artifact — not just a claim made
      in prose at step 7.** A coverage summary that only ever exists as the model's own narrated
      paragraph is unverifiable — the owner has no way to tell "this criterion is covered" from
@@ -396,10 +435,11 @@ qualify), and confirm the choice with the owner.
    - A spec exists (the non-docs/non-tech-debt branch, or a structural/tech-accompanying
      `type:docs` one) → `"$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" --issue
      <N> --change openspec/changes/issue-<N> --doc openspec/changes/issue-<N>/ac-coverage.md
-     --title "issue-<N>" --subtitle "<issue title>" --out <path>`. `--doc` here is deliberate, not
-     redundant with `--change` — `ac-coverage.md` is a spec-flow-specific artifact (see step 5),
-     not one of the generic OpenSpec files `--change` auto-includes (`proposal.md`/`design.md`/
-     `tasks.md`/`specs/**`), and `review-tools` stays unaware of spec-flow's own file conventions.
+     --doc openspec/changes/issue-<N>/overrides.md --title "issue-<N>" --subtitle "<issue title>"
+     --out <path>`. The two `--doc` flags are deliberate, not redundant with `--change` —
+     `ac-coverage.md`/`overrides.md` are spec-flow-specific artifacts (see step 5), not among the
+     generic OpenSpec files `--change` auto-includes (`proposal.md`/`design.md`/`tasks.md`/
+     `specs/**`), and `review-tools` stays unaware of spec-flow's own file conventions.
    - No spec (content-only `type:docs`, or `type:tech-debt`) → there's no change dir to point at,
      so first write the branch's own rendered substance (scope + acceptance criteria, or Direction +
      adjacent-behavior list) to `.spec-flow/seam1-review.md` inside the worktree (gitignored, same
@@ -451,11 +491,12 @@ qualify), and confirm the choice with the owner.
    the decision. Render the substance inline: the **proposal** (why + what changes + scope), the
    **design the owner chose at step 4** (restated, with the rejected alternatives and why, so the
    owner can confirm this is still what they meant), the **delta-spec requirements + their
-   `#### Scenario:` blocks** (the testable contract), the **`ac-coverage.md` table** committed at
-   step 5 verbatim — render the actual table, not a fresh paraphrase of it, so what the owner reads
-   here is exactly the durable artifact, not a second, potentially-drifted retelling — so the owner
-   can catch a dropped criterion before approving, not after implementation — the **tasks** in
-   order, including any folded-in
+   `#### Scenario:` blocks** (the testable contract), the **`ac-coverage.md` table** and
+   **`overrides.md`** committed at step 5, both verbatim — render the actual files, not a fresh
+   paraphrase of them, so what the owner reads here is exactly the durable artifacts, not a second,
+   potentially-drifted retelling — so the owner can catch a dropped criterion, an unnoticed
+   override of existing behavior, or a conflict with another in-flight change before approving, not
+   after implementation — the **tasks** in order, including any folded-in
    structural-debt task from step 4 — and, if any nearby structural debt was recommended as a
    separate issue, a one-line reminder of its disposition (filed as `#<M>`, or left for later).
    Summarize faithfully — it must be enough to approve or redirect without opening a file. You may
@@ -470,7 +511,10 @@ qualify), and confirm the choice with the owner.
    lightweight branch above instead.)
 
    **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
-   auto-approve the spec for this run.** If so, still render in full as above — the spec for a
+   auto-approve the spec for this run — and step 5's `overrides.md` didn't find a hard conflict**
+   (same exception as step 4's hard dependency: a genuine hard conflict always stops here for the
+   owner regardless of what this run's instructions say). If auto-approving, still render in full
+   as above — the spec for a
    structural/tech-accompanying `type:docs` issue or any other, or the scope + acceptance criteria
    (or, for tech-debt, the Direction + adjacent-behavior list) for a content-only/tech-debt one —
    posted as a comment, not just shown inline, since there's no owner in the conversation to see it,

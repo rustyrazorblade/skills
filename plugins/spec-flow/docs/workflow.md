@@ -114,6 +114,23 @@ Step 7 renders this table verbatim at Seam 1 (as its own node in the explain vie
 terminal mode) instead of re-narrating coverage in prose, so a dropped criterion is something you
 can see directly rather than something you'd have to take the model's word for.
 
+**Spec override and conflict detection.** Where a spec is generated, `activate` step 5 also writes
+`openspec/changes/issue-<N>/overrides.md` — always, even when it has nothing to report, so its
+absence is never mistaken for "nothing was checked":
+- **Overrides existing behavior**: every `MODIFIED`/`REMOVED` requirement in this change's delta
+  specs, compared against the current baseline (`openspec/specs/<capability>/spec.md` — the
+  already-merged, currently-true spec) — the actual before → after text, not just the fact that a
+  `MODIFIED` header exists. This is what "this change overrides a previous decision" looks like
+  made explicit instead of left for you to notice by reading headers.
+- **Conflicts with other in-flight changes**: every other open `openspec/changes/*` directory that
+  touches the same capability as this one, judged for whether it actually modifies/removes the same
+  requirement (not just folder-name overlap) — flagged prominently if so, noted as benign overlap
+  otherwise.
+A genuine hard conflict (two changes modifying the same requirement incompatibly) is a real
+blocker, the same class as an architect-flagged hard dependency (see **Overriding either seam's
+default** below) — it always stops Seam 1 for you, even under a full auto-approve instruction.
+Step 7 renders this file the same way it renders `ac-coverage.md`.
+
 (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
@@ -182,7 +199,9 @@ that's internal to these docs, not something you need to say) — and passes it 
 still stops and waits, by default; nothing is ever inferred or carried over from a different
 issue's spawn. Seam 2's auto-merge path only actually merges once the PR's required CI checks
 report green — an instruction to merge automatically doesn't skip that; a hard dependency the
-architect flags always stops Seam 1 regardless, even under a full auto-approve instruction.
+architect flags, or a hard spec conflict step 5's override/conflict check finds (see **Spec
+override and conflict detection** below), always stops Seam 1 regardless, even under a full
+auto-approve instruction.
 
 **Seam 2's auto-merge specifically can also be set with the `merge-on-green` label** — it's a
 binary, GitHub-native "how to handle this issue" setting (metadata about what's being built, not

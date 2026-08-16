@@ -582,6 +582,28 @@ qualify), and confirm the choice with the owner.
    auto-adopt above — step 4 auto-adopts *by default*, unconditionally; this one (Seam 1 itself)
    still needs an explicit `.spec-flow/owner-instructions` opt-in, same as every other issue.
 
+   **Handling a redirect — capture it as a structured record, not just a reaction.** When the owner
+   objects instead of approving, don't just regenerate from a fresh read of their chat message —
+   append a durable entry to `.spec-flow/seam1-feedback.md` in the worktree (gitignored, same
+   category as `.spec-flow/owner-instructions`; **append, never overwrite** — this is a running
+   history across possibly several redirects) before touching anything:
+   ```markdown
+   ## Redirect — HEAD was <sha from `git rev-parse HEAD` right now>
+   **Targeting:** <capability>/spec.md — Requirement: <title>  (or "(whole change)" if it's not
+   about one specific requirement)
+   **Owner said:** "<their objection, close to verbatim>"
+   ```
+   Reference the SAME requirement identifiers `ac-coverage.md` and `overrides.md` already use, so
+   all three files stay cross-referenceable. Then go back to step 5: **read
+   `.spec-flow/seam1-feedback.md` first**, if it exists, before regenerating anything, and treat
+   every entry as a concrete item to address — not a vague prompt to reinterpret from memory. This
+   is what makes a redirect survive a crashed/resumed session (chat context can be lost; a file
+   can't) and keeps a *second* redirect on the same requirement precise instead of the model
+   re-deriving "what did they mean" from scratch each time. Once addressed, continue through steps
+   5–7 again as normal — regenerate, re-validate, rebuild `ac-coverage.md`/`overrides.md`, re-render
+   (as a **re-review**, per this step's opening check, so the owner sees a diff, not the whole spec
+   again).
+
 ## Rules
 
 - **Show, don't link.** At either stop, render inline in the conversation; never hand back only a

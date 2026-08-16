@@ -425,7 +425,32 @@ qualify), and confirm the choice with the owner.
    git -C <worktree> commit -m "issue-<N>: spec (proposal/design/specs/tasks)"
    ```
 
-7. **Render for review, then mark spec-review and STOP.** **First, check `SPEC_FLOW_SEAM_VIEW`**
+7. **Render for review, then mark spec-review and STOP.** **First, determine whether this is a
+   fresh look or a re-review** — read `.spec-flow/seam1-last-shown-sha` in the worktree (gitignored,
+   same category of file as `.spec-flow/owner-instructions`; this step both reads and, at the end,
+   writes it):
+   - **Missing** → fresh look. Render the full spec below, exactly as this step already describes.
+   - **Present and equal to the current `git rev-parse HEAD`** → nothing has changed since the
+     owner's last look (a resumed/crashed session re-entering this step with no regeneration in
+     between) — the labels/comment below were already posted last time this step ran, so skip
+     re-posting them too, not just the content render; say in one line that nothing's changed since
+     your last review and stop there.
+   - **Present and different from current HEAD** → the spec was regenerated since the owner last
+     saw it (they redirected you, or this is a later re-activation). Render **only what changed
+     since then**, not the whole spec again — the owner already reviewed the unchanged parts once;
+     re-showing them wastes their attention and buries what actually moved. This applies to the
+     "a spec exists" branch below, in both `explain` and terminal mode — it notes exactly how. The
+     content-only `type:docs` and `type:tech-debt` branches are already a quick, lightweight
+     confirmation (scope + acceptance criteria, or Direction + adjacent-behavior list, not a full
+     generated spec) — diffing isn't worth the added complexity there; they always render in full,
+     same as today.
+
+   Either way, after rendering (once the STOP below is reached), write the current
+   `git rev-parse HEAD` to `.spec-flow/seam1-last-shown-sha` (`mkdir -p .spec-flow` first if
+   needed) — this is what makes a *later* re-review, if any, diff-only again instead of a full
+   re-dump.
+
+   **Then check `SPEC_FLOW_SEAM_VIEW`**
    (set once, repo-wide, by `/spec-flow:setup` — see **Seam visualization** in `docs/workflow.md`).
    Unset or `terminal` → skip straight to the branches below; each one's inline text render is the
    whole deliverable, exactly as written. `explain` → resolve the `review-tools` plugin's installed
@@ -446,13 +471,21 @@ qualify), and confirm the choice with the owner.
    `--issue <N>` — the issue itself (body, comments, related/linked issues) belongs in the same
    view as the spec, not a second lookup:
    - A spec exists (the non-docs/non-tech-debt branch, or a structural/tech-accompanying
-     `type:docs` one) → `"$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" --issue
-     <N> --change openspec/changes/issue-<N> --doc openspec/changes/issue-<N>/ac-coverage.md
-     --doc openspec/changes/issue-<N>/overrides.md --title "issue-<N>" --subtitle "<issue title>"
-     --out <path>`. The two `--doc` flags are deliberate, not redundant with `--change` —
-     `ac-coverage.md`/`overrides.md` are spec-flow-specific artifacts (see step 5), not among the
-     generic OpenSpec files `--change` auto-includes (`proposal.md`/`design.md`/`tasks.md`/
-     `specs/**`), and `review-tools` stays unaware of spec-flow's own file conventions.
+     `type:docs` one), **fresh look or nothing changed** → `"$EXPLAIN_ROOT/skills/explain/scripts/
+     generate-explain.py" --issue <N> --change openspec/changes/issue-<N> --doc
+     openspec/changes/issue-<N>/ac-coverage.md --doc openspec/changes/issue-<N>/overrides.md
+     --title "issue-<N>" --subtitle "<issue title>" --out <path>`. The two `--doc` flags are
+     deliberate, not redundant with `--change` — `ac-coverage.md`/`overrides.md` are spec-flow-
+     specific artifacts (see step 5), not among the generic OpenSpec files `--change` auto-includes
+     (`proposal.md`/`design.md`/`tasks.md`/`specs/**`), and `review-tools` stays unaware of
+     spec-flow's own file conventions.
+   - A spec exists, **re-review** (the marker SHA differs from current HEAD) → same command, but
+     add `--diff --base <the recorded SHA> --path openspec/changes/issue-<N>` — this scopes the
+     view to an actual diff of just this change dir since the owner's last look, using
+     `generate-explain.py`'s path-scoping (see its `SKILL.md`), rather than re-rendering the whole
+     spec as if it were new. Still include `--change`/the two `--doc` flags too — the AC-coverage
+     and overrides tables reflect the CURRENT state, not a diff, since those are conclusions to
+     re-check as a whole, not line-by-line deltas.
    - No spec (content-only `type:docs`, or `type:tech-debt`) → there's no change dir to point at,
      so first write the branch's own rendered substance (scope + acceptance criteria, or Direction +
      adjacent-behavior list) to `.spec-flow/seam1-review.md` inside the worktree (gitignored, same
@@ -498,6 +531,14 @@ qualify), and confirm the choice with the owner.
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
    gh issue comment <N> --body "📝 Spec committed (\`issue-<N>\`) — awaiting your review to approve implementation."
    ```
+   **On a re-review** (per this step's opening check — the marker SHA differs from current HEAD),
+   render differently: `git diff <the recorded SHA> HEAD -- openspec/changes/issue-<N>` and show
+   only the sections that actually changed, explicitly noting what didn't (e.g. "proposal and tasks
+   are unchanged from what you already saw; here's what changed in the design and specs") — never
+   re-paste content the owner already reviewed once. The `ac-coverage.md`/`overrides.md` tables
+   still render in full (current state, not a diff — see the `explain`-mode branch above for why).
+   **On a fresh look or when nothing changed**, the rest of this paragraph is the full render:
+
    **Show the spec in the conversation — do NOT just point at the worktree path.** The owner
    reviews here, not in an editor. This is confirmation that step 5 faithfully translated the
    design already **chosen at step 4** into a concrete spec — not the first time the owner sees

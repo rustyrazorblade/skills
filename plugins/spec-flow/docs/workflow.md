@@ -141,6 +141,16 @@ because there's no judgment call for you to make — by the time you see the spe
 structurally valid; `ac-coverage.md`/`overrides.md` above are for the calls that are actually yours
 to weigh in on.
 
+**A re-review shows only what changed since your last look.** If the spec gets regenerated after
+you've already seen it once at Seam 1 — you redirected `activate`, or you're re-activating a stale
+change — step 7 doesn't re-dump the whole spec again. It tracks the commit SHA it last showed you
+in `.spec-flow/seam1-last-shown-sha` (gitignored, same category as `.spec-flow/owner-instructions`)
+and, on a later re-entry, renders a diff scoped to just `openspec/changes/issue-<N>` between that
+SHA and the current one — a real diff view via `review-tools`'s `explain` skill (its `--path` flag
+scopes `--diff` to one directory instead of the whole repo) when `SPEC_FLOW_SEAM_VIEW=explain`, or
+a scoped `git diff` in terminal mode. `ac-coverage.md`/`overrides.md` still render in full either
+way — they're conclusions to re-check as a whole, not something that makes sense line-by-line.
+
 (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one

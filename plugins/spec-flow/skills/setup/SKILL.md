@@ -28,7 +28,9 @@ later question moot.
      `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
-   - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`.
+   - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and
+     whether the standalone `review-tools` plugin is installed/enabled:
+     `claude plugin list --json | jq -e '[.[] | select(.id | startswith("review-tools@")) | select(.enabled)] | length > 0'`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
      entries.
    - **CI tiering**: the same detection `adopt-tiering` step 1 uses — Gradle
@@ -68,21 +70,24 @@ later question moot.
      { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
      ```
      merging into whatever's already there rather than overwriting the file.
-   - **Seam visualization preference unset** → explain the choice in one line: at both owner
-     seams (design approval, in-review), `activate`/`implement` can either generate an interactive
-     HTML deck — file tree, diff view, docs, all in one place (see `/spec-flow:deck`) — or render
-     the same content as plain text in the terminal, same as before that skill existed. Recommend
-     the deck, default yes, but genuinely optional — like agent teams, a real preference, not a
-     mechanical default. If yes:
+   - **Seam visualization preference unset, AND the `review-tools` plugin is installed/enabled**
+     (skip this item entirely if `review-tools` isn't installed — don't offer a preference for a
+     plugin the owner doesn't have; they can install it and re-run `setup` any time) → explain the
+     choice in one line: at both owner seams (design approval, in-review), `activate`/`implement`
+     can either generate an interactive HTML view via `review-tools`'s `explain` skill — file tree,
+     diff view, docs, all in one place — or render the same content as plain text in the terminal,
+     same as before that plugin existed. Recommend the HTML view, default yes, but genuinely
+     optional — like agent teams, a real preference, not a mechanical default. If yes:
      ```json
-     { "env": { "SPEC_FLOW_SEAM_VIEW": "deck" } }
+     { "env": { "SPEC_FLOW_SEAM_VIEW": "explain" } }
      ```
      If the owner prefers terminal-only:
      ```json
      { "env": { "SPEC_FLOW_SEAM_VIEW": "terminal" } }
      ```
-     merging into whatever's already there. `activate`/`implement` read this fresh at each seam —
-     see **Seam visualization** in `docs/workflow.md`.
+     merging into whatever's already there. `activate`/`implement` read this fresh at each seam,
+     and re-check `review-tools`'s availability every time rather than trusting this one-time
+     detection — see **Seam visualization** in `docs/workflow.md`.
    - **CI not tiered** → don't attempt this here, it's its own migration. Just point at
      `/spec-flow:adopt-tiering` and explain in one line what it does; recommend running it next,
      but leave the decision (and the run) to the owner.

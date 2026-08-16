@@ -15,6 +15,7 @@ Then install whichever plugins you want:
 /plugin install cassandra-expert@rustyrazorblade-plugins
 /plugin install easy-db-lab@rustyrazorblade-plugins
 /plugin install spec-flow@rustyrazorblade-plugins
+/plugin install review-tools@rustyrazorblade-plugins
 ```
 
 ### Codex
@@ -24,7 +25,7 @@ codex plugin marketplace add rustyrazorblade/skills
 
 Codex exposes skills through `$` mentions instead of slash commands. `cassandra-expert` and
 `easy-db-lab` ship Codex manifests; `spec-flow` is Claude Code only (it depends on Claude Code
-agents and the `Workflow` runtime).
+agents and the `Workflow` runtime). `review-tools` is Claude Code only too for now.
 
 ## Available Plugins
 
@@ -232,7 +233,11 @@ yourself.
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
 | `/spec-flow:adopt-tiering` | One-time per repo: split an existing suite into the unit/integration tiers the tiering model needs, then open a PR |
-| `/spec-flow:deck <base-ref> [docs...]` | Render a self-contained, IDE-style HTML walkthrough of a change (file tree, diff/code editor, docs) — used standalone or automatically at both owner seams when `SPEC_FLOW_SEAM_VIEW=deck` |
+
+If the standalone [`review-tools`](#review-tools) plugin is also installed, set
+`SPEC_FLOW_SEAM_VIEW=explain` (via `/spec-flow:setup`) to have `activate`/`implement` render both
+owner seams as an interactive HTML view instead of plain text — see **Seam visualization** in
+`docs/workflow.md`.
 
 #### Agents
 
@@ -341,6 +346,34 @@ Agents resolve **bare-first with a namespaced fallback**: the workflow tries `re
 wins — a deliberate way to specialize a reviewer or the developer for a repo's stack.
 
 See [`plugins/spec-flow/docs/workflow.md`](plugins/spec-flow/docs/workflow.md) for the full design.
+
+### review-tools
+
+Render an IDE-style single-page HTML view — a file tree on the left (code diffs and plain files in
+one panel, docs/issue text in another, whichever's non-empty), a code/diff/doc editor top-right,
+and an explanation pane bottom-right — of a git diff, a GitHub issue plus everything linked to it,
+project docs, or any mix. Self-contained output, no server, no CDN, opens over `file://`. Standalone
+— no other plugin required, useful in any repo.
+
+Claude Code:
+
+```
+/plugin install review-tools@rustyrazorblade-plugins
+```
+
+#### Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/explain <issue-N \| base-ref> [docs...]` | Render the HTML view — an issue (body, comments, related/linked issues), a diff, docs, or any combination |
+
+If the [`spec-flow`](#spec-flow) plugin is also installed, its `activate`/`implement` skills call
+`explain` automatically at both owner seams once `SPEC_FLOW_SEAM_VIEW=explain` is set (via
+`/spec-flow:setup`) — see **Seam visualization** in `plugins/spec-flow/docs/workflow.md`. That
+integration is optional and one-directional; `review-tools` has no dependency on spec-flow.
+
+See [`plugins/review-tools/skills/explain/SKILL.md`](plugins/review-tools/skills/explain/SKILL.md)
+for the full CLI and manifest schema.
 
 ## License
 

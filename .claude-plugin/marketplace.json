@@ -24,6 +24,12 @@
       "source": "./plugins/spec-flow",
       "description": "Session-driven multi-agent delivery pipeline over OpenSpec + GitHub: groom, activate (spec), implement (5-lens review panel), address, finalize",
       "category": "workflow"
+    },
+    {
+      "name": "review-tools",
+      "source": "./plugins/review-tools",
+      "description": "Render an IDE-style single-page HTML view of a diff, a GitHub issue plus everything linked to it, or docs — standalone, no other plugin required",
+      "category": "workflow"
     }
   ]
 }

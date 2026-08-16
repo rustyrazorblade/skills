@@ -1,4 +1,4 @@
-<title>Deck</title>
+<title>Explain</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -42,27 +42,27 @@
     height: 100vh;
   }
 
-  header#deck-header {
+  header#explain-header {
     flex: 0 0 auto;
     background: var(--bg-header);
     border-bottom: 1px solid var(--border);
     padding: 10px 16px;
   }
 
-  header#deck-header h1 {
+  header#explain-header h1 {
     margin: 0;
     font-size: 15px;
     font-weight: 600;
     color: var(--text);
   }
 
-  header#deck-header .subtitle {
+  header#explain-header .subtitle {
     margin-top: 2px;
     font-size: 12.5px;
     color: var(--text-dim);
   }
 
-  header#deck-header .meta {
+  header#explain-header .meta {
     margin-top: 4px;
     font-size: 11px;
     font-family: var(--code-font);
@@ -82,8 +82,9 @@
     max-width: 40vw;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
-    overflow-y: auto;
-    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     font-size: 13px;
   }
 
@@ -91,6 +92,39 @@
     color: var(--text-dim);
     padding: 8px 16px;
     font-style: italic;
+  }
+
+  /* Two stacked panels: code (diff/code nodes) on top, documents (markdown nodes) below —
+     kept visually distinct so a diff never gets lost in a pile of docs, or vice versa. */
+  .sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sidebar-panel + .sidebar-panel {
+    border-top: 1px solid var(--border);
+  }
+
+  #sidebar-code { flex: 1 1 40%; }
+  #sidebar-docs { flex: 1 1 60%; }
+
+  .sidebar-panel.hidden { display: none; }
+
+  .sidebar-panel-title {
+    flex: 0 0 auto;
+    padding: 7px 16px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .sidebar-panel .tree-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 4px 0 8px;
   }
 
   ul.tree, ul.tree ul {
@@ -368,13 +402,22 @@
   .explain-content { padding: 12px 20px; }
 </style>
 <div id="app">
-  <header id="deck-header">
-    <h1 id="deck-title">Deck</h1>
-    <div class="subtitle" id="deck-subtitle" style="display:none"></div>
-    <div class="meta" id="deck-meta" style="display:none"></div>
+  <header id="explain-header">
+    <h1 id="explain-title">Explain</h1>
+    <div class="subtitle" id="explain-subtitle" style="display:none"></div>
+    <div class="meta" id="explain-meta" style="display:none"></div>
   </header>
   <div id="body">
-    <nav id="sidebar"></nav>
+    <nav id="sidebar">
+      <div id="sidebar-code" class="sidebar-panel">
+        <div class="sidebar-panel-title">Code</div>
+        <div id="tree-code" class="tree-scroll"></div>
+      </div>
+      <div id="sidebar-docs" class="sidebar-panel">
+        <div class="sidebar-panel-title">Documents</div>
+        <div id="tree-docs" class="tree-scroll"></div>
+      </div>
+    </nav>
     <div id="right">
       <div id="editor-pane">
         <div id="editor-tab">No file selected</div>
@@ -393,13 +436,13 @@
 
   // ---------------------------------------------------------------------
   // Demo manifest — used only when window.MANIFEST is not injected (e.g.
-  // opening this shell file directly). generate-deck.py / init-deck.sh both
+  // opening this shell file directly). generate-explain.py / init-explain.sh both
   // replace the injection marker near the end of this file with a real one
   // (kept out of this comment as literal text so it stays a single, unique
   // occurrence in this file for the generator to target).
   // ---------------------------------------------------------------------
   var DEMO_MANIFEST = {
-    title: "deck viewer (demo)",
+    title: "explain viewer (demo)",
     subtitle: "No manifest was injected — showing a built-in example.",
     nodes: [
       {
@@ -698,9 +741,16 @@
   // ---------------------------------------------------------------------
   // File tree
   // ---------------------------------------------------------------------
-  function buildTree(nodes) {
+  function isCodeNode(node) { return node.kind === "diff" || node.kind === "code"; }
+  function isDocNode(node) { return node.kind === "markdown"; }
+
+  // `predicate` filters which nodes join this tree, but `idx` is always the node's index in the
+  // FULL manifest.nodes array (forEach over the unfiltered array, skipping non-matches) — the
+  // code and doc trees both need to resolve back to the same global node list on selection.
+  function buildTree(nodes, predicate) {
     var root = { name: "", children: {}, order: [] };
     nodes.forEach(function (node, idx) {
+      if (predicate && !predicate(node)) return;
       var raw = node.path || node.label || ("node-" + idx);
       var parts = String(raw).split("/").filter(Boolean);
       if (!parts.length) parts = [raw];
@@ -752,13 +802,13 @@
   function renderApp(manifest) {
     var nodes = manifest.nodes || [];
 
-    document.getElementById("deck-title").textContent = manifest.title || "Deck";
-    var subtitleEl = document.getElementById("deck-subtitle");
+    document.getElementById("explain-title").textContent = manifest.title || "Explain";
+    var subtitleEl = document.getElementById("explain-subtitle");
     if (manifest.subtitle) {
       subtitleEl.textContent = manifest.subtitle;
       subtitleEl.style.display = "";
     }
-    var metaEl = document.getElementById("deck-meta");
+    var metaEl = document.getElementById("explain-meta");
     if (manifest.meta && (manifest.meta.base || manifest.meta.head || manifest.meta.generatedFrom)) {
       var bits = [];
       if (manifest.meta.base || manifest.meta.head) {
@@ -770,11 +820,30 @@
     }
 
     var sidebar = document.getElementById("sidebar");
+    var codePanel = document.getElementById("sidebar-code");
+    var docsPanel = document.getElementById("sidebar-docs");
+
     if (!nodes.length) {
-      sidebar.innerHTML = '<div class="empty">No nodes in this manifest.</div>';
+      codePanel.classList.add("hidden");
+      docsPanel.classList.remove("hidden");
+      document.getElementById("tree-docs").innerHTML = '<div class="empty">No nodes in this manifest.</div>';
     } else {
-      var tree = buildTree(nodes);
-      sidebar.innerHTML = renderTreeNode(tree, "");
+      var codeNodes = nodes.filter(isCodeNode);
+      var docNodes = nodes.filter(isDocNode);
+
+      if (codeNodes.length) {
+        codePanel.classList.remove("hidden");
+        document.getElementById("tree-code").innerHTML = renderTreeNode(buildTree(nodes, isCodeNode), "");
+      } else {
+        codePanel.classList.add("hidden");
+      }
+
+      if (docNodes.length) {
+        docsPanel.classList.remove("hidden");
+        document.getElementById("tree-docs").innerHTML = renderTreeNode(buildTree(nodes, isDocNode), "");
+      } else {
+        docsPanel.classList.add("hidden");
+      }
     }
 
     sidebar.addEventListener("click", function (ev) {

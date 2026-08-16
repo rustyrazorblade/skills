@@ -380,23 +380,32 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    Use the printed URL as `<PR_URL>` below — same convention as `<DEFAULT_BR>`/`<PR>` above,
    a literal value from this output, not a shell variable carried across separate Bash calls:
 
-   **If `SPEC_FLOW_SEAM_VIEW=deck`** (set once, repo-wide, by `/spec-flow:setup` — see **Seam
-   visualization** in `docs/workflow.md`; unset or `terminal` skips this entirely), generate a
-   "what changed" deck alongside the PR before posting the comment below:
+   **If `SPEC_FLOW_SEAM_VIEW=explain`** (set once, repo-wide, by `/spec-flow:setup` — see **Seam
+   visualization** in `docs/workflow.md`; unset or `terminal` skips this entirely), resolve the
+   standalone `review-tools` plugin's installed root the same way `activate` step 7 does:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/skills/deck/scripts/generate-deck.py \
-     --base "$(git merge-base HEAD origin/<DEFAULT_BR>)" --head "$BR" \
+   EXPLAIN_ROOT=$(claude plugin list --json 2>/dev/null | jq -r '
+     [.[] | select(.id | startswith("review-tools@")) | select(.enabled)]
+     | sort_by(.installedAt) | last.installPath // empty')
+   ```
+   `EXPLAIN_ROOT` empty → skip straight to **Otherwise** below, and mention once, in passing, that
+   the seam-view preference is set but `review-tools` isn't available here. Otherwise, generate a
+   "what changed" explain view alongside the PR before posting the comment below:
+   ```bash
+   "$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" \
+     --diff --base "$(git merge-base HEAD origin/<DEFAULT_BR>)" --head "$BR" \
      --change "openspec/changes/issue-<N>" \
      --title "issue-<N>" --subtitle "PR #<PR> — what changed" --out <path>
    ```
    (omit `--change` if this issue never generated an OpenSpec change — the docs-fast-path/tech-debt
-   case). Never pass `--open` — same display constraint as `activate`, see `skills/deck/SKILL.md`.
+   case). Never pass `--open` — same display constraint as `activate`, see `review-tools`'s own
+   `skills/explain/SKILL.md`.
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>
 
-   🗂️ Deck (what changed): <deck path> — open <deck path>"
+   🗂️ Explain (what changed): <explain path> — open <explain path>"
    ```
-   **Otherwise** (unset or `terminal`):
+   **Otherwise** (unset, `terminal`, or `review-tools` unavailable):
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>"
    ```

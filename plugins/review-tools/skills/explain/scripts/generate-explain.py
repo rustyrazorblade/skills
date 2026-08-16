@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministic generator for a `deck` walkthrough: a single self-contained HTML file built from
-a git diff plus optional docs/code, with zero model-authored markup. Stdlib only (json, argparse,
-subprocess, pathlib, tempfile, webbrowser) + shelling out to `git` — no pip dependencies. Must run
-on macOS system python3 and in CI (Linux); avoid anything requiring a compiled extension.
+"""Deterministic generator for an `explain` walkthrough: a single self-contained HTML file built
+from a git diff, a GitHub issue + its related issues, and/or optional docs/code, with zero
+model-authored markup. Stdlib only (json, argparse, subprocess, pathlib, tempfile, webbrowser) +
+shelling out to `git`/`gh` — no pip dependencies. Must run on macOS system python3 and in CI
+(Linux); avoid anything requiring a compiled extension.
 
-See plugins/spec-flow/skills/deck/SKILL.md for the manifest schema and usage from the skill.
+See plugins/review-tools/skills/explain/SKILL.md for the manifest schema and usage from the skill.
 """
 
 import argparse
@@ -34,7 +35,7 @@ LANG_BY_SUFFIX = {
 
 
 def fail(message):
-    print(f"generate-deck: {message}", file=sys.stderr)
+    print(f"generate-explain: {message}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -45,6 +46,128 @@ def run_git(args, cwd=None):
     if result.returncode != 0:
         raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
     return result.stdout
+
+
+def run_gh(args):
+    result = subprocess.run(["gh", *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return result.stdout
+
+
+ISSUE_MENTION_RE = re.compile(r"(?<!\w)#(\d+)\b")
+
+
+def repo_slug():
+    """"owner/repo" of the current directory's GitHub remote, for the dependencies API (which
+    isn't scoped by `gh issue`'s own repo-inference the way `gh issue view` is)."""
+    try:
+        return run_gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]).strip()
+    except subprocess.CalledProcessError as e:
+        fail(f"couldn't resolve the GitHub repo ('gh repo view' failed): {e.stderr.strip()}")
+
+
+def fetch_issue(number, with_comments):
+    fields = "number,title,body,url,state,labels"
+    if with_comments:
+        fields += ",comments"
+    try:
+        raw = run_gh(["issue", "view", str(number), "--json", fields])
+    except subprocess.CalledProcessError as e:
+        return None
+    return json.loads(raw)
+
+
+def dependency_numbers(number, owner_repo, relation):
+    # relation: "blocked_by" or "blocking". Native GitHub issue-dependencies API — additive to,
+    # not a substitute for, the #-mention scan below (an issue can reference another without a
+    # formal dependency link, and vice versa).
+    try:
+        raw = run_gh(["api", f"repos/{owner_repo}/issues/{number}/dependencies/{relation}"])
+    except subprocess.CalledProcessError:
+        return []
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return [item["number"] for item in items if "number" in item]
+
+
+def mentioned_numbers(issue_data):
+    text = (issue_data.get("body") or "")
+    for c in issue_data.get("comments") or []:
+        text += "\n" + (c.get("body") or "")
+    return [int(n) for n in ISSUE_MENTION_RE.findall(text)]
+
+
+def issue_markdown(issue_data, relation_note=None):
+    lines = [f"# #{issue_data['number']} — {issue_data['title']}"]
+    meta_bits = [issue_data.get("state", "").upper()]
+    labels = [l["name"] for l in issue_data.get("labels") or []]
+    if labels:
+        meta_bits.append(", ".join(labels))
+    lines.append(f"*{' · '.join(b for b in meta_bits if b)}*")
+    if relation_note:
+        lines.append(f"*{relation_note}*")
+    lines.append("")
+    lines.append(issue_data.get("body") or "*(no description)*")
+
+    comments = issue_data.get("comments") or []
+    if comments:
+        lines.append("")
+        lines.append("## Discussion")
+        for c in comments:
+            author = (c.get("author") or {}).get("login", "unknown")
+            created = c.get("createdAt", "")
+            lines.append("")
+            lines.append(f"**@{author}** — {created}")
+            lines.append("")
+            lines.append(c.get("body") or "")
+    return "\n".join(lines)
+
+
+def issue_nodes_from(issue_numbers):
+    """Primary issues (full body + comments) plus, one level out, every issue they're linked to
+    via a native GitHub dependency or a bare "#N" mention in their body/comments — so "related
+    issues and the research that went into this one" doesn't require any code diff to exist yet.
+    Returns (nodes, primary_title_for_default_title_or_None)."""
+    nodes = []
+    primary_title = None
+    seen = set()
+    related_numbers = {}  # number -> relation note, for issues NOT explicitly requested
+
+    owner_repo = repo_slug()
+
+    for n in issue_numbers:
+        if n in seen:
+            continue
+        seen.add(n)
+        data = fetch_issue(n, with_comments=True)
+        if data is None:
+            print(f"generate-explain: warning: issue #{n} not found or inaccessible, skipping", file=sys.stderr)
+            continue
+        if primary_title is None:
+            primary_title = f"#{n} — {data['title']}"
+        nodes.append(markdown_node(f"issue-{n}.md", issue_markdown(data)))
+
+        for m in dependency_numbers(n, owner_repo, "blocked_by"):
+            related_numbers.setdefault(m, f"Related: blocked by #{n}")
+        for m in dependency_numbers(n, owner_repo, "blocking"):
+            related_numbers.setdefault(m, f"Related: blocks #{n}")
+        for m in mentioned_numbers(data):
+            if m != n:
+                related_numbers.setdefault(m, f"Related: mentioned in #{n}")
+
+    for m, note in related_numbers.items():
+        if m in seen:
+            continue
+        seen.add(m)
+        data = fetch_issue(m, with_comments=False)
+        if data is None:
+            continue
+        nodes.append(markdown_node(f"related/issue-{m}.md", issue_markdown(data, relation_note=note)))
+
+    return nodes, primary_title
 
 
 def resolve_default_branch():
@@ -153,7 +276,7 @@ def code_node(path, text):
 def change_nodes_from(change_dir):
     d = Path(change_dir)
     if not d.is_dir():
-        print(f"generate-deck: warning: --change dir not found, skipping: {change_dir}", file=sys.stderr)
+        print(f"generate-explain: warning: --change dir not found, skipping: {change_dir}", file=sys.stderr)
         return []
 
     nodes = []
@@ -172,30 +295,40 @@ def change_nodes_from(change_dir):
 
 def build_manifest(args, base, head):
     nodes = []
-    nodes += diff_nodes_from(base, head)
+    source_bits = []
+    meta = {}
+
+    if args.diff:
+        nodes += diff_nodes_from(base, head)
+        head_label = head or "working tree"
+        meta["base"] = base
+        meta["head"] = head_label
+        source_bits.append(f"git diff {base}..{head_label}")
+
+    primary_issue_title = None
+    if args.issue:
+        issue_nodes, primary_issue_title = issue_nodes_from(args.issue)
+        nodes += issue_nodes
+        source_bits.append(f"{len(args.issue)} issue(s) + related")
+
     for change_dir in args.change or []:
         nodes += change_nodes_from(change_dir)
-    for doc in args.doc or []:
-        nodes.append(markdown_node(doc, read_text(doc)))
-    for code in args.code or []:
-        nodes.append(code_node(code, read_text(code)))
-
-    head_label = head or "working tree"
-    source_bits = [f"git diff {base}..{head_label}"]
     if args.change:
         source_bits.append(f"{len(args.change)} change dir(s)")
+    for doc in args.doc or []:
+        nodes.append(markdown_node(doc, read_text(doc)))
     if args.doc:
         source_bits.append(f"{len(args.doc)} doc(s)")
+    for code in args.code or []:
+        nodes.append(code_node(code, read_text(code)))
     if args.code:
         source_bits.append(f"{len(args.code)} code file(s)")
 
+    meta["generatedFrom"] = ", ".join(source_bits) if source_bits else "no inputs"
+
     manifest = {
-        "title": args.title or "Deck",
-        "meta": {
-            "base": base,
-            "head": head_label,
-            "generatedFrom": ", ".join(source_bits),
-        },
+        "title": args.title or primary_issue_title or "Explain",
+        "meta": meta,
         "nodes": nodes,
     }
     if args.subtitle:
@@ -220,15 +353,19 @@ def default_out_path():
     # mkstemp for a guaranteed-unique name; we immediately overwrite via write_text below, so the
     # empty file it creates is just a placeholder reservation.
     import os
-    fd, name = tempfile.mkstemp(prefix="deck-", suffix=".html", dir=str(fd_path))
+    fd, name = tempfile.mkstemp(prefix="explain-", suffix=".html", dir=str(fd_path))
     os.close(fd)
     return Path(name)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a deterministic IDE-style HTML deck from a git diff + docs.")
-    parser.add_argument("--base", help="diff base ref (default: merge-base with the default branch)")
-    parser.add_argument("--head", help="diff head ref (default: working tree)")
+    parser = argparse.ArgumentParser(description="Generate a deterministic IDE-style HTML explain view from a git diff, a GitHub issue, and/or docs.")
+    parser.add_argument("--diff", action="store_true",
+                         help="include a git diff (base/head below); omit for a docs-only or issue-only view — no diff is computed unless this is passed")
+    parser.add_argument("--base", help="diff base ref (default: merge-base with the default branch); only meaningful with --diff")
+    parser.add_argument("--head", help="diff head ref (default: working tree); only meaningful with --diff")
+    parser.add_argument("--issue", action="append", type=int, default=[], metavar="N",
+                         help="a GitHub issue number: its body + comments, plus (one level out) every issue it's linked to via a native dependency or a bare #N mention (repeatable)")
     parser.add_argument("--change", action="append", default=[], metavar="DIR",
                          help="an OpenSpec change dir; auto-includes proposal.md/design.md/tasks.md + specs/**/*.md (repeatable)")
     parser.add_argument("--doc", action="append", default=[], metavar="PATH",
@@ -241,11 +378,18 @@ def main():
     parser.add_argument("--open", action="store_true", help="open the result in a browser (only when explicitly passed)")
     args = parser.parse_args()
 
-    if shutil.which("git") is None:
-        fail("'git' is required but not on PATH.")
+    if not (args.diff or args.issue or args.change or args.doc or args.code):
+        fail("nothing to render — pass at least one of --diff, --issue, --change, --doc, --code")
 
-    base = args.base or resolve_base()
-    head = args.head  # None means "working tree" — handled in diff_nodes_from
+    if args.diff and shutil.which("git") is None:
+        fail("'git' is required but not on PATH (needed for --diff).")
+    if args.issue and shutil.which("gh") is None:
+        fail("'gh' is required but not on PATH (needed for --issue).")
+
+    base = head = None
+    if args.diff:
+        base = args.base or resolve_base()
+        head = args.head  # None means "working tree" — handled in diff_nodes_from
 
     manifest = build_manifest(args, base, head)
 

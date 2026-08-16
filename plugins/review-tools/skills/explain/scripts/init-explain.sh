@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Bootstrap a curated (hand-authored) deck: copy the static viewer shell into <target-dir> and
-# write a skeleton deck.manifest.js next to it, loaded via <script src>, so the deck stays
+# Bootstrap a curated (hand-authored) explain view: copy the static viewer shell into <target-dir>
+# and write a skeleton explain.manifest.js next to it, loaded via <script src>, so it stays
 # file://-safe and editable without ever touching viewer.html itself. See ../SKILL.md's "curated"
 # mode. macOS bash 3.2 compatible (no associative arrays, no mapfile).
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "usage: init-deck.sh <target-dir>" >&2
+  echo "usage: init-explain.sh <target-dir>" >&2
   exit 1
 fi
 target="$1"
 
 command -v sed >/dev/null 2>&1 || {
-  echo "init-deck: 'sed' is required but not on PATH." >&2
+  echo "init-explain: 'sed' is required but not on PATH." >&2
   exit 1
 }
 
@@ -20,20 +20,20 @@ script_dir="$(cd "$(dirname "$0")/.." && pwd)"
 viewer_src="$script_dir/assets/viewer.html"
 
 if [[ ! -f "$viewer_src" ]]; then
-  echo "init-deck: viewer shell not found at $viewer_src — was assets/viewer.html removed?" >&2
+  echo "init-explain: viewer shell not found at $viewer_src — was assets/viewer.html removed?" >&2
   exit 1
 fi
 
 mkdir -p "$target"
 
-# generate-deck.py injects the manifest inline at this same marker; a curated deck instead loads
-# it from an external file so the owner can hand-edit deck.manifest.js without regenerating or
-# touching viewer.html.
-sed 's#<!--MANIFEST-->#<script src="deck.manifest.js"></script>#' "$viewer_src" > "$target/viewer.html"
+# generate-explain.py injects the manifest inline at this same marker; a curated view instead
+# loads it from an external file so the owner can hand-edit explain.manifest.js without
+# regenerating or touching viewer.html.
+sed 's#<!--MANIFEST-->#<script src="explain.manifest.js"></script>#' "$viewer_src" > "$target/viewer.html"
 
-manifest_file="$target/deck.manifest.js"
+manifest_file="$target/explain.manifest.js"
 cat > "$manifest_file" <<'EOF'
-// deck manifest schema:
+// explain manifest schema:
 //   title: string
 //   subtitle?: string
 //   meta?: { base?: string, head?: string, generatedFrom?: string }
@@ -58,7 +58,7 @@ window.MANIFEST = {
 };
 EOF
 
-echo "init-deck: wrote $target/viewer.html and $manifest_file"
+echo "init-explain: wrote $target/viewer.html and $manifest_file"
 echo ""
 echo "Manifest schema:"
 echo "  title: string"

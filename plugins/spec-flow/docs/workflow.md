@@ -123,14 +123,29 @@ bookkeeping `project-manager` does in bulk across several issues at once, see **
 archiving** below.)
 
 **Seam visualization.** At both seams, the rendered content — the spec/scope at Seam 1, the diff
-at Seam 2 — can be shown two ways, an owner preference set once per repo by `/spec-flow:setup`:
-`SPEC_FLOW_SEAM_VIEW=deck` (recommended default) generates an interactive, self-contained HTML deck
-via `/spec-flow:deck` (file tree, diff view, docs, and per-node explanations in one page) and prints
+at Seam 2 — can be shown two ways, an owner preference set once per repo by `/spec-flow:setup`, and
+only ever offered if the standalone **`review-tools`** plugin (separate from spec-flow — see
+**A note on `review-tools`** below) is installed: `SPEC_FLOW_SEAM_VIEW=explain` (recommended
+default when `review-tools` is available) generates an interactive, self-contained HTML view via
+its `explain` skill (file tree, diff/doc view, and per-node explanations in one page) and prints
 its path + an `open <path>` command — a background `issue-pm` can't reliably pop a browser on your
 screen, so it never tries; `SPEC_FLOW_SEAM_VIEW=terminal` renders the same content as plain text in
-the conversation, the original behavior from before `deck` existed. Read fresh from
-`.claude/settings.json` at each seam, not cached from an earlier stop. See `skills/deck/SKILL.md`
-for the deck format itself and `skills/setup/SKILL.md` for how the preference gets set.
+the conversation, the original behavior from before `explain` existed, and is what's used
+automatically if `review-tools` isn't installed on the machine an `issue-pm` happens to be running
+on, even when the preference says `explain`. Read fresh from `.claude/settings.json` at each seam,
+not cached from an earlier stop; `review-tools`'s own availability is re-checked fresh too (via
+`claude plugin list --json`), not assumed from setup time. `/explain` (from `review-tools`) is also
+the owner's own primary way to look at any issue — including a plain backlog issue, before it's
+even activated, with no diff or worktree required (its `--issue` mode pulls the issue's body,
+comments, and related/linked issues straight from GitHub) — usable with or without spec-flow
+installed at all.
+
+**A note on `review-tools`.** It's a separate, standalone plugin, not part of spec-flow — installed
+independently, useful in any repo whether or not that repo uses spec-flow at all. spec-flow depends
+on it only optionally, one-directionally, and at runtime (resolving its installed root fresh via
+`claude plugin list --json`, never a hardcoded path) — spec-flow ships and works completely without
+it, just without the HTML seam views. See its own `skills/explain/SKILL.md` for the format itself,
+and `skills/setup/SKILL.md` here for how the seam-view preference gets set.
 
 **Two more standing preferences, asked once by `project-manager` itself (not `/spec-flow:setup`,
 not `issue-pm`).** Unlike seam visualization above, these are gated on a specific tool actually

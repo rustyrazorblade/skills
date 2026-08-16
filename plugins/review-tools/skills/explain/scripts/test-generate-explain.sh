@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Structural self-test for generate-deck.py + viewer.html. Builds a tiny throwaway git repo with
-# a known change, runs the generator against it, and asserts on the output HTML — see README.md
-# in this directory for how to run it. Exits non-zero if any assertion fails. macOS bash 3.2
-# compatible (no associative arrays, no mapfile); the JSON-shaped assertions delegate to python3,
-# which the generator itself already requires.
+# Structural self-test for generate-explain.py + viewer.html. Builds a tiny throwaway git repo
+# with a known change, runs the generator against it, and asserts on the output HTML — see
+# README.md in this directory for how to run it. Exits non-zero if any assertion fails. macOS
+# bash 3.2 compatible (no associative arrays, no mapfile); the JSON-shaped assertions delegate to
+# python3, which the generator itself already requires.
 set -uo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-generate_deck="$script_dir/generate-deck.py"
+generate_explain="$script_dir/generate-explain.py"
 viewer_html="$script_dir/../assets/viewer.html"
 
 pass_count=0
@@ -26,12 +26,12 @@ check() {
   fi
 }
 
-command -v git >/dev/null 2>&1 || { echo "test-generate-deck: 'git' is required but not on PATH." >&2; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "test-generate-deck: 'python3' is required but not on PATH." >&2; exit 1; }
+command -v git >/dev/null 2>&1 || { echo "test-generate-explain: 'git' is required but not on PATH." >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "test-generate-explain: 'python3' is required but not on PATH." >&2; exit 1; }
 
 repo="$(mktemp -d)"
 out_dir="$(mktemp -d)"
-out_html="$out_dir/deck-test.html"
+out_html="$out_dir/explain-test.html"
 
 cleanup() { rm -rf "$repo" "$out_dir"; }
 trap cleanup EXIT
@@ -61,16 +61,17 @@ printf '# Design\n\nHow the thing works.\n' > "$repo/changes/demo/design.md"
 printf '## ADDED Requirements\n\nfoo\n' > "$repo/changes/demo/specs/foo.md"
 
 (
-  cd "$repo" && python3 "$generate_deck" \
+  cd "$repo" && python3 "$generate_explain" \
+    --diff \
     --base "$base_sha" \
     --change "$repo/changes/demo" \
     --doc "$repo/docs/note.md" \
     --code "$repo/src/extra.py" \
-    --title "Test Deck" \
+    --title "Test Explain" \
     --out "$out_html"
 )
 gen_status=$?
-check "generate-deck.py exits 0" "$gen_status"
+check "generate-explain.py exits 0" "$gen_status"
 
 [[ -f "$out_html" ]]
 check "output HTML file exists" $?
@@ -166,6 +167,106 @@ check "viewer.html defines a markdown-render function" $?
 
 grep -qE 'function parseDiff' "$viewer_html"
 check "viewer.html defines a diff-parse function" $?
+
+# ---------------------------------------------------------------------------
+# Argument validation: nothing to render at all should fail loudly, not
+# silently produce an empty view — this is the exact bug an owner hit trying
+# to view a plain backlog issue with no diff yet.
+# ---------------------------------------------------------------------------
+python3 "$generate_explain" >/dev/null 2>/dev/null
+[[ $? -ne 0 ]]
+check "no flags at all -> non-zero exit (never a silent empty view)" $?
+
+# ---------------------------------------------------------------------------
+# --issue mode: no git diff involved at all. Fakes `gh` on PATH so this runs
+# offline — a primary issue (#1) linked to a blocked-by issue (#2) and
+# mentioning a third (#3) in its body, exercising both the native-dependency
+# and #N-mention relation paths without any code change existing.
+# ---------------------------------------------------------------------------
+fake_gh_dir="$(mktemp -d)"
+cat > "$fake_gh_dir/gh" <<'GHEOF'
+#!/usr/bin/env bash
+case "$1" in
+  repo)
+    echo '{"nameWithOwner":"acme/widgets"}'
+    ;;
+  issue)
+    case "$3" in
+      1) echo '{"number":1,"title":"Primary issue","body":"See #3 for context.","url":"https://x/1","state":"OPEN","labels":[{"name":"P1"}],"comments":[{"author":{"login":"jon"},"createdAt":"2026-01-01T00:00:00Z","body":"Some research note."}]}' ;;
+      2) echo '{"number":2,"title":"Blocked-by issue","body":"","url":"https://x/2","state":"OPEN","labels":[]}' ;;
+      3) echo '{"number":3,"title":"Mentioned issue","body":"","url":"https://x/3","state":"CLOSED","labels":[]}' ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  api)
+    case "$2" in
+      */dependencies/blocked_by) echo '[{"number":2}]' ;;
+      */dependencies/blocking) echo '[]' ;;
+      *) echo '[]' ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_gh_dir/gh"
+
+issue_out_html="$out_dir/explain-issue-test.html"
+(
+  cd "$repo" && PATH="$fake_gh_dir:$PATH" python3 "$generate_explain" \
+    --issue 1 \
+    --out "$issue_out_html"
+)
+check "generate-explain.py --issue exits 0" $?
+
+issue_py_out="$(python3 - "$issue_out_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    content = open(path, encoding="utf-8").read()
+except OSError as e:
+    print(f"FAIL: could not read --issue output HTML ({e})")
+    sys.exit(0)
+
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+
+nodes = manifest.get("nodes", [])
+paths = sorted(n.get("path") for n in nodes)
+if paths == ["issue-1.md", "related/issue-2.md", "related/issue-3.md"]:
+    print("PASS: --issue mode includes primary + both related issues (dependency + mention)")
+else:
+    print(f"FAIL: --issue mode node paths — got {paths}")
+
+if all(n.get("kind") == "markdown" for n in nodes):
+    print("PASS: --issue mode nodes are all markdown")
+else:
+    print("FAIL: --issue mode nodes are all markdown")
+
+primary = next((n for n in nodes if n.get("path") == "issue-1.md"), {})
+if "Some research note." in primary.get("md", ""):
+    print("PASS: --issue mode includes the issue's discussion/comments")
+else:
+    print("FAIL: --issue mode includes the issue's discussion/comments")
+
+if "base" not in manifest.get("meta", {}) and "head" not in manifest.get("meta", {}):
+    print("PASS: --issue mode without --diff never computes/claims a diff base/head")
+else:
+    print(f"FAIL: --issue mode without --diff leaked diff meta — got {manifest.get('meta')}")
+PYEOF
+)"
+echo "$issue_py_out"
+issue_py_pass="$(echo "$issue_py_out" | grep -c '^PASS:')"
+issue_py_fail="$(echo "$issue_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + issue_py_pass))
+fail_count=$((fail_count + issue_py_fail))
+
+rm -rf "$fake_gh_dir"
 
 echo ""
 echo "----------------------------------------"

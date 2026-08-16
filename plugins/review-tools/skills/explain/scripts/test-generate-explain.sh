@@ -63,7 +63,7 @@ printf '## MODIFIED Requirements\n\nchanged\n\n## REMOVED Requirements\n\ngone\n
 
 (
   cd "$repo" && python3 "$generate_explain" \
-    --diff \
+    --diff --blame \
     --base "$base_sha" \
     --change "$repo/changes/demo" \
     --doc "$repo/docs/note.md" \
@@ -139,6 +139,12 @@ if "-line2" in patch and "+line2-modified" in patch and "+line4" in patch:
 else:
     print("FAIL: diff node patch round-trips the known change")
 
+blame_explain = diff_nodes[0].get("explain", "") if diff_nodes else ""
+if "Test" in blame_explain and "initial" in blame_explain:
+    print("PASS: --blame populates the diff node's explain with the base commit's author/summary")
+else:
+    print(f"FAIL: --blame explain — got {blame_explain!r}")
+
 foo_node = next((n for n in nodes if n.get("path", "").endswith("foo.md")), {})
 if foo_node.get("badge") == "ADDED" and foo_node.get("badgeClass") == "add":
     print("PASS: ADDED-only delta spec gets an ADDED/add tree badge")
@@ -196,6 +202,12 @@ check "viewer.html wraps delta-spec sections in a color-coded div" $?
 grep -qF 'function slugify' "$viewer_html"
 check "viewer.html gives headings stable slugified anchor ids" $?
 
+grep -qF 'function renderPrComment' "$viewer_html"
+check "viewer.html defines a PR-comment renderer" $?
+
+grep -qF 'commentsByKey' "$viewer_html"
+check "viewer.html anchors PR comments to their diff row by side+line" $?
+
 # ---------------------------------------------------------------------------
 # Argument validation: nothing to render at all should fail loudly, not
 # silently produce an empty view — this is the exact bug an owner hit trying
@@ -204,6 +216,50 @@ check "viewer.html gives headings stable slugified anchor ids" $?
 python3 "$generate_explain" >/dev/null 2>/dev/null
 [[ $? -ne 0 ]]
 check "no flags at all -> non-zero exit (never a silent empty view)" $?
+
+# ---------------------------------------------------------------------------
+# --symbol blast-radius: a word-boundary git grep across the working tree
+# (tracked files, uncommitted edits included) -- "line2-modified" exists only
+# in file.txt's uncommitted content; "totally_absent_xyz" matches nothing.
+# ---------------------------------------------------------------------------
+symbol_out_html="$out_dir/explain-symbol-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" \
+    --symbol line2-modified --symbol totally_absent_xyz \
+    --out "$symbol_out_html"
+)
+check "generate-explain.py --symbol exits 0" $?
+
+symbol_py_out="$(python3 - "$symbol_out_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+content = open(path, encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+found = nodes.get("blast-radius/line2-modified.md", {}).get("md", "")
+if "file.txt" in found and "1 reference" in found:
+    print("PASS: --symbol finds a real match with file:line context")
+else:
+    print(f"FAIL: --symbol found-case — got {found!r}")
+
+absent = nodes.get("blast-radius/totally_absent_xyz.md", {}).get("md", "")
+if "No references found" in absent:
+    print("PASS: --symbol with zero matches still produces an explicit 'none found' node")
+else:
+    print(f"FAIL: --symbol zero-match case — got {absent!r}")
+PYEOF
+)"
+echo "$symbol_py_out"
+symbol_py_pass="$(echo "$symbol_py_out" | grep -c '^PASS:')"
+symbol_py_fail="$(echo "$symbol_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + symbol_py_pass))
+fail_count=$((fail_count + symbol_py_fail))
 
 # ---------------------------------------------------------------------------
 # --path scoping: a second uncommitted change outside the scoped path must
@@ -270,6 +326,12 @@ case "$1" in
     case "$2" in
       */dependencies/blocked_by) echo '[{"number":2}]' ;;
       */dependencies/blocking) echo '[]' ;;
+      */pulls/42/comments)
+        echo '[
+          {"path":"file.txt","line":4,"side":"RIGHT","body":"Why is this line here?","user":{"login":"reviewer1"},"created_at":"2026-01-02T00:00:00Z"},
+          {"path":"nonexistent.txt","line":9,"side":"RIGHT","body":"Stale comment on a file not in this diff.","user":{"login":"reviewer2"},"created_at":"2026-01-02T00:01:00Z"}
+        ]'
+        ;;
       *) echo '[]' ;;
     esac
     ;;
@@ -333,6 +395,52 @@ issue_py_pass="$(echo "$issue_py_out" | grep -c '^PASS:')"
 issue_py_fail="$(echo "$issue_py_out" | grep -c '^FAIL:')"
 pass_count=$((pass_count + issue_py_pass))
 fail_count=$((fail_count + issue_py_fail))
+
+# ---------------------------------------------------------------------------
+# --pr mode: overlays file/line-anchored review comments onto --diff nodes.
+# One comment anchors to a line that's actually IN the diff (file.txt:4, the
+# "+line4" addition); one anchors to a file the diff doesn't touch at all, to
+# exercise the "outside this diff" fallback rather than silently dropping it.
+# ---------------------------------------------------------------------------
+pr_out_html="$out_dir/explain-pr-test.html"
+(
+  cd "$repo" && PATH="$fake_gh_dir:$PATH" python3 "$generate_explain" \
+    --diff --base "$base_sha" --pr 42 \
+    --out "$pr_out_html"
+)
+check "generate-explain.py --pr exits 0" $?
+
+pr_py_out="$(python3 - "$pr_out_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+content = open(path, encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = manifest.get("nodes", [])
+
+file_node = next((n for n in nodes if n.get("path") == "file.txt"), {})
+comments = file_node.get("comments", [])
+if len(comments) == 1 and comments[0]["line"] == 4 and comments[0]["author"] == "reviewer1":
+    print("PASS: --pr attaches a line-anchored comment to its diff node")
+else:
+    print(f"FAIL: --pr comment attachment — got {comments}")
+
+outside = next((n for n in nodes if n.get("path") == "pr-comments/outside-diff.md"), None)
+if outside and "nonexistent.txt" in outside.get("md", "") and "reviewer2" in outside.get("md", ""):
+    print("PASS: --pr surfaces a comment on a file outside this diff instead of dropping it")
+else:
+    print(f"FAIL: --pr outside-diff fallback — got {outside}")
+PYEOF
+)"
+echo "$pr_py_out"
+pr_py_pass="$(echo "$pr_py_out" | grep -c '^PASS:')"
+pr_py_fail="$(echo "$pr_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + pr_py_pass))
+fail_count=$((fail_count + pr_py_fail))
 
 rm -rf "$fake_gh_dir"
 

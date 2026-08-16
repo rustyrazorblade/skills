@@ -49,10 +49,27 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
     <path>...`). Omit to diff the whole repo. Useful for a "what changed since you last looked at
     just this" view — e.g. `--base <sha-you-last-showed>` scoped to one OpenSpec change dir, so a
     re-review after a redirect shows only what actually moved, not the whole branch.
+  - `--blame` — populate each diff node's explanation pane with `git blame` context: which
+    commit(s) last touched the OLD-side lines this hunk changes, as of `--base` — "why did this
+    look the way it did before this change." Opt-in (one `git blame` call per hunk); best-effort,
+    silently skips a hunk/file it can't blame (shallow clone, binary, etc.) rather than failing.
+  - `--pr <N>` — overlay this PR's file/line-anchored GitHub review comments onto the diff, right
+    at the row each was left on (matched by file path + line + side, same convention GitHub itself
+    uses). A comment anchored to a file/line outside this diff's range (outdated, or the diff was
+    rescoped since) is never silently dropped — it lands in its own `pr-comments/outside-diff.md`
+    node instead. Requires `gh`, authenticated. Ignored (with a warning) if `--diff` wasn't passed
+    — there's nothing to overlay comments onto without a diff.
 - `--change <dir>` — repeatable; an OpenSpec change dir. Auto-includes `proposal.md`, `design.md`,
   `tasks.md` (whichever exist) plus any delta-spec markdown under `<dir>/specs/**`.
 - `--doc <path>` — repeatable; any extra markdown file, rendered as a markdown node.
 - `--code <path>` — repeatable; show a file as plain code (not a diff).
+- `--symbol <name>` — repeatable; a **blast-radius** view: a word-boundary `git grep` for `name`
+  across tracked files in the working tree (uncommitted edits included, untracked files excluded),
+  rendered as a callers list under `blast-radius/<name>.md`. Deterministic and language-agnostic —
+  a plain-text search, not an AST/language server — so it's exact-name-only (no rename tracking,
+  no semantic "who calls this overload") in exchange for working the same way in any language with
+  zero setup. Always produces a node, even on zero matches, so "checked, found nothing" is visible
+  rather than the symbol silently missing from the tree.
 - `--title` / `--subtitle` — header text; if omitted and `--issue` resolved a primary issue, the
   title defaults to that issue's own `#N — title`.
 - `--out <path>` — output HTML path; defaults to a generated path under the system temp dir.
@@ -100,9 +117,11 @@ nodes: [
     path: string,             // tree path; "/" nests folders
     label?: string,            // tree label; defaults to basename(path)
     badge?: string,             // small chip in the tree, e.g. "THE BUG"
-    badgeClass?: string,        // "bug" | "store" | "join" | "test" | "add" | "del" | ""
+    badgeClass?: string,        // "bug" | "store" | "join" | "test" | "add" | "del" | "mod" | ""
     kind: "diff" | "code" | "markdown",
     patch?: string,             // kind=diff: raw unified-diff text for THIS file
+    comments?: [{ line: number, side: "LEFT" | "RIGHT", author: string, body: string,
+                  createdAt?: string }],  // kind=diff: PR review comments anchored to this file
     code?: string, lang?: string, startLine?: number, highlight?: number[],  // kind=code
     md?: string,                // kind=markdown: raw markdown (issue bodies/comments render here)
     explain?: string            // markdown/html shown in the bottom pane, optional on any kind

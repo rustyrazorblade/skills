@@ -336,6 +336,26 @@
 
   .code-row.hl { background: var(--hl-bg); }
 
+  /* PR review comments, overlaid right at the diff row they were left on */
+  .pr-comment {
+    margin: 2px 12px 6px 68px;
+    padding: 6px 10px;
+    background: var(--bg-header);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    font-family: var(--ui-font);
+  }
+  .pr-comment-meta {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 3px;
+  }
+  .pr-comment-body { font-size: 13px; }
+  .pr-comment-body p:first-child { margin-top: 0; }
+  .pr-comment-body p:last-child { margin-bottom: 0; }
+
   /* markdown rendering (shared by markdown nodes + explain pane) */
 
   .md-view, .explain-content { font-size: 13.5px; line-height: 1.55; }
@@ -753,11 +773,28 @@
     return hunks;
   }
 
+  function renderPrComment(c) {
+    var meta = "@" + escapeHtml(c.author || "unknown") + (c.createdAt ? " — " + escapeHtml(c.createdAt) : "");
+    return '<div class="pr-comment">' +
+      '<div class="pr-comment-meta">' + meta + "</div>" +
+      '<div class="pr-comment-body">' + renderMarkdown(c.body || "") + "</div>" +
+      "</div>";
+  }
+
   function renderDiffNode(node) {
     var hunks = parseDiff(node.patch || "");
     if (!hunks.length) {
       return '<div class="empty-state">No hunks parsed from this patch.</div>';
     }
+    // Comments keyed by "SIDE:line" — RIGHT-side comments anchor to a row's newLine, LEFT-side
+    // to its oldLine, matching GitHub's own review-comment side convention.
+    var commentsByKey = {};
+    (node.comments || []).forEach(function (c) {
+      if (c.line === null || c.line === undefined) return;
+      var key = (c.side || "RIGHT") + ":" + c.line;
+      (commentsByKey[key] = commentsByKey[key] || []).push(c);
+    });
+
     var out = ['<div class="diff-view">'];
     hunks.forEach(function (h, i) {
       if (i > 0) out.push('<div class="diff-sep">⋯</div>');
@@ -771,6 +808,10 @@
           '<span class="code">' + escapeHtml(r.text) + '</span>' +
           '</div>'
         );
+        var rightHits = r.newLine !== null ? commentsByKey["RIGHT:" + r.newLine] : null;
+        var leftHits = r.oldLine !== null ? commentsByKey["LEFT:" + r.oldLine] : null;
+        (rightHits || []).forEach(function (c) { out.push(renderPrComment(c)); });
+        (leftHits || []).forEach(function (c) { out.push(renderPrComment(c)); });
       });
     });
     out.push("</div>");

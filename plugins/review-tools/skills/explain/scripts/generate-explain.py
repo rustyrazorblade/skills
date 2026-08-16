@@ -227,7 +227,62 @@ def split_diff_by_file(diff_text):
     return chunks
 
 
-def diff_nodes_from(base, head, paths=None):
+HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.MULTILINE)
+
+# git blame --line-porcelain: each attributed line starts with "<sha> <origline> <finalline>
+# [<numlines>]", followed by metadata lines (author/summary/etc.) for the FIRST line of a run,
+# then a "\t<content>" line. We only need sha/author/summary, so a simple line-by-line scan
+# (rather than a full porcelain parser) is enough.
+BLAME_COMMIT_RE = re.compile(r"^([0-9a-f]{40}|[0-9a-f]{7,40}) \d+ \d+")
+
+
+def blame_context_for(base, path, chunk, max_commits=5):
+    """For a diff hunk's OLD-side line ranges, find the commit(s) that last touched those lines
+    as of `base` — the "why did this look like this before your change" context. Best-effort:
+    returns None on any failure (shallow clone, binary file, blame not applicable) rather than
+    failing the whole generation over one file's missing history."""
+    ranges = []
+    for m in HUNK_HEADER_RE.finditer(chunk):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        if count > 0:
+            ranges.append((start, start + count - 1))
+    if not ranges:
+        return None
+
+    commits = {}  # sha -> (author, summary), insertion-ordered
+    for start, end in ranges:
+        try:
+            out = run_git(["blame", "--line-porcelain", "-L", f"{start},{end}", base, "--", path])
+        except subprocess.CalledProcessError:
+            continue
+        sha = author = summary = None
+        for line in out.split("\n"):
+            m = BLAME_COMMIT_RE.match(line)
+            if m:
+                sha = m.group(1)
+                continue
+            if line.startswith("author "):
+                author = line[len("author "):]
+            elif line.startswith("summary "):
+                summary = line[len("summary "):]
+                if sha and sha not in commits:
+                    commits[sha] = (author or "unknown", summary)
+                    if len(commits) >= max_commits:
+                        return format_blame(commits)
+    return format_blame(commits) if commits else None
+
+
+def format_blame(commits):
+    if not commits:
+        return None
+    lines = ["**Last touched (as of the diff base):**", ""]
+    for sha, (author, summary) in commits.items():
+        lines.append(f"- `{sha[:7]}` {author} — {summary}")
+    return "\n".join(lines)
+
+
+def diff_nodes_from(base, head, paths=None, blame=False):
     cmd = ["diff", "--no-color", base] if head is None else ["diff", "--no-color", base, head]
     if paths:
         cmd += ["--"] + list(paths)
@@ -249,8 +304,80 @@ def diff_nodes_from(base, head, paths=None):
         elif "\ndeleted file mode" in chunk:
             node["badge"] = "deleted"
             node["badgeClass"] = "del"
+        if blame:
+            explain = blame_context_for(base, path, chunk)
+            if explain:
+                node["explain"] = explain
         nodes.append(node)
     return nodes
+
+
+def fetch_pr_review_comments(pr_number, owner_repo):
+    """File/line-anchored PR review comments (GitHub's "pulls/{n}/comments" REST endpoint) — NOT
+    `gh pr view --json comments`, which returns only top-level issue comments with no path/line.
+    Returns [] on any failure (private repo you can't reach, PR not found, etc.) rather than
+    failing the whole generation over comment data that's inherently supplementary."""
+    try:
+        raw = run_gh(["api", f"repos/{owner_repo}/pulls/{pr_number}/comments", "--paginate"])
+    except subprocess.CalledProcessError as e:
+        print(f"generate-explain: warning: couldn't fetch PR #{pr_number} review comments: {e.stderr.strip()}", file=sys.stderr)
+        return []
+    # --paginate concatenates one JSON array per page back-to-back, not one combined array.
+    comments = []
+    decoder = json.JSONDecoder()
+    text = raw.strip()
+    pos = 0
+    while pos < len(text):
+        obj, end = decoder.raw_decode(text, pos)
+        comments.extend(obj)
+        pos = end
+        while pos < len(text) and text[pos] in " \t\n\r":
+            pos += 1
+    return comments
+
+
+def attach_pr_comments(nodes, pr_comments):
+    """Attach each file/line-anchored review comment to its diff node (matched by path); comments
+    on a path with no matching diff node (e.g. resolved/outdated, or outside this diff's range)
+    are collected into their own node instead of silently dropped."""
+    by_path = {}
+    unmatched = []
+    for c in pr_comments:
+        path = c.get("path")
+        line = c.get("line") if c.get("line") is not None else c.get("original_line")
+        entry = {
+            "line": line,
+            "side": c.get("side") or "RIGHT",
+            "author": (c.get("user") or {}).get("login", "unknown"),
+            "body": c.get("body") or "",
+            "createdAt": c.get("created_at"),
+        }
+        if path and line is not None:
+            by_path.setdefault(path, []).append(entry)
+        else:
+            unmatched.append({**entry, "path": path or "(unknown file)"})
+
+    node_by_path = {n["path"]: n for n in nodes if n.get("kind") == "diff"}
+    for path, entries in by_path.items():
+        node = node_by_path.get(path)
+        if node is not None:
+            node["comments"] = entries
+        else:
+            unmatched.extend({**e, "path": path} for e in entries)
+
+    if unmatched:
+        lines = ["# PR review comments outside this diff", "",
+                 "Anchored to a file/line, but that file isn't part of the diff being viewed here "
+                 "(comment predates the current base/head range, or the line's since moved) — "
+                 "listed so nothing from the review silently disappears:", ""]
+        for e in unmatched:
+            lines.append(f"**@{e['author']}** on `{e['path']}`" +
+                         (f":{e['line']}" if e.get("line") is not None else "") +
+                         (f" — {e['createdAt']}" if e.get("createdAt") else ""))
+            lines.append("")
+            lines.append(e["body"])
+            lines.append("")
+        nodes.append(markdown_node("pr-comments/outside-diff.md", "\n".join(lines)))
 
 
 def read_text(path):
@@ -318,18 +445,63 @@ def change_nodes_from(change_dir):
     return nodes
 
 
+MAX_SYMBOL_HITS = 200  # a blast-radius list beyond this is noise, not signal — truncate and say so
+
+
+def blast_radius_node(symbol):
+    """A deterministic, language-agnostic "who else references this" list: a plain word-boundary
+    `git grep` for the symbol across tracked files in the working tree (no AST/language server —
+    that's the tradeoff for working the same way in any language). Always returns a node, even on
+    zero matches, so "checked, found nothing" is visible rather than the symbol silently missing
+    from the tree."""
+    try:
+        out = run_git(["grep", "-n", "-w", "--full-name", "-e", symbol])
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 1:
+            out = ""  # git grep exits 1 for "no matches" — not an error
+        else:
+            print(f"generate-explain: warning: 'git grep' failed for --symbol {symbol}: {e.stderr.strip()}", file=sys.stderr)
+            return markdown_node(f"blast-radius/{symbol}.md", f"# Callers of `{symbol}`\n\n`git grep` failed — see stderr.\n")
+
+    hits = [line for line in out.split("\n") if line]
+    lines = [f"# Callers of `{symbol}`", ""]
+    if not hits:
+        lines.append("No references found (word-boundary `git grep` across tracked files in the working tree).")
+    else:
+        truncated = hits[:MAX_SYMBOL_HITS]
+        lines.append(f"{len(hits)} reference(s) across the working tree" +
+                     (f" (showing first {MAX_SYMBOL_HITS})" if len(hits) > MAX_SYMBOL_HITS else "") + ":")
+        lines.append("")
+        for hit in truncated:
+            # "path:lineno:content" — content may itself contain ":", so split with maxsplit=2
+            parts = hit.split(":", 2)
+            if len(parts) == 3:
+                path, lineno, content = parts
+                lines.append(f"- `{path}:{lineno}` — `{content.strip()}`")
+            else:
+                lines.append(f"- `{hit}`")
+    return markdown_node(f"blast-radius/{symbol}.md", "\n".join(lines))
+
+
 def build_manifest(args, base, head):
     nodes = []
     source_bits = []
     meta = {}
 
     if args.diff:
-        nodes += diff_nodes_from(base, head, paths=args.path)
+        nodes += diff_nodes_from(base, head, paths=args.path, blame=args.blame)
         head_label = head or "working tree"
         meta["base"] = base
         meta["head"] = head_label
         scope = f" -- {' '.join(args.path)}" if args.path else ""
         source_bits.append(f"git diff {base}..{head_label}{scope}")
+
+        if args.pr:
+            pr_comments = fetch_pr_review_comments(args.pr, repo_slug())
+            attach_pr_comments(nodes, pr_comments)
+            source_bits.append(f"PR #{args.pr} review comments ({len(pr_comments)})")
+    elif args.pr:
+        print("generate-explain: warning: --pr has no diff to attach comments to without --diff — ignoring --pr", file=sys.stderr)
 
     primary_issue_title = None
     if args.issue:
@@ -349,6 +521,10 @@ def build_manifest(args, base, head):
         nodes.append(code_node(code, read_text(code)))
     if args.code:
         source_bits.append(f"{len(args.code)} code file(s)")
+    for symbol in args.symbol or []:
+        nodes.append(blast_radius_node(symbol))
+    if args.symbol:
+        source_bits.append(f"{len(args.symbol)} symbol blast-radius search(es)")
 
     meta["generatedFrom"] = ", ".join(source_bits) if source_bits else "no inputs"
 
@@ -392,6 +568,8 @@ def main():
     parser.add_argument("--head", help="diff head ref (default: working tree); only meaningful with --diff")
     parser.add_argument("--path", action="append", default=[], metavar="PATH",
                          help="scope --diff to this path (repeatable, passed to git diff as -- <path>...); only meaningful with --diff, omit to diff the whole repo")
+    parser.add_argument("--blame", action="store_true",
+                         help="populate each diff node's explain pane with git-blame context (which commit(s) last touched the changed lines, as of --base) — opt-in, costs one `git blame` call per hunk; only meaningful with --diff")
     parser.add_argument("--issue", action="append", type=int, default=[], metavar="N",
                          help="a GitHub issue number: its body + comments, plus (one level out) every issue it's linked to via a native dependency or a bare #N mention (repeatable)")
     parser.add_argument("--change", action="append", default=[], metavar="DIR",
@@ -400,19 +578,27 @@ def main():
                          help="an extra markdown file -> a markdown node (repeatable)")
     parser.add_argument("--code", action="append", default=[], metavar="PATH",
                          help="show a file as a non-diff code node (repeatable)")
+    parser.add_argument("--symbol", action="append", default=[], metavar="NAME",
+                         help="blast-radius: a word-boundary `git grep` for NAME across the working tree, rendered as a callers list under blast-radius/ (repeatable, deterministic, language-agnostic — no AST/language server)")
+    parser.add_argument("--pr", type=int, metavar="N",
+                         help="overlay this PR's file/line-anchored GitHub review comments onto the --diff nodes they were left on; only meaningful with --diff (ignored otherwise, with a warning)")
     parser.add_argument("--title")
     parser.add_argument("--subtitle")
     parser.add_argument("--out", help="output HTML path (default: a generated path under the system temp dir)")
     parser.add_argument("--open", action="store_true", help="open the result in a browser (only when explicitly passed)")
     args = parser.parse_args()
 
-    if not (args.diff or args.issue or args.change or args.doc or args.code):
-        fail("nothing to render — pass at least one of --diff, --issue, --change, --doc, --code")
+    if not (args.diff or args.issue or args.change or args.doc or args.code or args.symbol):
+        fail("nothing to render — pass at least one of --diff, --issue, --change, --doc, --code, --symbol")
 
     if args.diff and shutil.which("git") is None:
         fail("'git' is required but not on PATH (needed for --diff).")
     if args.issue and shutil.which("gh") is None:
         fail("'gh' is required but not on PATH (needed for --issue).")
+    if args.pr and shutil.which("gh") is None:
+        fail("'gh' is required but not on PATH (needed for --pr).")
+    if args.symbol and shutil.which("git") is None:
+        fail("'git' is required but not on PATH (needed for --symbol).")
 
     base = head = None
     if args.diff:

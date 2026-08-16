@@ -209,6 +209,35 @@
   .badge-test { background: #3fb950; color: #1e1e1e; }
   .badge-add { background: #2ea043; color: #1e1e1e; }
   .badge-del { background: #f85149; color: #1e1e1e; }
+  .badge-mod { background: #d29922; color: #1e1e1e; }
+
+  /* ---------- delta-spec sections (OpenSpec's own ADDED/MODIFIED/REMOVED/RENAMED
+     Requirements convention) inside a rendered markdown doc — color-coded so new vs
+     changed vs removed behavior is visually obvious, not just something you notice by
+     reading a plain heading. */
+  .delta-section {
+    border-left: 3px solid var(--diff-sep);
+    padding: 2px 0 2px 14px;
+    margin: 14px 0;
+  }
+  .delta-section .delta-label {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+  }
+  .delta-added   { border-left-color: var(--diff-add-border); }
+  .delta-added   .delta-label { background: var(--diff-add-border); color: #0a2e12; }
+  .delta-modified { border-left-color: #d29922; }
+  .delta-modified .delta-label { background: #d29922; color: #2b1d02; }
+  .delta-removed { border-left-color: var(--diff-del-border); }
+  .delta-removed .delta-label { background: var(--diff-del-border); color: #2e0a08; }
+  .delta-renamed { border-left-color: var(--accent); }
+  .delta-renamed .delta-label { background: var(--accent); color: #05203a; }
 
   /* ---------- right column: editor + explain ---------- */
 
@@ -549,10 +578,18 @@
   var OL_RE = /^\s*\d+\.\s+(.*)$/;
   var FENCE_RE = /^\s*(```|~~~)(.*)$/;
 
+  // OpenSpec's own delta-spec convention (not spec-flow-specific — OpenSpec is its own
+  // generic tool): a level-2 "## ADDED/MODIFIED/REMOVED/RENAMED Requirements" heading starts
+  // a section that runs until the next heading of level <= 2. Color-coded so new vs changed
+  // vs removed behavior is visually obvious while scrolling a delta spec, not just something
+  // you'd notice by reading a plain heading.
+  var DELTA_HEADING_RE = /^(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b/i;
+
   function renderMarkdown(src) {
     var lines = String(src || "").replace(/\r\n/g, "\n").split("\n");
     var html = "";
     var i = 0;
+    var openDelta = null; // null | "added" | "modified" | "removed" | "renamed"
 
     while (i < lines.length) {
       var line = lines[i];
@@ -577,6 +614,16 @@
       var heading = line.match(HEADING_RE);
       if (heading) {
         var level = heading[1].length;
+        var deltaMatch = level === 2 ? heading[2].trim().match(DELTA_HEADING_RE) : null;
+        if (level <= 2 && openDelta) {
+          html += "</div>";
+          openDelta = null;
+        }
+        if (deltaMatch) {
+          openDelta = deltaMatch[1].toLowerCase();
+          html += '<div class="delta-section delta-' + openDelta + '">' +
+            '<span class="delta-label">' + escapeHtml(deltaMatch[1].toUpperCase()) + "</span>";
+        }
         html += "<h" + level + ">" + inlineMD(heading[2]) + "</h" + level + ">";
         i++;
         continue;
@@ -634,6 +681,8 @@
       }
       html += "<p>" + paraLines.map(inlineMD).join("<br>") + "</p>";
     }
+
+    if (openDelta) html += "</div>";
 
     return html;
   }

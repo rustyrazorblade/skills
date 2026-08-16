@@ -261,8 +261,31 @@ def read_text(path):
         fail(f"could not read {path}: {e}")
 
 
+# OpenSpec's own delta-spec convention (not spec-flow-specific — OpenSpec is its own generic
+# tool): a "## ADDED/MODIFIED/REMOVED/RENAMED Requirements" heading. Priority when a file has
+# more than one (REMOVED/MODIFIED are the riskier changes to miss, so they win the tree badge —
+# the markdown renderer itself still color-codes every section, this is just the one-badge
+# quick-scan hint in the file tree).
+DELTA_HEADING_RE = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b", re.IGNORECASE | re.MULTILINE)
+DELTA_BADGE_PRIORITY = ["REMOVED", "MODIFIED", "RENAMED", "ADDED"]
+DELTA_BADGE_CLASS = {"ADDED": "add", "MODIFIED": "mod", "REMOVED": "del", "RENAMED": "mod"}
+
+
+def delta_badge_for(text):
+    found = {m.group(1).upper() for m in DELTA_HEADING_RE.finditer(text)}
+    for kind in DELTA_BADGE_PRIORITY:
+        if kind in found:
+            return kind, DELTA_BADGE_CLASS[kind]
+    return None, None
+
+
 def markdown_node(path, text):
-    return {"path": str(path), "kind": "markdown", "md": text}
+    node = {"path": str(path), "kind": "markdown", "md": text}
+    badge, badge_class = delta_badge_for(text)
+    if badge:
+        node["badge"] = badge
+        node["badgeClass"] = badge_class
+    return node
 
 
 def code_node(path, text):

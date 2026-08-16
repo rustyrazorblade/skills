@@ -59,6 +59,7 @@ printf 'def add(a, b):\n    return a + b\n' > "$repo/src/extra.py"
 printf '# Proposal\n\nDo the thing.\n' > "$repo/changes/demo/proposal.md"
 printf '# Design\n\nHow the thing works.\n' > "$repo/changes/demo/design.md"
 printf '## ADDED Requirements\n\nfoo\n' > "$repo/changes/demo/specs/foo.md"
+printf '## MODIFIED Requirements\n\nchanged\n\n## REMOVED Requirements\n\ngone\n' > "$repo/changes/demo/specs/bar.md"
 
 (
   cd "$repo" && python3 "$generate_explain" \
@@ -114,15 +115,15 @@ except Exception as e:
     sys.exit(0)
 
 nodes = manifest.get("nodes", [])
-if len(nodes) == 6:
-    print("PASS: manifest has expected node count (6)")
+if len(nodes) == 7:
+    print("PASS: manifest has expected node count (7)")
 else:
-    print(f"FAIL: manifest has expected node count (6) — got {len(nodes)}")
+    print(f"FAIL: manifest has expected node count (7) — got {len(nodes)}")
 
 kinds = Counter(n.get("kind") for n in nodes)
-expected = Counter({"diff": 1, "markdown": 4, "code": 1})
+expected = Counter({"diff": 1, "markdown": 5, "code": 1})
 if kinds == expected:
-    print("PASS: manifest has expected node kinds (diff=1, markdown=4, code=1)")
+    print("PASS: manifest has expected node kinds (diff=1, markdown=5, code=1)")
 else:
     print(f"FAIL: manifest has expected node kinds — got {dict(kinds)}")
 
@@ -137,6 +138,24 @@ if "-line2" in patch and "+line2-modified" in patch and "+line4" in patch:
     print("PASS: diff node patch round-trips the known change")
 else:
     print("FAIL: diff node patch round-trips the known change")
+
+foo_node = next((n for n in nodes if n.get("path", "").endswith("foo.md")), {})
+if foo_node.get("badge") == "ADDED" and foo_node.get("badgeClass") == "add":
+    print("PASS: ADDED-only delta spec gets an ADDED/add tree badge")
+else:
+    print(f"FAIL: ADDED-only delta spec badge — got {foo_node.get('badge')}/{foo_node.get('badgeClass')}")
+
+bar_node = next((n for n in nodes if n.get("path", "").endswith("bar.md")), {})
+if bar_node.get("badge") == "REMOVED" and bar_node.get("badgeClass") == "del":
+    print("PASS: MODIFIED+REMOVED delta spec badge prioritizes REMOVED")
+else:
+    print(f"FAIL: MODIFIED+REMOVED delta spec badge — got {bar_node.get('badge')}/{bar_node.get('badgeClass')}")
+
+proposal_node = next((n for n in nodes if n.get("path", "").endswith("proposal.md")), {})
+if "badge" not in proposal_node:
+    print("PASS: a non-delta doc (proposal.md) gets no delta badge")
+else:
+    print(f"FAIL: a non-delta doc (proposal.md) got an unexpected badge — {proposal_node.get('badge')}")
 PYEOF
 )"
 echo "$py_out"
@@ -167,6 +186,12 @@ check "viewer.html defines a markdown-render function" $?
 
 grep -qE 'function parseDiff' "$viewer_html"
 check "viewer.html defines a diff-parse function" $?
+
+grep -qF 'DELTA_HEADING_RE' "$viewer_html"
+check "viewer.html defines the ADDED/MODIFIED/REMOVED/RENAMED heading matcher" $?
+
+grep -qF 'delta-section delta-' "$viewer_html"
+check "viewer.html wraps delta-spec sections in a color-coded div" $?
 
 # ---------------------------------------------------------------------------
 # Argument validation: nothing to render at all should fail loudly, not

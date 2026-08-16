@@ -324,6 +324,9 @@ qualify), and confirm the choice with the owner.
      then assess whether it already reflects the design the owner just chose at step 4. If it
      does, continue from it rather than regenerating from scratch. If it doesn't (the owner picked
      differently this time, or it's stale/partial), say so and regenerate the affected parts.
+     **If `ac-coverage.md` is missing** (a change dir from before this file existed) — build and
+     write it now from the existing specs, even when nothing else about the change needs touching;
+     step 7 depends on it being present, and re-activation is exactly the moment to retrofit it.
    - **Something else is there** (an older change predating this naming, or one you don't
      recognize): same orientation — read what's there before deciding whether to continue it,
      rename it to `issue-<N>`, or start fresh. Never silently create a second, competing change
@@ -340,12 +343,27 @@ qualify), and confirm the choice with the owner.
      explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
      the decision and the generated plan.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
-   - **Build an explicit AC→scenario mapping.** List every acceptance criterion from the issue,
-     and every risk/failure-mode the architect's design surfaced ("Risks & impact"), against the
-     scenario(s) that cover each. Every criterion and every architect-surfaced risk must map to at
-     least one scenario — if one doesn't, either add a scenario for it or explicitly note it as an
-     intentional exclusion with a one-line reason. Never let a criterion silently drop out with no
-     scenario and no explanation. This mapping is rendered for the owner at step 7.
+   - **Build an explicit AC→scenario mapping, as a real committed artifact — not just a claim made
+     in prose at step 7.** A coverage summary that only ever exists as the model's own narrated
+     paragraph is unverifiable — the owner has no way to tell "this criterion is covered" from
+     "the model believes this criterion is covered." Make it a table instead, so a gap is something
+     the owner (or a future reviewer) can see directly, not something they have to take on faith:
+     write `openspec/changes/issue-<N>/ac-coverage.md` as a markdown table with one row per
+     acceptance criterion from the issue AND per risk/failure-mode the architect's design surfaced
+     ("Risks & impact"):
+     ```markdown
+     | Source | Requirement | Covering scenario(s) | Status |
+     |--------|-------------|----------------------|--------|
+     | AC     | <criterion text, or a short paraphrase> | `<capability>: <scenario title>` | ✅ Covered |
+     | Risk   | <architect risk text>                   | `<capability>: <scenario title>` | ✅ Covered |
+     | AC     | <criterion text>                        | —                                | ⚠️ Excluded — <one-line reason> |
+     ```
+     **Every row must resolve to ✅ Covered or ⚠️ Excluded (with a reason) before this step is
+     done** — never write a row as unresolved/missing and move on. If a criterion has no covering
+     scenario and no good reason to exclude it, that means the spec is incomplete: go back and add
+     the scenario (or, for a genuinely ambiguous case, surface it as a question rather than guessing
+     at an exclusion reason). The file, once written, IS the coverage claim — step 7 renders it
+     directly instead of re-summarizing it in prose.
 
 6. **Commit the spec on the branch** — **skip this step entirely for a content-only `type:docs`
    issue, or any `type:tech-debt` issue** (step 5 above), since there's no `openspec/changes/issue-<N>`
@@ -377,8 +395,11 @@ qualify), and confirm the choice with the owner.
    view as the spec, not a second lookup:
    - A spec exists (the non-docs/non-tech-debt branch, or a structural/tech-accompanying
      `type:docs` one) → `"$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" --issue
-     <N> --change openspec/changes/issue-<N> --title "issue-<N>" --subtitle "<issue title>" --out
-     <path>`.
+     <N> --change openspec/changes/issue-<N> --doc openspec/changes/issue-<N>/ac-coverage.md
+     --title "issue-<N>" --subtitle "<issue title>" --out <path>`. `--doc` here is deliberate, not
+     redundant with `--change` — `ac-coverage.md` is a spec-flow-specific artifact (see step 5),
+     not one of the generic OpenSpec files `--change` auto-includes (`proposal.md`/`design.md`/
+     `tasks.md`/`specs/**`), and `review-tools` stays unaware of spec-flow's own file conventions.
    - No spec (content-only `type:docs`, or `type:tech-debt`) → there's no change dir to point at,
      so first write the branch's own rendered substance (scope + acceptance criteria, or Direction +
      adjacent-behavior list) to `.spec-flow/seam1-review.md` inside the worktree (gitignored, same
@@ -430,10 +451,11 @@ qualify), and confirm the choice with the owner.
    the decision. Render the substance inline: the **proposal** (why + what changes + scope), the
    **design the owner chose at step 4** (restated, with the rejected alternatives and why, so the
    owner can confirm this is still what they meant), the **delta-spec requirements + their
-   `#### Scenario:` blocks** (the testable contract), the **AC→scenario mapping** from step 5 —
-   every acceptance criterion and architect-surfaced risk against its covering scenario(s), with
-   any intentional exclusions called out by name so the owner can catch a dropped criterion before
-   approving, not after implementation — the **tasks** in order, including any folded-in
+   `#### Scenario:` blocks** (the testable contract), the **`ac-coverage.md` table** committed at
+   step 5 verbatim — render the actual table, not a fresh paraphrase of it, so what the owner reads
+   here is exactly the durable artifact, not a second, potentially-drifted retelling — so the owner
+   can catch a dropped criterion before approving, not after implementation — the **tasks** in
+   order, including any folded-in
    structural-debt task from step 4 — and, if any nearby structural debt was recommended as a
    separate issue, a one-line reminder of its disposition (filed as `#<M>`, or left for later).
    Summarize faithfully — it must be enough to approve or redirect without opening a file. You may

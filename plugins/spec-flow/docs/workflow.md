@@ -103,7 +103,18 @@ from your chosen design and committing it. Nothing is implemented until you expl
 This stop confirms the spec faithfully reflects the design you already picked — it is not the
 first time you see the decision. (For a content-only `type:docs` issue there's no spec to generate
 or commit — this stop instead reviews the issue's own scope + acceptance criteria; see **Docs fast
-path** below.) (Upstream of both stops, at `groom`, the **`product-manager`
+path** below.)
+
+**AC coverage is a committed artifact, not a claim.** Where a spec is generated, `activate` step 5
+also writes `openspec/changes/issue-<N>/ac-coverage.md` — a table mapping every acceptance
+criterion from the issue, and every risk the architect's design surfaced, to the scenario(s) that
+cover it (or an explicit, one-line exclusion reason). Every row must resolve one way or the other
+before the spec is considered done — nothing gets left unresolved and silently summarized away.
+Step 7 renders this table verbatim at Seam 1 (as its own node in the explain view, or inline in
+terminal mode) instead of re-narrating coverage in prose, so a dropped criterion is something you
+can see directly rather than something you'd have to take the model's word for.
+
+(Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
 question at a time, its own recommended answer stated alongside each one, dependent questions

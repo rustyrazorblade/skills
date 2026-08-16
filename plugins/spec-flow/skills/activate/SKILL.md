@@ -344,6 +344,19 @@ qualify), and confirm the choice with the owner.
      explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
      the decision and the generated plan.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
+   - **Validate the generated specs structurally before doing anything else with them.**
+     ```bash
+     openspec validate issue-<N> --type change --strict --json
+     ```
+     Any `ERROR`-level issue (a requirement with no scenario, a missing/malformed delta header,
+     etc.) means the spec is structurally broken — fix it and re-validate before continuing to any
+     bullet below. Never carry a failing validation into the owner's review; this is a mechanical
+     pre-flight gate, not a judgment call, so there's nothing for the owner to weigh in on here.
+     `openspec validate` does NOT check the internal shape of a scenario, though — confirmed live:
+     a `#### Scenario:` written as free prose instead of `- **WHEN** ... / - **THEN** ...` bullets
+     passes it clean. So also confirm every `#### Scenario:` block is immediately followed by at
+     least one `- **WHEN**` bullet and one `- **THEN**` bullet; rewrite any that aren't — a prose
+     scenario isn't the testable contract the AC→scenario mapping below assumes it is.
    - **Check whether this change overrides the current baseline, or conflicts with another
      in-flight change — write `openspec/changes/issue-<N>/overrides.md`, always, even when there's
      nothing to report** (an explicit "none found" is a checked answer; a missing file would leave

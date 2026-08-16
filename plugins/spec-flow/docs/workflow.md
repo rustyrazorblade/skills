@@ -131,6 +131,16 @@ blocker, the same class as an architect-flagged hard dependency (see **Overridin
 default** below) — it always stops Seam 1 for you, even under a full auto-approve instruction.
 Step 7 renders this file the same way it renders `ac-coverage.md`.
 
+**Structural validation is a pre-flight gate, not a review artifact.** Before either of the above,
+`activate` step 5 runs `openspec validate issue-<N> --type change --strict --json` on the generated
+spec — a requirement with no scenario, a missing/malformed delta header, and similar mechanical
+defects are caught and fixed there, never carried into what you see at Seam 1. (Confirmed by test:
+`openspec validate` doesn't check a scenario's internal shape, so step 5 separately confirms every
+`#### Scenario:` has real `- **WHEN**`/`- **THEN**` bullets, not free prose.) Nothing renders here
+because there's no judgment call for you to make — by the time you see the spec, it's already
+structurally valid; `ac-coverage.md`/`overrides.md` above are for the calls that are actually yours
+to weigh in on.
+
 (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one

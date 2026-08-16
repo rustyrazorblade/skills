@@ -193,6 +193,9 @@ check "viewer.html defines the ADDED/MODIFIED/REMOVED/RENAMED heading matcher" $
 grep -qF 'delta-section delta-' "$viewer_html"
 check "viewer.html wraps delta-spec sections in a color-coded div" $?
 
+grep -qF 'function slugify' "$viewer_html"
+check "viewer.html gives headings stable slugified anchor ids" $?
+
 # ---------------------------------------------------------------------------
 # Argument validation: nothing to render at all should fail loudly, not
 # silently produce an empty view — this is the exact bug an owner hit trying

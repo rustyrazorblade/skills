@@ -140,6 +140,19 @@ skill from another plugin (e.g. spec-flow's seam wiring) — treat any string be
 literal `generate-explain.py` flags and run them as-is; the shorthand above is a convenience for a
 human typing `/explain`, not the only supported call shape.
 
+## Referencing a specific section precisely
+
+Every rendered heading gets a stable, slugified `id` (e.g. `### Requirement: Widget deletion` →
+`id="requirement-widget-deletion"`, deduplicated with a `-2`/`-3` suffix if a doc repeats a
+heading). There is deliberately no comment/annotation UI — `viewer.html` is a static `file://` page
+with no server, so it has no channel to send anything back to whoever generated it; adding one
+would break the self-contained, no-server design this skill is built around (see **Rules** below).
+The anchor ids are what make it possible to reference a specific requirement or scenario precisely
+in a URL fragment, or by name in conversation, without needing bidirectional wiring — a caller that
+wants to capture structured feedback against a specific section (e.g. spec-flow's own redirect
+handling at Seam 1 — see `docs/workflow.md` there) does so on its own side, using these same
+heading names as the shared vocabulary, not through this skill.
+
 ## Known gap: only what's actually on GitHub
 
 `--issue` mode surfaces the issue's body, its comment thread, and linked/mentioned issues — that's

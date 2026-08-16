@@ -585,11 +585,25 @@
   // you'd notice by reading a plain heading.
   var DELTA_HEADING_RE = /^(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b/i;
 
+  // Stable per-heading anchors (e.g. "requirement-widget-deletion") so a requirement/scenario can
+  // be referenced precisely — in a redirect, in a URL fragment — instead of "the third one down".
+  function slugify(text, usedIds) {
+    var base = String(text || "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "section";
+    var slug = base;
+    var n = 2;
+    while (usedIds[slug]) { slug = base + "-" + n; n++; }
+    usedIds[slug] = true;
+    return slug;
+  }
+
   function renderMarkdown(src) {
     var lines = String(src || "").replace(/\r\n/g, "\n").split("\n");
     var html = "";
     var i = 0;
     var openDelta = null; // null | "added" | "modified" | "removed" | "renamed"
+    var usedIds = {};
 
     while (i < lines.length) {
       var line = lines[i];
@@ -624,7 +638,8 @@
           html += '<div class="delta-section delta-' + openDelta + '">' +
             '<span class="delta-label">' + escapeHtml(deltaMatch[1].toUpperCase()) + "</span>";
         }
-        html += "<h" + level + ">" + inlineMD(heading[2]) + "</h" + level + ">";
+        var headingId = slugify(heading[2], usedIds);
+        html += "<h" + level + ' id="' + headingId + '">' + inlineMD(heading[2]) + "</h" + level + ">";
         i++;
         continue;
       }

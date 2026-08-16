@@ -122,6 +122,32 @@ worktree afterward — it doesn't touch the OpenSpec archive at all; that's sepa
 bookkeeping `project-manager` does in bulk across several issues at once, see **Bulk spec
 archiving** below.)
 
+**Seam visualization.** At both seams, the rendered content — the spec/scope at Seam 1, the diff
+at Seam 2 — can be shown two ways, an owner preference set once per repo by `/spec-flow:setup`:
+`SPEC_FLOW_SEAM_VIEW=deck` (recommended default) generates an interactive, self-contained HTML deck
+via `/spec-flow:deck` (file tree, diff view, docs, and per-node explanations in one page) and prints
+its path + an `open <path>` command — a background `issue-pm` can't reliably pop a browser on your
+screen, so it never tries; `SPEC_FLOW_SEAM_VIEW=terminal` renders the same content as plain text in
+the conversation, the original behavior from before `deck` existed. Read fresh from
+`.claude/settings.json` at each seam, not cached from an earlier stop. See `skills/deck/SKILL.md`
+for the deck format itself and `skills/setup/SKILL.md` for how the preference gets set.
+
+**Two more standing preferences, asked once by `project-manager` itself (not `/spec-flow:setup`,
+not `issue-pm`).** Unlike seam visualization above, these are gated on a specific tool actually
+being in use, so they're asked by `project-manager` on its own first look at the repo rather than
+folded into `setup`'s fixed checklist — see **Startup checks** in `agents/project-manager.md` for
+the exact detection commands and phrasing:
+- **`SPEC_FLOW_UNIFIED_MEMORY`** — when MemSearch is enabled, whether every issue's worktree should
+  share one MemSearch memory store instead of each getting its own (MemSearch keys memory off the
+  git toplevel by default, and every worktree has a distinct one). `spawn-issue-pm.sh` computes and
+  exports the actual shared path fresh at every spawn when this is `"1"` — never stored as a fixed
+  path itself, since an absolute path baked into checked-in settings would be wrong on every other
+  machine this repo is cloned to.
+- **`SPEC_FLOW_AUTO_INDEX`** — when claude-context is connected, whether `activate` should index
+  each new issue worktree with it automatically, right after isolating (`skills/activate/SKILL.md`
+  step 2) — claude-context indexes by absolute path, so each worktree needs its own call regardless
+  of this setting; the setting only controls whether that call happens automatically or not at all.
+
 **Overriding either seam's default.** Both seams default to always stopping. `project-manager`
 composes a free-text instruction — from whatever you said for that issue, or a standing preference
 you wrote in `CLAUDE.md`, in your own words (never a fixed vocabulary like "Seam 1"/"Seam 2" —

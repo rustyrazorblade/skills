@@ -1,0 +1,845 @@
+<title>Deck</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1e1e1e;
+    --bg-sidebar: #252526;
+    --bg-header: #2d2d2d;
+    --bg-editor-tab: #2d2d2d;
+    --bg-explain: #1e1e2140;
+    --border: #3c3c3c;
+    --text: #d4d4d4;
+    --text-dim: #8a8a8a;
+    --accent: #569cd6;
+    --active-bg: #094771;
+    --hover-bg: #2a2d2e;
+    --diff-add-bg: rgba(46, 160, 67, 0.16);
+    --diff-add-border: #2ea043;
+    --diff-del-bg: rgba(248, 81, 73, 0.16);
+    --diff-del-border: #f85149;
+    --diff-sep: #6e7681;
+    --hl-bg: rgba(255, 213, 79, 0.14);
+    --code-font: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui-font);
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  header#deck-header {
+    flex: 0 0 auto;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+  }
+
+  header#deck-header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  header#deck-header .subtitle {
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  header#deck-header .meta {
+    margin-top: 4px;
+    font-size: 11px;
+    font-family: var(--code-font);
+    color: var(--text-dim);
+  }
+
+  #body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* ---------- sidebar / file tree ---------- */
+
+  #sidebar {
+    flex: 0 0 280px;
+    max-width: 40vw;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 8px 0;
+    font-size: 13px;
+  }
+
+  #sidebar .empty {
+    color: var(--text-dim);
+    padding: 8px 16px;
+    font-style: italic;
+  }
+
+  ul.tree, ul.tree ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 14px;
+  }
+
+  ul.tree {
+    padding-left: 0;
+  }
+
+  .tree-folder > .tree-folder-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    cursor: pointer;
+    color: var(--text-dim);
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .tree-folder > .tree-folder-label:hover {
+    background: var(--hover-bg);
+  }
+
+  .tree-folder .twisty {
+    display: inline-block;
+    width: 10px;
+    transition: transform 0.1s ease;
+  }
+
+  .tree-folder.collapsed > ul {
+    display: none;
+  }
+
+  .tree-folder.collapsed > .tree-folder-label .twisty {
+    transform: rotate(-90deg);
+  }
+
+  .tree-leaf {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 24px;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--text);
+    border-left: 2px solid transparent;
+  }
+
+  .tree-leaf:hover {
+    background: var(--hover-bg);
+  }
+
+  .tree-leaf.active {
+    background: var(--active-bg);
+    border-left-color: var(--accent);
+  }
+
+  .tree-leaf .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .badge {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: #6e7681;
+    color: #1e1e1e;
+  }
+
+  .badge-bug { background: #f85149; color: #1e1e1e; }
+  .badge-store { background: #58a6ff; color: #1e1e1e; }
+  .badge-join { background: #a371f7; color: #1e1e1e; }
+  .badge-test { background: #3fb950; color: #1e1e1e; }
+  .badge-add { background: #2ea043; color: #1e1e1e; }
+  .badge-del { background: #f85149; color: #1e1e1e; }
+
+  /* ---------- right column: editor + explain ---------- */
+
+  #right {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  #editor-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #editor-tab {
+    flex: 0 0 auto;
+    background: var(--bg-editor-tab);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--code-font);
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #editor-body {
+    flex: 1 1 auto;
+    overflow: auto;
+    background: var(--bg);
+  }
+
+  #editor-body .empty-state {
+    color: var(--text-dim);
+    padding: 24px;
+    font-style: italic;
+  }
+
+  /* diff / code rows */
+
+  .diff-view, .code-view {
+    font-family: var(--code-font);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  .diff-row, .code-row {
+    display: flex;
+    white-space: pre;
+  }
+
+  .diff-row .gl, .code-row .gl {
+    flex: 0 0 44px;
+    text-align: right;
+    padding: 0 8px;
+    color: var(--text-dim);
+    user-select: none;
+    border-right: 1px solid var(--border);
+  }
+
+  .code-row .gl {
+    flex-basis: 52px;
+  }
+
+  .diff-row .marker {
+    flex: 0 0 18px;
+    text-align: center;
+    color: var(--text-dim);
+    user-select: none;
+  }
+
+  .diff-row .code, .code-row .code {
+    flex: 1 1 auto;
+    padding-left: 6px;
+    padding-right: 16px;
+  }
+
+  .diff-row.diff-add { background: var(--diff-add-bg); }
+  .diff-row.diff-add .marker { color: var(--diff-add-border); }
+  .diff-row.diff-del { background: var(--diff-del-bg); }
+  .diff-row.diff-del .marker { color: var(--diff-del-border); }
+
+  .diff-sep {
+    text-align: center;
+    color: var(--diff-sep);
+    font-family: var(--code-font);
+    padding: 3px 0;
+    letter-spacing: 0.3em;
+    border-top: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+  }
+
+  .code-row.hl { background: var(--hl-bg); }
+
+  /* markdown rendering (shared by markdown nodes + explain pane) */
+
+  .md-view, .explain-content { font-size: 13.5px; line-height: 1.55; }
+  .md-view { padding: 18px 22px; max-width: 900px; }
+
+  .md-view h1, .md-view h2, .md-view h3,
+  .md-view h4, .md-view h5, .md-view h6,
+  .explain-content h1, .explain-content h2, .explain-content h3,
+  .explain-content h4, .explain-content h5, .explain-content h6 {
+    color: var(--text);
+    margin: 1.1em 0 0.4em;
+    font-family: var(--ui-font);
+  }
+
+  .md-view h1 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+  .md-view h2 { font-size: 1.35em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+  .md-view h3 { font-size: 1.15em; }
+
+  .md-view p, .explain-content p { margin: 0.5em 0; }
+
+  .md-view ul, .md-view ol, .explain-content ul, .explain-content ol {
+    margin: 0.4em 0;
+    padding-left: 1.6em;
+  }
+
+  .md-view code, .explain-content code {
+    font-family: var(--code-font);
+    background: rgba(110, 118, 129, 0.2);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }
+
+  .md-view pre.md-code, .explain-content pre.md-code {
+    background: #161616;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+  }
+
+  .md-view pre.md-code code, .explain-content pre.md-code code {
+    background: none;
+    padding: 0;
+  }
+
+  .md-view a, .explain-content a { color: var(--accent); }
+
+  .md-view table, .explain-content table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    font-size: 0.95em;
+  }
+
+  .md-view th, .md-view td, .explain-content th, .explain-content td {
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    text-align: left;
+  }
+
+  .md-view th, .explain-content th {
+    background: var(--bg-header);
+  }
+
+  /* ---------- explain pane ---------- */
+
+  #explain-pane {
+    flex: 0 0 auto;
+    max-height: 32vh;
+    min-height: 0;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    background: var(--bg-explain);
+  }
+
+  #explain-pane.empty {
+    display: none;
+  }
+
+  #explain-pane .explain-heading {
+    position: sticky;
+    top: 0;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 6px 14px;
+  }
+
+  .explain-content { padding: 12px 20px; }
+</style>
+<div id="app">
+  <header id="deck-header">
+    <h1 id="deck-title">Deck</h1>
+    <div class="subtitle" id="deck-subtitle" style="display:none"></div>
+    <div class="meta" id="deck-meta" style="display:none"></div>
+  </header>
+  <div id="body">
+    <nav id="sidebar"></nav>
+    <div id="right">
+      <div id="editor-pane">
+        <div id="editor-tab">No file selected</div>
+        <div id="editor-body"><div class="empty-state">Select a file from the tree to view it.</div></div>
+      </div>
+      <div id="explain-pane" class="empty">
+        <div class="explain-heading">Explanation</div>
+        <div class="explain-content" id="explain-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // Demo manifest — used only when window.MANIFEST is not injected (e.g.
+  // opening this shell file directly). generate-deck.py / init-deck.sh both
+  // replace the injection marker near the end of this file with a real one
+  // (kept out of this comment as literal text so it stays a single, unique
+  // occurrence in this file for the generator to target).
+  // ---------------------------------------------------------------------
+  var DEMO_MANIFEST = {
+    title: "deck viewer (demo)",
+    subtitle: "No manifest was injected — showing a built-in example.",
+    nodes: [
+      {
+        path: "src/example/user_store.rs",
+        label: "user_store.rs",
+        badge: "THE BUG",
+        badgeClass: "bug",
+        kind: "diff",
+        patch: [
+          "diff --git a/src/example/user_store.rs b/src/example/user_store.rs",
+          "index 1111111..2222222 100644",
+          "--- a/src/example/user_store.rs",
+          "+++ b/src/example/user_store.rs",
+          "@@ -10,7 +10,7 @@ impl UserStore {",
+          "     pub fn get(&self, id: u64) -> Option<&User> {",
+          "         self.users.get(&id)",
+          "     }",
+          "-    pub fn remove(&mut self, id: u64) {",
+          "+    pub fn remove(&mut self, id: u64) -> Option<User> {",
+          "         self.users.remove(&id)",
+          "     }",
+          " }",
+          "@@ -40,6 +40,10 @@ mod tests {",
+          "     fn get_missing_returns_none() {",
+          "         assert_eq!(store().get(999), None);",
+          "     }",
+          "+",
+          "+    #[test]",
+          "+    fn remove_returns_removed_user() {",
+          "+        assert!(store().remove(1).is_some());",
+          "+    }",
+          " }"
+        ].join("\n"),
+        explain: "The bug: `remove` discarded the removed `User` instead of returning it, so callers " +
+          "couldn't tell **who** was removed. Returning `Option<User>` fixes that and is covered by a new test."
+      },
+      {
+        path: "src/example/main.rs",
+        label: "main.rs",
+        kind: "code",
+        lang: "rust",
+        startLine: 1,
+        highlight: [3],
+        code: "fn main() {\n    let mut store = UserStore::new();\n    let removed = store.remove(1);\n    println!(\"{:?}\", removed);\n}\n"
+      },
+      {
+        path: "docs/proposal.md",
+        label: "proposal.md",
+        kind: "markdown",
+        md: "# Proposal\n\nReturn the removed `User` from `UserStore::remove` so callers can react to **who**\nwas removed.\n\n## Why\n\n- Silent discards make undo/audit flows impossible\n- Matches `HashMap::remove`'s own signature\n\n| Before | After |\n| --- | --- |\n| `fn remove(&mut self, id: u64)` | `fn remove(&mut self, id: u64) -> Option<User>` |\n"
+      }
+    ]
+  };
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function basename(path) {
+    var parts = String(path || "").split("/").filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : String(path || "");
+  }
+
+  // ---------------------------------------------------------------------
+  // Markdown — compact, built-in, no external library. Supports headings,
+  // ordered/unordered lists, fenced code blocks, inline code, bold, italic,
+  // links, and simple pipe tables. Good enough for proposal/design/task
+  // docs and free-text explain fields; not a full CommonMark implementation.
+  // ---------------------------------------------------------------------
+  function inlineMD(text) {
+    var s = escapeHtml(text);
+    var codes = [];
+    // Plain-ASCII sentinel (no control/unicode escapes) protects code-span content from the
+    // bold/italic/link passes below, then gets swapped back in as a real <code> tag.
+    s = s.replace(/`([^`]+)`/g, function (m, p1) {
+      codes.push(p1);
+      return "@@CS" + (codes.length - 1) + "@@";
+    });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    s = s.replace(/_([^_]+)_/g, "<em>$1</em>");
+    s = s.replace(/@@CS(\d+)@@/g, function (m, idx) {
+      return "<code>" + codes[Number(idx)] + "</code>";
+    });
+    return s;
+  }
+
+  function splitTableRow(line) {
+    var t = line.trim();
+    if (t.charAt(0) === "|") t = t.slice(1);
+    if (t.charAt(t.length - 1) === "|") t = t.slice(0, -1);
+    return t.split("|").map(function (c) { return c.trim(); });
+  }
+
+  var TABLE_SEP_RE = /^\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+  var HEADING_RE = /^(#{1,6})\s+(.*)$/;
+  var UL_RE = /^\s*[-*+]\s+(.*)$/;
+  var OL_RE = /^\s*\d+\.\s+(.*)$/;
+  var FENCE_RE = /^\s*(```|~~~)(.*)$/;
+
+  function renderMarkdown(src) {
+    var lines = String(src || "").replace(/\r\n/g, "\n").split("\n");
+    var html = "";
+    var i = 0;
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      var fence = line.match(FENCE_RE);
+      if (fence) {
+        var fenceMark = fence[1];
+        var lang = fence[2].trim();
+        var codeLines = [];
+        i++;
+        while (i < lines.length && lines[i].trim().indexOf(fenceMark) !== 0) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++; // skip closing fence
+        html += '<pre class="md-code"><code' +
+          (lang ? ' data-lang="' + escapeHtml(lang) + '"' : "") +
+          ">" + escapeHtml(codeLines.join("\n")) + "</code></pre>";
+        continue;
+      }
+
+      var heading = line.match(HEADING_RE);
+      if (heading) {
+        var level = heading[1].length;
+        html += "<h" + level + ">" + inlineMD(heading[2]) + "</h" + level + ">";
+        i++;
+        continue;
+      }
+
+      if (line.indexOf("|") !== -1 && i + 1 < lines.length && TABLE_SEP_RE.test(lines[i + 1])) {
+        var headerCells = splitTableRow(line);
+        i += 2;
+        var rows = [];
+        while (i < lines.length && lines[i].indexOf("|") !== -1 && !/^\s*$/.test(lines[i])) {
+          rows.push(splitTableRow(lines[i]));
+          i++;
+        }
+        html += "<table><thead><tr>" +
+          headerCells.map(function (c) { return "<th>" + inlineMD(c) + "</th>"; }).join("") +
+          "</tr></thead><tbody>" +
+          rows.map(function (r) {
+            return "<tr>" + r.map(function (c) { return "<td>" + inlineMD(c) + "</td>"; }).join("") + "</tr>";
+          }).join("") +
+          "</tbody></table>";
+        continue;
+      }
+
+      if (/^\s*$/.test(line)) { i++; continue; }
+
+      if (UL_RE.test(line)) {
+        var ulItems = [];
+        while (i < lines.length && UL_RE.test(lines[i])) {
+          ulItems.push(lines[i].replace(UL_RE, "$1"));
+          i++;
+        }
+        html += "<ul>" + ulItems.map(function (it) { return "<li>" + inlineMD(it) + "</li>"; }).join("") + "</ul>";
+        continue;
+      }
+
+      if (OL_RE.test(line)) {
+        var olItems = [];
+        while (i < lines.length && OL_RE.test(lines[i])) {
+          olItems.push(lines[i].replace(OL_RE, "$1"));
+          i++;
+        }
+        html += "<ol>" + olItems.map(function (it) { return "<li>" + inlineMD(it) + "</li>"; }).join("") + "</ol>";
+        continue;
+      }
+
+      var paraLines = [];
+      while (i < lines.length &&
+        !/^\s*$/.test(lines[i]) &&
+        !HEADING_RE.test(lines[i]) &&
+        !UL_RE.test(lines[i]) &&
+        !OL_RE.test(lines[i]) &&
+        !FENCE_RE.test(lines[i])) {
+        paraLines.push(lines[i]);
+        i++;
+      }
+      html += "<p>" + paraLines.map(inlineMD).join("<br>") + "</p>";
+    }
+
+    return html;
+  }
+
+  // ---------------------------------------------------------------------
+  // Unified diff parsing — minimal, hand-written (no library). Parses one
+  // file's raw patch text: hunk headers "@@ -a,b +c,d @@" then " "/"+"/"-"
+  // prefixed lines. Any header lines before the first hunk (diff --git,
+  // index, ---, +++) are metadata and intentionally skipped in the row
+  // output.
+  // ---------------------------------------------------------------------
+  var HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+  function parseDiff(patch) {
+    var lines = String(patch || "").replace(/\r\n/g, "\n").split("\n");
+    var hunks = [];
+    var cur = null;
+    var oldLine = 0, newLine = 0;
+
+    for (var idx = 0; idx < lines.length; idx++) {
+      var raw = lines[idx];
+      var hunkMatch = raw.match(HUNK_RE);
+      if (hunkMatch) {
+        if (cur) hunks.push(cur);
+        oldLine = parseInt(hunkMatch[1], 10);
+        newLine = parseInt(hunkMatch[3], 10);
+        cur = { oldStart: oldLine, newStart: newLine, rows: [] };
+        continue;
+      }
+      if (!cur) continue; // before the first hunk: file-header metadata, not rendered
+      if (raw.charAt(0) === "\\") continue; // "\ No newline at end of file"
+
+      var prefix = raw.charAt(0);
+      var text = raw.slice(1);
+      if (prefix === "+") {
+        cur.rows.push({ kind: "add", oldLine: null, newLine: newLine, text: text });
+        newLine++;
+      } else if (prefix === "-") {
+        cur.rows.push({ kind: "del", oldLine: oldLine, newLine: null, text: text });
+        oldLine++;
+      } else if (prefix === " ") {
+        cur.rows.push({ kind: "ctx", oldLine: oldLine, newLine: newLine, text: text });
+        oldLine++;
+        newLine++;
+      } else if (raw.length === 0) {
+        // blank context line with the leading space stripped by some tools
+        cur.rows.push({ kind: "ctx", oldLine: oldLine, newLine: newLine, text: "" });
+        oldLine++;
+        newLine++;
+      }
+    }
+    if (cur) hunks.push(cur);
+    return hunks;
+  }
+
+  function renderDiffNode(node) {
+    var hunks = parseDiff(node.patch || "");
+    if (!hunks.length) {
+      return '<div class="empty-state">No hunks parsed from this patch.</div>';
+    }
+    var out = ['<div class="diff-view">'];
+    hunks.forEach(function (h, i) {
+      if (i > 0) out.push('<div class="diff-sep">⋯</div>');
+      h.rows.forEach(function (r) {
+        var marker = r.kind === "add" ? "+" : r.kind === "del" ? "-" : " ";
+        out.push(
+          '<div class="diff-row diff-' + r.kind + '">' +
+          '<span class="gl">' + (r.oldLine === null ? "" : r.oldLine) + '</span>' +
+          '<span class="gl">' + (r.newLine === null ? "" : r.newLine) + '</span>' +
+          '<span class="marker">' + marker + '</span>' +
+          '<span class="code">' + escapeHtml(r.text) + '</span>' +
+          '</div>'
+        );
+      });
+    });
+    out.push("</div>");
+    return out.join("");
+  }
+
+  function renderCodeNode(node) {
+    var codeText = String(node.code || "");
+    var startLine = node.startLine || 1;
+    var highlightSet = {};
+    (node.highlight || []).forEach(function (n) { highlightSet[n] = true; });
+    var lines = codeText.replace(/\r\n/g, "\n").split("\n");
+    var out = ['<div class="code-view">'];
+    lines.forEach(function (l, idx) {
+      var lineNo = startLine + idx;
+      var hl = highlightSet[lineNo] ? " hl" : "";
+      out.push(
+        '<div class="code-row' + hl + '">' +
+        '<span class="gl">' + lineNo + '</span>' +
+        '<span class="code">' + escapeHtml(l) + '</span>' +
+        '</div>'
+      );
+    });
+    out.push("</div>");
+    return out.join("");
+  }
+
+  function renderMarkdownNode(node) {
+    return '<div class="md-view">' + renderMarkdown(node.md || "") + '</div>';
+  }
+
+  // ---------------------------------------------------------------------
+  // File tree
+  // ---------------------------------------------------------------------
+  function buildTree(nodes) {
+    var root = { name: "", children: {}, order: [] };
+    nodes.forEach(function (node, idx) {
+      var raw = node.path || node.label || ("node-" + idx);
+      var parts = String(raw).split("/").filter(Boolean);
+      if (!parts.length) parts = [raw];
+      var cur = root;
+      parts.forEach(function (part, i) {
+        var isLast = i === parts.length - 1;
+        if (!cur.children[part]) {
+          cur.children[part] = { name: part, children: {}, order: [] };
+          cur.order.push(part);
+        }
+        cur = cur.children[part];
+        if (isLast) {
+          cur.isLeaf = true;
+          cur.nodeIndex = idx;
+          cur.node = node;
+        }
+      });
+    });
+    return root;
+  }
+
+  function renderTreeNode(folder, path) {
+    var html = '<ul class="tree' + (path ? "" : "") + '">';
+    folder.order.forEach(function (name) {
+      var child = folder.children[name];
+      if (child.isLeaf && Object.keys(child.children).length === 0) {
+        var node = child.node;
+        var label = escapeHtml(node.label || basename(node.path || name));
+        var badge = node.badge
+          ? '<span class="badge badge-' + escapeHtml(node.badgeClass || "") + '">' + escapeHtml(node.badge) + "</span>"
+          : "";
+        html += '<li><div class="tree-leaf" data-node-index="' + child.nodeIndex + '">' +
+          '<span class="label">' + label + "</span>" + badge + "</div></li>";
+      } else {
+        var childPath = (path ? path + "/" : "") + name;
+        html += '<li><div class="tree-folder" data-path="' + escapeHtml(childPath) + '">' +
+          '<div class="tree-folder-label"><span class="twisty">▾</span><span>' + escapeHtml(name) + "</span></div>" +
+          renderTreeNode(child, childPath) +
+          "</div></li>";
+      }
+    });
+    html += "</ul>";
+    return html;
+  }
+
+  // ---------------------------------------------------------------------
+  // App wiring
+  // ---------------------------------------------------------------------
+  function renderApp(manifest) {
+    var nodes = manifest.nodes || [];
+
+    document.getElementById("deck-title").textContent = manifest.title || "Deck";
+    var subtitleEl = document.getElementById("deck-subtitle");
+    if (manifest.subtitle) {
+      subtitleEl.textContent = manifest.subtitle;
+      subtitleEl.style.display = "";
+    }
+    var metaEl = document.getElementById("deck-meta");
+    if (manifest.meta && (manifest.meta.base || manifest.meta.head || manifest.meta.generatedFrom)) {
+      var bits = [];
+      if (manifest.meta.base || manifest.meta.head) {
+        bits.push((manifest.meta.base || "?") + " → " + (manifest.meta.head || "?"));
+      }
+      if (manifest.meta.generatedFrom) bits.push(manifest.meta.generatedFrom);
+      metaEl.textContent = bits.join("  ·  ");
+      metaEl.style.display = "";
+    }
+
+    var sidebar = document.getElementById("sidebar");
+    if (!nodes.length) {
+      sidebar.innerHTML = '<div class="empty">No nodes in this manifest.</div>';
+    } else {
+      var tree = buildTree(nodes);
+      sidebar.innerHTML = renderTreeNode(tree, "");
+    }
+
+    sidebar.addEventListener("click", function (ev) {
+      var leaf = ev.target.closest(".tree-leaf");
+      if (leaf) {
+        selectNode(parseInt(leaf.getAttribute("data-node-index"), 10));
+        return;
+      }
+      var folderLabel = ev.target.closest(".tree-folder-label");
+      if (folderLabel) {
+        folderLabel.parentElement.classList.toggle("collapsed");
+      }
+    });
+
+    var tab = document.getElementById("editor-tab");
+    var editorBody = document.getElementById("editor-body");
+    var explainPane = document.getElementById("explain-pane");
+    var explainContent = document.getElementById("explain-content");
+
+    function selectNode(idx) {
+      var node = nodes[idx];
+      if (!node) return;
+
+      var prevActive = sidebar.querySelector(".tree-leaf.active");
+      if (prevActive) prevActive.classList.remove("active");
+      var thisLeaf = sidebar.querySelector('.tree-leaf[data-node-index="' + idx + '"]');
+      if (thisLeaf) thisLeaf.classList.add("active");
+
+      tab.textContent = node.path || node.label || ("node " + idx);
+
+      if (node.kind === "diff") {
+        editorBody.innerHTML = renderDiffNode(node);
+      } else if (node.kind === "code") {
+        editorBody.innerHTML = renderCodeNode(node);
+      } else if (node.kind === "markdown") {
+        editorBody.innerHTML = renderMarkdownNode(node);
+      } else {
+        editorBody.innerHTML = '<div class="empty-state">Unknown node kind: ' + escapeHtml(node.kind) + "</div>";
+      }
+      editorBody.scrollTop = 0;
+
+      if (node.explain) {
+        explainContent.innerHTML = renderMarkdown(node.explain);
+        explainPane.classList.remove("empty");
+      } else {
+        explainContent.innerHTML = "";
+        explainPane.classList.add("empty");
+      }
+    }
+
+    if (nodes.length) selectNode(0);
+  }
+
+  function boot() {
+    var manifest = window.MANIFEST || DEMO_MANIFEST;
+    renderApp(manifest);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    // Marker script (if injected) already ran during synchronous parsing,
+    // and the document is already parsed by the time we get here.
+    boot();
+  }
+})();
+</script>
+<!--MANIFEST-->

@@ -232,6 +232,7 @@ yourself.
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
 | `/spec-flow:adopt-tiering` | One-time per repo: split an existing suite into the unit/integration tiers the tiering model needs, then open a PR |
+| `/spec-flow:deck <base-ref> [docs...]` | Render a self-contained, IDE-style HTML walkthrough of a change (file tree, diff/code editor, docs) — used standalone or automatically at both owner seams when `SPEC_FLOW_SEAM_VIEW=deck` |
 
 #### Agents
 

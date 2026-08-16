@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the .gitignore entries, and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
+description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the .gitignore entries, and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
 argument-hint: [optional notes; run from inside the target repo]
 ---
 
@@ -28,6 +28,7 @@ later question moot.
      `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
+   - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
      entries.
    - **CI tiering**: the same detection `adopt-tiering` step 1 uses — Gradle
@@ -67,6 +68,21 @@ later question moot.
      { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
      ```
      merging into whatever's already there rather than overwriting the file.
+   - **Seam visualization preference unset** → explain the choice in one line: at both owner
+     seams (design approval, in-review), `activate`/`implement` can either generate an interactive
+     HTML deck — file tree, diff view, docs, all in one place (see `/spec-flow:deck`) — or render
+     the same content as plain text in the terminal, same as before that skill existed. Recommend
+     the deck, default yes, but genuinely optional — like agent teams, a real preference, not a
+     mechanical default. If yes:
+     ```json
+     { "env": { "SPEC_FLOW_SEAM_VIEW": "deck" } }
+     ```
+     If the owner prefers terminal-only:
+     ```json
+     { "env": { "SPEC_FLOW_SEAM_VIEW": "terminal" } }
+     ```
+     merging into whatever's already there. `activate`/`implement` read this fresh at each seam —
+     see **Seam visualization** in `docs/workflow.md`.
    - **CI not tiered** → don't attempt this here, it's its own migration. Just point at
      `/spec-flow:adopt-tiering` and explain in one line what it does; recommend running it next,
      but leave the decision (and the run) to the owner.

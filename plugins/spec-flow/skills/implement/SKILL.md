@@ -379,6 +379,24 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    ```
    Use the printed URL as `<PR_URL>` below — same convention as `<DEFAULT_BR>`/`<PR>` above,
    a literal value from this output, not a shell variable carried across separate Bash calls:
+
+   **If `SPEC_FLOW_SEAM_VIEW=deck`** (set once, repo-wide, by `/spec-flow:setup` — see **Seam
+   visualization** in `docs/workflow.md`; unset or `terminal` skips this entirely), generate a
+   "what changed" deck alongside the PR before posting the comment below:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/skills/deck/scripts/generate-deck.py \
+     --base "$(git merge-base HEAD origin/<DEFAULT_BR>)" --head "$BR" \
+     --change "openspec/changes/issue-<N>" \
+     --title "issue-<N>" --subtitle "PR #<PR> — what changed" --out <path>
+   ```
+   (omit `--change` if this issue never generated an OpenSpec change — the docs-fast-path/tech-debt
+   case). Never pass `--open` — same display constraint as `activate`, see `skills/deck/SKILL.md`.
+   ```bash
+   gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>
+
+   🗂️ Deck (what changed): <deck path> — open <deck path>"
+   ```
+   **Otherwise** (unset or `terminal`):
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>"
    ```

@@ -141,6 +141,17 @@ qualify), and confirm the choice with the owner.
    second one — confirmed by test. Once confirmed, every subsequent action — tool-driven or
    Bash-driven — lands there, not in the owner's primary checkout.
 
+   **If `SPEC_FLOW_AUTO_INDEX=1`, index this worktree now.** claude-context indexes by absolute
+   path, and this worktree is a distinct path from every other worktree of this repo (including the
+   primary checkout) — it never inherits another worktree's index. Call the `mcp__claude-context__
+   index_codebase` tool with `path` set to this worktree's absolute root (from
+   `git rev-parse --show-toplevel`, just confirmed above). Fire-and-forget — don't block this step
+   on indexing finishing; if it fails (e.g. `claude-context` not actually reachable despite the flag
+   being set), note it in passing and move on, never treat it as a blocker. This is `issue-pm`'s own
+   responsibility, once, right after isolating — never repeated later in the run, and never done by
+   `project-manager` itself (see **Startup checks** in `agents/project-manager.md`, which only asks
+   about and records the preference — the indexing action itself always happens here).
+
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** **Skip
    this step and step 4 entirely if the issue carries `type:docs`** — a docs-only change has no
    architecture to decide, structural or not. Go straight to step 5, which further decides whether
@@ -344,7 +355,27 @@ qualify), and confirm the choice with the owner.
    git -C <worktree> commit -m "issue-<N>: spec (proposal/design/specs/tasks)"
    ```
 
-7. **Render for review, then mark spec-review and STOP.** **For a content-only `type:docs` issue**
+7. **Render for review, then mark spec-review and STOP.** **First, check `SPEC_FLOW_SEAM_VIEW`**
+   (set once, repo-wide, by `/spec-flow:setup` — see **Seam visualization** in `docs/workflow.md`).
+   Unset or `terminal` → skip straight to the branches below; each one's inline text render is the
+   whole deliverable, exactly as written. `deck` → generate a deck **in addition to** doing
+   whichever branch below's labeling/comment step, and present the deck path/open line **as** that
+   branch's render instead of the inline text dump (the branch's own comment-posting and STOP still
+   apply unchanged either way):
+   - A spec exists (the non-docs/non-tech-debt branch, or a structural/tech-accompanying
+     `type:docs` one) → `${CLAUDE_PLUGIN_ROOT}/skills/deck/scripts/generate-deck.py --change
+     openspec/changes/issue-<N> --title "issue-<N>" --subtitle "<issue title>" --out <path>`.
+   - No spec (content-only `type:docs`, or `type:tech-debt`) → there's no change dir to point at,
+     so first write the branch's own rendered substance (scope + acceptance criteria, or Direction +
+     adjacent-behavior list) to `.spec-flow/seam1-review.md` inside the worktree (gitignored, same
+     entry every worktree already inherits), then `generate-deck.py --doc
+     .spec-flow/seam1-review.md --title "issue-<N>" --subtitle "<issue title>" --out <path>`.
+   Either way: never pass `--open` (this is a background session — see the display constraint in
+   `skills/deck/SKILL.md`); tell the owner the deck's absolute path plus the printed `open <path>`
+   line, and still state plainly that nothing will be implemented until they approve — the deck
+   satisfies "render the spec at the seam," it doesn't relax the approval gate itself.
+
+   **For a content-only `type:docs` issue**
    (step 5 decided no spec is needed, so step 6's commit never ran) render the issue's own scope +
    acceptance criteria instead of a spec — it was already scoped once at `groom`, so this is a
    quick confirmation, not a first

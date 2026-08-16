@@ -59,24 +59,18 @@ qualify), and confirm the choice with the owner.
    **Multi-user guard.** Check `assignees` against the authenticated user
    (`gh api user --jq .login`). If the issue is already assigned to someone else, **stop** — tell
    the owner it's claimed and let them pick a different issue or coordinate with whoever has it;
-   do not proceed. Otherwise claim it before doing anything else — `--add-assignee`/
-   `--add-label` are safe to repeat, but only post the "claimed" comment on a **genuinely fresh**
-   claim, not a re-activation (the issue was already assigned to you): re-running this on your own
-   in-flight issue shouldn't repost it every time.
+   do not proceed. Otherwise claim it before doing anything else — hand off to a script that only
+   posts the "claimed" comment on a **genuinely fresh** claim, not a re-activation (the issue was
+   already assigned to you): re-running this on your own in-flight issue shouldn't repost it every
+   time.
    ```bash
-   ME=$(gh api user --jq .login)
-   # gh's own --jq flag does NOT support jq's --arg passthrough (confirmed live: "accepts at most
-   # 1 arg(s), received 3") — interpolate the value straight into the jq expression string instead.
-   # GitHub logins are alphanumeric/hyphen only, so this is safe to inline without escaping issues.
-   # Use exact-match `any(...)`, not `contains([...])` — jq's array `contains` is a SUBSTRING test
-   # on string elements (confirmed live: contains(["jon"]) matches login "jonhaddad"), which would
-   # false-positive ALREADY_MINE for any login containing yours as a substring.
-   ALREADY_MINE=$(gh issue view <N> --json assignees --jq "[.assignees[].login] | any(. == \"$ME\")")
-   gh issue edit <N> --add-assignee @me --add-label agent:active
-   if [[ "$ALREADY_MINE" != "true" ]]; then
-     gh issue comment <N> --body "🏗️ Claimed — starting design."
-   fi
+   ${CLAUDE_PLUGIN_ROOT}/scripts/claim-issue.sh <N>
    ```
+   Resolves everything from the issue number alone (re-derives the authenticated user itself); safe
+   to re-run. The full reasoning — why `--jq` gets the expression interpolated rather than passed
+   via `--arg`, why `any(...)` and not `contains([...])` — lives in the script's own comments; never
+   reimplement it inline.
+
    This is what makes "who's working on what" visible to other users of this repo — claim before
    anything else. `agent:active` and the comment are the only things that make you visible to
    *another* user's `project-manager` (or your own, from a different machine) — nothing else about

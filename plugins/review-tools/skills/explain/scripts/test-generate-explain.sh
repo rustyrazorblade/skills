@@ -203,6 +203,46 @@ python3 "$generate_explain" >/dev/null 2>/dev/null
 check "no flags at all -> non-zero exit (never a silent empty view)" $?
 
 # ---------------------------------------------------------------------------
+# --path scoping: a second uncommitted change outside the scoped path must
+# NOT show up in the diff nodes — this is what makes a "what changed since
+# you last reviewed" view scoped to just one change dir, not the whole repo.
+# ---------------------------------------------------------------------------
+printf 'unrelated change\n' > "$repo/unrelated.txt"
+git -C "$repo" add "$repo/unrelated.txt"
+
+path_out_html="$out_dir/explain-path-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" \
+    --diff --base "$base_sha" --path file.txt \
+    --out "$path_out_html"
+)
+check "generate-explain.py --path exits 0" $?
+
+path_py_out="$(python3 - "$path_out_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+content = open(path, encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+
+paths = sorted(n.get("path") for n in manifest.get("nodes", []))
+if paths == ["file.txt"]:
+    print("PASS: --path scopes the diff to only the given path (unrelated.txt excluded)")
+else:
+    print(f"FAIL: --path scoping — got {paths}")
+PYEOF
+)"
+echo "$path_py_out"
+path_py_pass="$(echo "$path_py_out" | grep -c '^PASS:')"
+path_py_fail="$(echo "$path_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + path_py_pass))
+fail_count=$((fail_count + path_py_fail))
+
+# ---------------------------------------------------------------------------
 # --issue mode: no git diff involved at all. Fakes `gh` on PATH so this runs
 # offline — a primary issue (#1) linked to a blocked-by issue (#2) and
 # mentioning a third (#3) in its body, exercising both the native-dependency

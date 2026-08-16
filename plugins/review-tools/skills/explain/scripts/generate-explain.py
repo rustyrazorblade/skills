@@ -227,8 +227,10 @@ def split_diff_by_file(diff_text):
     return chunks
 
 
-def diff_nodes_from(base, head):
+def diff_nodes_from(base, head, paths=None):
     cmd = ["diff", "--no-color", base] if head is None else ["diff", "--no-color", base, head]
+    if paths:
+        cmd += ["--"] + list(paths)
     try:
         diff_text = run_git(cmd)
     except subprocess.CalledProcessError as e:
@@ -322,11 +324,12 @@ def build_manifest(args, base, head):
     meta = {}
 
     if args.diff:
-        nodes += diff_nodes_from(base, head)
+        nodes += diff_nodes_from(base, head, paths=args.path)
         head_label = head or "working tree"
         meta["base"] = base
         meta["head"] = head_label
-        source_bits.append(f"git diff {base}..{head_label}")
+        scope = f" -- {' '.join(args.path)}" if args.path else ""
+        source_bits.append(f"git diff {base}..{head_label}{scope}")
 
     primary_issue_title = None
     if args.issue:
@@ -387,6 +390,8 @@ def main():
                          help="include a git diff (base/head below); omit for a docs-only or issue-only view — no diff is computed unless this is passed")
     parser.add_argument("--base", help="diff base ref (default: merge-base with the default branch); only meaningful with --diff")
     parser.add_argument("--head", help="diff head ref (default: working tree); only meaningful with --diff")
+    parser.add_argument("--path", action="append", default=[], metavar="PATH",
+                         help="scope --diff to this path (repeatable, passed to git diff as -- <path>...); only meaningful with --diff, omit to diff the whole repo")
     parser.add_argument("--issue", action="append", type=int, default=[], metavar="N",
                          help="a GitHub issue number: its body + comments, plus (one level out) every issue it's linked to via a native dependency or a bare #N mention (repeatable)")
     parser.add_argument("--change", action="append", default=[], metavar="DIR",

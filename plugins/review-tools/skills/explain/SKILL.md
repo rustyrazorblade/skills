@@ -45,6 +45,10 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
   require one. When passed:
   - `--base <ref>` — diff base; default is the merge-base with the default branch.
   - `--head <ref>` — diff head; default is the **working tree** (uncommitted changes included).
+  - `--path <path>` — repeatable; scope the diff to this path (passed to `git diff` as `--
+    <path>...`). Omit to diff the whole repo. Useful for a "what changed since you last looked at
+    just this" view — e.g. `--base <sha-you-last-showed>` scoped to one OpenSpec change dir, so a
+    re-review after a redirect shows only what actually moved, not the whole branch.
 - `--change <dir>` — repeatable; an OpenSpec change dir. Auto-includes `proposal.md`, `design.md`,
   `tasks.md` (whichever exist) plus any delta-spec markdown under `<dir>/specs/**`.
 - `--doc <path>` — repeatable; any extra markdown file, rendered as a markdown node.

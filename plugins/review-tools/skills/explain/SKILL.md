@@ -8,10 +8,12 @@ argument-hint: [issue N | base-ref] [doc paths...]
 
 Renders a single, self-contained HTML file: a file tree on the left, a diff/code/doc editor
 top-right, and an explanation pane bottom-right. No server, no CDN, opens correctly via `file://`.
-Not just a diff tool — this is a general way to look at *anything* worth reviewing whole: a code
-change, a GitHub issue and everything linked to it, project docs, or any combination, with no
-requirement that a diff (or even a worktree) exist yet. Standalone — nothing here depends on any
-other plugin. Two modes — pick deterministic unless you have a specific reason to hand-author.
+The goal is aiding human understanding of what's happening in a change — a walkthrough or
+presentation of it, not a raw diff dump — whatever that change actually is: a **worktree**
+(uncommitted local work), a **branch** (against the default branch), or an **issue** (before any
+code exists at all). Standalone — nothing here depends on any other plugin, and it stays that way
+deliberately, since it needs to work on projects that can't or don't adopt spec-flow. Two modes —
+pick deterministic unless you have a specific reason to hand-author.
 
 If the `spec-flow` plugin is also installed, its `activate`/`implement` skills call this one
 automatically at the owner's two approval seams when `SPEC_FLOW_SEAM_VIEW=explain` — see
@@ -43,6 +45,14 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
 - `--diff` — include a git diff. **Omit this for anything that isn't about a code change** —
   reviewing a backlog issue before it's activated (no worktree, no diff exists yet) must never
   require one. When passed:
+  - `--worktree` — alias for `--diff` with no `--base`/`--head` override: "explain what's
+    uncommitted here." This is already `--diff`'s own default behavior (merge-base vs. working
+    tree) — the flag exists purely so that intent is discoverable/nameable, not because it adds
+    new resolution logic.
+  - `--branch <name>` — alias for `--diff --head <name>`: "explain this branch against the
+    default branch." Ignored if `--head` is also passed explicitly (`--head` wins). Deliberately
+    generic — no issue-number guessing from the branch name, no assumptions about any project's
+    branch-naming convention — so this stays usable in any repo, with or without spec-flow.
   - `--base <ref>` — diff base; default is the merge-base with the default branch.
   - `--head <ref>` — diff head; default is the **working tree** (uncommitted changes included).
   - `--path <path>` — repeatable; scope the diff to this path (passed to `git diff` as `--

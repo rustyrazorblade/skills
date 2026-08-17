@@ -229,6 +229,74 @@ python3 "$generate_explain" >/dev/null 2>/dev/null
 check "no flags at all -> non-zero exit (never a silent empty view)" $?
 
 # ---------------------------------------------------------------------------
+# --worktree / --branch: generic, git-only sugar for --diff's own base/head
+# defaults -- no issue-number guessing, no spec-flow filename assumptions.
+# ---------------------------------------------------------------------------
+worktree_out_html="$out_dir/explain-worktree-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --worktree --out "$worktree_out_html"
+)
+check "generate-explain.py --worktree exits 0" $?
+
+worktree_py_out="$(python3 - "$worktree_out_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+diff_nodes = [n for n in manifest.get("nodes", []) if n.get("kind") == "diff"]
+if any(n.get("path") == "file.txt" for n in diff_nodes):
+    print("PASS: --worktree resolves the same as --diff's own default (merge-base vs. working tree)")
+else:
+    print(f"FAIL: --worktree — got diff node paths {[n.get('path') for n in diff_nodes]}")
+PYEOF
+)"
+echo "$worktree_py_out"
+pass_count=$((pass_count + $(echo "$worktree_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$worktree_py_out" | grep -c '^FAIL:')))
+
+# A second branch with a distinct, known commit -- proves --branch NAME actually resolves head
+# to that branch's tip, not just falling back to the working-tree default. Built entirely with
+# plumbing commands so the fixture's current branch/working tree/index are never touched --
+# later tests in this file keep reusing the same $repo.
+other_blob="$(printf 'line1\nline2\nline3\nfrom-other-branch\n' | git -C "$repo" hash-object -w --stdin)"
+base_tree="$(git -C "$repo" rev-parse "$base_sha^{tree}")"
+other_tree="$(
+  { git -C "$repo" ls-tree "$base_tree" | grep -v $'\tfile\\.txt$'; printf '100644 blob %s\tfile.txt\n' "$other_blob"; } \
+    | git -C "$repo" mktree
+)"
+other_commit="$(git -C "$repo" commit-tree "$other_tree" -p "$base_sha" -m "other-branch commit")"
+git -C "$repo" branch -q other-branch "$other_commit"
+
+branch_out_html="$out_dir/explain-branch-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --branch other-branch --out "$branch_out_html"
+)
+check "generate-explain.py --branch exits 0" $?
+
+branch_py_out="$(python3 - "$branch_out_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+diff_nodes = [n for n in manifest.get("nodes", []) if n.get("kind") == "diff"]
+patch = next((n.get("patch", "") for n in diff_nodes if n.get("path") == "file.txt"), "")
+if "+from-other-branch" in patch:
+    print("PASS: --branch NAME resolves head to that branch's tip, not the working tree default")
+else:
+    print(f"FAIL: --branch — got patch {patch!r}")
+PYEOF
+)"
+echo "$branch_py_out"
+pass_count=$((pass_count + $(echo "$branch_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$branch_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
 # --blame is opt-in, OFF by default: git can only ever quote historical text
 # someone else wrote, never explain what the current diff actually does --
 # so it must never be the silent default. (--no-blame is now a no-op kept

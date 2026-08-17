@@ -613,6 +613,10 @@ def main():
     parser = argparse.ArgumentParser(description="Generate a deterministic IDE-style HTML explain view from a git diff, a GitHub issue, and/or docs.")
     parser.add_argument("--diff", action="store_true",
                          help="include a git diff (base/head below); omit for a docs-only or issue-only view — no diff is computed unless this is passed")
+    parser.add_argument("--worktree", action="store_true",
+                         help="alias for --diff with no --base/--head override -- 'explain what's uncommitted here', which is already --diff's own default behavior (merge-base vs. working tree). Purely a clearer, more discoverable name for that default; adds no new resolution logic")
+    parser.add_argument("--branch", metavar="NAME",
+                         help="alias for --diff --head NAME -- 'explain this branch against the default branch'. Ignored if --head is also passed explicitly (--head wins). Generic git-level convenience only -- no issue-number guessing, no assumptions about branch-naming conventions, so this stays usable in any repo")
     parser.add_argument("--base", help="diff base ref (default: merge-base with the default branch); only meaningful with --diff")
     parser.add_argument("--head", help="diff head ref (default: working tree); only meaningful with --diff")
     parser.add_argument("--path", action="append", default=[], metavar="PATH",
@@ -641,8 +645,16 @@ def main():
     parser.add_argument("--open", action="store_true", help="open the result in a browser (only when explicitly passed)")
     args = parser.parse_args()
 
+    # --worktree/--branch are pure sugar, resolved before anything else reads args.diff/args.head.
+    if args.worktree:
+        args.diff = True
+    if args.branch:
+        args.diff = True
+        if not args.head:
+            args.head = args.branch
+
     if not (args.diff or args.issue or args.change or args.doc or args.code or args.symbol):
-        fail("nothing to render — pass at least one of --diff, --issue, --change, --doc, --code, --symbol")
+        fail("nothing to render — pass at least one of --diff (or --worktree/--branch), --issue, --change, --doc, --code, --symbol")
 
     if args.diff and shutil.which("git") is None:
         fail("'git' is required but not on PATH (needed for --diff).")

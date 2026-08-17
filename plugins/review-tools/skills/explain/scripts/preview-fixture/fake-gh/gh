@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Fake `gh` -- part of explain's own preview fixture, so preview.sh can demonstrate --issue/--pr
+# without a real GitHub repo or network access. Same technique test-generate-explain.sh uses to
+# run offline. macOS bash 3.2 compatible.
+set -uo pipefail
+
+case "$1" in
+  repo)
+    # Real `gh repo view --json nameWithOwner --jq .nameWithOwner` prints the bare string, not
+    # the JSON object -- match that exactly, since generate-explain.py's repo_slug() feeds this
+    # straight into `repos/{owner_repo}/issues/...` API paths.
+    echo 'acme/widgets'
+    ;;
+  issue)
+    case "$3" in
+      1)
+        echo '{"number":1,"title":"Cascade-delete widget attachments on delete","body":"Deleting a widget currently leaves its attachments orphaned in storage. See #2 for the follow-up on the attachment-cleanup job.","url":"https://example.com/acme/widgets/issues/1","state":"OPEN","labels":[{"name":"P1"}],"comments":[{"author":{"login":"jon"},"createdAt":"2026-01-01T00:00:00Z","body":"Confirmed: the attachments table has no FK cascade, so this has to be handled in application code, not the schema."}]}'
+        ;;
+      2)
+        echo '{"number":2,"title":"Attachment cleanup follow-up","body":"Track whether the cascade-delete above needs a background job for already-orphaned attachments.","url":"https://example.com/acme/widgets/issues/2","state":"OPEN","labels":[]}'
+        ;;
+      *)
+        exit 1
+        ;;
+    esac
+    ;;
+  api)
+    case "$2" in
+      */dependencies/blocked_by) echo '[]' ;;
+      */dependencies/blocking) echo '[{"number":2}]' ;;
+      */pulls/42/comments)
+        echo '[
+          {"path":"src/widget.py","line":10,"side":"RIGHT","body":"Should this also remove attachment blobs from storage, not just the DB rows?","user":{"login":"reviewer1"},"created_at":"2026-01-02T00:00:00Z"},
+          {"path":"src/gone.py","line":3,"side":"RIGHT","body":"Stale comment on a file not in this diff (predates a rebase).","user":{"login":"reviewer2"},"created_at":"2026-01-02T00:01:00Z"}
+        ]'
+        ;;
+      *)
+        echo '[]'
+        ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac

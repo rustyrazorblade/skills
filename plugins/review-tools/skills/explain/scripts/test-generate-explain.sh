@@ -1042,11 +1042,15 @@ pass_count=$((pass_count + $(echo "$headref_py_out" | grep -c '^PASS:')))
 fail_count=$((fail_count + $(echo "$headref_py_out" | grep -c '^FAIL:')))
 
 # ---------------------------------------------------------------------------
-# preview-fixture smoke check: proves the SHIPPED preview fixture (the one
-# preview.sh points at) still exercises ADDED+MODIFIED+REMOVED+baseline-match
-# end-to-end, per design.md's own stated mitigation for fixture drift. Runs
-# the same generator invocation preview.sh does, minus --open (no browser in
-# CI).
+# preview-fixture smoke check: proves the SHIPPED preview fixture's OpenSpec
+# content (the baseline + delta spec preview.sh's own throwaway repo is built
+# from) still exercises ADDED+MODIFIED+REMOVED+baseline-match end-to-end,
+# reached the same way --change mode would. NOTE: this covers only that
+# content, via --change -- it does NOT exercise preview.sh's own invocation
+# (building the throwaway git repo, --diff-mode OpenSpec path detection, the
+# fake-gh wiring, --blame/--explain-map/--doc/--code/--symbol/--issue/--pr) --
+# nothing in CI runs preview.sh itself; a regression specific to that path
+# would only surface by actually running it.
 # ---------------------------------------------------------------------------
 preview_fixture_dir="$script_dir/preview-fixture"
 preview_smoke_html="$out_dir/explain-preview-smoke-test.html"

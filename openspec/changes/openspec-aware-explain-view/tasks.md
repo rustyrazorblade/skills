@@ -101,3 +101,48 @@
       content-triggered regardless of path (like everywhere else), only the MODIFIED-requirement
       baseline *comparison* specifically requires the path to look like a delta spec (that's what
       locates the sibling baseline file). Previous wording implied path-gating for both.
+
+## 7. Preview: QA every feature in one combined view
+
+- [x] 7.1 A design investigation into `explain`'s long-term architecture (decoupling data from
+      layout, standalone-app question) surfaced that `init-explain.sh`'s curated-mode schema
+      comment had drifted from `SKILL.md`'s documented schema (missing the `"mod"` badgeClass and
+      the `comments` field) — fixed both copies (the written `explain.manifest.js` header and the
+      terminal echo), with a cross-reference comment so future schema changes update both.
+- [x] 7.2 Rebuilt `preview.sh` from a static `--change`-only fixture into a throwaway git repo
+      (baseline commit + an uncommitted "in-flight change"), exercising every `generate-explain.py`
+      input in ONE combined view instead of OpenSpec content alone: the delta spec (ADDED/MODIFIED
+      with baseline comparison/REMOVED) alongside the actual code diffs it describes (a MODIFIED
+      file, a NEW file for the ADDED requirement, a DELETED file for the REMOVED requirement),
+      `--blame` on the modified file, `--explain-map` overriding the new file's blame with a real
+      curated explanation, `--doc`/`--code` (plain markdown/code nodes), `--symbol` blast-radius,
+      and `--issue`/`--pr` (a primary issue + a related one via both a dependency link and a `#N`
+      mention, plus a PR comment anchored inside the diff and one outside it) via a fake `gh` on
+      PATH — same offline technique `test-generate-explain.sh` already used.
+- [x] 7.3 Added the fixture files this needed: `baseline-src/` (pre-change source, seeds the
+      baseline commit), `src/widget_renaming.py` and the modified `src/widget.py` (post-change
+      source), `docs/widget-notes.md` (a plain non-delta doc), `src/widget_helpers.py` (a plain
+      `--code` file), `explain-map.json`, and `fake-gh/gh` (executable).
+- [x] 7.4 Verified live: `preview.sh` runs cleanly end to end; inspected the generated manifest
+      directly and confirmed every node kind/feature listed above is present with the expected
+      content (badges, comments, blame vs. explain-map override, blast-radius hits).
+- [x] 7.5 Re-ran `test-generate-explain.sh`'s existing preview-fixture smoke check (task 6.6) —
+      still 82/82; the new fixture files don't affect the `--change openspec/changes/demo`
+      invocation that check exercises.
+- [x] 7.6 A fable review of 7.1-7.5 found one real, pre-existing bug made visible by the new
+      fixture: `issue_nodes_from()`'s dependency-relation notes were swapped — an issue in #n's
+      `blocked_by` list (which, per GitHub's own API naming, BLOCKS #n) was labeled "blocked by
+      #n" instead of "blocks #n", and vice versa for `blocking`. Fixed (`generate-explain.py`);
+      confirmed live the fixture's #2 now correctly reads "Related: blocked by #1" (#1 blocks its
+      own follow-up), not the previous backwards "blocks #1".
+- [x] 7.7 Fixed the new `fake-gh/gh`'s `repo view --jq` handling — it was echoing the whole JSON
+      object instead of the bare `--jq .nameWithOwner` string a real `gh` would print, so
+      `owner_repo` inside `generate-explain.py` became a JSON blob rather than `acme/widgets` (the
+      demo happened to still work, since the fake's own `api` patterns suffix-match regardless).
+- [x] 7.8 Corrected two stale claims the review caught: `test-generate-explain.sh`'s
+      preview-fixture-smoke-check comment (used to claim it runs "the same generator invocation
+      preview.sh does" — no longer true now that `preview.sh` does far more than `--change` alone)
+      and design.md's fixture-drift mitigation bullet (now states plainly that nothing in CI runs
+      `preview.sh` itself — only its fixture's `--change`-reachable content is smoke-checked).
+- [x] 7.9 Removed `preview.sh`'s trailing `echo`s duplicating output `generate-explain.py` already
+      prints on success (a nitpick from the same review).

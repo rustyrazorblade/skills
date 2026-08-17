@@ -1,0 +1,3 @@
+{
+  "src/widget_renaming.py": "Implements the ADDED \"Widget renaming\" requirement -- a plain rename with a non-empty-name guard, no cascading effects since renaming doesn't touch attachments. Overrides --blame's \"New file\" fallback to demonstrate --explain-map taking priority."
+}

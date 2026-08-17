@@ -95,12 +95,18 @@ for the first time, e.g. a rename across the same change, or the title itself ch
 the edit), not an error condition, and must never break generation or show a broken/empty block.
 
 **7. Preview fixture and script are dev-only, kept out of the skill's own documented CLI.**
-`scripts/preview-fixture/` (canned baseline + delta spec covering all three categories) and
-`scripts/preview.sh`. *Alternatives considered:* previewing against this repo's own real
-`--worktree`/`--branch` diff (zero fixture maintenance, but doesn't reliably demonstrate the
-OpenSpec-aware feature specifically, since this repo may not have an in-flight delta spec at any
-given moment) and a `--fixture` flag on a combined script (both, selectable) — the owner chose the
-fixture-only version: always demonstrates the full feature, independent of this repo's real state.
+`scripts/preview-fixture/` (canned baseline + delta spec covering all three categories, plus the
+matching source-code changes and a fake `gh`) and `scripts/preview.sh`. *Alternatives considered:*
+previewing against this repo's own real `--worktree`/`--branch` diff (zero fixture maintenance,
+but doesn't reliably demonstrate the OpenSpec-aware feature specifically, since this repo may not
+have an in-flight delta spec at any given moment) and a `--fixture` flag on a combined script
+(both, selectable) — the owner chose the fixture-only version: always demonstrates the full
+feature, independent of this repo's real state. Extended later, at the owner's explicit request
+("I need to QA every feature of the tool"), from an OpenSpec-only demo into a throwaway git repo
+exercising every `generate-explain.py` input in one combined view: the delta spec alongside the
+actual modified/new/deleted code diffs it describes, `--blame`, `--explain-map` overriding it,
+`--doc`/`--code`, `--symbol`, and `--issue`/`--pr` via a fake `gh` (same offline technique
+`test-generate-explain.sh` already used) — see tasks.md §7.
 
 ## Risks / Trade-offs
 
@@ -115,8 +121,12 @@ fixture-only version: always demonstrates the full feature, independent of this 
   unchanged unless it explicitly opts in by passing the change-dir context.
 - **[Risk] Preview fixture drifts from the real detection/rendering logic over time** (fixture
   content stops actually exercising ADDED+MODIFIED+REMOVED+baseline-match once code changes) **→
-  [Mitigation]** the preview script's own smoke-checked in the same test run as the rest of the
-  suite (tasks.md should include running it as part of verification, not just eyeballing it once).
+  [Mitigation, partial]** `test-generate-explain.sh` smoke-checks the fixture's OpenSpec content
+  (baseline + delta spec) via `--change`, in the same run as the rest of the suite — but this
+  covers only that content, not `preview.sh`'s own invocation (the throwaway-git-repo build,
+  `--diff`-mode path detection, the fake-`gh` wiring, or any of the other flags it now exercises —
+  see tasks.md §7). Nothing in CI runs `preview.sh` itself; a regression specific to that path
+  needs an actual manual run to catch.
 - **[Risk] The heading/section regexes (`DELTA_HEADING_RE`, `REQUIREMENT_BLOCK_RE`,
   `delta_section_span`'s boundary search) are naive line-anchored patterns with no awareness of
   fenced code blocks** — a requirement whose own body quotes a fenced example containing a

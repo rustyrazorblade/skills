@@ -151,10 +151,13 @@ def issue_nodes_from(issue_numbers):
             primary_title = f"#{n} — {data['title']}"
         nodes.append(markdown_node(f"issue-{n}.md", issue_markdown(data)))
 
+        # GitHub's own naming is from the QUERIED issue's perspective: #n's "blocked_by" list
+        # names the issues that block #n (so, from m's own page, "m blocks #n"); #n's "blocking"
+        # list names the issues #n blocks (so, from m's own page, "m is blocked by #n").
         for m in dependency_numbers(n, owner_repo, "blocked_by"):
-            related_numbers.setdefault(m, f"Related: blocked by #{n}")
-        for m in dependency_numbers(n, owner_repo, "blocking"):
             related_numbers.setdefault(m, f"Related: blocks #{n}")
+        for m in dependency_numbers(n, owner_repo, "blocking"):
+            related_numbers.setdefault(m, f"Related: blocked by #{n}")
         for m in mentioned_numbers(data):
             if m != n:
                 related_numbers.setdefault(m, f"Related: mentioned in #{n}")

@@ -222,7 +222,7 @@ def render_row(row):
     if marker:
         bits.append(marker)
     if row["attach_id"]:
-        bits.append(f"(attach: claude attach {row['attach_id']})")
+        bits.append(f"(attach: claude agents — select {row['attach_id']})")
     if row["blocked"]:
         bits.append(f"🔒 BLOCKED on {row['blocked_note']}")
     if row["needs_attention"]:

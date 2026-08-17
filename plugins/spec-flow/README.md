@@ -16,7 +16,8 @@ Two tiers of agent run this. A **`project-manager`** is the central coordinator 
 directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
 individual issue itself. When you're ready to start or resume an issue, it launches a dedicated
 **`issue-pm`** (named `issue-pm-<N>`) as its **own separate background Claude Code process** —
-you attach to it yourself (`claude agents` to list, `claude attach <id>`) rather than having a tab
+you attach to it yourself (`claude agents` — an interactive picker, select it from the list;
+there is no direct "attach by id" command) rather than having a tab
 or window opened for you — not a subagent in the coordinator's own context. That process owns
 `activate → implement → address → finalize` for that one issue, end to end, in its own git
 worktree (Claude Code's `EnterWorktree` isolates it — called explicitly as its first action, not
@@ -127,9 +128,9 @@ All skills are namespaced under the plugin:
   "Overriding either seam's default"). Wire it as your repo's **default agent** (next section).
 - **`issue-pm`** — the **per-issue delivery lead**. `project-manager` launches one (named
   `issue-pm-<N>`) as its own background process — via `scripts/spawn-issue-pm.sh` — when you start
-  or resume work on issue `#N`; attach to it yourself (`claude attach <id>`, printed by the spawn
-  script) to talk to it directly. It owns that issue alone, end to end: claims it, drives
-  `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
+  or resume work on issue `#N`; attach to it yourself (`claude agents`, then select the session id
+  printed by the spawn script) to talk to it directly. It owns that issue alone, end to end: claims
+  it, drives `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
   hands back. This is the default flow for working an issue, not an opt-in.
 - **`archive-batch`** — the **one-shot bulk archiver**. `project-manager` launches one (named
   `archive-batch`) as its own background process — via `scripts/spawn-archive-batch.sh` — once
@@ -187,9 +188,9 @@ pipeline. Set it **per-project** in the consuming repo's `.claude/settings.json`
 
 Now opening that project drops you into the coordinator: it reads the board and tells you what's
 next. When you tell it to start (or resume) a specific issue, it launches that issue's `issue-pm`
-as its own background process and reports how to attach (`claude attach <id>`) — attach there to
-drive that issue directly, and switch back to the coordinator's own session (or another issue's
-`issue-pm`) whenever you want the cross-issue view again.
+as its own background process and reports its session id — run `claude agents` and select it to
+attach and drive that issue directly, and switch back to the coordinator's own session (or another
+issue's `issue-pm`) whenever you want the cross-issue view again.
 
 > **Why per-project and not in the plugin?** The plugin deliberately ships **no** root
 > `settings.json` with an `agent` field. A plugin that sets a default agent hijacks the main thread

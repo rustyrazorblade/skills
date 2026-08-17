@@ -127,7 +127,7 @@ check "spec-review issue assigned to me appears (blocked on you)" $?
 echo "$out" | grep -q "#11 .*PR #90 ✅ CI"
 check "in-review issue shows its correlated PR + green CI (via closingIssuesReferences)" $?
 
-echo "$out" | grep -q "attach: claude attach sess-abc123"
+echo "$out" | grep -q "attach: claude agents — select sess-abc123"
 check "live session (agent:active + matching claude agents name) offers an attach command" $?
 
 echo "$out" | grep -q "#12 .*STALLED"

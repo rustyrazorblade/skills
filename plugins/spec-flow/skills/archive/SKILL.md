@@ -58,8 +58,8 @@ to a dedicated background worker, the same way you delegate an issue to `issue-p
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-archive-batch.sh
    ```
-   Report its one-line output — the session id and the `claude attach <id>` command — and tell the
-   owner they can attach to watch it work, same as an `issue-pm`. **Don't create the worktree,
+   Report its one-line output — the session id — and tell the owner they can attach via
+   `claude agents` (select it from the list) to watch it work, same as an `issue-pm`. **Don't create the worktree,
    run `openspec-sync-specs`/`openspec-archive-change`, or open the PR yourself** — if you catch
    yourself about to do any of that inline, stop; that's `agents/archive-batch.md`'s job, running
    as its own process specifically so this doesn't become work in your own context. If the script

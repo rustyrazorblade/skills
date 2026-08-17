@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Launch a dedicated issue-pm as a separate background Claude Code process. Prints the session id
-# and the `claude attach` command — nothing more. Invoked by the project-manager agent — never by
-# a human directly, though it's safe to run by hand too. Background-only, deliberately: the owner
-# manages running sessions themselves via `claude agents` / `claude attach <id>`, not a tab/window
-# opened automatically on every spawn.
+# and how to attach to it — nothing more. Invoked by the project-manager agent — never by a human
+# directly, though it's safe to run by hand too. Background-only, deliberately: the owner manages
+# running sessions themselves via `claude agents` (an interactive picker — select the session by
+# name/id from the list; there is no direct "attach by id" command), not a tab/window opened
+# automatically on every spawn.
 set -euo pipefail
 
 usage() {
@@ -206,7 +207,7 @@ if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state"
   # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
   # `claude logs` positively says the process is gone.
   if claude logs "$existing_id" > /dev/null 2>&1; then
-    echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})" >&2
+    echo "already running: ${name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
     exit 1
   fi
   echo "spawn-issue-pm: ${name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
@@ -420,7 +421,7 @@ if [[ "$state" == "failed" ]]; then
   exit 1
 fi
 
-attach_cmd="claude attach ${session_id}"
+attach_cmd="claude agents — select ${session_id}"
 
 # issue_title was resolved by the sub-issue check above (both fresh-spawn and respawn paths run
 # it), so it's available here for free — surfacing it lets whoever reads this line (a human, or

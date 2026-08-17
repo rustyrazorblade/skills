@@ -5,8 +5,8 @@ two things a human should own — **defining/prioritizing work** and **final rev
 the middle runs as a repeatable, agent-driven pipeline. A central coordinator handles cross-issue
 state and grooming; the moment you start working a specific issue, it launches a dedicated
 per-issue agent as its own separate background Claude Code process — you attach to it yourself
-(`claude attach <id>`) — that drives that issue's pipeline turn-by-turn with you, in its own
-context, until it merges.
+(`claude agents` — an interactive picker, select the session from the list) — that drives that
+issue's pipeline turn-by-turn with you, in its own context, until it merges.
 
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board|archive|setup`) plus a roster of agents: a
@@ -452,10 +452,10 @@ a subagent either. Instead:
 - When you want to start or resume work on a specific issue, `project-manager` runs
   `scripts/spawn-issue-pm.sh <N>`, which launches a dedicated **`issue-pm`** (named `issue-pm-<N>`)
   as its **own separate background Claude Code process** — `claude --bg` — and prints the session
-  id and the `claude attach <id>` command. **Background-only, deliberately**: you manage running
-  sessions yourself via `claude agents` (list) / `claude attach <id>`, not a tab or window opened
-  for you on every spawn. You talk to that process directly, in its own context, once attached; it
-  never shares the coordinator's.
+  id. **Background-only, deliberately**: you manage running sessions yourself via `claude agents`
+  (an interactive picker — select the session by name/id; there is no direct "attach by id"
+  command), not a tab or window opened for you on every spawn. You talk to that process directly,
+  in its own context, once attached; it never shares the coordinator's.
 - That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged and closed
@@ -517,7 +517,7 @@ run: "archive these 3 now"), and — only once you've confirmed the specific bat
 dedicated **`archive-batch`** worker as its own separate background Claude Code process (via
 `scripts/spawn-archive-batch.sh`), the same delegation pattern as `issue-pm`: `project-manager`
 coordinates, it doesn't do the archiving itself. You can attach to that worker
-(`claude attach <id>`) to watch it, same as any `issue-pm`.
+(`claude agents` — select it from the list) to watch it, same as any `issue-pm`.
 
 The worker (`agents/archive-batch.md`) does the whole batch in one pass: one short-lived worktree
 cut from the default branch, `openspec-sync-specs`/`openspec-archive-change` for every pending
@@ -656,8 +656,9 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   that installs it.
 - `issue-pm` — the **per-issue delivery lead**, launched by `project-manager` (named
   `issue-pm-<N>`, via `scripts/spawn-issue-pm.sh`) as its own separate background Claude Code
-  process when you start or resume work on issue `#N`. You attach to it yourself (`claude attach
-  <id>`, printed by the spawn script) — not a subagent you switch to inside another conversation.
+  process when you start or resume work on issue `#N`. You attach to it yourself (`claude agents`,
+  then select the session id printed by the spawn script) — not a subagent you switch to inside
+  another conversation.
   It becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
   stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
   **Coordinator and issue leads** above.

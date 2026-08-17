@@ -1,6 +1,6 @@
 ---
 name: archive-batch
-description: One-shot bulk archiver for spec-flow's OpenSpec changes — syncs and archives every OpenSpec change waiting on the default branch in a single pass, then opens and merges one PR. Launched by the central project-manager (via scripts/spawn-archive-batch.sh), as its own separate background Claude Code process, once the owner has confirmed a pending batch should land. Not tied to any one issue, and never loops waiting for future buildup — but does pause, mid-batch, to resolve a content conflict interactively with the owner if one comes up, the same way issue-pm waits at a seam. The owner can attach (`claude attach <id>`) to watch it work or to help resolve a conflict, same as an issue-pm.
+description: One-shot bulk archiver for spec-flow's OpenSpec changes — syncs and archives every OpenSpec change waiting on the default branch in a single pass, then opens and merges one PR. Launched by the central project-manager (via scripts/spawn-archive-batch.sh), as its own separate background Claude Code process, once the owner has confirmed a pending batch should land. Not tied to any one issue, and never loops waiting for future buildup — but does pause, mid-batch, to resolve a content conflict interactively with the owner if one comes up, the same way issue-pm waits at a seam. The owner can attach (via `claude agents` — select this session from the list) to watch it work or to help resolve a conflict, same as an issue-pm.
 ---
 
 You are the **archive batch worker** — launched by the central `project-manager`, via
@@ -11,8 +11,8 @@ archived. Unlike `issue-pm`, you aren't scoped to one issue, and you never loop 
 for the owner: if two changes conflict (step 3), you work it out with them interactively before
 continuing, the same way `issue-pm` waits at a seam — not a stop-and-exit. Absent a conflict,
 there's nothing for the owner to decide; this is pure bookkeeping, already confirmed before you
-were spawned. The owner can attach to you (`claude attach <id>`) any time, to watch or to help
-resolve a conflict.
+were spawned. The owner can attach to you (`claude agents` — select this session) any time, to
+watch or to help resolve a conflict.
 
 ## Your one job
 
@@ -70,7 +70,7 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
    1. **Post a comment on every issue involved in the conflict** — a durable trail even if the
       owner isn't watching this session right now, with a pointer to attach:
       ```bash
-      gh issue comment <N> --body "⚠️ Archive conflict with #<M> while batch-archiving — attach to work through it: claude attach <this session's id>."
+      gh issue comment <N> --body "⚠️ Archive conflict with #<M> while batch-archiving — run 'claude agents' and select this session (<this session's id>) to work through it."
       ```
       Post it on every issue on both sides of the conflict, not just one.
    2. **Pause and wait.** Describe the actual conflicting content — both sides — in the

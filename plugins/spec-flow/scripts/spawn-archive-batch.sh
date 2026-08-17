@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Launch the one-shot archive-batch worker (agents/archive-batch.md) as a separate background
-# Claude Code process. Prints the session id and the `claude attach` command — nothing more.
+# Claude Code process. Prints the session id and how to attach to it — nothing more.
 # Invoked by the project-manager agent, only after it's already confirmed a pending batch with the
 # owner (see skills/archive/SKILL.md) — this script itself does no threshold/confirmation logic.
 # Background-only, deliberately, same as spawn-issue-pm.sh: the owner manages running sessions
-# themselves via `claude agents` / `claude attach <id>`.
+# themselves via `claude agents` (an interactive picker — select the session by name/id; there is
+# no direct "attach by id" command).
 set -euo pipefail
 
 for bin in claude jq gh git; do
@@ -45,7 +46,7 @@ rm -f "$claude_agents_out"
 if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
   # Same staleness check as spawn-issue-pm.sh: the registry's own `state` can lag reality.
   if claude logs "$existing_id" > /dev/null 2>&1; then
-    echo "already running: ${name} ${existing_id} (attach: claude attach ${existing_id})" >&2
+    echo "already running: ${name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
     exit 1
   fi
   echo "spawn-archive-batch: ${name} (${existing_id}) shows state=${existing_state} in the" >&2
@@ -94,4 +95,4 @@ if [[ -z "$session_id" ]]; then
   exit 1
 fi
 
-echo "${name} ${session_id} — attach: claude attach ${session_id}"
+echo "${name} ${session_id} — attach: claude agents — select ${session_id}"

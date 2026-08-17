@@ -337,9 +337,30 @@ qualify), and confirm the choice with the owner.
    criteria, folding in the design the **owner chose** in step 4 — not the architect's raw
    recommendation if they picked differently:
    - Use `openspec-explore` to think through the change if it's non-trivial.
-   - Use `openspec-propose` to generate proposal + design + specs + tasks for `issue-<N>`, carrying
-     the owner's chosen design (and why the alternatives were set aside) into the proposal/design
-     docs.
+   - Use `openspec-propose` to generate proposal + design + specs + tasks for `issue-<N>`.
+   - **Require `design.md` to actually carry what step 3/4 produced, not a compressed memory of
+     it three steps later.** `openspec-propose`'s own template doesn't know this pipeline's
+     step 3/4 exists, so after it runs, directly edit `design.md` (or write these sections
+     yourself if `openspec-propose` left them thin) to guarantee both are present:
+     - **`## Alternatives Considered`** — one entry per option the architect actually presented
+       at step 4, not just the one chosen: the option, why it was rejected, and — if the owner
+       picked differently than the architect's own recommendation — a note that this was an
+       explicit owner override, not the advisor's pick. This is a transcription job, not
+       synthesis: the full architect output is already in context from step 3, so copy it in
+       faithfully rather than re-summarizing from memory.
+     - **`## Domain Facts`** — when a domain-expert agent was consulted at step 3, its supporting
+       facts, attributed to it, not folded anonymously into the architect's own reasoning. Omit
+       this section entirely (not a stub) when no domain-expert was available.
+   - **Require `proposal.md`'s `## What Changes` to be concrete, not a one-liner.** It should name
+     the actual shape of the change — which files/capabilities are touched, what the user-facing
+     or API-visible behavior will be — not just restate the issue's title in different words.
+   - **Before committing (step 6), confirm none of the above are thin or missing** — an empty or
+     single-sentence `## Alternatives Considered`, a `## Domain Facts` section that's a stub
+     instead of omitted, or a `## What Changes` that doesn't actually describe the change's shape
+     all mean going back and filling them in properly before proceeding, the same discipline as
+     `ac-coverage.md`'s "every row must resolve" rule below. This is what makes Seam 1 (step 7's
+     render) actually informative instead of forcing the owner to reconstruct the architect's
+     reasoning from a comment history or their own memory of the step-4 conversation.
    - If the owner agreed at step 4 to fold in any nearby structural-debt item, add it as an
      explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
      the decision and the generated plan.
@@ -543,8 +564,10 @@ qualify), and confirm the choice with the owner.
    reviews here, not in an editor. This is confirmation that step 5 faithfully translated the
    design already **chosen at step 4** into a concrete spec — not the first time the owner sees
    the decision. Render the substance inline: the **proposal** (why + what changes + scope), the
-   **design the owner chose at step 4** (restated, with the rejected alternatives and why, so the
-   owner can confirm this is still what they meant), the **delta-spec requirements + their
+   **design the owner chose at step 4** — `design.md`'s `## Alternatives Considered` and (when
+   present) `## Domain Facts` sections, verbatim, not re-narrated — so the owner can confirm this
+   is still what they meant and see exactly what the architect actually said, not a compressed
+   retelling of it, the **delta-spec requirements + their
    `#### Scenario:` blocks** (the testable contract), the **`ac-coverage.md` table** and
    **`overrides.md`** committed at step 5, both verbatim — render the actual files, not a fresh
    paraphrase of them, so what the owner reads here is exactly the durable artifacts, not a second,

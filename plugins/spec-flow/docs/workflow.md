@@ -105,6 +105,19 @@ first time you see the decision. (For a content-only `type:docs` issue there's n
 or commit — this stop instead reviews the issue's own scope + acceptance criteria; see **Docs fast
 path** below.)
 
+**`design.md` must actually carry the architect's reasoning, not a compressed memory of it.**
+`openspec-propose`'s own template has no idea steps 3/4 of this pipeline exist, so nothing
+guarantees the architect's full advice — the alternatives it presented, the domain-expert facts
+behind them — survives from that conversation into the committed file. `activate` step 5 requires
+two sections regardless of what `openspec-propose` produced on its own: `## Alternatives
+Considered` (every option the architect presented, why each rejected one lost, and whether you
+overrode its recommendation — copied in from step 3's actual output, not re-synthesized from
+memory), and `## Domain Facts` when a domain-expert was consulted (omitted entirely, not stubbed,
+when one wasn't). `proposal.md`'s `## What Changes` is held to the same bar — the actual shape of
+the change, not a restated title. None of this is optional polish: it's what makes Seam 1's render
+(step 7) something you can actually approve from, instead of having to reconstruct the
+architect's reasoning from memory of a conversation three steps back.
+
 **AC coverage is a committed artifact, not a claim.** Where a spec is generated, `activate` step 5
 also writes `openspec/changes/issue-<N>/ac-coverage.md` — a table mapping every acceptance
 criterion from the issue, and every risk the architect's design surfaced, to the scenario(s) that

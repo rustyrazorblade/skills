@@ -83,24 +83,29 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
     <path>...`). Omit to diff the whole repo. Useful for a "what changed since you last looked at
     just this" view — e.g. `--base <sha-you-last-showed>` scoped to one OpenSpec change dir, so a
     re-review after a redirect shows only what actually moved, not the whole branch.
+  - **The explanation pane is never empty for a code diff node.** By default, every diff node
+    (i.e. every non-OpenSpec changed file — OpenSpec's own content rendering, above, doesn't go
+    through this at all) gets commit-history context automatically; layer `--explain-map` on top
+    for real, per-file explanations wherever you have them. There is deliberately no way to end up
+    looking at a code diff with a silently-missing explanation pane.
   - `--explain-map <path>` — **the real "why" mechanism.** A JSON file of `{"path": "explanation",
     ...}`, written by a caller that has actually read and understood the diff (an LLM — `git`
     cannot produce this). Applies to any node whose path matches a key, of any kind, and always
-    wins over `--blame` for that node. This is the only way to get an explanation of what the
-    current diff *does*; nothing else here can.
-  - `--blame` — populate each diff node's explanation pane with commit-history context instead: a
-    mechanical fallback, opt-in, off by default. For each hunk, `git blame` finds which commit(s)
-    last touched the OLD-side lines as of `--base`, then pulls each one's full commit message
-    (`git log --format=%B`) — the sha/author render as a small byline, not the headline. **This is
-    NOT an explanation of the current diff** — it can only quote what someone wrote about a
-    *previous* change to those lines, which may be unrelated, stale, or absent entirely. Reach for
-    `--explain-map` first; use `--blame` only as a cheap, zero-model-token substitute when no real
-    explanation is available, or layer it in for extra historical context on nodes `--explain-map`
-    doesn't cover. When `--blame` is on, it never leaves a node silently blank: a brand-new file, a
-    pure-addition hunk, or a hunk `git blame` genuinely can't resolve (shallow clone, binary) each
-    get an explicit one-line reason instead of silence, so "no explanation" always reads as a
-    deliberate answer. (`--no-blame` is accepted, for backward compatibility — it's a no-op now
-    that `--blame` is opt-in again.)
+    wins over the commit-history default for that node. This is the only way to get an explanation
+    of what the current diff *does*; nothing else here can. Use it whenever you can — the
+    commit-history default below is what a node falls back to when this doesn't cover it, not a
+    substitute for actually explaining the diff.
+  - **Commit-history context — on by default with `--diff`.** For each hunk, `git blame` finds
+    which commit(s) last touched the OLD-side lines as of `--base`, then pulls each one's full
+    commit message (`git log --format=%B`) — the sha/author render as a small byline, not the
+    headline. **This is NOT an explanation of the current diff** — it can only quote what someone
+    wrote about a *previous* change to those lines, which may be unrelated, stale, or absent
+    entirely. It never leaves a node silently blank, though: a brand-new file, a pure-addition
+    hunk, or a hunk `git blame` genuinely can't resolve (shallow clone, binary) each get an
+    explicit one-line reason instead of silence, so "no explanation" always reads as a deliberate
+    answer, not a missing feature. `--blame` is accepted explicitly (a no-op — this is already the
+    default); `--no-blame` turns it off (e.g. for speed on a very large diff, or when
+    `--explain-map` alone is enough).
   - `--pr <N>` — overlay this PR's file/line-anchored GitHub review comments onto the diff, right
     at the row each was left on (matched by file path + line + side, same convention GitHub itself
     uses). A comment anchored to a file/line outside this diff's range (outdated, or the diff was

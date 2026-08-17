@@ -297,19 +297,60 @@ pass_count=$((pass_count + $(echo "$branch_py_out" | grep -c '^PASS:')))
 fail_count=$((fail_count + $(echo "$branch_py_out" | grep -c '^FAIL:')))
 
 # ---------------------------------------------------------------------------
-# --blame is opt-in, OFF by default: git can only ever quote historical text
-# someone else wrote, never explain what the current diff actually does --
-# so it must never be the silent default. (--no-blame is now a no-op kept
-# for backward compatibility -- this exercises the plain default instead.)
+# Commit-history context is now the DEFAULT for a code diff's explain pane --
+# a code diff must never leave the owner looking at a silently-empty
+# explanation pane. --no-blame is the real opt-out (git can only ever quote
+# historical text someone else wrote, never explain what the current diff
+# actually does -- a caller with a real --explain-map, or one that just wants
+# speed on a large diff, can turn it off explicitly).
 # ---------------------------------------------------------------------------
-noblame_out_html="$out_dir/explain-noblame-test.html"
+default_blame_html="$out_dir/explain-default-blame-test.html"
 (
   cd "$repo" && python3 "$generate_explain" \
-    --diff --base "$base_sha" --out "$noblame_out_html"
+    --diff --base "$base_sha" --out "$default_blame_html"
 )
 check "generate-explain.py with --diff alone exits 0" $?
 
-noblame_py_out="$(python3 - "$noblame_out_html" <<'PYEOF'
+default_blame_py_out="$(python3 - "$default_blame_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+content = open(path, encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+diff_nodes = {n["path"]: n for n in manifest.get("nodes", []) if n.get("kind") == "diff"}
+
+file_explain = diff_nodes.get("file.txt", {}).get("explain", "")
+if "Test" in file_explain and "initial" in file_explain:
+    print("PASS: commit-history context populates a modified file's explain pane by default (no flag needed)")
+else:
+    print(f"FAIL: --diff alone — got explain={file_explain!r}")
+
+newfile_explain = diff_nodes.get("newfile.txt", {}).get("explain", "")
+if "New file" in newfile_explain:
+    print("PASS: a brand-new file gets an explicit 'New file' explain by default too")
+else:
+    print(f"FAIL: --diff alone, new-file explain — got {newfile_explain!r}")
+PYEOF
+)"
+echo "$default_blame_py_out"
+default_blame_py_pass="$(echo "$default_blame_py_out" | grep -c '^PASS:')"
+default_blame_py_fail="$(echo "$default_blame_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + default_blame_py_pass))
+fail_count=$((fail_count + default_blame_py_fail))
+
+# --no-blame is the real opt-out now (--blame is accepted but redundant -- already the default).
+noblame_off_html="$out_dir/explain-noblame-off-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" \
+    --diff --base "$base_sha" --no-blame --out "$noblame_off_html"
+)
+check "generate-explain.py --no-blame exits 0" $?
+
+noblame_off_py_out="$(python3 - "$noblame_off_html" <<'PYEOF'
 import json
 import sys
 
@@ -320,17 +361,18 @@ start = content.index(start_marker) + len(start_marker)
 end = content.index(";</script>", start)
 manifest = json.loads(content[start:end])
 diff_nodes = [n for n in manifest.get("nodes", []) if n.get("kind") == "diff"]
-if diff_nodes and "explain" not in diff_nodes[0]:
-    print("PASS: --blame is opt-in -- no explain field without it, even for a modified file")
+if not diff_nodes:
+    print(f"FAIL: --no-blame — expected diff nodes to check, got none at all")
+elif all("explain" not in n for n in diff_nodes):
+    print("PASS: --no-blame actually opts out -- no explain field on any diff node")
 else:
-    print(f"FAIL: --diff alone — got explain={diff_nodes[0].get('explain') if diff_nodes else 'NO DIFF NODES'!r}")
+    with_explain = [n["path"] for n in diff_nodes if "explain" in n]
+    print(f"FAIL: --no-blame — expected no explain fields, got some on {with_explain}")
 PYEOF
 )"
-echo "$noblame_py_out"
-noblame_py_pass="$(echo "$noblame_py_out" | grep -c '^PASS:')"
-noblame_py_fail="$(echo "$noblame_py_out" | grep -c '^FAIL:')"
-pass_count=$((pass_count + noblame_py_pass))
-fail_count=$((fail_count + noblame_py_fail))
+echo "$noblame_off_py_out"
+pass_count=$((pass_count + $(echo "$noblame_off_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$noblame_off_py_out" | grep -c '^FAIL:')))
 
 # ---------------------------------------------------------------------------
 # --explain-map: the REAL explanation path. A caller that has actually read

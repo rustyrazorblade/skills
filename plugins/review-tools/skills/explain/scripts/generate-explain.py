@@ -423,9 +423,10 @@ def diff_nodes_from(base, head, paths=None, blame=False):
 def load_explain_map(path):
     """{"path": "explanation text", ...} — a caller who has actually read and understood the
     diff supplies this after doing that reading; it's the only source of a REAL explanation of
-    what the code does. Blame/commit-history (--blame) is a cheap, mechanical fallback that can
-    only ever say who wrote something and quote what they said about it at the time — never an
-    actual account of what the current diff does, since git has no understanding of code."""
+    what the code does. Blame/commit-history (on by default for --diff; see --no-blame) is a
+    cheap, mechanical fallback that can only ever say who wrote something and quote what they
+    said about it at the time — never an actual account of what the current diff does, since git
+    has no understanding of code. This always wins over blame per-node when it covers that path."""
     p = Path(path)
     if not p.is_file():
         fail(f"--explain-map file not found: {path}")
@@ -819,7 +820,11 @@ def build_manifest(args, base, head):
     meta = {}
 
     if args.diff:
-        nodes += diff_nodes_from(base, head, paths=args.path, blame=args.blame)
+        # Blame-based commit-history context is the default for a code diff's explain pane --
+        # an owner reviewing a diff should always see SOME "why", not nothing, even before an
+        # --explain-map with a real explanation exists. --explain-map still wins per-node when
+        # supplied (see apply_explain_map); --no-blame opts out entirely.
+        nodes += diff_nodes_from(base, head, paths=args.path, blame=not args.no_blame)
         head_label = head or "working tree"
         meta["base"] = base
         meta["head"] = head_label
@@ -911,9 +916,9 @@ def main():
     parser.add_argument("--path", action="append", default=[], metavar="PATH",
                          help="scope --diff to this path (repeatable, passed to git diff as -- <path>...); only meaningful with --diff, omit to diff the whole repo")
     parser.add_argument("--blame", action="store_true",
-                         help="populate each diff node's explain pane with commit-history context (each touched commit's full message) — opt-in, and a mechanical fallback at best: git can quote what someone once wrote, never explain what the CURRENT diff actually does. Prefer --explain-map when you can. Only meaningful with --diff; overridden per-node by --explain-map when both apply")
+                         help="accepted for backward compatibility / explicitness — commit-history context on each diff node's explain pane is now the DEFAULT with --diff, so this flag doesn't change anything by itself; see --no-blame to turn it off")
     parser.add_argument("--no-blame", action="store_true",
-                         help="accepted for backward compatibility — --blame is opt-in again (not the default), so this no longer changes anything")
+                         help="skip commit-history context on diff nodes' explain panes (one `git blame` call per hunk otherwise) — trade the explain pane's 'why does this look this way' context for speed on a large diff, or when --explain-map alone is enough. Only meaningful with --diff")
     parser.add_argument("--explain-map", metavar="PATH",
                          help="a JSON file of {\"path\": \"explanation\", ...} — REAL explanations of what the code does, written by a caller that has actually read the diff (an LLM; git cannot produce this). Applies to any node whose path matches a key, of any kind, always taking priority over --blame for that node")
     parser.add_argument("--issue", action="append", type=int, default=[], metavar="N",

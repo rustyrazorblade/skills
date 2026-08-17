@@ -9,6 +9,7 @@ See plugins/review-tools/skills/explain/SKILL.md for the manifest schema and usa
 """
 
 import argparse
+import fnmatch
 import json
 import re
 import shutil
@@ -16,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 import webbrowser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # The canonical "nothing here yet" tree — diffing against it renders a from-scratch add of
 # everything in <head>. Used only when no other base can be resolved (e.g. a repo with a single
@@ -227,6 +228,53 @@ def split_diff_by_file(diff_text):
     return chunks
 
 
+# OpenSpec's own directory convention (not spec-flow-specific -- OpenSpec is its own generic,
+# third-party tool). A 100%-green diff of a brand-new spec/change doc is never useful to review
+# line-by-line; the point is to read it. Path-based only, deliberately -- see generate-explain.py's
+# own SKILL.md and the openspec-aware-explain-view change for why content-sniffing was rejected.
+#
+# pathlib for the anchoring (an actual path-segment match, not a string/regex search that a
+# prefix like "notopenspec/" could accidentally satisfy), fnmatch for the shape -- glob patterns
+# read the same way OpenSpec's own docs describe these paths, rather than a hand-escaped regex
+# alternation that's easy to get subtly wrong (anchoring, dot-escaping) and hard to eyeball.
+OPENSPEC_TAIL_PATTERNS = [
+    "openspec/specs/*.md",
+    "openspec/changes/*/specs/*.md",
+    "openspec/changes/*/proposal.md",
+    "openspec/changes/*/design.md",
+    "openspec/changes/*/tasks.md",
+]
+
+
+def is_openspec_path(path):
+    parts = PurePosixPath(str(path).replace("\\", "/")).parts
+    try:
+        idx = parts.index("openspec")
+    except ValueError:
+        return False
+    tail = "/".join(parts[idx:])
+    return any(fnmatch.fnmatchcase(tail, pattern) for pattern in OPENSPEC_TAIL_PATTERNS)
+
+
+def read_file_at_ref(path, ref):
+    """The file's content at `ref`, or None if it can't be read there. `ref=None` means the
+    working tree (a plain disk read); otherwise `git show ref:path`. Used both to pull an
+    OpenSpec file's current content for rendering, and (with a different path) to fetch a
+    capability's baseline spec for the MODIFIED-requirement comparison."""
+    if ref is None:
+        p = Path(path)
+        if not p.is_file():
+            return None
+        try:
+            return p.read_text(encoding="utf-8")
+        except OSError:
+            return None
+    try:
+        return run_git(["show", f"{ref}:{path}"])
+    except subprocess.CalledProcessError:
+        return None
+
+
 HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.MULTILINE)
 
 # git blame --line-porcelain: each attributed line starts with "<sha> <origline> <finalline>
@@ -316,12 +364,25 @@ def diff_nodes_from(base, head, paths=None, blame=False):
         first_line = chunk.split("\n", 1)[0]
         match = DIFF_GIT_RE.match(first_line)
         path = match.group(2) if match else f"unknown-file-{i}"
+        is_deleted = "\ndeleted file mode" in chunk
+
+        # An OpenSpec file's diff (almost always 100% green -- a fresh change dir has never
+        # existed before) is never useful to review line-by-line; render its actual content
+        # instead. Scoped strictly to OpenSpec paths -- every other file, including a brand-new
+        # one, keeps the diff view. A deletion has no current content to show, so it stays a diff.
+        if is_openspec_path(path) and not is_deleted:
+            content = read_file_at_ref(path, head)
+            if content is not None:
+                nodes.append(markdown_node(path, content, read_baseline=lambda p, _head=head: read_file_at_ref(p, _head)))
+                continue
+            # Defensive fallback -- git diff just told us this file changed, so failing to read
+            # its content is unexpected; render as a diff rather than silently dropping the node.
 
         node = {"path": path, "kind": "diff", "patch": chunk}
         if "\nnew file mode" in chunk:
             node["badge"] = "new"
             node["badgeClass"] = "add"
-        elif "\ndeleted file mode" in chunk:
+        elif is_deleted:
             node["badge"] = "deleted"
             node["badgeClass"] = "del"
         if blame:
@@ -453,12 +514,114 @@ def delta_badge_for(text):
     return None, None
 
 
-def markdown_node(path, text):
+# A delta spec's own path -> its capability's baseline spec, e.g.
+# ".../openspec/changes/issue-42/specs/widget/spec.md" -> ".../openspec/specs/widget/spec.md".
+# Prefix-agnostic (works whether the delta path is absolute or relative) since it substitutes
+# only the matched suffix, preserving whatever came before "openspec/changes/...".
+DELTA_SPEC_PATH_RE = re.compile(r"openspec/changes/[^/]+/specs/([^/]+)/spec\.md$")
+
+# One "### Requirement: <title>" heading through everything up to (not including) the next
+# "###"/"##" heading or end of string -- works the same whether parsing a delta spec's own
+# section or a baseline spec's flat "## Requirements" list.
+REQUIREMENT_BLOCK_RE = re.compile(r"(^### Requirement:[ \t]*(.+?)[ \t]*$\n(?:(?!^###[ \t]|^##[ \t]).*\n?)*)", re.MULTILINE)
+
+
+def baseline_path_for(delta_spec_path):
+    m = DELTA_SPEC_PATH_RE.search(str(delta_spec_path))
+    if not m:
+        return None
+    prefix = str(delta_spec_path)[:m.start()]
+    return f"{prefix}openspec/specs/{m.group(1)}/spec.md"
+
+
+def parse_requirements(text):
+    """{title: full block text (heading line + body, trailing newlines stripped)}."""
+    return {m.group(2).strip(): m.group(1).rstrip("\n") for m in REQUIREMENT_BLOCK_RE.finditer(text or "")}
+
+
+def delta_section_span(text, category):
+    """(start, end) character offsets of a "## <category> Requirements" section's BODY (after
+    its own heading line, up to the next "## " heading or end of text), or None if absent."""
+    m = re.search(rf"^##[ \t]+{category}[ \t]+Requirements\b.*$", text, re.MULTILINE | re.IGNORECASE)
+    if not m:
+        return None
+    start = m.end() + 1 if m.end() < len(text) and text[m.end()] == "\n" else m.end()
+    tail = re.search(r"^##[ \t]+\S", text[start:], re.MULTILINE)
+    end = start + tail.start() if tail else len(text)
+    return start, end
+
+
+def inject_baseline_comparisons(text, baseline_requirements):
+    """Splice a "Currently:/This change:" prose comparison into each MODIFIED requirement whose
+    title matches something in `baseline_requirements` -- silently leaves a requirement
+    untouched when there's no match (a real, expected case: a new capability, or a rename within
+    the same change), never an error."""
+    if not baseline_requirements:
+        return text
+    span = delta_section_span(text, "MODIFIED")
+    if not span:
+        return text
+    start, end = span
+
+    def _inject(m):
+        block, title = m.group(1), m.group(2).strip()
+        old_block = baseline_requirements.get(title)
+        if not old_block:
+            return block
+        # Drop each block's own "### Requirement:" heading line for the comparison -- the
+        # requirement's title is already established by the surrounding section; repeating it
+        # three times (the section itself + two comparison blocks) is just noise.
+        old_body = re.sub(r"^### Requirement:.*\n", "", old_block, count=1).strip()
+        new_body = re.sub(r"^### Requirement:.*\n", "", block, count=1).strip()
+        return block.rstrip("\n") + f"\n\n**Currently:**\n\n{old_body}\n\n**This change:**\n\n{new_body}\n\n"
+
+    new_section = REQUIREMENT_BLOCK_RE.sub(_inject, text[start:end])
+    return text[:start] + new_section + text[end:]
+
+
+def delta_summary_prefix(text):
+    """A "N added · M modified · ..." count line plus jump links to each present category's
+    heading anchor (matching viewer.html's own slugify() -- lowercase, non-alnum runs to "-"),
+    or None if no delta headers are present at all."""
+    counts = {}
+    for category in ("ADDED", "MODIFIED", "REMOVED", "RENAMED"):
+        span = delta_section_span(text, category)
+        if span is None:
+            continue
+        section_text = text[span[0]:span[1]]
+        if category == "RENAMED":
+            count = len(re.findall(r"^-\s*FROM:", section_text, re.MULTILINE))
+        else:
+            count = len(REQUIREMENT_BLOCK_RE.findall(section_text))
+        if count:
+            counts[category] = count
+    if not counts:
+        return None
+    summary_line = " · ".join(f"{n} {cat.lower()}" for cat, n in counts.items())
+    links = "  ".join(f"[{cat}](#{cat.lower()}-requirements)" for cat in counts)
+    return f"{summary_line}\n\n{links}\n\n"
+
+
+def markdown_node(path, text, read_baseline=None):
     node = {"path": str(path), "kind": "markdown", "md": text}
     badge, badge_class = delta_badge_for(text)
     if badge:
         node["badge"] = badge
         node["badgeClass"] = badge_class
+
+        baseline_requirements = {}
+        if read_baseline is not None:
+            baseline_path = baseline_path_for(path)
+            if baseline_path:
+                baseline_text = read_baseline(baseline_path)
+                if baseline_text:
+                    baseline_requirements = parse_requirements(baseline_text)
+
+        enriched = inject_baseline_comparisons(text, baseline_requirements)
+        summary = delta_summary_prefix(enriched)
+        if summary:
+            enriched = summary + enriched
+        node["md"] = enriched
     return node
 
 
@@ -476,16 +639,21 @@ def change_nodes_from(change_dir):
         print(f"generate-explain: warning: --change dir not found, skipping: {change_dir}", file=sys.stderr)
         return []
 
+    # Disk-relative, matching how --change itself always resolves (no git-ref awareness needed
+    # here) -- this is what lets a delta spec reached via --change get the same MODIFIED-requirement
+    # baseline comparison as one reached via --diff's own OpenSpec-path detection (see markdown_node).
+    disk_reader = lambda p: read_file_at_ref(p, None)
+
     nodes = []
     for fname in ("proposal.md", "design.md", "tasks.md"):
         f = d / fname
         if f.is_file():
-            nodes.append(markdown_node(f, read_text(f)))
+            nodes.append(markdown_node(f, read_text(f), read_baseline=disk_reader))
 
     specs_dir = d / "specs"
     if specs_dir.is_dir():
         for f in sorted(specs_dir.rglob("*.md")):
-            nodes.append(markdown_node(f, read_text(f)))
+            nodes.append(markdown_node(f, read_text(f), read_baseline=disk_reader))
 
     return nodes
 

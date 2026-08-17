@@ -1,6 +1,6 @@
 {
   "name": "review-tools",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Render an IDE-style single-page HTML view of a code diff, a GitHub issue plus everything linked to it, or docs — self-contained, no server. Standalone; also wired into spec-flow's owner seams when both plugins are installed.",
   "author": { "name": "Jon Haddad" },
   "repository": "https://github.com/rustyrazorblade/skills",

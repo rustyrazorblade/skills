@@ -44,7 +44,28 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
   target repo.
 - `--diff` — include a git diff. **Omit this for anything that isn't about a code change** —
   reviewing a backlog issue before it's activated (no worktree, no diff exists yet) must never
-  require one. When passed:
+  require one.
+
+  **A changed file under OpenSpec's own directory convention never renders as a diff, even here**
+  — `openspec/specs/**/*.md`, `openspec/changes/*/specs/**/*.md`, and `openspec/changes/*/
+  {proposal,design,tasks}.md` render as content instead (explanation pane only), whichever way
+  `--diff` was invoked (`--worktree`, `--branch`, or explicit `--base`/`--head`). A brand-new
+  change dir's files are typically 100% green in a raw diff — nothing to review line-by-line — so
+  the point is to read the spec, not diff it. This is strictly scoped to OpenSpec's own paths
+  (path-based detection only, no content-sniffing) — every other file, including a brand-new
+  non-OpenSpec one, keeps the diff view + explanation pane exactly as normal. A matched file whose
+  content contains OpenSpec's delta headers (`## ADDED/MODIFIED/REMOVED/RENAMED Requirements`)
+  additionally gets: a summary line with per-category counts, jump links to each section, and —
+  for each `MODIFIED` requirement — a **"Currently:"/"This change:"** prose comparison against the
+  same-titled requirement in that capability's baseline spec (`openspec/specs/<capability>/
+  spec.md`, derived from the delta spec's own path), when a match is found; silently omitted,
+  never an error, when it isn't (a new capability, or a rename within the same change). A matched
+  file with no delta headers (`proposal.md`, `design.md`, `tasks.md`, an unchanged-shape baseline
+  spec) renders as plain markdown, same as `--change` mode already did. This enrichment lives in
+  the shared node-building logic, so `--change <dir>` mode gets it too, identically — reaching a
+  delta spec either way produces the same rendering.
+
+  When passed:
   - `--worktree` — alias for `--diff` with no `--base`/`--head` override: "explain what's
     uncommitted here." This is already `--diff`'s own default behavior (merge-base vs. working
     tree) — the flag exists purely so that intent is discoverable/nameable, not because it adds

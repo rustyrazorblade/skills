@@ -612,6 +612,172 @@ fail_count=$((fail_count + pr_py_fail))
 
 rm -rf "$fake_gh_dir"
 
+# ---------------------------------------------------------------------------
+# OpenSpec-aware rendering in --diff mode: a delta spec renders as content
+# (not a diff), gets the ADDED/MODIFIED/REMOVED summary + jump nav, and a
+# MODIFIED requirement gets a Currently:/This change: comparison against its
+# baseline -- when a title match exists, and gracefully skipped when it
+# doesn't. A brand-new NON-OpenSpec file in the same diff must stay a plain
+# diff node, completely unaffected. Own repo (separate from $repo above) so
+# its history doesn't interfere with the other cases.
+# ---------------------------------------------------------------------------
+ospec_repo="$out_dir/openspec-repo"
+mkdir -p "$ospec_repo/openspec/specs/widget" "$ospec_repo/src"
+git -C "$ospec_repo" init -q
+git -C "$ospec_repo" config user.email "test@example.com"
+git -C "$ospec_repo" config user.name "Test"
+
+cat > "$ospec_repo/openspec/specs/widget/spec.md" <<'EOF'
+## Purpose
+
+Widget management baseline.
+
+## Requirements
+
+### Requirement: Widget deletion
+The system SHALL allow deleting a widget by id.
+
+#### Scenario: Delete succeeds
+- **WHEN** a delete request is submitted
+- **THEN** the widget is removed
+EOF
+printf 'print("existing")\n' > "$ospec_repo/src/existing.py"
+git -C "$ospec_repo" add -A
+git -C "$ospec_repo" commit -q -m "baseline"
+ospec_base_sha="$(git -C "$ospec_repo" rev-parse HEAD)"
+
+mkdir -p "$ospec_repo/openspec/changes/demo/specs/widget"
+cat > "$ospec_repo/openspec/changes/demo/specs/widget/spec.md" <<'EOF'
+## ADDED Requirements
+
+### Requirement: Widget renaming
+The system SHALL allow renaming a widget.
+
+#### Scenario: Rename succeeds
+- **WHEN** a rename request is submitted
+- **THEN** the widget's name is updated
+
+## MODIFIED Requirements
+
+### Requirement: Widget deletion
+The system SHALL allow deleting a widget by id, and SHALL cascade-delete its attachments.
+
+#### Scenario: Delete succeeds
+- **WHEN** a delete request is submitted
+- **THEN** the widget and its attachments are removed
+
+### Requirement: A title with no baseline match
+The system SHALL do something with no prior version.
+
+#### Scenario: New behavior
+- **WHEN** something happens
+- **THEN** something else happens
+
+## REMOVED Requirements
+
+### Requirement: Legacy widget export
+**Reason**: Superseded by the new export system
+**Migration**: Use the v2 export endpoint instead
+EOF
+printf 'print("brand new, not openspec")\n' > "$ospec_repo/src/newfile.py"
+git -C "$ospec_repo" add -A
+
+ospec_diff_html="$out_dir/explain-openspec-diff-test.html"
+(
+  cd "$ospec_repo" && python3 "$generate_explain" --diff --base "$ospec_base_sha" --out "$ospec_diff_html"
+)
+check "generate-explain.py exits 0 with an OpenSpec delta spec in the diff" $?
+
+ospec_diff_py_out="$(python3 - "$ospec_diff_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+spec_node = nodes.get("openspec/changes/demo/specs/widget/spec.md")
+if spec_node and spec_node.get("kind") == "markdown":
+    print("PASS: delta spec renders as a markdown node, not a diff, in --diff mode")
+else:
+    print(f"FAIL: delta spec kind — got {spec_node.get('kind') if spec_node else 'MISSING NODE'}")
+
+if spec_node and spec_node.get("badge") == "REMOVED":
+    print("PASS: delta spec badge reflects highest-priority category present (REMOVED)")
+else:
+    print(f"FAIL: delta spec badge — got {spec_node.get('badge') if spec_node else None}")
+
+md = spec_node.get("md", "") if spec_node else ""
+if "1 added" in md and "2 modified" in md and "1 removed" in md:
+    print("PASS: summary line reflects actual per-category counts")
+else:
+    print(f"FAIL: summary line — got {md.splitlines()[0] if md else '(empty)'}")
+
+if "(#added-requirements)" in md and "(#modified-requirements)" in md and "(#removed-requirements)" in md:
+    print("PASS: jump links present for each category")
+else:
+    print("FAIL: jump links missing")
+
+if "**Currently:**" in md and "The system SHALL allow deleting a widget by id.\n" in md and \
+   "**This change:**" in md and "cascade-delete its attachments" in md:
+    print("PASS: MODIFIED requirement with a baseline match gets the Currently:/This change: comparison")
+else:
+    print("FAIL: MODIFIED-with-match comparison missing or wrong content")
+
+no_match_section = md[md.index("A title with no baseline match"):]
+no_match_section = no_match_section[:no_match_section.index("## REMOVED")]
+if "Currently:" not in no_match_section:
+    print("PASS: MODIFIED requirement with NO baseline match renders with no comparison block, no error")
+else:
+    print("FAIL: no-match requirement unexpectedly got a comparison block")
+
+diff_node = nodes.get("src/newfile.py")
+if diff_node and diff_node.get("kind") == "diff" and diff_node.get("badge") == "new":
+    print("PASS: a brand-new NON-OpenSpec file in the same diff is completely unaffected")
+else:
+    print(f"FAIL: src/newfile.py — got {diff_node}")
+PYEOF
+)"
+echo "$ospec_diff_py_out"
+pass_count=$((pass_count + $(echo "$ospec_diff_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$ospec_diff_py_out" | grep -c '^FAIL:')))
+
+# Same fixture content, reached via --change instead of --diff, must produce byte-identical
+# enriched markdown -- the two entry points share markdown_node()'s enrichment.
+ospec_change_html="$out_dir/explain-openspec-change-test.html"
+(
+  cd "$ospec_repo" && python3 "$generate_explain" --change openspec/changes/demo --out "$ospec_change_html"
+)
+check "generate-explain.py --change exits 0 against the same OpenSpec fixture" $?
+
+ospec_parity_py_out="$(python3 - "$ospec_diff_html" "$ospec_change_html" <<'PYEOF'
+import json
+import sys
+
+def spec_md(path):
+    content = open(path, encoding="utf-8").read()
+    start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+    end = content.index(";</script>", start)
+    manifest = json.loads(content[start:end])
+    for n in manifest.get("nodes", []):
+        if n["path"].endswith("demo/specs/widget/spec.md"):
+            return n.get("md")
+    return None
+
+diff_md = spec_md(sys.argv[1])
+change_md = spec_md(sys.argv[2])
+if diff_md is not None and diff_md == change_md:
+    print("PASS: --diff (path-detected) and --change produce byte-identical enriched output")
+else:
+    print("FAIL: --diff vs --change enrichment mismatch")
+PYEOF
+)"
+echo "$ospec_parity_py_out"
+pass_count=$((pass_count + $(echo "$ospec_parity_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$ospec_parity_py_out" | grep -c '^FAIL:')))
+
 echo ""
 echo "----------------------------------------"
 echo "PASS: $pass_count  FAIL: $fail_count"

@@ -389,16 +389,29 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
      | sort_by(.installedAt) | last.installPath // empty')
    ```
    `EXPLAIN_ROOT` empty → skip straight to **Otherwise** below, and mention once, in passing, that
-   the seam-view preference is set but `review-tools` isn't available here. Otherwise, generate a
-   "what changed" explain view alongside the PR before posting the comment below:
+   the seam-view preference is set but `review-tools` isn't available here. Otherwise:
+
+   **First, write a real explanation for each changed file — not commit history, an actual
+   account of what changed.** `review-tools`' own `--blame` can only quote historical commit
+   messages; the only way the explain view's explanation pane says something genuinely useful is
+   a caller that has actually read the diff supplying that content itself — see `--explain-map` in
+   `review-tools`'s `skills/explain/SKILL.md`. You already have this understanding from driving
+   the implementation and the review panel — this is externalizing what you already know, not a
+   fresh re-read of the diff. For every file `git diff --name-only "$(git merge-base HEAD
+   origin/<DEFAULT_BR>)" "$BR"` lists, write 1–3 concrete sentences (what changed in this file,
+   and why) into `.spec-flow/explain-map.json` as `{"path": "explanation", ...}` — skip a file only
+   if it's genuinely mechanical with nothing to say (a lockfile regeneration, pure formatting).
+   Then generate a "what changed" explain view alongside the PR before posting the comment below:
    ```bash
    "$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" \
      --diff --base "$(git merge-base HEAD origin/<DEFAULT_BR>)" --head "$BR" \
      --change "openspec/changes/issue-<N>" \
+     --explain-map .spec-flow/explain-map.json \
      --title "issue-<N>" --subtitle "PR #<PR> — what changed" --out <path>
    ```
    (omit `--change` if this issue never generated an OpenSpec change — the docs-fast-path/tech-debt
-   case). Never pass `--open` — same display constraint as `activate`, see `review-tools`'s own
+   case; omit `--explain-map` only if it ended up empty, e.g. every file was genuinely mechanical).
+   Never pass `--open` — same display constraint as `activate`, see `review-tools`'s own
    `skills/explain/SKILL.md`.
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>

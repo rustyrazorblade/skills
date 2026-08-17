@@ -201,6 +201,14 @@ even activated, with no diff or worktree required (its `--issue` mode pulls the 
 comments, and related/linked issues straight from GitHub) — usable with or without spec-flow
 installed at all.
 
+**Seam 2's explain view includes real per-file explanations, not commit history.** `explain`'s
+own `--blame` can only quote a historical commit message, never explain what the *current* diff
+does — so `implement` step 5, right before generating the view, writes a real 1–3 sentence
+explanation per changed file into `.spec-flow/explain-map.json`, drawing on what it already
+learned driving the implementation and review panel (not a fresh re-read of the diff), and passes
+it via `--explain-map`. This is what makes the explanation pane at Seam 2 actually say something
+about what changed and why, instead of either nothing or a quote from an unrelated past commit.
+
 **A note on `review-tools`.** It's a separate, standalone plugin, not part of spec-flow — installed
 independently, useful in any repo whether or not that repo uses spec-flow at all. spec-flow depends
 on it only optionally, one-directionally, and at runtime (resolving its installed root fresh via

@@ -49,21 +49,24 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
     <path>...`). Omit to diff the whole repo. Useful for a "what changed since you last looked at
     just this" view — e.g. `--base <sha-you-last-showed>` scoped to one OpenSpec change dir, so a
     re-review after a redirect shows only what actually moved, not the whole branch.
-  - `--no-blame` — skip populating each diff node's explanation pane with commit-history context.
-    **Runs by default whenever `--diff` is used.** For each hunk, `git blame` finds which
-    commit(s) last touched the OLD-side lines as of `--base`, then pulls each one's **full commit
-    message** (`git log --format=%B`, not just the one-line summary `git blame` itself gives) —
-    the explanation belongs in the message body when the commit bothered to write one, and a bare
-    one-liner rarely explains anything. The commit's sha/author render as a small byline above the
-    message, not the headline — a "who touched this" list with no explanatory text is close to
-    useless on its own, which is the whole reason this exists: the explanation pane is *for*
-    explaining, not for attribution. Always produces something, even when there's nothing to
-    blame — a brand-new file, a pure-addition hunk, or a hunk `git blame` genuinely can't resolve
-    (shallow clone, binary) each get an explicit one-line reason instead of silence, so "no
-    explanation" always reads as a deliberate answer, never as this feature having quietly failed.
-    `--no-blame` trades all of that for speed on a large diff (one `git blame` + one `git log` call
-    per hunk otherwise). (`--blame` is still accepted, for backward compatibility — it no longer
-    does anything, since this is now the default.)
+  - `--explain-map <path>` — **the real "why" mechanism.** A JSON file of `{"path": "explanation",
+    ...}`, written by a caller that has actually read and understood the diff (an LLM — `git`
+    cannot produce this). Applies to any node whose path matches a key, of any kind, and always
+    wins over `--blame` for that node. This is the only way to get an explanation of what the
+    current diff *does*; nothing else here can.
+  - `--blame` — populate each diff node's explanation pane with commit-history context instead: a
+    mechanical fallback, opt-in, off by default. For each hunk, `git blame` finds which commit(s)
+    last touched the OLD-side lines as of `--base`, then pulls each one's full commit message
+    (`git log --format=%B`) — the sha/author render as a small byline, not the headline. **This is
+    NOT an explanation of the current diff** — it can only quote what someone wrote about a
+    *previous* change to those lines, which may be unrelated, stale, or absent entirely. Reach for
+    `--explain-map` first; use `--blame` only as a cheap, zero-model-token substitute when no real
+    explanation is available, or layer it in for extra historical context on nodes `--explain-map`
+    doesn't cover. When `--blame` is on, it never leaves a node silently blank: a brand-new file, a
+    pure-addition hunk, or a hunk `git blame` genuinely can't resolve (shallow clone, binary) each
+    get an explicit one-line reason instead of silence, so "no explanation" always reads as a
+    deliberate answer. (`--no-blame` is accepted, for backward compatibility — it's a no-op now
+    that `--blame` is opt-in again.)
   - `--pr <N>` — overlay this PR's file/line-anchored GitHub review comments onto the diff, right
     at the row each was left on (matched by file path + line + side, same convention GitHub itself
     uses). A comment anchored to a file/line outside this diff's range (outdated, or the diff was

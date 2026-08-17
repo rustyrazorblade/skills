@@ -64,3 +64,40 @@
 - [x] 5.1 Updated `plugins/review-tools/skills/explain/SKILL.md` to describe the new `--diff`-mode
       OpenSpec rendering behavior (where it applies, what it doesn't affect)
 - [x] 5.2 Bumped `plugins/review-tools/.claude-plugin/plugin.json`'s version
+
+## 6. Fixes from an independent (fable-model) review, before archiving
+
+- [x] 6.1 Made every structural regex (`DELTA_HEADING_RE`, `REQUIREMENT_BLOCK_RE`,
+      `delta_section_span`'s boundary search) fence-aware via `mask_fenced_code()` — a
+      `## `/`### `-looking line inside a requirement's own fenced example was previously
+      truncating the requirement and corrupting the Currently:/This change: splice, and a
+      non-OpenSpec doc merely mentioning a delta header inside a fence was firing a fabricated
+      badge/summary. Regression-covered in `test-generate-explain.sh`.
+- [x] 6.2 Root-anchored `--diff` mode's working-tree disk reads (`repo_root()` +
+      `read_file_at_ref(..., cwd=...)`) — paths from `git diff` are always repo-root-relative, so
+      running the skill from a subdirectory was silently falling back to a raw diff instead of the
+      OpenSpec rendering. `--change` mode's own disk-relative reads are untouched.
+- [x] 6.3 Corrected `SKILL.md` and this change's own delta spec: a **deleted** OpenSpec file (and
+      the defensive read-failure fallback) still render as a diff, not markdown — the original
+      wording overclaimed "never renders as a diff, even here."
+- [x] 6.4 Wired `read_baseline` into the `--doc` node-building path too, so a delta spec reached
+      via `--doc` gets the same MODIFIED-requirement baseline comparison `--diff`/`--change`
+      already did.
+- [x] 6.5 Default title (when `--title` isn't passed) now names what's actually being explained —
+      the OpenSpec change dir, diff branch/head, or doc/code filename — instead of the generic
+      "Explain" for every invocation.
+- [x] 6.6 Fixed `preview.sh`'s BSD-only `mktemp -t` usage (errored on GNU mktemp/Linux) and added a
+      `test-generate-explain.sh` smoke check against the shipped `preview-fixture/` itself, per
+      design.md's own stated mitigation for fixture drift (previously undone).
+- [x] 6.7 Fixed a test assertion (`ospec_diff_py_out`'s no-baseline-match check) that used
+      `str.index()` and would raise on a miss, silently aborting later assertions in the same
+      block instead of recording a FAIL.
+- [x] 6.8 Fixed `default_title()` checking `args.branch` before `head` — a `--diff --branch X
+      --head Y` invocation actually diffs against `Y` (`--head` wins per `main()`'s own
+      resolution and `--branch`'s own help text), but was titling the page after the ignored `X`.
+      Now just checks the already-resolved `head`, which equals `args.branch`'s value in the
+      common case anyway. Regression-covered in `test-generate-explain.sh`.
+- [x] 6.9 Corrected `SKILL.md`'s `--doc` description — the delta-header summary/category-nav is
+      content-triggered regardless of path (like everywhere else), only the MODIFIED-requirement
+      baseline *comparison* specifically requires the path to look like a delta spec (that's what
+      locates the sibling baseline file). Previous wording implied path-gating for both.

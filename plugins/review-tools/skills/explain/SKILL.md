@@ -46,12 +46,15 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
   reviewing a backlog issue before it's activated (no worktree, no diff exists yet) must never
   require one.
 
-  **A changed file under OpenSpec's own directory convention never renders as a diff, even here**
-  — `openspec/specs/**/*.md`, `openspec/changes/*/specs/**/*.md`, and `openspec/changes/*/
+  **A changed file under OpenSpec's own directory convention renders as content, not a diff, here
+  too** — `openspec/specs/**/*.md`, `openspec/changes/*/specs/**/*.md`, and `openspec/changes/*/
   {proposal,design,tasks}.md` render as content instead (explanation pane only), whichever way
   `--diff` was invoked (`--worktree`, `--branch`, or explicit `--base`/`--head`). A brand-new
   change dir's files are typically 100% green in a raw diff — nothing to review line-by-line — so
-  the point is to read the spec, not diff it. This is strictly scoped to OpenSpec's own paths
+  the point is to read the spec, not diff it. A **deleted** OpenSpec file keeps the diff view
+  (there's no current content left to show), and this all requires the file's content to actually
+  be readable at `--head` — on the rare read failure, it falls back to a diff too rather than
+  dropping the node. This is strictly scoped to OpenSpec's own paths
   (path-based detection only, no content-sniffing) — every other file, including a brand-new
   non-OpenSpec one, keeps the diff view + explanation pane exactly as normal. A matched file whose
   content contains OpenSpec's delta headers (`## ADDED/MODIFIED/REMOVED/RENAMED Requirements`)
@@ -106,7 +109,11 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
     — there's nothing to overlay comments onto without a diff.
 - `--change <dir>` — repeatable; an OpenSpec change dir. Auto-includes `proposal.md`, `design.md`,
   `tasks.md` (whichever exist) plus any delta-spec markdown under `<dir>/specs/**`.
-- `--doc <path>` — repeatable; any extra markdown file, rendered as a markdown node.
+- `--doc <path>` — repeatable; any extra markdown file, rendered as a markdown node. If its content
+  contains OpenSpec's delta headers it gets the same summary/category-nav treatment as `--diff`/
+  `--change` regardless of path (content-triggered, like everywhere else); the MODIFIED-requirement
+  baseline comparison specifically also requires the path itself to look like a delta spec, since
+  that's what locates the sibling baseline file — see `--diff`'s own OpenSpec section above.
 - `--code <path>` — repeatable; show a file as plain code (not a diff).
 - `--symbol <name>` — repeatable; a **blast-radius** view: a word-boundary `git grep` for `name`
   across tracked files in the working tree (uncommitted edits included, untracked files excluded),
@@ -115,8 +122,11 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
   no semantic "who calls this overload") in exchange for working the same way in any language with
   zero setup. Always produces a node, even on zero matches, so "checked, found nothing" is visible
   rather than the symbol silently missing from the tree.
-- `--title` / `--subtitle` — header text; if omitted and `--issue` resolved a primary issue, the
-  title defaults to that issue's own `#N — title`.
+- `--title` / `--subtitle` — header text. When `--title` is omitted, it defaults to whichever
+  input most specifically names what's being explained — an `--issue`'s own `#N — title` first,
+  then an `--change` dir's name, then `--diff`'s branch/head (or "working tree"), then a `--doc`/
+  `--code` file's own name, then a `--symbol`; falling back to the generic "Explain" only when
+  none of those apply.
 - `--out <path>` — output HTML path; defaults to a generated path under the system temp dir.
 - `--open` — additionally open the result in a browser. **Only pass this for an interactive,
   same-machine, foreground invocation** — see the display constraint below.

@@ -1,19 +1,27 @@
 ## ADDED Requirements
 
 ### Requirement: OpenSpec files render as content, not a diff, in diff mode
-The system SHALL render a changed file as a markdown content node instead of a diff node, in
-`--diff` mode (including via the `--worktree`/`--branch` aliases), whenever that file's path
-matches OpenSpec's own directory convention: `openspec/specs/**/*.md`,
+The system SHALL render a changed, non-deleted file as a markdown content node instead of a diff
+node, in `--diff` mode (including via the `--worktree`/`--branch` aliases), whenever that file's
+path matches OpenSpec's own directory convention: `openspec/specs/**/*.md`,
 `openspec/changes/*/specs/**/*.md`, `openspec/changes/*/proposal.md`,
-`openspec/changes/*/design.md`, or `openspec/changes/*/tasks.md`. The system SHALL leave every
-other file entirely unaffected — rendered as a diff node with its explanation pane exactly as
-before, including a brand-new non-OpenSpec file.
+`openspec/changes/*/design.md`, or `openspec/changes/*/tasks.md`. A **deleted** OpenSpec file
+SHALL render as a diff node — there is no current content to show as markdown — and if the
+matched file's content cannot be read at all (unexpected, since the diff itself reports it as
+changed), the system SHALL fall back to a diff node rather than dropping the file from the
+manifest. The system SHALL leave every other file entirely unaffected — rendered as a diff node
+with its explanation pane exactly as before, including a brand-new non-OpenSpec file.
 
 #### Scenario: OpenSpec path renders as content
-- **WHEN** a changed file's path matches `openspec/specs/**/*.md` or one of the
+- **WHEN** a changed, non-deleted file's path matches `openspec/specs/**/*.md` or one of the
   `openspec/changes/*/` document paths
 - **THEN** the manifest contains a markdown node for that file using its current (head-side)
   content, not a diff node
+
+#### Scenario: Deleted OpenSpec file stays a diff node
+- **WHEN** a file matching an OpenSpec path pattern is deleted in the diff
+- **THEN** the manifest contains a diff node for that file, exactly as it would without this
+  feature
 
 #### Scenario: Non-OpenSpec file is unaffected, even when brand-new
 - **WHEN** a changed file's path does not match any OpenSpec path pattern

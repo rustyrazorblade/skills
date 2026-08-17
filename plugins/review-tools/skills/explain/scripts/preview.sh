@@ -16,7 +16,11 @@ if [[ ! -d "$fixture_dir" ]]; then
   exit 1
 fi
 
-out="$(mktemp -t explain-preview).html"
+# A dedicated throwaway dir (not `mktemp -t`, which needs a template with XXXXXX on GNU mktemp
+# but not BSD/macOS mktemp -- this form works identically on both) so the generated HTML keeps
+# its .html extension without a separate rename step.
+out_dir="$(mktemp -d "${TMPDIR:-/tmp}/explain-preview.XXXXXX")"
+out="$out_dir/explain-preview.html"
 
 # Run from inside the fixture so --change's relative path resolves the same way a real caller's
 # would, and so the delta spec's baseline lookup (openspec/specs/widget/spec.md) resolves

@@ -117,6 +117,17 @@ fixture-only version: always demonstrates the full feature, independent of this 
   content stops actually exercising ADDED+MODIFIED+REMOVED+baseline-match once code changes) **→
   [Mitigation]** the preview script's own smoke-checked in the same test run as the rest of the
   suite (tasks.md should include running it as part of verification, not just eyeballing it once).
+- **[Risk] The heading/section regexes (`DELTA_HEADING_RE`, `REQUIREMENT_BLOCK_RE`,
+  `delta_section_span`'s boundary search) are naive line-anchored patterns with no awareness of
+  fenced code blocks** — a requirement whose own body quotes a fenced example containing a
+  `## `/`### `-looking line (a markdown-about-markdown example, a shell comment) would get
+  truncated at that line, and the Currently:/This change: splice would land inside the open fence;
+  a non-OpenSpec doc that merely *mentions* a delta header inside a fenced example would get a
+  fabricated badge/summary **→ [Mitigation]** `mask_fenced_code()` blanks out fenced-block interiors
+  (mirroring viewer.html's own `FENCE_RE` exactly) before any boundary search runs; every regex
+  that decides where a section/requirement starts or ends operates on the masked copy, while the
+  actual spliced/parsed content is always sliced back out of the real, unmasked text using the
+  offsets found there. Covered by `test-generate-explain.sh`'s fenced-example fixture.
 
 ## Open Questions
 

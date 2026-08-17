@@ -726,12 +726,16 @@ if "**Currently:**" in md and "The system SHALL allow deleting a widget by id.\n
 else:
     print("FAIL: MODIFIED-with-match comparison missing or wrong content")
 
-no_match_section = md[md.index("A title with no baseline match"):]
-no_match_section = no_match_section[:no_match_section.index("## REMOVED")]
-if "Currently:" not in no_match_section:
-    print("PASS: MODIFIED requirement with NO baseline match renders with no comparison block, no error")
+no_match_start = md.find("A title with no baseline match")
+no_match_end = md.find("## REMOVED", no_match_start) if no_match_start != -1 else -1
+if no_match_start != -1 and no_match_end != -1:
+    no_match_section = md[no_match_start:no_match_end]
+    if "Currently:" not in no_match_section:
+        print("PASS: MODIFIED requirement with NO baseline match renders with no comparison block, no error")
+    else:
+        print("FAIL: no-match requirement unexpectedly got a comparison block")
 else:
-    print("FAIL: no-match requirement unexpectedly got a comparison block")
+    print(f"FAIL: could not locate the no-baseline-match requirement's section in md — got {md[:200]!r}")
 
 diff_node = nodes.get("src/newfile.py")
 if diff_node and diff_node.get("kind") == "diff" and diff_node.get("badge") == "new":
@@ -777,6 +781,362 @@ PYEOF
 echo "$ospec_parity_py_out"
 pass_count=$((pass_count + $(echo "$ospec_parity_py_out" | grep -c '^PASS:')))
 fail_count=$((fail_count + $(echo "$ospec_parity_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# Fence-awareness: a requirement whose own body quotes a fenced example that
+# LOOKS like markdown structure ("## "/"### " lines inside a ```-fenced block)
+# must not get truncated at that fake heading, and the Currently:/This change:
+# comparison must land after the fence closes, never spliced into it. Also
+# covers path-detection for proposal.md (a non-delta doc) and a DELETED
+# OpenSpec file staying a diff node -- own repo, own baseline commit.
+# ---------------------------------------------------------------------------
+ospec_repo2="$out_dir/openspec-repo2"
+mkdir -p "$ospec_repo2/openspec/specs/widget" "$ospec_repo2/openspec/changes/demo"
+git -C "$ospec_repo2" init -q
+git -C "$ospec_repo2" config user.email "test@example.com"
+git -C "$ospec_repo2" config user.name "Test"
+
+cat > "$ospec_repo2/openspec/specs/widget/spec.md" <<'EOF'
+## Requirements
+
+### Requirement: Widget deletion
+The system SHALL allow deleting a widget by id.
+EOF
+cat > "$ospec_repo2/openspec/changes/demo/proposal.md" <<'EOF'
+# Proposal
+
+Original proposal text.
+EOF
+cat > "$ospec_repo2/openspec/changes/demo/tasks.md" <<'EOF'
+## 1. Tasks
+
+- [ ] 1.1 Do the thing
+EOF
+git -C "$ospec_repo2" add -A
+git -C "$ospec_repo2" commit -q -m "baseline"
+ospec2_base_sha="$(git -C "$ospec_repo2" rev-parse HEAD)"
+
+cat > "$ospec_repo2/openspec/changes/demo/proposal.md" <<'EOF'
+# Proposal
+
+Updated proposal text.
+EOF
+rm "$ospec_repo2/openspec/changes/demo/tasks.md"
+
+mkdir -p "$ospec_repo2/openspec/changes/demo/specs/widget"
+cat > "$ospec_repo2/openspec/changes/demo/specs/widget/spec.md" <<'EOF'
+## MODIFIED Requirements
+
+### Requirement: Widget deletion
+The system SHALL allow deleting a widget by id. Example error response:
+
+```
+## MODIFIED Requirements
+### Requirement: This is not real, just an example inside a fence
+```
+
+The above is illustrative only.
+
+#### Scenario: Delete succeeds
+- **WHEN** a delete request is submitted
+- **THEN** the widget is removed
+EOF
+git -C "$ospec_repo2" add -A
+
+ospec2_diff_html="$out_dir/explain-openspec-fence-test.html"
+(
+  cd "$ospec_repo2" && python3 "$generate_explain" --diff --base "$ospec2_base_sha" --out "$ospec2_diff_html"
+)
+check "generate-explain.py exits 0 with a fenced-example delta spec in the diff" $?
+
+ospec2_py_out="$(python3 - "$ospec2_diff_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+spec_node = nodes.get("openspec/changes/demo/specs/widget/spec.md")
+md = spec_node.get("md", "") if spec_node else ""
+
+fenced_verbatim = "```\n## MODIFIED Requirements\n### Requirement: This is not real, just an example inside a fence\n```"
+if fenced_verbatim in md:
+    print("PASS: fenced pseudo-headings inside a requirement body survive verbatim, not treated as section boundaries")
+else:
+    print(f"FAIL: fenced content corrupted or misparsed — got {md!r}")
+
+illus_idx = md.find("The above is illustrative only.")
+currently_idx = md.find("**Currently:**")
+if illus_idx != -1 and currently_idx != -1 and currently_idx > illus_idx:
+    print("PASS: Currently:/This change: comparison is spliced after the fenced block, not inside it")
+else:
+    print(f"FAIL: comparison splice position wrong — illustrative@{illus_idx}, Currently@{currently_idx}")
+
+if spec_node and spec_node.get("badge") == "MODIFIED":
+    print("PASS: a fenced pseudo-heading example does not corrupt the delta badge")
+else:
+    print(f"FAIL: badge — got {spec_node.get('badge') if spec_node else None}")
+
+if md.startswith("1 modified") and "1 added" not in md.splitlines()[0] and "1 removed" not in md.splitlines()[0]:
+    print("PASS: summary counts ignore fenced pseudo-requirement/section text")
+else:
+    print(f"FAIL: summary counts — got {md.splitlines()[0] if md else '(empty)'}")
+
+proposal_node = nodes.get("openspec/changes/demo/proposal.md")
+if (proposal_node and proposal_node.get("kind") == "markdown" and "badge" not in proposal_node
+        and "Updated proposal text." in proposal_node.get("md", "")):
+    print("PASS: proposal.md is path-detected as OpenSpec via --diff and renders its updated content, no badge")
+else:
+    print(f"FAIL: proposal.md via --diff — got {proposal_node}")
+
+tasks_node = nodes.get("openspec/changes/demo/tasks.md")
+if tasks_node and tasks_node.get("kind") == "diff" and tasks_node.get("badge") == "deleted":
+    print("PASS: a deleted OpenSpec file stays a diff node with a deleted badge, never markdown")
+else:
+    print(f"FAIL: deleted OpenSpec file — got {tasks_node}")
+PYEOF
+)"
+echo "$ospec2_py_out"
+pass_count=$((pass_count + $(echo "$ospec2_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$ospec2_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# --doc mode: (a) a doc whose only delta-header text lives inside a fenced
+# example (e.g. a doc *about* OpenSpec's own syntax) must not misfire a
+# badge/summary, and (b) a delta spec reached via --doc must get the SAME
+# MODIFIED-requirement baseline comparison --diff/--change already give
+# (read_baseline is now wired for --doc too).
+# ---------------------------------------------------------------------------
+fenced_doc="$out_dir/fenced-example.md"
+cat > "$fenced_doc" <<'EOF'
+# How delta specs work
+
+Here's an example of what a delta spec section looks like:
+
+```
+## ADDED Requirements
+
+### Requirement: Example
+Some example text.
+```
+
+That's the format OpenSpec expects.
+EOF
+
+fenced_doc_html="$out_dir/explain-fenced-doc-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --doc "$fenced_doc" --out "$fenced_doc_html"
+)
+check "generate-explain.py --doc exits 0 for a doc whose delta headers are only inside a code fence" $?
+
+ospec_doc_html="$out_dir/explain-openspec-doc-test.html"
+(
+  cd "$ospec_repo" && python3 "$generate_explain" \
+    --doc "openspec/changes/demo/specs/widget/spec.md" --out "$ospec_doc_html"
+)
+check "generate-explain.py --doc exits 0 against an OpenSpec delta spec path" $?
+
+doc_py_out="$(python3 - "$fenced_doc_html" "$ospec_doc_html" <<'PYEOF'
+import json
+import sys
+
+def manifest_of(path):
+    content = open(path, encoding="utf-8").read()
+    start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+    end = content.index(";</script>", start)
+    return json.loads(content[start:end])
+
+fenced_nodes = manifest_of(sys.argv[1]).get("nodes", [])
+fenced_node = next((n for n in fenced_nodes if n.get("path", "").endswith("fenced-example.md")), None)
+if fenced_node is not None and "badge" not in fenced_node:
+    print("PASS: delta headers appearing only inside a fenced code example don't trigger a badge/summary via --doc")
+else:
+    print(f"FAIL: fenced-example doc unexpectedly got a badge — {fenced_node}")
+
+doc_nodes = manifest_of(sys.argv[2]).get("nodes", [])
+doc_node = next((n for n in doc_nodes if n.get("path", "").endswith("widget/spec.md")), None)
+doc_md = doc_node.get("md", "") if doc_node else ""
+if "**Currently:**" in doc_md and "cascade-delete its attachments" in doc_md:
+    print("PASS: --doc mode also gets the MODIFIED-requirement baseline comparison, matching --diff/--change")
+else:
+    print(f"FAIL: --doc baseline comparison missing — got {doc_md!r}")
+PYEOF
+)"
+echo "$doc_py_out"
+pass_count=$((pass_count + $(echo "$doc_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$doc_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# Root-anchoring: --diff paths are always repo-root-relative (as `git diff`
+# itself emits them), so the working-tree disk read for an OpenSpec file's
+# content/baseline must resolve against the repo root, not the caller's cwd
+# -- running from a subdirectory must not silently fall back to a raw diff.
+# ---------------------------------------------------------------------------
+ospec_subdir_html="$out_dir/explain-openspec-subdir-test.html"
+(
+  cd "$ospec_repo/src" && python3 "$generate_explain" --diff --base "$ospec_base_sha" --out "$ospec_subdir_html"
+)
+check "generate-explain.py --diff exits 0 when run from a repo subdirectory" $?
+
+subdir_py_out="$(python3 - "$ospec_subdir_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+spec_node = nodes.get("openspec/changes/demo/specs/widget/spec.md")
+md = spec_node.get("md", "") if spec_node else ""
+if spec_node and spec_node.get("kind") == "markdown" and "**Currently:**" in md:
+    print("PASS: OpenSpec content + baseline comparison resolve correctly even when run from a repo subdirectory")
+else:
+    print(f"FAIL: subdirectory root-anchoring — got kind={spec_node.get('kind') if spec_node else 'MISSING NODE'}")
+PYEOF
+)"
+echo "$subdir_py_out"
+pass_count=$((pass_count + $(echo "$subdir_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$subdir_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# --diff --head <ref>: exercises the `git show ref:path` disk-read
+# alternative (as opposed to every other OpenSpec case above, which reads
+# the working tree via head=None) for the same enrichment.
+# ---------------------------------------------------------------------------
+git -C "$ospec_repo" commit -q -m "demo change"
+ospec_head_sha="$(git -C "$ospec_repo" rev-parse HEAD)"
+
+ospec_headref_html="$out_dir/explain-openspec-headref-test.html"
+(
+  cd "$ospec_repo" && python3 "$generate_explain" \
+    --diff --base "$ospec_base_sha" --head "$ospec_head_sha" --out "$ospec_headref_html"
+)
+check "generate-explain.py --diff --head <ref> exits 0 against a committed OpenSpec change" $?
+
+headref_py_out="$(python3 - "$ospec_headref_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+spec_node = nodes.get("openspec/changes/demo/specs/widget/spec.md")
+md = spec_node.get("md", "") if spec_node else ""
+if (spec_node and spec_node.get("kind") == "markdown" and spec_node.get("badge") == "REMOVED"
+        and "**Currently:**" in md):
+    print("PASS: --head <ref> reads OpenSpec content + baseline via 'git show', not just the working tree")
+else:
+    print(f"FAIL: --head <ref> OpenSpec rendering — got {spec_node}")
+PYEOF
+)"
+echo "$headref_py_out"
+pass_count=$((pass_count + $(echo "$headref_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$headref_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# preview-fixture smoke check: proves the SHIPPED preview fixture (the one
+# preview.sh points at) still exercises ADDED+MODIFIED+REMOVED+baseline-match
+# end-to-end, per design.md's own stated mitigation for fixture drift. Runs
+# the same generator invocation preview.sh does, minus --open (no browser in
+# CI).
+# ---------------------------------------------------------------------------
+preview_fixture_dir="$script_dir/preview-fixture"
+preview_smoke_html="$out_dir/explain-preview-smoke-test.html"
+(
+  cd "$preview_fixture_dir" && python3 "$generate_explain" \
+    --change openspec/changes/demo --out "$preview_smoke_html"
+)
+check "generate-explain.py exits 0 against the shipped preview-fixture/" $?
+
+preview_py_out="$(python3 - "$preview_smoke_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+nodes = {n["path"]: n for n in manifest.get("nodes", [])}
+
+spec_node = nodes.get("openspec/changes/demo/specs/widget/spec.md")
+md = spec_node.get("md", "") if spec_node else ""
+if (spec_node and spec_node.get("badge") == "REMOVED" and "1 added" in md and "1 modified" in md
+        and "1 removed" in md and "**Currently:**" in md and "cascade-delete" in md):
+    print("PASS: shipped preview-fixture/ still exercises ADDED+MODIFIED+REMOVED+baseline-match end-to-end")
+else:
+    print(f"FAIL: preview-fixture smoke check — got {spec_node}")
+PYEOF
+)"
+echo "$preview_py_out"
+pass_count=$((pass_count + $(echo "$preview_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$preview_py_out" | grep -c '^FAIL:')))
+
+# ---------------------------------------------------------------------------
+# Default title: names what's actually being explained (branch, change dir)
+# instead of the generic "Explain", when --title isn't passed.
+# ---------------------------------------------------------------------------
+title_branch_html="$out_dir/explain-title-branch-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --branch other-branch --out "$title_branch_html"
+)
+check "generate-explain.py --branch (no --title) exits 0" $?
+
+title_change_html="$out_dir/explain-title-change-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --change "$repo/changes/demo" --out "$title_change_html"
+)
+check "generate-explain.py --change (no --title) exits 0" $?
+
+# --head explicitly wins over --branch for the ACTUAL diff (see main()'s own resolution and
+# --branch's help text) -- the title must reflect whichever one actually won, not just whichever
+# was named --branch.
+title_branch_head_html="$out_dir/explain-title-branch-head-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --diff --branch other-branch --head "$base_sha" --out "$title_branch_head_html"
+)
+check "generate-explain.py --branch with an explicit --head override exits 0" $?
+
+title_py_out="$(python3 - "$title_branch_html" "$title_change_html" "$title_branch_head_html" "$base_sha" <<'PYEOF'
+import json
+import sys
+
+def manifest_of(path):
+    content = open(path, encoding="utf-8").read()
+    start = content.index("<script>window.MANIFEST = ") + len("<script>window.MANIFEST = ")
+    end = content.index(";</script>", start)
+    return json.loads(content[start:end])
+
+branch_title = manifest_of(sys.argv[1]).get("title")
+if branch_title == "Diff: other-branch":
+    print("PASS: default title names the branch when --branch is used, not just 'Explain'")
+else:
+    print(f"FAIL: --branch default title — got {branch_title!r}")
+
+change_title = manifest_of(sys.argv[2]).get("title")
+if change_title == "demo":
+    print("PASS: default title names the OpenSpec change dir when --change is used")
+else:
+    print(f"FAIL: --change default title — got {change_title!r}")
+
+base_sha = sys.argv[4]
+branch_head_title = manifest_of(sys.argv[3]).get("title")
+if branch_head_title == f"Diff: {base_sha}":
+    print("PASS: an explicit --head overriding --branch wins the title too, matching the actual diffed content")
+else:
+    print(f"FAIL: --branch+--head default title — got {branch_head_title!r}, expected 'Diff: {base_sha}'")
+PYEOF
+)"
+echo "$title_py_out"
+pass_count=$((pass_count + $(echo "$title_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$title_py_out" | grep -c '^FAIL:')))
 
 echo ""
 echo "----------------------------------------"

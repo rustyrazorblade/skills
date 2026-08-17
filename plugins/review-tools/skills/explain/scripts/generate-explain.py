@@ -256,13 +256,28 @@ def is_openspec_path(path):
     return any(fnmatch.fnmatchcase(tail, pattern) for pattern in OPENSPEC_TAIL_PATTERNS)
 
 
-def read_file_at_ref(path, ref):
+def repo_root():
+    """Absolute path to the current repo's top level, or None if it can't be resolved (not a git
+    repo, detached from any worktree, etc). --diff mode's paths are always repo-root-relative (as
+    `git diff` itself emits them), so a working-tree disk read for one of those paths must be
+    anchored here -- not to the caller's actual cwd, which is a subdirectory more often than not
+    and would otherwise make the read silently fail there."""
+    try:
+        return Path(run_git(["rev-parse", "--show-toplevel"]).strip())
+    except subprocess.CalledProcessError:
+        return None
+
+
+def read_file_at_ref(path, ref, cwd=None):
     """The file's content at `ref`, or None if it can't be read there. `ref=None` means the
-    working tree (a plain disk read); otherwise `git show ref:path`. Used both to pull an
-    OpenSpec file's current content for rendering, and (with a different path) to fetch a
-    capability's baseline spec for the MODIFIED-requirement comparison."""
+    working tree (a plain disk read, anchored at `cwd` when given); otherwise `git show
+    ref:path`. Used both to pull an OpenSpec file's current content for rendering, and (with a
+    different path) to fetch a capability's baseline spec for the MODIFIED-requirement
+    comparison. `cwd` is for --diff mode's repo-root-relative paths (see repo_root()) -- --change
+    mode's own disk_reader passes nothing here, since its paths are already relative to wherever
+    --change itself was resolved from and must stay that way."""
     if ref is None:
-        p = Path(path)
+        p = (Path(cwd) / path) if cwd is not None else Path(path)
         if not p.is_file():
             return None
         try:
@@ -359,6 +374,12 @@ def diff_nodes_from(base, head, paths=None, blame=False):
     except subprocess.CalledProcessError as e:
         fail(f"'git {' '.join(cmd)}' failed: {e.stderr.strip()}")
 
+    # `git diff` always emits repo-root-relative paths, regardless of the caller's actual cwd.
+    # Only matters for head=None (a working-tree disk read) -- git show ref:path resolves against
+    # the repo itself either way. Resolved once per call, not lazily, so a repo_root() failure
+    # (rare -- git diff already succeeded) surfaces here rather than as a silent per-file miss.
+    root = repo_root() if head is None else None
+
     nodes = []
     for i, chunk in enumerate(split_diff_by_file(diff_text)):
         first_line = chunk.split("\n", 1)[0]
@@ -371,9 +392,12 @@ def diff_nodes_from(base, head, paths=None, blame=False):
         # instead. Scoped strictly to OpenSpec paths -- every other file, including a brand-new
         # one, keeps the diff view. A deletion has no current content to show, so it stays a diff.
         if is_openspec_path(path) and not is_deleted:
-            content = read_file_at_ref(path, head)
+            content = read_file_at_ref(path, head, cwd=root)
             if content is not None:
-                nodes.append(markdown_node(path, content, read_baseline=lambda p, _head=head: read_file_at_ref(p, _head)))
+                nodes.append(markdown_node(
+                    path, content,
+                    read_baseline=lambda p, _head=head, _root=root: read_file_at_ref(p, _head, cwd=_root),
+                ))
                 continue
             # Defensive fallback -- git diff just told us this file changed, so failing to read
             # its content is unexpected; render as a diff rather than silently dropping the node.
@@ -505,9 +529,44 @@ DELTA_HEADING_RE = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Require
 DELTA_BADGE_PRIORITY = ["REMOVED", "MODIFIED", "RENAMED", "ADDED"]
 DELTA_BADGE_CLASS = {"ADDED": "add", "MODIFIED": "mod", "REMOVED": "del", "RENAMED": "mod"}
 
+# A requirement's own prose (a Scenario, an example response) can legitimately contain a fenced
+# code block that itself quotes markdown -- a "## MODIFIED Requirements" example, a "### x" in a
+# shell comment. None of the structural regexes below (DELTA_HEADING_RE, REQUIREMENT_BLOCK_RE,
+# the section-boundary search in delta_section_span) know about fences, so unmasked they'd treat
+# a fenced example line as a real heading: truncating a requirement's content early, splicing the
+# Currently:/This change: comparison into the middle of an open fence, or firing a badge/summary
+# off a doc that only ever *mentions* delta headers (e.g. a doc about OpenSpec's own syntax).
+# Mirrors viewer.html's own FENCE_RE exactly (``` or ~~~, no length/indent requirements beyond
+# what viewer.html itself enforces) so masking agrees with how the rendered output actually gets
+# split into code vs. prose.
+FENCE_LINE_RE = re.compile(r"^\s*(```|~~~)")
+
+
+def mask_fenced_code(text):
+    """Same length and line count as `text`, but every character inside a fenced code block
+    (both the fence delimiter lines and their contents) is replaced with a space. Used ONLY to
+    find heading/boundary positions safely -- real content is always sliced back out of the
+    original `text` using the offsets found here, never read from the masked copy."""
+    lines = text.split("\n")
+    masked = []
+    fence_mark = None
+    for line in lines:
+        if fence_mark is None:
+            m = FENCE_LINE_RE.match(line)
+            if m:
+                fence_mark = m.group(1)
+                masked.append(" " * len(line))
+            else:
+                masked.append(line)
+        else:
+            masked.append(" " * len(line))
+            if line.strip().startswith(fence_mark):
+                fence_mark = None
+    return "\n".join(masked)
+
 
 def delta_badge_for(text):
-    found = {m.group(1).upper() for m in DELTA_HEADING_RE.finditer(text)}
+    found = {m.group(1).upper() for m in DELTA_HEADING_RE.finditer(mask_fenced_code(text))}
     for kind in DELTA_BADGE_PRIORITY:
         if kind in found:
             return kind, DELTA_BADGE_CLASS[kind]
@@ -535,19 +594,31 @@ def baseline_path_for(delta_spec_path):
 
 
 def parse_requirements(text):
-    """{title: full block text (heading line + body, trailing newlines stripped)}."""
-    return {m.group(2).strip(): m.group(1).rstrip("\n") for m in REQUIREMENT_BLOCK_RE.finditer(text or "")}
+    """{title: full block text (heading line + body, trailing newlines stripped)}. Boundaries are
+    found against a fence-masked copy (see mask_fenced_code) so a "### Requirement:"-looking line
+    quoted inside a fenced example never gets mistaken for a real requirement heading; the
+    returned content is always sliced back out of the real, unmasked `text`."""
+    text = text or ""
+    masked = mask_fenced_code(text)
+    return {
+        text[m.start(2):m.end(2)].strip(): text[m.start(1):m.end(1)].rstrip("\n")
+        for m in REQUIREMENT_BLOCK_RE.finditer(masked)
+    }
 
 
 def delta_section_span(text, category):
     """(start, end) character offsets of a "## <category> Requirements" section's BODY (after
-    its own heading line, up to the next "## " heading or end of text), or None if absent."""
-    m = re.search(rf"^##[ \t]+{category}[ \t]+Requirements\b.*$", text, re.MULTILINE | re.IGNORECASE)
+    its own heading line, up to the next "## " heading or end of text), or None if absent. Found
+    against a fence-masked copy of `text` so a fenced example's own "## ..." line can never be
+    mistaken for the section's real start/end -- the returned offsets are valid against `text`
+    itself, since masking preserves length and line breaks exactly."""
+    masked = mask_fenced_code(text)
+    m = re.search(rf"^##[ \t]+{category}[ \t]+Requirements\b.*$", masked, re.MULTILINE | re.IGNORECASE)
     if not m:
         return None
-    start = m.end() + 1 if m.end() < len(text) and text[m.end()] == "\n" else m.end()
-    tail = re.search(r"^##[ \t]+\S", text[start:], re.MULTILINE)
-    end = start + tail.start() if tail else len(text)
+    start = m.end() + 1 if m.end() < len(masked) and masked[m.end()] == "\n" else m.end()
+    tail = re.search(r"^##[ \t]+\S", masked[start:], re.MULTILINE)
+    end = start + tail.start() if tail else len(masked)
     return start, end
 
 
@@ -555,44 +626,58 @@ def inject_baseline_comparisons(text, baseline_requirements):
     """Splice a "Currently:/This change:" prose comparison into each MODIFIED requirement whose
     title matches something in `baseline_requirements` -- silently leaves a requirement
     untouched when there's no match (a real, expected case: a new capability, or a rename within
-    the same change), never an error."""
+    the same change), never an error. Requirement boundaries within the section are found against
+    a fence-masked copy, so a requirement whose own body quotes a fenced "## "/"### " example
+    never gets truncated mid-fence, and the comparison is never spliced into the middle of an
+    open fence -- it always lands after the requirement's real (unmasked) content ends."""
     if not baseline_requirements:
         return text
     span = delta_section_span(text, "MODIFIED")
     if not span:
         return text
     start, end = span
+    section_text = text[start:end]
+    masked_section = mask_fenced_code(section_text)
 
-    def _inject(m):
-        block, title = m.group(1), m.group(2).strip()
+    pieces = []
+    pos = 0
+    for m in REQUIREMENT_BLOCK_RE.finditer(masked_section):
+        pieces.append(section_text[pos:m.start(1)])
+        block = section_text[m.start(1):m.end(1)]
+        title = section_text[m.start(2):m.end(2)].strip()
         old_block = baseline_requirements.get(title)
-        if not old_block:
-            return block
-        # Drop each block's own "### Requirement:" heading line for the comparison -- the
-        # requirement's title is already established by the surrounding section; repeating it
-        # three times (the section itself + two comparison blocks) is just noise.
-        old_body = re.sub(r"^### Requirement:.*\n", "", old_block, count=1).strip()
-        new_body = re.sub(r"^### Requirement:.*\n", "", block, count=1).strip()
-        return block.rstrip("\n") + f"\n\n**Currently:**\n\n{old_body}\n\n**This change:**\n\n{new_body}\n\n"
+        if old_block:
+            # Drop each block's own "### Requirement:" heading line for the comparison -- the
+            # requirement's title is already established by the surrounding section; repeating it
+            # three times (the section itself + two comparison blocks) is just noise.
+            old_body = re.sub(r"^### Requirement:.*\n", "", old_block, count=1).strip()
+            new_body = re.sub(r"^### Requirement:.*\n", "", block, count=1).strip()
+            block = block.rstrip("\n") + f"\n\n**Currently:**\n\n{old_body}\n\n**This change:**\n\n{new_body}\n\n"
+        pieces.append(block)
+        pos = m.end(1)
+    pieces.append(section_text[pos:])
 
-    new_section = REQUIREMENT_BLOCK_RE.sub(_inject, text[start:end])
+    new_section = "".join(pieces)
     return text[:start] + new_section + text[end:]
 
 
 def delta_summary_prefix(text):
     """A "N added · M modified · ..." count line plus jump links to each present category's
     heading anchor (matching viewer.html's own slugify() -- lowercase, non-alnum runs to "-"),
-    or None if no delta headers are present at all."""
+    or None if no delta headers are present at all. Counts are taken from the fence-masked
+    section text, so a fenced example that merely quotes what a requirement/rename line looks
+    like is never counted as a real one."""
+    masked = mask_fenced_code(text)
     counts = {}
     for category in ("ADDED", "MODIFIED", "REMOVED", "RENAMED"):
         span = delta_section_span(text, category)
         if span is None:
             continue
-        section_text = text[span[0]:span[1]]
+        section_masked = masked[span[0]:span[1]]
         if category == "RENAMED":
-            count = len(re.findall(r"^-\s*FROM:", section_text, re.MULTILINE))
+            count = len(re.findall(r"^-\s*FROM:", section_masked, re.MULTILINE))
         else:
-            count = len(REQUIREMENT_BLOCK_RE.findall(section_text))
+            count = len(REQUIREMENT_BLOCK_RE.findall(section_masked))
         if count:
             counts[category] = count
     if not counts:
@@ -696,6 +781,35 @@ def blast_radius_node(symbol):
     return markdown_node(f"blast-radius/{symbol}.md", "\n".join(lines))
 
 
+def default_title(args, head, primary_issue_title):
+    """A title that names what's actually being explained, instead of the generic "Explain" --
+    picked from whichever input is the most identity-bearing single artifact: an issue's own
+    title beats everything (it already names the work); an OpenSpec change dir names a specific
+    proposed change; a diff is named by its branch/head when there is one to point to; a doc/code
+    file falls back to its own name. Only reached when --title wasn't passed explicitly."""
+    if primary_issue_title:
+        return primary_issue_title
+    if args.change:
+        names = [Path(c).name for c in args.change]
+        return names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1} more"
+    if args.diff:
+        # `head` is already the resolved value -- when --branch drove it (no explicit --head),
+        # head == args.branch; when both were passed, --head wins over --branch for the actual
+        # diff (see main()'s --branch/--head resolution), so it must win for the title too.
+        if head:
+            return f"Diff: {head}"
+        return "Diff: working tree"
+    if args.doc:
+        names = [Path(d).name for d in args.doc]
+        return names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1} more"
+    if args.code:
+        names = [Path(c).name for c in args.code]
+        return names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1} more"
+    if args.symbol:
+        return args.symbol[0] if len(args.symbol) == 1 else f"{args.symbol[0]} +{len(args.symbol) - 1} more"
+    return "Explain"
+
+
 def build_manifest(args, base, head):
     nodes = []
     source_bits = []
@@ -726,8 +840,12 @@ def build_manifest(args, base, head):
         nodes += change_nodes_from(change_dir)
     if args.change:
         source_bits.append(f"{len(args.change)} change dir(s)")
+    # Disk-relative, matching how --doc itself always resolves (a plain path, not a git ref) --
+    # same reasoning as --change's own disk_reader in change_nodes_from, so a delta spec reached
+    # via --doc gets the identical MODIFIED-requirement baseline comparison --diff/--change give.
+    doc_baseline_reader = lambda p: read_file_at_ref(p, None)
     for doc in args.doc or []:
-        nodes.append(markdown_node(doc, read_text(doc)))
+        nodes.append(markdown_node(doc, read_text(doc), read_baseline=doc_baseline_reader))
     if args.doc:
         source_bits.append(f"{len(args.doc)} doc(s)")
     for code in args.code or []:
@@ -746,7 +864,7 @@ def build_manifest(args, base, head):
         source_bits.append("caller-supplied explanations")
 
     manifest = {
-        "title": args.title or primary_issue_title or "Explain",
+        "title": args.title or default_title(args, head, primary_issue_title),
         "meta": meta,
         "nodes": nodes,
     }

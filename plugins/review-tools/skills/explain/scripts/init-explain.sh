@@ -33,7 +33,8 @@ sed 's#<!--MANIFEST-->#<script src="explain.manifest.js"></script>#' "$viewer_sr
 
 manifest_file="$target/explain.manifest.js"
 cat > "$manifest_file" <<'EOF'
-// explain manifest schema:
+// explain manifest schema (kept in sync with ../SKILL.md's own "Manifest schema" section --
+// update both together):
 //   title: string
 //   subtitle?: string
 //   meta?: { base?: string, head?: string, generatedFrom?: string }
@@ -42,9 +43,11 @@ cat > "$manifest_file" <<'EOF'
 //       path: string,              // tree path; "/" nests folders
 //       label?: string,            // tree label; defaults to basename(path)
 //       badge?: string,            // small chip in the tree, e.g. "THE BUG"
-//       badgeClass?: string,       // "bug" | "store" | "join" | "test" | "add" | "del" | ""
+//       badgeClass?: string,       // "bug" | "store" | "join" | "test" | "add" | "del" | "mod" | ""
 //       kind: "diff" | "code" | "markdown",
 //       patch?: string,            // kind=diff: raw unified-diff text for THIS file
+//       comments?: [{ line: number, side: "LEFT" | "RIGHT", author: string, body: string,
+//                     createdAt?: string }],  // kind=diff: PR review comments anchored to this file
 //       code?: string, lang?: string, startLine?: number, highlight?: number[],  // kind=code
 //       md?: string,               // kind=markdown: raw markdown
 //       explain?: string           // markdown/html shown in the bottom pane, optional on any kind
@@ -69,9 +72,11 @@ echo "    {"
 echo "      path: string,              // tree path; \"/\" nests folders"
 echo "      label?: string,            // tree label; defaults to basename(path)"
 echo "      badge?: string,            // small chip in the tree, e.g. \"THE BUG\""
-echo "      badgeClass?: string,       // \"bug\" | \"store\" | \"join\" | \"test\" | \"add\" | \"del\" | \"\""
+echo "      badgeClass?: string,       // \"bug\" | \"store\" | \"join\" | \"test\" | \"add\" | \"del\" | \"mod\" | \"\""
 echo "      kind: \"diff\" | \"code\" | \"markdown\","
 echo "      patch?: string,            // kind=diff: raw unified-diff text for THIS file"
+echo "      comments?: [{ line: number, side: \"LEFT\" | \"RIGHT\", author: string, body: string,"
+echo "                    createdAt?: string }],  // kind=diff: PR review comments anchored to this file"
 echo "      code?: string, lang?: string, startLine?: number, highlight?: number[],  // kind=code"
 echo "      md?: string,               // kind=markdown: raw markdown"
 echo "      explain?: string           // markdown/html shown in the bottom pane, optional on any kind"

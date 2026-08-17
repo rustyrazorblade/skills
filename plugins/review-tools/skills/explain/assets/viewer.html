@@ -425,7 +425,11 @@
   #explain-pane {
     flex: 0 0 auto;
     max-height: 32vh;
-    min-height: 0;
+    /* A real minimum, not 0 -- short content (a one-line blame note, a two-commit list) was
+       sizing the whole panel down to a sliver a couple lines tall. .empty below still fully
+       hides the pane when there's genuinely nothing to show, so this only affects the case
+       where content exists but is short. */
+    min-height: 16vh;
     overflow-y: auto;
     border-top: 1px solid var(--border);
     background: var(--bg-explain);

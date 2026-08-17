@@ -53,6 +53,11 @@ base_sha="$(git -C "$repo" rev-parse HEAD)"
 # Known small change, left uncommitted:
 printf 'line1\nline2-modified\nline3\nline4\n' > "$repo/file.txt"
 
+# A brand-new file, staged -- exercises the "*New file*" explain message (no prior history to
+# blame at all, as opposed to a modified file with a real blame trail).
+printf 'brand new content\n' > "$repo/newfile.txt"
+git -C "$repo" add newfile.txt
+
 mkdir -p "$repo/docs" "$repo/src" "$repo/changes/demo/specs"
 printf '# Note\n\nSome doc content.\n' > "$repo/docs/note.md"
 printf 'def add(a, b):\n    return a + b\n' > "$repo/src/extra.py"
@@ -115,35 +120,41 @@ except Exception as e:
     sys.exit(0)
 
 nodes = manifest.get("nodes", [])
-if len(nodes) == 7:
-    print("PASS: manifest has expected node count (7)")
+if len(nodes) == 8:
+    print("PASS: manifest has expected node count (8)")
 else:
-    print(f"FAIL: manifest has expected node count (7) — got {len(nodes)}")
+    print(f"FAIL: manifest has expected node count (8) — got {len(nodes)}")
 
 kinds = Counter(n.get("kind") for n in nodes)
-expected = Counter({"diff": 1, "markdown": 5, "code": 1})
+expected = Counter({"diff": 2, "markdown": 5, "code": 1})
 if kinds == expected:
-    print("PASS: manifest has expected node kinds (diff=1, markdown=5, code=1)")
+    print("PASS: manifest has expected node kinds (diff=2, markdown=5, code=1)")
 else:
     print(f"FAIL: manifest has expected node kinds — got {dict(kinds)}")
 
-diff_nodes = [n for n in nodes if n.get("kind") == "diff"]
-if len(diff_nodes) == 1 and diff_nodes[0].get("path") == "file.txt":
-    print("PASS: diff node path round-trips (file.txt)")
+diff_nodes = {n["path"]: n for n in nodes if n.get("kind") == "diff"}
+if set(diff_nodes) == {"file.txt", "newfile.txt"}:
+    print("PASS: diff node paths round-trip (file.txt modified, newfile.txt added)")
 else:
-    print(f"FAIL: diff node path round-trips — got {[n.get('path') for n in diff_nodes]}")
+    print(f"FAIL: diff node paths — got {sorted(diff_nodes)}")
 
-patch = diff_nodes[0].get("patch", "") if diff_nodes else ""
+patch = diff_nodes.get("file.txt", {}).get("patch", "")
 if "-line2" in patch and "+line2-modified" in patch and "+line4" in patch:
     print("PASS: diff node patch round-trips the known change")
 else:
     print("FAIL: diff node patch round-trips the known change")
 
-blame_explain = diff_nodes[0].get("explain", "") if diff_nodes else ""
+blame_explain = diff_nodes.get("file.txt", {}).get("explain", "")
 if "Test" in blame_explain and "initial" in blame_explain:
-    print("PASS: blame context populates the diff node's explain BY DEFAULT (no --blame flag passed)")
+    print("PASS: blame context populates a modified file's explain BY DEFAULT (no --blame flag passed)")
 else:
     print(f"FAIL: default blame explain — got {blame_explain!r}")
+
+newfile_explain = diff_nodes.get("newfile.txt", {}).get("explain", "")
+if "New file" in newfile_explain:
+    print("PASS: a brand-new file gets an explicit 'New file' explain instead of no explain at all")
+else:
+    print(f"FAIL: new-file explain — got {newfile_explain!r}")
 
 foo_node = next((n for n in nodes if n.get("path", "").endswith("foo.md")), {})
 if foo_node.get("badge") == "ADDED" and foo_node.get("badgeClass") == "add":

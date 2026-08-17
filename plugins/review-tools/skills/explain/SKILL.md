@@ -49,15 +49,21 @@ ${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
     <path>...`). Omit to diff the whole repo. Useful for a "what changed since you last looked at
     just this" view — e.g. `--base <sha-you-last-showed>` scoped to one OpenSpec change dir, so a
     re-review after a redirect shows only what actually moved, not the whole branch.
-  - `--no-blame` — skip populating each diff node's explanation pane with `git blame` context.
-    **Blame runs by default whenever `--diff` is used** — which commit(s) last touched the OLD-side
-    lines this hunk changes, as of `--base`, i.e. "why did this look the way it did before this
-    change." That's not a nice-to-have — it's the reason the explanation pane exists at all, so it
-    doesn't stay opt-in behind a flag nobody thinks to pass. Best-effort either way: silently skips
-    a hunk/file it can't blame (shallow clone, binary, etc.) rather than failing. `--no-blame` trades
-    that context for speed on a large diff (one `git blame` call per hunk otherwise). (`--blame` is
-    still accepted, for backward compatibility — it no longer does anything, since this is now the
-    default.)
+  - `--no-blame` — skip populating each diff node's explanation pane with commit-history context.
+    **Runs by default whenever `--diff` is used.** For each hunk, `git blame` finds which
+    commit(s) last touched the OLD-side lines as of `--base`, then pulls each one's **full commit
+    message** (`git log --format=%B`, not just the one-line summary `git blame` itself gives) —
+    the explanation belongs in the message body when the commit bothered to write one, and a bare
+    one-liner rarely explains anything. The commit's sha/author render as a small byline above the
+    message, not the headline — a "who touched this" list with no explanatory text is close to
+    useless on its own, which is the whole reason this exists: the explanation pane is *for*
+    explaining, not for attribution. Always produces something, even when there's nothing to
+    blame — a brand-new file, a pure-addition hunk, or a hunk `git blame` genuinely can't resolve
+    (shallow clone, binary) each get an explicit one-line reason instead of silence, so "no
+    explanation" always reads as a deliberate answer, never as this feature having quietly failed.
+    `--no-blame` trades all of that for speed on a large diff (one `git blame` + one `git log` call
+    per hunk otherwise). (`--blame` is still accepted, for backward compatibility — it no longer
+    does anything, since this is now the default.)
   - `--pr <N>` — overlay this PR's file/line-anchored GitHub review comments onto the diff, right
     at the row each was left on (matched by file path + line + side, same convention GitHub itself
     uses). A comment anchored to a file/line outside this diff's range (outdated, or the diff was

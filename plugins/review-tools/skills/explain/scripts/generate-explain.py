@@ -236,11 +236,30 @@ HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.MULTI
 BLAME_COMMIT_RE = re.compile(r"^([0-9a-f]{40}|[0-9a-f]{7,40}) \d+ \d+")
 
 
-def blame_context_for(base, path, chunk, max_commits=5):
+def commit_message_full(sha):
+    """The full commit message (subject + body), not just the one-line summary `git blame`'s
+    porcelain output gives — the body is where a "why" actually lives, when the commit bothered
+    to write one. A one-liner like "fix bug" explains nothing; the body usually does."""
+    try:
+        return run_git(["log", "-1", "--format=%B", sha]).strip()
+    except subprocess.CalledProcessError:
+        return None
+
+
+def blame_context_for(base, path, chunk, max_commits=3):
     """For a diff hunk's OLD-side line ranges, find the commit(s) that last touched those lines
-    as of `base` — the "why did this look like this before your change" context. Best-effort:
-    returns None on any failure (shallow clone, binary file, blame not applicable) rather than
-    failing the whole generation over one file's missing history."""
+    as of `base`, and surface each one's FULL commit message (not just its one-line summary) as
+    the explanation of why that code looked the way it did before this change. The commit
+    metadata (sha/author) is secondary — a small byline under the message, not the headline; a
+    bare "who/when" with no explanatory text is close to useless on its own.
+
+    ALWAYS returns a string, never None/empty — a diff node with `blame` enabled but no explain
+    set at all reads as "this file has nothing to say," which is indistinguishable from "blame
+    silently failed here." A brand-new file, or a hunk that's a pure addition (no old-side lines
+    at all — nothing existed there to blame), gets an explicit one-line reason instead of empty."""
+    if "\nnew file mode" in chunk:
+        return "*New file — no prior history to show.*"
+
     ranges = []
     for m in HUNK_HEADER_RE.finditer(chunk):
         start = int(m.group(1))
@@ -248,15 +267,15 @@ def blame_context_for(base, path, chunk, max_commits=5):
         if count > 0:
             ranges.append((start, start + count - 1))
     if not ranges:
-        return None
+        return "*Pure addition — no old-side lines in this diff, so there's nothing to blame.*"
 
-    commits = {}  # sha -> (author, summary), insertion-ordered
+    commit_authors = {}  # sha -> author, insertion-ordered (most-recently-encountered-line first)
     for start, end in ranges:
         try:
             out = run_git(["blame", "--line-porcelain", "-L", f"{start},{end}", base, "--", path])
         except subprocess.CalledProcessError:
             continue
-        sha = author = summary = None
+        sha = author = None
         for line in out.split("\n"):
             m = BLAME_COMMIT_RE.match(line)
             if m:
@@ -264,22 +283,23 @@ def blame_context_for(base, path, chunk, max_commits=5):
                 continue
             if line.startswith("author "):
                 author = line[len("author "):]
-            elif line.startswith("summary "):
-                summary = line[len("summary "):]
-                if sha and sha not in commits:
-                    commits[sha] = (author or "unknown", summary)
-                    if len(commits) >= max_commits:
-                        return format_blame(commits)
-    return format_blame(commits) if commits else None
+                if sha and sha not in commit_authors:
+                    commit_authors[sha] = author or "unknown"
+                    if len(commit_authors) >= max_commits:
+                        return format_blame(commit_authors)
+    return format_blame(commit_authors)
 
 
-def format_blame(commits):
-    if not commits:
-        return None
-    lines = ["**Last touched (as of the diff base):**", ""]
-    for sha, (author, summary) in commits.items():
-        lines.append(f"- `{sha[:7]}` {author} — {summary}")
-    return "\n".join(lines)
+def format_blame(commit_authors):
+    if not commit_authors:
+        return "*`git blame` found nothing for the changed lines (shallow clone, a binary file, or blame otherwise unavailable here).*"
+    # The renderer has no horizontal-rule support, so a "---" separator would just render as a
+    # literal "---" paragraph -- each block's own byline already reads as a clear visual break.
+    parts = []
+    for sha, author in commit_authors.items():
+        message = commit_message_full(sha) or "*(no commit message available)*"
+        parts.append(f"*`{sha[:7]}` — {author}*\n\n{message}")
+    return "\n\n\n".join(parts)
 
 
 def diff_nodes_from(base, head, paths=None, blame=False):

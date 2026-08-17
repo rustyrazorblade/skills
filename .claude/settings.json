@@ -6,5 +6,9 @@
     "allow": [
       "Bash(easy-db-lab *)"
     ]
-  }
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "agent": "spec-flow:project-manager"
 }

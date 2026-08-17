@@ -44,28 +44,52 @@ one level out, every issue it is linked to via a native GitHub dependency or a b
 - **THEN** the manifest includes a lighter node for issue M under `related/`, distinct from a
   native-dependency relation
 
-### Requirement: Diff explanation via commit history
-The system SHALL populate each diff node's explanation pane with the full commit message(s) of
-whichever commit(s) last touched the changed lines, as of the diff base, so the pane explains why
-the code looked the way it did before the change — not just who touched it and when.
+### Requirement: Caller-supplied explanation of what the code does
+The system SHALL accept a caller-supplied explanation of what a diff actually does, keyed by file
+path, and SHALL apply it to any node whose path matches, taking priority over any other source of
+explanation for that node. Explaining what code *does* requires understanding the diff; the
+generator itself has none, so this content is always authored elsewhere (typically an LLM that has
+already read the diff) and supplied as input, never invented mechanically.
 
-#### Scenario: Modified lines show the full commit message
-- **WHEN** a hunk changes lines that existed at the diff base
+#### Scenario: Supplied explanation is applied
+- **WHEN** an explanation map entry's path matches a node's path
+- **THEN** that node's explain field is set to the supplied text
+
+#### Scenario: Supplied explanation overrides other sources
+- **WHEN** a node has both a supplied explanation and commit-history context available
+- **THEN** the supplied explanation is what's shown; the commit-history context is not
+
+#### Scenario: Missing explanation-map file fails loudly
+- **WHEN** an explanation map is requested from a file that doesn't exist
+- **THEN** the generator exits non-zero rather than silently proceeding without it
+
+### Requirement: Commit-history context as a fallback, not a default
+The system SHALL support populating a diff node's explanation pane with commit-history context —
+the full commit message(s) of whichever commit(s) last touched the changed lines, as of the diff
+base — only when explicitly requested, and SHALL NOT enable it by default. Commit-history context
+can only ever quote what someone wrote about a previous change to those lines; it is not an
+explanation of the current diff, and must never be presented as the primary or default source of
+explanation.
+
+#### Scenario: Off by default
+- **WHEN** a diff is generated without explicitly requesting commit-history context
+- **THEN** diff nodes carry no explain field derived from commit history
+
+#### Scenario: Modified lines show the full commit message, once requested
+- **WHEN** commit-history context is explicitly requested, and a hunk changes lines that existed
+  at the diff base
 - **THEN** the node's explain field contains the full commit message (not just the one-line
   summary) of the commit(s) that last touched those lines, with author/commit-id shown as
   secondary metadata, not the primary content
 
 #### Scenario: New file gets an explicit reason, not silence
-- **WHEN** a diff node is for a brand-new file
+- **WHEN** commit-history context is explicitly requested, and a diff node is for a brand-new file
 - **THEN** its explain field states there is no prior history to show, rather than being absent
 
 #### Scenario: Pure addition gets an explicit reason
-- **WHEN** a hunk adds lines without touching any existing old-side lines
+- **WHEN** commit-history context is explicitly requested, and a hunk adds lines without touching
+  any existing old-side lines
 - **THEN** the node's explain field states there is nothing to blame, rather than being absent
-
-#### Scenario: Blame context can be disabled
-- **WHEN** `--no-blame` is passed alongside `--diff`
-- **THEN** diff nodes are produced without an explain field populated from commit history
 
 ### Requirement: PR review comment overlay
 The system SHALL, given `--pr N` alongside `--diff`, overlay that pull request's file/line-anchored

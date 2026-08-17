@@ -63,7 +63,7 @@ printf '## MODIFIED Requirements\n\nchanged\n\n## REMOVED Requirements\n\ngone\n
 
 (
   cd "$repo" && python3 "$generate_explain" \
-    --diff --blame \
+    --diff \
     --base "$base_sha" \
     --change "$repo/changes/demo" \
     --doc "$repo/docs/note.md" \
@@ -141,9 +141,9 @@ else:
 
 blame_explain = diff_nodes[0].get("explain", "") if diff_nodes else ""
 if "Test" in blame_explain and "initial" in blame_explain:
-    print("PASS: --blame populates the diff node's explain with the base commit's author/summary")
+    print("PASS: blame context populates the diff node's explain BY DEFAULT (no --blame flag passed)")
 else:
-    print(f"FAIL: --blame explain — got {blame_explain!r}")
+    print(f"FAIL: default blame explain — got {blame_explain!r}")
 
 foo_node = next((n for n in nodes if n.get("path", "").endswith("foo.md")), {})
 if foo_node.get("badge") == "ADDED" and foo_node.get("badgeClass") == "add":
@@ -216,6 +216,42 @@ check "viewer.html anchors PR comments to their diff row by side+line" $?
 python3 "$generate_explain" >/dev/null 2>/dev/null
 [[ $? -ne 0 ]]
 check "no flags at all -> non-zero exit (never a silent empty view)" $?
+
+# ---------------------------------------------------------------------------
+# --no-blame: the opt-out actually opts out (an owner hit the OPPOSITE bug —
+# blame silently never running because it required a flag nobody thought to
+# pass on a tool whose whole point is explaining "why" — --blame flipped to
+# default-on; this locks in that --no-blame still works as the escape hatch).
+# ---------------------------------------------------------------------------
+noblame_out_html="$out_dir/explain-noblame-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" \
+    --diff --no-blame --base "$base_sha" --out "$noblame_out_html"
+)
+check "generate-explain.py --no-blame exits 0" $?
+
+noblame_py_out="$(python3 - "$noblame_out_html" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+content = open(path, encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+manifest = json.loads(content[start:end])
+diff_nodes = [n for n in manifest.get("nodes", []) if n.get("kind") == "diff"]
+if diff_nodes and "explain" not in diff_nodes[0]:
+    print("PASS: --no-blame actually skips blame context")
+else:
+    print(f"FAIL: --no-blame — got explain={diff_nodes[0].get('explain') if diff_nodes else 'NO DIFF NODES'!r}")
+PYEOF
+)"
+echo "$noblame_py_out"
+noblame_py_pass="$(echo "$noblame_py_out" | grep -c '^PASS:')"
+noblame_py_fail="$(echo "$noblame_py_out" | grep -c '^FAIL:')"
+pass_count=$((pass_count + noblame_py_pass))
+fail_count=$((fail_count + noblame_py_fail))
 
 # ---------------------------------------------------------------------------
 # --symbol blast-radius: a word-boundary git grep across the working tree

@@ -489,7 +489,7 @@ def build_manifest(args, base, head):
     meta = {}
 
     if args.diff:
-        nodes += diff_nodes_from(base, head, paths=args.path, blame=args.blame)
+        nodes += diff_nodes_from(base, head, paths=args.path, blame=not args.no_blame)
         head_label = head or "working tree"
         meta["base"] = base
         meta["head"] = head_label
@@ -569,7 +569,9 @@ def main():
     parser.add_argument("--path", action="append", default=[], metavar="PATH",
                          help="scope --diff to this path (repeatable, passed to git diff as -- <path>...); only meaningful with --diff, omit to diff the whole repo")
     parser.add_argument("--blame", action="store_true",
-                         help="populate each diff node's explain pane with git-blame context (which commit(s) last touched the changed lines, as of --base) — opt-in, costs one `git blame` call per hunk; only meaningful with --diff")
+                         help="accepted for backward compatibility — blame context is now the default with --diff, this flag no longer changes anything")
+    parser.add_argument("--no-blame", action="store_true",
+                         help="skip git-blame context on diff nodes (one `git blame` call per hunk otherwise) — trade the explain pane's 'why does this look this way' context for speed on a large diff; only meaningful with --diff")
     parser.add_argument("--issue", action="append", type=int, default=[], metavar="N",
                          help="a GitHub issue number: its body + comments, plus (one level out) every issue it's linked to via a native dependency or a bare #N mention (repeatable)")
     parser.add_argument("--change", action="append", default=[], metavar="DIR",

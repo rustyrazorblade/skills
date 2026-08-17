@@ -1,11 +1,11 @@
 ## Purpose
 
-Render an IDE-style, single-page HTML view — a file tree, a code/diff/doc editor, and an
-explanation pane — of a git diff, a GitHub issue plus everything linked to it, project docs, or
-any combination, so a reviewer sees everything relevant to a decision in one place instead of
-raw diff output or hopping between GitHub tabs. Deterministic and self-contained: no model tokens
-spent on markup in the default mode, no server, opens over `file://`. Ships as the `explain` skill
-in the standalone `review-tools` plugin — no dependency on any other plugin.
+Aid human understanding of what's happening in a change — a worktree, a branch, or an issue —
+presented as a walkthrough rather than a raw diff dump: a file tree, a code/diff/doc editor, and
+an explanation pane, all in one self-contained HTML view. Deterministic and self-contained: no
+model tokens spent on markup in the default mode, no server, opens over `file://`. Ships as the
+`explain` skill in the standalone `review-tools` plugin — no dependency on any other plugin, and
+generic enough to work on any project, including ones that can't or don't adopt spec-flow.
 
 ## Requirements
 
@@ -26,6 +26,25 @@ default mode.
 #### Scenario: Diff can be scoped to specific paths
 - **WHEN** `--diff` is passed with one or more `--path` values
 - **THEN** the diff is scoped to only those paths, excluding changes elsewhere in the repository
+
+### Requirement: Generic scope aliases for worktree and branch
+The system SHALL provide `--worktree` and `--branch <name>` as convenience aliases that resolve
+to `--diff`'s own default base/head behavior, using only generic git-level information — no
+issue-number inference, no assumption of any project's branch-naming or file-layout conventions —
+so the aliases remain usable on any repository.
+
+#### Scenario: Worktree alias
+- **WHEN** `--worktree` is passed
+- **THEN** the view is generated as if `--diff` were passed with no `--base`/`--head` override —
+  merge-base with the default branch vs. the working tree
+
+#### Scenario: Branch alias
+- **WHEN** `--branch <name>` is passed without an explicit `--head`
+- **THEN** the view is generated as if `--diff --head <name>` were passed
+
+#### Scenario: Explicit --head takes precedence
+- **WHEN** both `--branch <name>` and `--head` are passed
+- **THEN** the explicit `--head` value is used, not the branch alias's
 
 ### Requirement: GitHub issue mode surfaces related work
 The system SHALL, given `--issue N`, include that issue's full body and comment thread, plus,

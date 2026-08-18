@@ -28,7 +28,7 @@
     {
       "name": "review-tools",
       "source": "./plugins/review-tools",
-      "description": "Render an IDE-style single-page HTML view of a diff, a GitHub issue plus everything linked to it, or docs — standalone, no other plugin required",
+      "description": "Render a change or a subsystem as one self-contained HTML page — `explain` for an IDE-style view of a diff, a GitHub issue plus everything linked to it, or docs; `walkthrough` for a diagram-first, ordered-step presentation — standalone, no other plugin required",
       "category": "workflow"
     }
   ]

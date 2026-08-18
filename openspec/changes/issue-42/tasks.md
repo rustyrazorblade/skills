@@ -85,12 +85,12 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Write `plugins/review-tools/skills/walkthrough/SKILL.md`: manifest schema (mirroring how
+- [x] 5.1 Write `plugins/review-tools/skills/walkthrough/SKILL.md`: manifest schema (mirroring how
       `explain`'s `SKILL.md` documents its own schema), CLI usage, and — the actual "how to use
       me" contract — guidance for the invoking agent on what to investigate before authoring a
       manifest and how to write a good diagram/narration for each of the five walkthrough kinds
       (explanation, tech-debt, improvements, recommendations, performance).
-- [ ] 5.2 Write `plugins/review-tools/skills/walkthrough/scripts/README.md` documenting the test
+- [x] 5.2 Write `plugins/review-tools/skills/walkthrough/scripts/README.md` documenting the test
       suite, mirroring `explain`'s sibling `scripts/README.md`.
 
 ## 6. Versioning
@@ -99,5 +99,5 @@
       `plugins/review-tools/.claude-plugin/plugin.json` before changing it (this repo's
       established convention — propose a minor bump per the repo's stated default, from whatever
       the current version is at implementation time).
-- [ ] 6.2 Update `plugin.json`'s `description`/`keywords` to mention `walkthrough` alongside
+- [x] 6.2 Update `plugin.json`'s `description`/`keywords` to mention `walkthrough` alongside
       `explain`.

@@ -7,6 +7,10 @@
   compatible.
 - `test-generate-explain.sh` — structural self-test for the two scripts above.
 
+`generate-explain.py` imports `fail()`, the `<!--MANIFEST-->` injection helper, and the
+temp-output-path helper from `plugins/review-tools/lib/html_shell.py`, which it shares with the
+sibling `walkthrough` skill's generator — a change there affects both.
+
 ## Running the test
 
 ```bash

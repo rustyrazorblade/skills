@@ -1,0 +1,16 @@
+{
+  "title": "Second step has an empty excerpt list",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "A valid first step",
+      "narration": "Some narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    },
+    {
+      "title": "The excerptless step",
+      "narration": "Nothing to show.",
+      "excerpts": []
+    }
+  ]
+}

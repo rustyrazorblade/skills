@@ -1,0 +1,15 @@
+{
+  "title": "Second step has no narration",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "A valid first step",
+      "narration": "Some narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    },
+    {
+      "title": "The narrationless step",
+      "excerpts": [{ "path": "src/a.py", "startLine": 2, "code": "y = 2" }]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "title": "Second excerpt of the second step has no path",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "A valid first step",
+      "narration": "Some narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    },
+    {
+      "title": "The pathless-excerpt step",
+      "narration": "Its second excerpt is missing a path.",
+      "excerpts": [
+        { "path": "src/a.py", "startLine": 2, "code": "y = 2" },
+        { "startLine": 3, "code": "z = 3" }
+      ]
+    }
+  ]
+}

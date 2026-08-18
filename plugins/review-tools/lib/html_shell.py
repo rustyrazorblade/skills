@@ -20,10 +20,14 @@ def fail(message, prog):
 
 
 def inject_manifest(viewer_html, manifest, prog):
-    # ensure_ascii keeps the payload plain-ASCII-safe; escaping "</" as "<\/" is the standard
-    # technique to stop an embedded "</script>" substring (e.g. inside a doc or diff) from
-    # prematurely closing the injected <script> tag.
-    manifest_json = json.dumps(manifest, ensure_ascii=True).replace("</", "<\\/")
+    # ensure_ascii keeps the payload plain-ASCII-safe; every "<" then becomes a "<" escape,
+    # which is safe because inside JSON a "<" can only ever appear within a string literal, and
+    # the parser resolves the escape back to the same character. Escaping only "</" is not
+    # enough: HTML's script-data tokenizer treats an embedded "<!--" followed by "<script" as
+    # entering double-escaped state, after which a later "</script>" no longer closes the tag —
+    # content as ordinary as an HTML template excerpt ("<!--[if IE]><script>") would then eat
+    # the rest of the page and silently render the shell's demo fallback instead.
+    manifest_json = json.dumps(manifest, ensure_ascii=True).replace("<", "\\u003c")
     script_tag = f"<script>window.MANIFEST = {manifest_json};</script>"
     if "<!--MANIFEST-->" not in viewer_html:
         fail("assets/viewer.html is missing its <!--MANIFEST--> marker — was it edited?", prog)

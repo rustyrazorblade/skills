@@ -1,0 +1,11 @@
+{
+  "title": "An excerpt has no code",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "The codeless-excerpt step",
+      "narration": "Its only excerpt has no code.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1 }]
+    }
+  ]
+}

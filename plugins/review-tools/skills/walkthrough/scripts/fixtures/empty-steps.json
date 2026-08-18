@@ -1,0 +1,5 @@
+{
+  "title": "No steps at all",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": []
+}

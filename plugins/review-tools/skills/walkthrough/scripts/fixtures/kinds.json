@@ -1,0 +1,48 @@
+{
+  "title": "Ingest path review",
+  "diagram": {
+    "type": "svg",
+    "source": "<svg viewBox=\"0 0 200 40\" width=\"200\" height=\"40\"><rect x=\"1\" y=\"1\" width=\"198\" height=\"38\" fill=\"none\" stroke=\"#569cd6\"/><text x=\"12\" y=\"25\" fill=\"#d4d4d4\" font-size=\"13\">ingest -&gt; parse -&gt; store</text></svg>"
+  },
+  "steps": [
+    {
+      "title": "Duplicated parsing logic",
+      "narration": "The same header parse is implemented twice.",
+      "kind": "tech-debt",
+      "excerpts": [
+        { "path": "src/ingest.py", "startLine": 20, "code": "header = line.split(':', 1)" }
+      ]
+    },
+    {
+      "title": "The per-row allocation",
+      "narration": "Each row allocates a fresh buffer.",
+      "kind": "performance",
+      "excerpts": [
+        { "path": "src/ingest.py", "startLine": 55, "code": "buf = bytearray(4096)" }
+      ]
+    },
+    {
+      "title": "Batch the writes",
+      "narration": "Group writes into a single transaction.",
+      "kind": "recommendation",
+      "excerpts": [
+        { "path": "src/store.py", "startLine": 88, "code": "for row in rows:\n    self._db.insert(row)" }
+      ]
+    },
+    {
+      "title": "An unrecognized kind still renders",
+      "narration": "Any string is accepted for `kind`.",
+      "kind": "tech-dept",
+      "excerpts": [
+        { "path": "src/store.py", "startLine": 91, "code": "self._db.commit()" }
+      ]
+    },
+    {
+      "title": "No kind at all",
+      "narration": "This step omits `kind` entirely, so it must render no badge.",
+      "excerpts": [
+        { "path": "src/store.py", "startLine": 95, "code": "return len(rows)" }
+      ]
+    }
+  ]
+}

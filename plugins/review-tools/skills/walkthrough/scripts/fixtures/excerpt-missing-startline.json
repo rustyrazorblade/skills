@@ -1,0 +1,11 @@
+{
+  "title": "An excerpt has no startLine",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "The startLine-less-excerpt step",
+      "narration": "Its only excerpt has no startLine.",
+      "excerpts": [{ "path": "src/a.py", "code": "x = 1" }]
+    }
+  ]
+}

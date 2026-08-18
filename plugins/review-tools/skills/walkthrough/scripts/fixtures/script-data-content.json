@@ -1,0 +1,18 @@
+{
+  "title": "Content that could break out of the injected script tag",
+  "diagram": { "type": "html", "source": "<div>template -&gt; browser</div>" },
+  "steps": [
+    {
+      "title": "An HTML template excerpt",
+      "narration": "Narration mentioning `</script>` and a conditional comment.",
+      "excerpts": [
+        {
+          "path": "templates/legacy.html",
+          "startLine": 3,
+          "lang": "html",
+          "code": "<!--[if IE]><script src=\"shim.js\"></script><![endif]-->\n<div id=\"app\"></div>"
+        }
+      ]
+    }
+  ]
+}

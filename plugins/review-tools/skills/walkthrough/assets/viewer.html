@@ -1,0 +1,718 @@
+<title>Walkthrough</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1e1e1e;
+    --bg-panel: #252526;
+    --bg-header: #2d2d2d;
+    --bg-code: #161616;
+    --border: #3c3c3c;
+    --text: #d4d4d4;
+    --text-dim: #8a8a8a;
+    --accent: #569cd6;
+    --hover-bg: #2a2d2e;
+    --hl-bg: rgba(255, 213, 79, 0.14);
+    --diff-add-border: #2ea043;
+    --diff-del-border: #f85149;
+    --diff-sep: #6e7681;
+    --code-font: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui-font);
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  header#wt-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+  }
+
+  #wt-heading { flex: 1 1 auto; min-width: 0; }
+
+  header#wt-header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  header#wt-header .subtitle {
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  /* ---------- nav chrome ---------- */
+
+  #nav {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #nav button {
+    font-family: var(--ui-font);
+    font-size: 12px;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+
+  #nav button:hover { background: var(--hover-bg); }
+  #nav button:disabled { opacity: 0.4; cursor: default; }
+
+  #step-counter {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    min-width: 92px;
+    text-align: center;
+  }
+
+  /* The counter and prev/next only steer horizontal mode; in vertical mode the page scrolls
+     normally, so they're hidden rather than lying about a position they don't control. */
+  #nav.vertical #step-counter,
+  #nav.vertical #prev-step,
+  #nav.vertical #next-step { display: none; }
+
+  /* ---------- content ---------- */
+
+  #content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 24px 40px;
+  }
+
+  #diagram-section {
+    max-width: 1100px;
+    margin: 0 auto 26px;
+    padding: 18px 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  #diagram svg { max-width: 100%; height: auto; }
+
+  #diagram-caption {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  #steps {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .step {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px 20px;
+  }
+
+  .step-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .step-index {
+    font-family: var(--code-font);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .step-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* Any string is accepted for a step's kind — the four conventional values get their own
+     color, anything else falls through to this neutral base style rather than failing. */
+  .step-kind {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--diff-sep);
+    color: #1e1e1e;
+  }
+
+  .step-kind-explanation { background: var(--accent); }
+  .step-kind-tech-debt { background: #d29922; }
+  .step-kind-performance { background: #a371f7; }
+  .step-kind-recommendation { background: var(--diff-add-border); }
+
+  .step-narration { font-size: 13.5px; line-height: 1.55; }
+
+  /* ---------- code excerpts ---------- */
+
+  .excerpt { margin-top: 14px; }
+
+  .excerpt-ref {
+    font-family: var(--code-font);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    padding: 4px 10px;
+    background: var(--bg-header);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+  }
+
+  .excerpt-code {
+    font-family: var(--code-font);
+    font-size: 12.5px;
+    line-height: 1.5;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 0 0 6px 6px;
+    overflow-x: auto;
+  }
+
+  .code-row { display: flex; white-space: pre; }
+  .code-row.hl { background: var(--hl-bg); }
+
+  .code-row .gl {
+    flex: 0 0 52px;
+    text-align: right;
+    padding: 0 8px;
+    color: var(--text-dim);
+    user-select: none;
+    border-right: 1px solid var(--border);
+  }
+
+  .code-row .code {
+    flex: 1 1 auto;
+    padding: 0 16px 0 8px;
+  }
+
+  /* ---------- horizontal (slide) mode ---------- */
+
+  #steps.horizontal {
+    flex-direction: row;
+    gap: 0;
+    max-width: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  /* Bounded so a long step scrolls inside its own slide instead of stretching every slide to
+     its height and pushing the next one off-screen. */
+  #steps.horizontal > .step {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  /* ---------- markdown (step narration) ---------- */
+
+  .step-narration h1, .step-narration h2, .step-narration h3,
+  .step-narration h4, .step-narration h5, .step-narration h6 {
+    color: var(--text);
+    margin: 1.1em 0 0.4em;
+    font-family: var(--ui-font);
+    font-size: 1.05em;
+  }
+
+  .step-narration p { margin: 0.5em 0; }
+
+  .step-narration ul, .step-narration ol {
+    margin: 0.4em 0;
+    padding-left: 1.6em;
+  }
+
+  .step-narration code {
+    font-family: var(--code-font);
+    background: rgba(110, 118, 129, 0.2);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }
+
+  .step-narration pre.md-code {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+  }
+
+  .step-narration pre.md-code code { background: none; padding: 0; }
+
+  .step-narration a { color: var(--accent); }
+
+  .step-narration table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    font-size: 0.95em;
+  }
+
+  .step-narration th, .step-narration td {
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    text-align: left;
+  }
+
+  .step-narration th { background: var(--bg-header); }
+
+  /* The copied markdown renderer color-codes OpenSpec's delta-spec sections; narration that
+     quotes one still renders styled rather than as a bare div. */
+  .delta-section {
+    border-left: 3px solid var(--diff-sep);
+    padding: 2px 0 2px 14px;
+    margin: 14px 0;
+  }
+  .delta-section .delta-label {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+  }
+  .delta-added { border-left-color: var(--diff-add-border); }
+  .delta-added .delta-label { background: var(--diff-add-border); color: #0a2e12; }
+  .delta-modified { border-left-color: #d29922; }
+  .delta-modified .delta-label { background: #d29922; color: #2b1d02; }
+  .delta-removed { border-left-color: var(--diff-del-border); }
+  .delta-removed .delta-label { background: var(--diff-del-border); color: #2e0a08; }
+  .delta-renamed { border-left-color: var(--accent); }
+  .delta-renamed .delta-label { background: var(--accent); color: #05203a; }
+</style>
+<div id="app">
+  <header id="wt-header">
+    <div id="wt-heading">
+      <h1 id="wt-title">Walkthrough</h1>
+      <div class="subtitle" id="wt-subtitle" style="display:none"></div>
+    </div>
+    <div id="nav" class="vertical">
+      <button id="prev-step" type="button" title="Previous step (left arrow)">&#8592; Prev</button>
+      <span id="step-counter">Step 1 of 1</span>
+      <button id="next-step" type="button" title="Next step (right arrow)">Next &#8594;</button>
+      <button id="layout-toggle" type="button">Slides</button>
+    </div>
+  </header>
+  <main id="content">
+    <section id="diagram-section">
+      <div id="diagram"></div>
+      <div id="diagram-caption" style="display:none"></div>
+    </section>
+    <div id="steps"></div>
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // Demo manifest — used only when window.MANIFEST is not injected (e.g.
+  // opening this shell file directly). generate-walkthrough.py replaces the
+  // injection marker near the end of this file with a real one (kept out of
+  // this comment as literal text so it stays a single, unique occurrence in
+  // this file for the generator to target).
+  // ---------------------------------------------------------------------
+  var DEMO_MANIFEST = {
+    title: "walkthrough viewer (demo)",
+    subtitle: "No manifest was injected — showing a built-in example.",
+    diagram: {
+      type: "html",
+      source: '<div style="display:flex;gap:10px;justify-content:center;align-items:center;font-family:monospace">' +
+        '<span style="border:1px solid #569cd6;border-radius:6px;padding:8px 14px">Request</span>' +
+        '<span style="color:#8a8a8a">&#8594;</span>' +
+        '<span style="border:1px solid #569cd6;border-radius:6px;padding:8px 14px">UserStore</span>' +
+        '<span style="color:#8a8a8a">&#8594;</span>' +
+        '<span style="border:1px solid #569cd6;border-radius:6px;padding:8px 14px">Cache</span>' +
+        "</div>",
+      caption: "A read goes through the store, which consults the cache first."
+    },
+    steps: [
+      {
+        title: "The entry point",
+        narration: "Every read enters through `get` — the **only** public accessor.",
+        kind: "explanation",
+        excerpts: [
+          {
+            path: "src/example/user_store.rs",
+            startLine: 10,
+            endLine: 12,
+            lang: "rust",
+            highlight: [11],
+            code: "pub fn get(&self, id: u64) -> Option<&User> {\n    self.users.get(&id)\n}"
+          }
+        ]
+      },
+      {
+        title: "The discarded return value",
+        narration: "`remove` throws away the removed `User`, so callers can't tell who was removed.",
+        kind: "tech-debt",
+        excerpts: [
+          {
+            path: "src/example/user_store.rs",
+            startLine: 14,
+            endLine: 16,
+            lang: "rust",
+            code: "pub fn remove(&mut self, id: u64) {\n    self.users.remove(&id);\n}"
+          }
+        ]
+      }
+    ]
+  };
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ---------------------------------------------------------------------
+  // Markdown — compact, built-in, no external library. Supports headings,
+  // ordered/unordered lists, fenced code blocks, inline code, bold, italic,
+  // links, and simple pipe tables. Copied verbatim from the explain skill's
+  // own viewer.html rather than written a second time; the two shells are
+  // separate static files with no build step to share JS through.
+  // ---------------------------------------------------------------------
+  function inlineMD(text) {
+    var s = escapeHtml(text);
+    var codes = [];
+    // Plain-ASCII sentinel (no control/unicode escapes) protects code-span content from the
+    // bold/italic/link passes below, then gets swapped back in as a real <code> tag.
+    s = s.replace(/`([^`]+)`/g, function (m, p1) {
+      codes.push(p1);
+      return "@@CS" + (codes.length - 1) + "@@";
+    });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    s = s.replace(/_([^_]+)_/g, "<em>$1</em>");
+    s = s.replace(/@@CS(\d+)@@/g, function (m, idx) {
+      return "<code>" + codes[Number(idx)] + "</code>";
+    });
+    return s;
+  }
+
+  function splitTableRow(line) {
+    var t = line.trim();
+    if (t.charAt(0) === "|") t = t.slice(1);
+    if (t.charAt(t.length - 1) === "|") t = t.slice(0, -1);
+    return t.split("|").map(function (c) { return c.trim(); });
+  }
+
+  var TABLE_SEP_RE = /^\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+  var HEADING_RE = /^(#{1,6})\s+(.*)$/;
+  var UL_RE = /^\s*[-*+]\s+(.*)$/;
+  var OL_RE = /^\s*\d+\.\s+(.*)$/;
+  var FENCE_RE = /^\s*(```|~~~)(.*)$/;
+
+  // OpenSpec's own delta-spec convention (not spec-flow-specific — OpenSpec is its own
+  // generic tool): a level-2 "## ADDED/MODIFIED/REMOVED/RENAMED Requirements" heading starts
+  // a section that runs until the next heading of level <= 2. Color-coded so new vs changed
+  // vs removed behavior is visually obvious while scrolling a delta spec, not just something
+  // you'd notice by reading a plain heading.
+  var DELTA_HEADING_RE = /^(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b/i;
+
+  // Stable per-heading anchors (e.g. "requirement-widget-deletion") so a requirement/scenario can
+  // be referenced precisely — in a redirect, in a URL fragment — instead of "the third one down".
+  function slugify(text, usedIds) {
+    var base = String(text || "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "section";
+    var slug = base;
+    var n = 2;
+    while (usedIds[slug]) { slug = base + "-" + n; n++; }
+    usedIds[slug] = true;
+    return slug;
+  }
+
+  function renderMarkdown(src) {
+    var lines = String(src || "").replace(/\r\n/g, "\n").split("\n");
+    var html = "";
+    var i = 0;
+    var openDelta = null; // null | "added" | "modified" | "removed" | "renamed"
+    var usedIds = {};
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      var fence = line.match(FENCE_RE);
+      if (fence) {
+        var fenceMark = fence[1];
+        var lang = fence[2].trim();
+        var codeLines = [];
+        i++;
+        while (i < lines.length && lines[i].trim().indexOf(fenceMark) !== 0) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++; // skip closing fence
+        html += '<pre class="md-code"><code' +
+          (lang ? ' data-lang="' + escapeHtml(lang) + '"' : "") +
+          ">" + escapeHtml(codeLines.join("\n")) + "</code></pre>";
+        continue;
+      }
+
+      var heading = line.match(HEADING_RE);
+      if (heading) {
+        var level = heading[1].length;
+        var deltaMatch = level === 2 ? heading[2].trim().match(DELTA_HEADING_RE) : null;
+        if (level <= 2 && openDelta) {
+          html += "</div>";
+          openDelta = null;
+        }
+        if (deltaMatch) {
+          openDelta = deltaMatch[1].toLowerCase();
+          html += '<div class="delta-section delta-' + openDelta + '">' +
+            '<span class="delta-label">' + escapeHtml(deltaMatch[1].toUpperCase()) + "</span>";
+        }
+        var headingId = slugify(heading[2], usedIds);
+        html += "<h" + level + ' id="' + headingId + '">' + inlineMD(heading[2]) + "</h" + level + ">";
+        i++;
+        continue;
+      }
+
+      if (line.indexOf("|") !== -1 && i + 1 < lines.length && TABLE_SEP_RE.test(lines[i + 1])) {
+        var headerCells = splitTableRow(line);
+        i += 2;
+        var rows = [];
+        while (i < lines.length && lines[i].indexOf("|") !== -1 && !/^\s*$/.test(lines[i])) {
+          rows.push(splitTableRow(lines[i]));
+          i++;
+        }
+        html += "<table><thead><tr>" +
+          headerCells.map(function (c) { return "<th>" + inlineMD(c) + "</th>"; }).join("") +
+          "</tr></thead><tbody>" +
+          rows.map(function (r) {
+            return "<tr>" + r.map(function (c) { return "<td>" + inlineMD(c) + "</td>"; }).join("") + "</tr>";
+          }).join("") +
+          "</tbody></table>";
+        continue;
+      }
+
+      if (/^\s*$/.test(line)) { i++; continue; }
+
+      if (UL_RE.test(line)) {
+        var ulItems = [];
+        while (i < lines.length && UL_RE.test(lines[i])) {
+          ulItems.push(lines[i].replace(UL_RE, "$1"));
+          i++;
+        }
+        html += "<ul>" + ulItems.map(function (it) { return "<li>" + inlineMD(it) + "</li>"; }).join("") + "</ul>";
+        continue;
+      }
+
+      if (OL_RE.test(line)) {
+        var olItems = [];
+        while (i < lines.length && OL_RE.test(lines[i])) {
+          olItems.push(lines[i].replace(OL_RE, "$1"));
+          i++;
+        }
+        html += "<ol>" + olItems.map(function (it) { return "<li>" + inlineMD(it) + "</li>"; }).join("") + "</ol>";
+        continue;
+      }
+
+      var paraLines = [];
+      while (i < lines.length &&
+        !/^\s*$/.test(lines[i]) &&
+        !HEADING_RE.test(lines[i]) &&
+        !UL_RE.test(lines[i]) &&
+        !OL_RE.test(lines[i]) &&
+        !FENCE_RE.test(lines[i])) {
+        paraLines.push(lines[i]);
+        i++;
+      }
+      html += "<p>" + paraLines.map(inlineMD).join("<br>") + "</p>";
+    }
+
+    if (openDelta) html += "</div>";
+
+    return html;
+  }
+
+  // ---------------------------------------------------------------------
+  // Steps
+  // ---------------------------------------------------------------------
+  function kindClass(kind) {
+    // Any string is accepted (see SKILL.md): a recognized value gets its own color, anything
+    // else keeps the neutral base badge rather than being rejected.
+    var slug = String(kind).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return slug ? " step-kind-" + slug : "";
+  }
+
+  function renderExcerpt(excerpt) {
+    var startLine = Number(excerpt.startLine) || 1;
+    var ref = String(excerpt.path) + ":" + startLine +
+      (excerpt.endLine ? "-" + excerpt.endLine : "");
+    var highlightSet = {};
+    (excerpt.highlight || []).forEach(function (n) { highlightSet[n] = true; });
+
+    var rows = String(excerpt.code || "").replace(/\r\n/g, "\n").split("\n").map(function (line, idx) {
+      var lineNo = startLine + idx;
+      return '<div class="code-row' + (highlightSet[lineNo] ? " hl" : "") + '">' +
+        '<span class="gl">' + lineNo + "</span>" +
+        '<span class="code">' + escapeHtml(line) + "</span>" +
+        "</div>";
+    }).join("");
+
+    return '<div class="excerpt">' +
+      '<div class="excerpt-ref">' + escapeHtml(ref) + "</div>" +
+      '<div class="excerpt-code"' + (excerpt.lang ? ' data-lang="' + escapeHtml(excerpt.lang) + '"' : "") + ">" +
+      rows + "</div></div>";
+  }
+
+  function renderStep(step, index, total) {
+    var badge = step.kind
+      ? '<span class="step-kind' + kindClass(step.kind) + '">' + escapeHtml(step.kind) + "</span>"
+      : "";
+    return '<section class="step" data-step-index="' + index + '">' +
+      '<div class="step-head">' +
+      '<span class="step-index">' + (index + 1) + " / " + total + "</span>" +
+      '<h2 class="step-title">' + escapeHtml(step.title) + "</h2>" +
+      badge +
+      "</div>" +
+      '<div class="step-narration">' + renderMarkdown(step.narration) + "</div>" +
+      (step.excerpts || []).map(renderExcerpt).join("") +
+      "</section>";
+  }
+
+  // ---------------------------------------------------------------------
+  // App wiring
+  // ---------------------------------------------------------------------
+  function renderApp(manifest) {
+    var steps = manifest.steps || [];
+    var diagram = manifest.diagram || {};
+
+    document.getElementById("wt-title").textContent = manifest.title || "Walkthrough";
+    if (manifest.subtitle) {
+      var subtitleEl = document.getElementById("wt-subtitle");
+      subtitleEl.textContent = manifest.subtitle;
+      subtitleEl.style.display = "";
+    }
+
+    // The diagram is embedded as-authored (inline SVG or HTML markup) and always renders
+    // before any step content — that ordering is the whole point of this view.
+    document.getElementById("diagram").innerHTML = diagram.source || "";
+    if (diagram.caption) {
+      var captionEl = document.getElementById("diagram-caption");
+      captionEl.textContent = diagram.caption;
+      captionEl.style.display = "";
+    }
+
+    var stepsEl = document.getElementById("steps");
+    stepsEl.innerHTML = steps.map(function (step, i) {
+      return renderStep(step, i, steps.length);
+    }).join("");
+
+    var nav = document.getElementById("nav");
+    var counter = document.getElementById("step-counter");
+    var prevBtn = document.getElementById("prev-step");
+    var nextBtn = document.getElementById("next-step");
+    var toggle = document.getElementById("layout-toggle");
+    var current = 0;
+
+    function isHorizontal() { return stepsEl.classList.contains("horizontal"); }
+
+    function updateNav() {
+      counter.textContent = "Step " + (current + 1) + " of " + steps.length;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current >= steps.length - 1;
+    }
+
+    function goTo(index) {
+      if (!steps.length) return;
+      current = Math.min(Math.max(index, 0), steps.length - 1);
+      var slide = stepsEl.children[current];
+      if (slide) stepsEl.scrollLeft = slide.offsetLeft - stepsEl.offsetLeft;
+      updateNav();
+    }
+
+    // Vertical scroll is the default layout; the toggle flips a single class and CSS does the
+    // rest (scroll-snap), so one generated file serves both modes with no regeneration.
+    toggle.addEventListener("click", function () {
+      var horizontal = stepsEl.classList.toggle("horizontal");
+      nav.classList.toggle("vertical", !horizontal);
+      toggle.textContent = horizontal ? "Scroll" : "Slides";
+      if (horizontal) goTo(current);
+    });
+
+    prevBtn.addEventListener("click", function () { goTo(current - 1); });
+    nextBtn.addEventListener("click", function () { goTo(current + 1); });
+
+    document.addEventListener("keydown", function (ev) {
+      if (!isHorizontal()) return;
+      if (ev.key === "ArrowLeft") {
+        goTo(current - 1);
+        ev.preventDefault();
+      } else if (ev.key === "ArrowRight") {
+        goTo(current + 1);
+        ev.preventDefault();
+      }
+    });
+
+    // Keep the counter honest when the reader swipes/scrolls the slides directly instead of
+    // using the buttons.
+    stepsEl.addEventListener("scroll", function () {
+      if (!isHorizontal() || !stepsEl.clientWidth) return;
+      var index = Math.round(stepsEl.scrollLeft / stepsEl.clientWidth);
+      if (index !== current) {
+        current = Math.min(Math.max(index, 0), steps.length - 1);
+        updateNav();
+      }
+    });
+
+    updateNav();
+  }
+
+  function boot() {
+    renderApp(window.MANIFEST || DEMO_MANIFEST);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    // Marker script (if injected) already ran during synchronous parsing,
+    // and the document is already parsed by the time we get here.
+    boot();
+  }
+})();
+</script>
+<!--MANIFEST-->

@@ -2,5 +2,6 @@
 cassandra-upstream/
 /tests
 .DS_Store
+__pycache__/
 .claude/worktrees/
 .spec-flow/

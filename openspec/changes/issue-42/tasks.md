@@ -1,12 +1,12 @@
 ## 1. Extract shared helpers (do first — pure refactor, no behavior change)
 
-- [ ] 1.1 Create `plugins/review-tools/lib/html_shell.py` containing `fail()`, the
+- [x] 1.1 Create `plugins/review-tools/lib/html_shell.py` containing `fail()`, the
       `<!--MANIFEST-->` marker-injection helper (`inject_manifest()`), and the temp-output-path
       helper (`default_out_path()`), moved verbatim from `generate-explain.py`.
-- [ ] 1.2 Refactor `plugins/review-tools/skills/explain/scripts/generate-explain.py` to import
+- [x] 1.2 Refactor `plugins/review-tools/skills/explain/scripts/generate-explain.py` to import
       these three from `plugins/review-tools/lib/html_shell.py` instead of defining them locally —
       no other change to that file.
-- [ ] 1.3 Re-run `plugins/review-tools/skills/explain/scripts/test-generate-explain.sh` — must
+- [x] 1.3 Re-run `plugins/review-tools/skills/explain/scripts/test-generate-explain.sh` — must
       still be 85/85 passing. Fix immediately if not; this must land clean before any new code is
       built on top of it.
 

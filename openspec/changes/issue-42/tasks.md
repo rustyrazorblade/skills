@@ -187,3 +187,12 @@
       its own AppleScript-based controller regardless of `$BROWSER`).
       `test-generate-walkthrough.sh`: 117 -> 135 passing, verified under real `/bin/bash`
       (3.2.57); `test-generate-explain.sh` unaffected at 88.
+
+## 10. Remaining low-severity security finding
+
+- [x] 10.1 SEC-2 (low): `diagram.source` is an intentional, unsanitized `innerHTML` sink -- the
+      one place content executes with no click, unlike the SEC-1 link case -- but its trust
+      constraint was undocumented. Added an explicit bullet to `SKILL.md`'s "Authoring the
+      diagram" section: the markup must be agent-authored, never text copied from the code/docs/
+      issues under review. No code change -- sanitizing would destroy the feature; the authoring
+      rule is the only available control, so it needed to be written down.

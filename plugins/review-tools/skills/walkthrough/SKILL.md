@@ -126,6 +126,12 @@ client-side convention.
 - **`type: "svg"`** for anything with real layout — a branching flow, a layered stack. Use a
   `viewBox` and keep it responsive; **omit `xmlns`** (inline SVG in HTML doesn't need it, and the
   output must contain no URLs at all — see the self-containment rule below).
+- **`diagram.source` is embedded and executes as-is, with no sanitization, the instant the file
+  opens — no click required.** This is deliberate (it is the entire content model: agent-authored
+  markup, nothing mechanical in between), but it means the markup must be *yours* — never
+  interpolate text copied from the code, docs, issues, or dependencies under review into it. If
+  you need to show a fragment of real markup as an example, put it in a step's code excerpt
+  instead (rendered as inert text, not executed).
 - Style with plain inline styles or the shell's own CSS custom properties (`var(--accent)`,
   `var(--text-dim)`, `var(--border)`), so the diagram matches the surrounding dark theme.
 - Keep it to the handful of boxes the walkthrough actually visits. The diagram is the map for

@@ -167,3 +167,23 @@
       suite: `test-generate-walkthrough.sh` 108 -> 117, `test-generate-explain.sh` unaffected at
       88 -- both verified under real `/bin/bash` (3.2.57).
 
+
+## 9. Fixes from the test-rigor pass
+
+- [x] 9.1 Added three wrong-type-input fixtures/cases (`not-an-object.json`,
+      `title-wrong-type.json`, `steps-wrong-type.json`) -- every prior failure fixture tested a
+      field being ABSENT or EMPTY, never PRESENT-with-the-wrong-shape (a top-level JSON array
+      instead of an object, a non-string required field, a non-list `steps`) -- a real mistake an
+      agent authoring a manifest by hand could make, and a real antagonistic gap.
+- [x] 9.2 Added a positive-case fixture (`excerpt-code-with-url.json`) proving the diagram-only
+      self-containment scope is real: an excerpt's `code` containing an `https://` URL is
+      accepted and survives into the rendered output. Previously only the *rejection* side
+      (`diagram.source` containing a URL) was tested -- a regression broadening the check to the
+      whole manifest would have silently broken ordinary source code with a URL constant, with
+      nothing in the suite to catch it.
+- [x] 9.3 Added coverage for both `--open` outcomes (a documented part of the CLI contract) via
+      direct `webbrowser.open` monkeypatching, not the `$BROWSER` env var -- confirmed live that
+      `$BROWSER` is not a reliable cross-platform mock (macOS routes `webbrowser.open()` through
+      its own AppleScript-based controller regardless of `$BROWSER`).
+      `test-generate-walkthrough.sh`: 117 -> 135 passing, verified under real `/bin/bash`
+      (3.2.57); `test-generate-explain.sh` unaffected at 88.

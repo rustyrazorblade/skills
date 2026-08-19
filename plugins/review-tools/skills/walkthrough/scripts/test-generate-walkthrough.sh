@@ -354,6 +354,13 @@ expect_failure "an unparseable manifest file" "not-json.json"
 expect_failure "a manifest with an empty step list" "empty-steps.json" "steps"
 expect_failure "a manifest with no title" "no-title.json" "title"
 
+# Wrong-type input, not just missing/empty -- every failure fixture above tests a field being
+# ABSENT; these test a field being PRESENT with the wrong shape, a real mistake an
+# agent authoring a manifest by hand could easily make.
+expect_failure "a manifest that is a JSON array, not an object, at the top level" "not-an-object.json" "expected a JSON object" "list"
+expect_failure "a manifest whose title is a number, not a string" "title-wrong-type.json" "title" "must be a string" "int"
+expect_failure "a manifest whose steps is an object, not a list" "steps-wrong-type.json" "steps" "must be a list" "dict"
+
 # Diagram is mandatory.
 expect_failure "a manifest with no diagram at all" "no-diagram.json" "diagram"
 expect_failure "a diagram with an empty source" "empty-diagram-source.json" "diagram" "source"
@@ -383,6 +390,68 @@ expect_failure "an excerpt whose highlight isn't a list of line numbers" "bad-hi
 bad_bytes="$out_dir/bad-bytes.json"
 printf '{"title": "\377\376bad"}' > "$bad_bytes"
 expect_failure "a manifest that isn't valid UTF-8" "$bad_bytes" "couldn't read"
+
+# ---------------------------------------------------------------------------
+# Positive proof of the diagram-only self-containment scope: an excerpt's code legitimately
+# contains a URL and must be ACCEPTED, not just "not covered" by the diagram.source check. A
+# regression that broadened that check to the whole manifest would silently break ordinary
+# source code containing a URL constant, with nothing above to catch it.
+# ---------------------------------------------------------------------------
+code_url_html="$out_dir/walkthrough-code-url.html"
+python3 "$generate_walkthrough" --manifest "$fixtures/excerpt-code-with-url.json" --out "$code_url_html"
+check "an excerpt whose code contains a URL is accepted (self-containment is diagram-only)" $?
+
+grep -qF 'https://api.example.com/v1' "$code_url_html"
+check "the excerpt's URL survives into the rendered output" $?
+
+# ---------------------------------------------------------------------------
+# --open: both webbrowser.open() outcomes are part of the documented CLI contract (SKILL.md).
+# The $BROWSER env var is NOT a reliable cross-platform mock -- confirmed live, macOS routes
+# webbrowser.open() through its own AppleScript-based controller regardless of $BROWSER, so a
+# fake BROWSER=/usr/bin/false silently does nothing there. Monkeypatch webbrowser.open directly
+# instead, which is correct on every platform.
+# ---------------------------------------------------------------------------
+open_html="$out_dir/walkthrough-open.html"
+open_py_out="$(python3 - "$generate_walkthrough" "$fixtures/valid.json" "$open_html" <<'PYEOF'
+import importlib.util
+import io
+import sys
+import webbrowser
+
+script_path, manifest_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = importlib.util.spec_from_file_location("generate_walkthrough_mod", script_path)
+gw = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gw)
+
+
+def run_with_open(open_returns):
+    webbrowser.open = lambda url: open_returns
+    saved_argv, saved_stderr = sys.argv, sys.stderr
+    sys.argv = ["generate-walkthrough.py", "--manifest", manifest_path, "--out", out_path, "--open"]
+    sys.stderr = io.StringIO()
+    try:
+        gw.main()
+        return sys.stderr.getvalue()
+    finally:
+        sys.argv, sys.stderr = saved_argv, saved_stderr
+
+
+stderr_on_success = run_with_open(True)
+if "couldn't launch" not in stderr_on_success:
+    print("PASS: --open with a successful browser launch prints no failure warning")
+else:
+    print(f"FAIL: --open success case unexpectedly warned — {stderr_on_success!r}")
+
+stderr_on_failure = run_with_open(False)
+if "couldn't launch a browser" in stderr_on_failure:
+    print("PASS: --open with a failed browser launch warns on stderr (exit still succeeds)")
+else:
+    print(f"FAIL: --open failure case did not warn — {stderr_on_failure!r}")
+PYEOF
+)"
+echo "$open_py_out"
+pass_count=$((pass_count + $(echo "$open_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$open_py_out" | grep -c '^FAIL:')))
 
 echo ""
 echo "----------------------------------------"

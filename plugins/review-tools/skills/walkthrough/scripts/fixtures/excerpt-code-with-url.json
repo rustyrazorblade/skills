@@ -1,0 +1,18 @@
+{
+  "title": "An excerpt legitimately contains a URL",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "A step whose code references a URL constant",
+      "narration": "The excerpt below defines a URL constant -- this must not trip the self-containment check, which is scoped to diagram.source only.",
+      "excerpts": [
+        {
+          "path": "src/config.py",
+          "startLine": 1,
+          "lang": "python",
+          "code": "API_BASE = \"https://api.example.com/v1\""
+        }
+      ]
+    }
+  ]
+}

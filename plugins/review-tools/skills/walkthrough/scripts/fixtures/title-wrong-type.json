@@ -1,0 +1,7 @@
+{
+  "title": 42,
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    { "title": "A step", "narration": "Narration.", "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }] }
+  ]
+}

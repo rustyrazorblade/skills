@@ -196,3 +196,36 @@
       diagram" section: the markup must be agent-authored, never text copied from the code/docs/
       issues under review. No code change -- sanitizing would destroy the feature; the authoring
       rule is the only available control, so it needed to be written down.
+
+## 11. Fixes from a second correctness pass (confirming round 8-10's own fixes)
+
+- [x] 11.1 Fixed a real bypass in `isSafeLinkUrl` (7.2's XSS fix): a leading C0 control character
+      (e.g. "\x01javascript:alert(1)") or an embedded tab/newline (e.g. "java\tscript:...") let
+      a scheme check anchored on `^[a-zA-Z]` fall through to "no explicit scheme" -> accepted,
+      while a browser's URL parser strips exactly those characters (WHATWG URL spec) before
+      parsing the scheme and still executes it on click. Verified live with node before and
+      after the fix. `isSafeLinkUrl` now normalizes the same way a browser does before testing
+      the scheme.
+- [x] 11.2 Broadened the diagram self-containment check (7.5/8.2) beyond http(s) to also catch
+      `ftp://`, `ws://`, `wss://` -- other network schemes an agent could plausibly reference (an
+      image src, a websocket) that the prior check silently let through. (Bare protocol-relative
+      `//host/...` deliberately NOT added -- too common a substring in ordinary prose/markup for
+      a plain substring match to catch safely; spec.md's own scenario only names http(s)
+      explicitly.)
+      Both caught by a second, focused correctness pass via `/code-review` confirming round
+      8-10's own fixes -- this is genuinely a re-review, not the same pass repeated.
+      Regression-tested (`diagram-ftp-scheme.json`; the link-scheme fix is covered structurally,
+      since no headless browser is available in this suite -- correctness was verified live with
+      node during development). `test-generate-walkthrough.sh`: 135 -> 142 passing, verified
+      under real `/bin/bash` (3.2.57); `test-generate-explain.sh` unaffected at 88.
+
+**Flagged for the owner, deliberately NOT fixed here (pre-existing gaps in `explain`, outside
+this change's scope, found by the same pass):**
+- `generate-explain.py`'s own output-side writes (`viewer_path.read_text`,
+  `out_path.write_text`) are unguarded, unlike `generate-walkthrough.py`'s now-guarded
+  equivalent (7.4) -- a raw traceback instead of a clean `fail()` message.
+- `generate-explain.py`'s `--open` still discards `webbrowser.open()`'s return value with no
+  diagnostic -- the exact gap fixed in `generate-walkthrough.py` (7.4).
+- `explain`'s own markdown link renderer has the identical missing-scheme-allow-list gap as
+  SEC-1 (7.2), fed genuinely untrusted GitHub content (already flagged there; repeated here for
+  visibility since a second independent pass found it too).

@@ -79,12 +79,20 @@ def validate_diagram(diagram):
     # (e.g. a URL constant in real source) and must stay exempt.
     source = diagram["source"]
     # Case-insensitive: URL schemes are case-insensitive per RFC 3986, and editor
-    # autocapitalization/copy-paste can easily produce "HTTPS://" or "Http://".
+    # autocapitalization/copy-paste can easily produce "HTTPS://" or "Http://". Covers the
+    # common network schemes an SVG/HTML author might reference (an image src, a stylesheet
+    # link, a websocket) -- not exhaustive (e.g. a bare protocol-relative "//host/x" isn't
+    # checked, since that substring is common enough in ordinary prose/markup to risk false
+    # positives for a plain substring match), but covers every scheme spec.md's own
+    # self-contained-output scenario names plus the closely related ones an agent could
+    # plausibly reach for.
     source_lower = source.lower()
-    if "http://" in source_lower or "https://" in source_lower:
-        fail("'diagram.source' contains an http:// or https:// reference — the rendered output "
-             "must be fully self-contained (a common cause: an SVG's default xmlns attribute; "
-             "see SKILL.md's authoring guidance to omit it)")
+    network_schemes = ("http://", "https://", "ftp://", "ws://", "wss://")
+    hit = next((scheme for scheme in network_schemes if scheme in source_lower), None)
+    if hit:
+        fail(f"'diagram.source' contains a {hit!r} reference — the rendered output must be "
+             "fully self-contained (a common cause: an SVG's default xmlns attribute; see "
+             "SKILL.md's authoring guidance to omit it)")
 
 
 def step_label(index, step):

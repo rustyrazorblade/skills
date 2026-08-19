@@ -414,8 +414,16 @@
   // already-escapeHtml'd text (see inlineMD below), so scheme characters are all still
   // plain ASCII regardless of what the original URL contained.
   function isSafeLinkUrl(url) {
-    if (/^(https?:|mailto:)/i.test(url)) return true;
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) return false;
+    // Mirror what a browser's URL parser does before it ever looks at the scheme (WHATWG URL
+    // spec): strip leading/trailing C0-control-or-space, then remove every ASCII tab/newline
+    // from anywhere in the string. Skipping this lets a payload like "\x01javascript:..." or
+    // "java\tscript:..." slip through the checks below as "no explicit scheme" while a browser
+    // still strips the same characters and executes it as javascript: on click.
+    var normalized = url
+      .replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, "")
+      .replace(/[\t\n\r]/g, "");
+    if (/^(https?:|mailto:)/i.test(normalized)) return true;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(normalized)) return false;
     return true;
   }
 

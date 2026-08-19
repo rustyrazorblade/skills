@@ -290,6 +290,21 @@ check "viewer.html defines a markdown-render function for step narration" $?
 grep -qE 'function inlineMD' "$viewer_html"
 check "viewer.html defines the inline-markdown helper" $?
 
+grep -qE 'function isSafeLinkUrl' "$viewer_html"
+check "viewer.html defines a link-scheme allow-list for narration markdown links" $?
+
+# The link-scheme check must normalize away leading/embedded control characters BEFORE testing
+# the scheme -- a browser's URL parser strips these too (WHATWG URL spec), so skipping this
+# normalization would let "\x01javascript:..." or "java\tscript:..." slip through as "no
+# explicit scheme" while a browser still executes them on click. No headless browser available
+# here, so this is a structural check (confirmed correct by direct evaluation during
+# development) rather than a live one -- see the surrounding function for the exact regexes.
+grep -qF '\x00-\x20' "$viewer_html"
+check "isSafeLinkUrl strips leading/trailing C0-control-or-space before checking the scheme" $?
+
+grep -qF '[\t\n\r]' "$viewer_html"
+check "isSafeLinkUrl strips embedded tab/newline before checking the scheme" $?
+
 grep -qF 'diagram.source' "$viewer_html"
 check "viewer.html embeds the diagram's source directly" $?
 
@@ -368,6 +383,9 @@ expect_failure "a diagram with an unsupported type" "bad-diagram-type.json" "dia
 # URL schemes are case-insensitive (RFC 3986) -- the self-containment check must not be fooled
 # by "HTTPS://" or "Http://" from editor autocapitalization or copy-paste.
 expect_failure "a diagram source with a mixed-case URL scheme" "diagram-mixed-case-url.json" "diagram.source" "http"
+# Not just http(s) -- other network schemes an agent might reach for (an image src, a
+# websocket) must be caught too, not just the two spec.md names explicitly.
+expect_failure "a diagram source with an ftp:// reference" "diagram-ftp-scheme.json" "diagram.source" "ftp"
 
 # Step-level failures name the offending step by 1-based position and title.
 expect_failure "a step missing its title" "step-missing-title.json" "step 2" "title"

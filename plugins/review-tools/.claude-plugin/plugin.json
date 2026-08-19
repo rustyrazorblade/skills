@@ -1,6 +1,6 @@
 {
   "name": "review-tools",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Render a change or a subsystem as one self-contained HTML page, no server: `explain` gives an IDE-style view of a code diff, a GitHub issue plus everything linked to it, or docs; `walkthrough` gives a diagram-first, ordered-step presentation — how something works, a tech-debt or performance analysis, recommendations. Standalone; also wired into spec-flow's owner seams when both plugins are installed.",
   "author": { "name": "Jon Haddad" },
   "repository": "https://github.com/rustyrazorblade/skills",

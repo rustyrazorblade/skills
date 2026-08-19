@@ -254,3 +254,16 @@ this change's scope, found by the same pass):**
 
 Three passes of the built-in `/code-review` skill in a row now confirm no new issues introduced
 by the fixes themselves -- converging. Moving to Build (format/lint) and Polish.
+
+## 13. Build and Polish
+
+- [x] 13.1 Build: no format/lint/build tooling is configured in this repo (no pyproject.toml,
+      no eslint config, no CI step referencing one) -- confirmed `python3 -m py_compile` and
+      `bash -n` clean on every touched file. Ran `shellcheck`/`ruff` informally (not a repo
+      requirement) as a bonus sanity check: the new files (`generate-walkthrough.py`,
+      `html_shell.py`) are fully clean; the handful of shellcheck notes on the new test script
+      match the same class already present, unfixed, in the sibling `test-generate-explain.sh`
+      (an established convention, not a new gap).
+- [x] 13.2 Polish: updated the top-level `README.md`'s `review-tools` section to describe both
+      skills (previously `explain`-only) and added a `/walkthrough` row to its skills table,
+      linking both `SKILL.md` files.

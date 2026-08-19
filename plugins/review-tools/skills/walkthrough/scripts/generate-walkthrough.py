@@ -78,7 +78,10 @@ def validate_diagram(diagram):
     # silently. Scoped to diagram.source only -- an excerpt's `code` legitimately contains URLs
     # (e.g. a URL constant in real source) and must stay exempt.
     source = diagram["source"]
-    if "http://" in source or "https://" in source:
+    # Case-insensitive: URL schemes are case-insensitive per RFC 3986, and editor
+    # autocapitalization/copy-paste can easily produce "HTTPS://" or "Http://".
+    source_lower = source.lower()
+    if "http://" in source_lower or "https://" in source_lower:
         fail("'diagram.source' contains an http:// or https:// reference — the rendered output "
              "must be fully self-contained (a common cause: an SVG's default xmlns attribute; "
              "see SKILL.md's authoring guidance to omit it)")
@@ -106,6 +109,13 @@ def validate_excerpt(excerpt, index, label):
         fail(f"{where}: missing required field 'startLine'")
     if isinstance(start_line, bool) or not isinstance(start_line, int):
         fail(f"{where}: 'startLine' must be an integer, got {type(start_line).__name__}")
+    if start_line < 1:
+        # Line numbers are 1-based -- 0 is not "unset" (that's what the field's absence already
+        # means, caught above) and negative is nonsensical. Reject here rather than let the
+        # viewer silently substitute a fallback: `Number(0) || 1`-style JS coercion would map
+        # startLine 0 to 1 with no error, quietly shifting the rendered gutter numbers by one
+        # and breaking every `highlight` entry that was written to line up with 0-based input.
+        fail(f"{where}: 'startLine' must be 1 or greater, got {start_line}")
 
     # The one optional field the viewer can't shrug off: it iterates `highlight` directly, so a
     # non-list here would blank the whole presentation at open time while this script still

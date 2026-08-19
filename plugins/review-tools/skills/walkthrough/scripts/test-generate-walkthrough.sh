@@ -358,6 +358,9 @@ expect_failure "a manifest with no title" "no-title.json" "title"
 expect_failure "a manifest with no diagram at all" "no-diagram.json" "diagram"
 expect_failure "a diagram with an empty source" "empty-diagram-source.json" "diagram" "source"
 expect_failure "a diagram with an unsupported type" "bad-diagram-type.json" "diagram" "type"
+# URL schemes are case-insensitive (RFC 3986) -- the self-containment check must not be fooled
+# by "HTTPS://" or "Http://" from editor autocapitalization or copy-paste.
+expect_failure "a diagram source with a mixed-case URL scheme" "diagram-mixed-case-url.json" "diagram.source" "http"
 
 # Step-level failures name the offending step by 1-based position and title.
 expect_failure "a step missing its title" "step-missing-title.json" "step 2" "title"
@@ -367,6 +370,9 @@ expect_failure "a step with an empty excerpt list" "step-empty-excerpts.json" "s
 # Excerpt-level failures name BOTH the step and the excerpt within it.
 expect_failure "an excerpt missing its path" "excerpt-missing-path.json" "step 2" "The pathless-excerpt step" "excerpt 2" "path"
 expect_failure "an excerpt missing its startLine" "excerpt-missing-startline.json" "step 1" "The startLine-less-excerpt step" "excerpt 1" "startLine"
+# startLine 0 (or negative) is not "unset" -- 0 must fail loudly, not silently become line 1 in
+# the viewer via a falsy-coercion fallback (the exact bug this rejects at generation time).
+expect_failure "an excerpt with startLine 0" "excerpt-startline-zero.json" "excerpt 1" "startLine" "1 or greater"
 expect_failure "an excerpt missing its code" "excerpt-missing-code.json" "step 1" "The codeless-excerpt step" "excerpt 1" "code"
 
 # `highlight` is the one optional field the viewer iterates directly — a wrong type there would

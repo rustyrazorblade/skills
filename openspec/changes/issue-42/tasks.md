@@ -149,3 +149,21 @@
       implementation output changed, and strictly for the better.
 - [x] 7.8 Fixed a self-referential comment typo in `html_shell.py` ("every `<` then becomes a `<`
       escape" → "... becomes a `\u003c` escape").
+
+## 8. Fixes from the correctness (code-review) pass on round 1's own fixes
+
+- [x] 8.1 Fixed a real falsy-zero bug in `viewer.html`: `Number(excerpt.startLine) || 1` silently
+      replaced a legitimate `startLine: 0` with `1`, shifting every displayed gutter line number
+      by one and breaking any `highlight` entry written against 0-based input, with no error at
+      generation time. Fixed at the source instead: `validate_excerpt()` now rejects
+      `startLine < 1` (line numbers are 1-based; 0 is not "unset" -- the field's absence already
+      means that, and is already caught separately).
+- [x] 8.2 Fixed a real bug in round 1's own diagram self-containment check (7.5): it was a
+      case-sensitive substring match, so `HTTPS://` or `Http://` (URL schemes are case-insensitive
+      per RFC 3986; easy to produce via autocapitalization or copy-paste) bypassed it silently.
+      Now checks against a lowercased copy of `diagram.source`.
+      Both caught by an independent correctness pass via the built-in `/code-review` skill.
+      Regression-tested (`excerpt-startline-zero.json`, `diagram-mixed-case-url.json`); full
+      suite: `test-generate-walkthrough.sh` 108 -> 117, `test-generate-explain.sh` unaffected at
+      88 -- both verified under real `/bin/bash` (3.2.57).
+

@@ -147,11 +147,16 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             if n is not None:
                 pr_by_issue.setdefault(n, pr)  # first PR that closes it wins -- one PR per issue is the pipeline's own convention
 
-    live_session_names = set()
+    # (name, id, startedAt) tuples, not a dict keyed by exact name -- spawn-issue-pm.sh names a
+    # session "issue-pm-<N>-<slug>" (a readable slug from the issue title, so several open tabs
+    # are distinguishable at a glance), never a fixed string this side could match exactly
+    # against. startedAt is kept so a rare double-match (a stale registry entry alongside its
+    # live respawn) resolves to the most recent session, the same tie-break
+    # spawn-issue-pm.sh's own lookup already uses (`sort_by(.startedAt) | last`).
+    live_sessions = []
     for s in sessions:
         if s.get("state") in ("working", "blocked") and s.get("name"):
-            live_session_names.add((s["name"], s.get("id")))
-    live_by_name = {name: sid for name, sid in live_session_names}
+            live_sessions.append((s["name"], s.get("id"), s.get("startedAt") or ""))
 
     rows = []
     for issue in issues:
@@ -181,11 +186,19 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             "pr_url": pr["url"] if pr else None,
             "ci": ci_status(pr.get("statusCheckRollup")) if pr else None,
         }
-        session_name = f"issue-pm-{n}"
-        if row["agent_active"] and session_name in live_by_name:
-            row["attach_id"] = live_by_name[session_name]
-        else:
-            row["attach_id"] = None
+        # Boundary-safe prefix match (exact "issue-pm-<n>", or "issue-pm-<n>-" followed by the
+        # slug) so issue #4 can never match a live "issue-pm-42-..." session -- a bare
+        # startswith("issue-pm-4") would.
+        session_prefix = f"issue-pm-{n}"
+        attach_id = None
+        if row["agent_active"]:
+            matches = [
+                (live_id, started_at) for live_name, live_id, started_at in live_sessions
+                if live_name == session_prefix or live_name.startswith(session_prefix + "-")
+            ]
+            if matches:
+                attach_id = max(matches, key=lambda m: m[1])[0]
+        row["attach_id"] = attach_id
 
         if row["blocked"]:
             row["blocked_note"] = blocked_reason_fn(n) or "see issue comments"

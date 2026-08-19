@@ -104,7 +104,7 @@ chmod +x "$fake_bin_dir/git"
 cat > "$fake_bin_dir/claude" <<'CLAUDEEOF'
 #!/usr/bin/env bash
 if [[ "$1" == "agents" ]]; then
-  echo '[{"name":"issue-pm-11","state":"working","id":"sess-abc123"},{"name":"issue-pm-999","state":"done","id":"sess-dead"}]'
+  echo '[{"name":"issue-pm-11","state":"working","id":"sess-abc123"},{"name":"issue-pm-15-blocked-item-fix","state":"working","id":"sess-slug456"},{"name":"issue-pm-999","state":"done","id":"sess-dead"}]'
   exit 0
 fi
 exit 1
@@ -129,6 +129,9 @@ check "in-review issue shows its correlated PR + green CI (via closingIssuesRefe
 
 echo "$out" | grep -q "attach: claude agents — select sess-abc123"
 check "live session (agent:active + matching claude agents name) offers an attach command" $?
+
+echo "$out" | grep -q "attach: claude agents — select sess-slug456"
+check "live session named with a title slug (issue-pm-15-blocked-item-fix) still matches issue #15 via boundary-safe prefix" $?
 
 echo "$out" | grep -q "#12 .*STALLED"
 check "in-progress issue with no agent:active is marked STALLED" $?

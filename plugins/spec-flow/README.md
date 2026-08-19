@@ -15,7 +15,10 @@ refine     design                                  5-lens review panel
 Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
 directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
 individual issue itself. When you're ready to start or resume an issue, it launches a dedicated
-**`issue-pm`** (named `issue-pm-<N>`) as its **own separate background Claude Code process** —
+**`issue-pm`** (named `issue-pm-<N>-<slug>` — a readable slug from the issue's own title, so several
+open sessions are distinguishable at a glance in `claude agents`; falls back to the bare `issue-pm-<N>`
+for a title with no alphanumeric characters to slug) as its **own separate background
+Claude Code process** —
 you attach to it yourself (`claude agents` — an interactive picker, select it from the list;
 there is no direct "attach by id" command) rather than having a tab
 or window opened for you — not a subagent in the coordinator's own context. That process owns

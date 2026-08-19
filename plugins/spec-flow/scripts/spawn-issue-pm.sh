@@ -112,7 +112,19 @@ if [[ "${SPEC_FLOW_UNIFIED_MEMORY:-}" == "1" ]]; then
   export MEMSEARCH_DIR
 fi
 
-name="issue-pm-${issue}"
+# A slug from the issue title makes the session identifiable at a glance in `claude agents` (the
+# owner's own complaint: several "issue-pm-N" tabs open at once, no way to tell which is which
+# without attaching to each). The slug is NOT the lookup key, though — the issue title can change
+# on GitHub between spawns, so an exact-name match against a freshly-recomputed slug would miss a
+# session spawned under an earlier title and duplicate it. `name_prefix` (below) is the stable
+# identity; `name` is only ever used for a FRESH spawn's own --name.
+slug=$(printf '%s' "$issue_title" \
+  | tr '[:upper:]' '[:lower:]' \
+  | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+  | cut -c1-40 \
+  | sed -E 's/-+$//')
+name_prefix="issue-pm-${issue}"
+name="${name_prefix}${slug:+-$slug}"
 
 lookup_session_id() {
   # $1 = session name, $2 = repo root to scope the match to (see the REPO_ROOT comment above) —
@@ -188,12 +200,21 @@ fi
 # from a different repo on this machine would match by name alone. `.cwd // ""` guards a
 # registry entry with a missing/null cwd: bare `startswith()` on null aborts jq (confirmed by
 # test) rather than just not matching, which would kill this script under `set -e`.
-existing_json=$(jq -c --arg n "$name" --arg root "$REPO_ROOT" \
-  '[.[] | select(.name == $n) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
+# Match on $name_prefix, not the freshly-computed $name: a session spawned under an earlier issue
+# title carries that title's OLD slug in its registered .name forever (respawn never renames it),
+# so an exact match against today's slug would miss it. Boundary-safe prefix match (exact
+# "issue-pm-<N>", or "issue-pm-<N>-" followed by anything) so issue #4 can never match a
+# registered "issue-pm-42-..." — a bare startswith("issue-pm-4") would.
+existing_json=$(jq -c --arg p "$name_prefix" --arg root "$REPO_ROOT" \
+  '[.[] | select(.name == $p or (.name | startswith($p + "-"))) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
   "$claude_agents_out")
 rm -f "$claude_agents_out"
 existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+# The actual registered name for THIS existing session — may carry an older slug than $name if
+# the issue's title changed since it was spawned; every message about the existing/respawned
+# session below uses this, never the freshly-computed $name (which would be wrong on respawn).
+existing_name=$(jq -r '.name // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
 
 if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
   # The registry's own `state` can go stale — confirmed by real-world observation (2026-08-04):
@@ -207,10 +228,10 @@ if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state"
   # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
   # `claude logs` positively says the process is gone.
   if claude logs "$existing_id" > /dev/null 2>&1; then
-    echo "already running: ${name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
+    echo "already running: ${existing_name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
     exit 1
   fi
-  echo "spawn-issue-pm: ${name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
+  echo "spawn-issue-pm: ${existing_name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
   echo "'claude logs' says it's gone — stale entry. Proceeding as if it's not live." >&2
 fi
 
@@ -246,9 +267,10 @@ if [[ -n "$existing_id" ]]; then
     fi
   fi
 
-  echo "resuming: ${name} was ${existing_state} — respawning ${existing_id} in its existing worktree" >&2
+  echo "resuming: ${existing_name} was ${existing_state} — respawning ${existing_id} in its existing worktree" >&2
   claude respawn "$existing_id" > /dev/null
   session_id="$existing_id"
+  final_name="$existing_name"
 
   # FAIL-SAFE, confirmed by test (2026-08-03): if the worktree this session lived in has since
   # been removed (e.g. Claude Code's own cleanupPeriodDays sweep), respawn does NOT recreate it
@@ -269,7 +291,7 @@ if [[ -n "$existing_id" ]]; then
     # fail-safe). Removing it here is what makes the *next* run take the fresh-spawn path instead.
     claude rm "$session_id" > /dev/null 2>&1 || true
     gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-    echo "spawn-issue-pm: respawned ${name} (${session_id}) landed in '${respawned_cwd:-<empty>}'," >&2
+    echo "spawn-issue-pm: respawned ${existing_name} (${session_id}) landed in '${respawned_cwd:-<empty>}'," >&2
     echo "NOT a confirmed isolated worktree even after waiting — either its original worktree is" >&2
     echo "gone (likely swept), or the state couldn't be confirmed. Stopped and removed the session" >&2
     echo "record so the next run takes the fresh-spawn path instead of hitting this same dead end." >&2
@@ -286,7 +308,7 @@ if [[ -n "$existing_id" ]]; then
   # not die: exiting now would abandon a healthy, running session with no label, the exact
   # false-negative (silently-unlabeled-but-live) the label exists to prevent.
   gh issue edit "$issue" --add-label agent:active 2>/dev/null || \
-    echo "spawn-issue-pm: warning — couldn't set agent:active on #${issue} after respawn (transient gh failure?); ${name} (${session_id}) is running regardless. Set the label manually if this persists." >&2
+    echo "spawn-issue-pm: warning — couldn't set agent:active on #${issue} after respawn (transient gh failure?); ${existing_name} (${session_id}) is running regardless. Set the label manually if this persists." >&2
 
   # `claude respawn` sends NO new prompt — it just resumes the session's prior context — so an
   # owner-instructions arg given on a respawn would otherwise never reach the session at all.
@@ -297,7 +319,7 @@ if [[ -n "$existing_id" ]]; then
   if [[ -n "$owner_instructions" ]]; then
     mkdir -p "${respawned_cwd}/.spec-flow"
     printf '%s\n' "$owner_instructions" > "${respawned_cwd}/.spec-flow/owner-instructions"
-    echo "spawn-issue-pm: updated .spec-flow/owner-instructions for ${name} (${session_id}) — it reads this fresh at its next seam check." >&2
+    echo "spawn-issue-pm: updated .spec-flow/owner-instructions for ${existing_name} (${session_id}) — it reads this fresh at its next seam check." >&2
   fi
 else
   # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
@@ -401,6 +423,7 @@ else
     echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json --all' after spawn" >&2
     exit 1
   fi
+  final_name="$name"
 fi
 
 # Same class as the temp-file fix above (a claude|jq pipe assignment can die under set -e via
@@ -412,12 +435,12 @@ if claude agents --json --all >"$state_out" 2>/dev/null; then
   state=$(jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state' "$state_out")
 else
   state=""
-  echo "spawn-issue-pm: warning — couldn't confirm final state ('claude agents --json --all' failed); ${name} (${session_id}) is running regardless." >&2
+  echo "spawn-issue-pm: warning — couldn't confirm final state ('claude agents --json --all' failed); ${final_name} (${session_id}) is running regardless." >&2
 fi
 rm -f "$state_out"
 if [[ "$state" == "failed" ]]; then
   gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-  echo "spawn-issue-pm: ${name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
+  echo "spawn-issue-pm: ${final_name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
   exit 1
 fi
 
@@ -426,4 +449,4 @@ attach_cmd="claude agents — select ${session_id}"
 # issue_title was resolved by the sub-issue check above (both fresh-spawn and respawn paths run
 # it), so it's available here for free — surfacing it lets whoever reads this line (a human, or
 # project-manager relaying it) identify the session/tab without attaching first.
-echo "${name} ${session_id} (\"${issue_title}\") — attach: ${attach_cmd}"
+echo "${final_name} ${session_id} (\"${issue_title}\") — attach: ${attach_cmd}"

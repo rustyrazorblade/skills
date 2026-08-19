@@ -361,9 +361,14 @@ reflects the local machine's session registry, and says nothing about another de
   signal — `board` reads it directly (see its **Steps**).
 
   `scripts/spawn-issue-pm.sh` checks its **own machine's, this repo's** past sessions first — a
-  session named `issue-pm-<N>` is only unique within one repo (GitHub issue numbers are per-repo),
-  so the lookup is scoped to sessions whose `cwd` falls under this repo's own root, not by name
-  alone; otherwise a same-numbered issue in a different repo on this machine could match. A match
+  session is named `issue-pm-<N>-<slug>` (a readable slug from the issue's title at spawn time, so
+  several open sessions are distinguishable in `claude agents` without attaching to each — falling
+  back to the bare `issue-pm-<N>` for a title with nothing alphanumeric to slug), matched
+  by the stable `issue-pm-<N>` prefix rather than the full name — the title, and so the slug, can
+  change on GitHub between spawns, so an exact match against today's title would miss a session
+  spawned under an earlier one. The lookup is also scoped to sessions whose `cwd` falls under this
+  repo's own root, not by name alone; otherwise a same-numbered issue in a different repo on this
+  machine could match. A match
   that's still live → refuse (already running here); one that exists but isn't live (crashed,
   stopped, finished) → `claude respawn` it, landing back in its own worktree with its branch and
   uncommitted work intact, instead of a fresh, unrelated one branched from `main` —
@@ -428,8 +433,9 @@ name that already exists on disk does **not** error, it re-enters and resumes th
 So a fresh spawn whose local session registry lost track of a prior run (the session evicted, or a
 different run on this machine) still lands back in the same worktree instead of duplicating it.
 This reinforces, rather than replaces, `scripts/spawn-issue-pm.sh`'s own respawn logic (looking for
-a past local session named `issue-pm-<N>` and `claude respawn`ing it — see **Coordination signals**
-below): respawn recovers the session's own history when a local record exists; the deterministic
+a past local session whose name carries the `issue-pm-<N>` prefix and `claude respawn`ing it — see
+**Coordination signals** below): respawn recovers the session's own history when a local record
+exists; the deterministic
 worktree name recovers the *files* even when it doesn't.
 
 The git branch itself is still Claude Code's own naming — a stage never assumes a branch name; it

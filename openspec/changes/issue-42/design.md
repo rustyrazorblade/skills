@@ -99,7 +99,12 @@ html_shell.py`, imported by both. *Owner decision* between this and "duplicate, 
 independent" (matching `explain`'s own "standalone, no other plugin required" philosophy applied
 one level down within `review-tools`) — the owner chose extraction, since the duplication really is
 byte-for-byte identical logic with zero schema coupling risk. `generate-explain.py`'s own test
-suite (currently 85/85) must stay green after this refactor — pure extraction, no behavior change.
+suite (currently 85/85) must stay green after this refactor. **Amendment, found during
+implementation:** the extraction itself (task 1) was pure/verbatim as planned, but a *later* commit
+building the walkthrough content model discovered and fixed a real escaping gap in the shared
+`inject_manifest()` (see the Risks section below) — a deliberate, reviewed departure from "no
+logic changes bundled," not an accident. `explain`'s test suite gained a dedicated regression case
+for it and stays green.
 
 **8. Markdown rendering for step narration reuses `explain`'s existing `renderMarkdown`/`inlineMD`
 JS logic, copied into the new `viewer.html`.** *Alternative considered:* writing a second,
@@ -121,9 +126,20 @@ shared-helpers case above; a `file://`-safe static HTML shell does not).
   data) as a lower-friction alternative to full SVG.
 - **[Risk] The `html_shell.py` extraction touches `generate-explain.py`, a file with its own recent
   history of subtle regressions (fence-masking, root-anchoring bugs fixed in 0.11.0/0.12.0)** **→
-  [Mitigation]** pure extraction only (move these three functions verbatim, change only the import
-  site) — no logic changes bundled into the same commit; `explain`'s full test suite re-run and
-  must stay 85/85 before this change is considered done.
+  [Mitigation, revised]** the *extraction* itself (task 1) was pure/verbatim — move the three
+  functions, change only the import site, no logic changes in that commit; `explain`'s full test
+  suite re-run and stayed 85/85. **What actually changed the mitigation:** building
+  walkthrough's own hostile-content fixture (a manifest excerpt containing `<!--` followed by
+  `<script`) surfaced a real, pre-existing gap in `inject_manifest()`'s escaping — `</`-only
+  escaping leaves HTML's script-data tokenizer able to enter double-escaped state, after which
+  the injected tag's own `</script>` no longer closes it and the page silently falls back to its
+  demo content. Fixed in the shared helper (escape every `<` as `<`, not just `</`), which
+  means `explain`'s injected output changed too — a deliberate, reviewed departure from "no logic
+  changes bundled into the same commit," not an oversight. The fix is strictly correct (verified:
+  round-trips through a real JS engine byte-identical to the authored content) and strictly safer
+  (closes a real hole, doesn't open one), so it was kept rather than reverted or deferred to a
+  separate change. `explain`'s test suite gained a dedicated regression case for exactly this
+  input shape (previously only walkthrough's own suite covered it) and both suites stay green.
 - **[Risk] `kind` accepting any string means a typo (`"tech-dept"`) silently renders a slightly
   wrong-looking badge instead of failing** **→ [Mitigation]** accepted trade-off (decision 4) —
   forward-compatibility was judged more valuable than typo-catching for a field with no fixed enum;

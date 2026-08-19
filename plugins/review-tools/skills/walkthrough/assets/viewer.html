@@ -319,6 +319,9 @@
   .delta-renamed .delta-label { background: var(--accent); color: #05203a; }
 </style>
 <div id="app">
+  <div id="demo-fallback-banner" style="display:none;background:#f85149;color:#1e1e1e;font-weight:700;text-align:center;padding:8px 12px;font-family:sans-serif">
+    DEMO CONTENT — no manifest was injected into this file, so a built-in example is shown instead of a real walkthrough.
+  </div>
   <header id="wt-header">
     <div id="wt-heading">
       <h1 id="wt-title">Walkthrough</h1>
@@ -405,6 +408,17 @@
       .replace(/"/g, "&quot;");
   }
 
+  // A link target must be http(s)/mailto, or have no explicit scheme at all (relative,
+  // scheme-relative, fragment) -- narration is agent-authored, not sanitized, so a
+  // javascript:/data: URI must never become a click-to-execute anchor. Operates on
+  // already-escapeHtml'd text (see inlineMD below), so scheme characters are all still
+  // plain ASCII regardless of what the original URL contained.
+  function isSafeLinkUrl(url) {
+    if (/^(https?:|mailto:)/i.test(url)) return true;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) return false;
+    return true;
+  }
+
   // ---------------------------------------------------------------------
   // Markdown — compact, built-in, no external library. Supports headings,
   // ordered/unordered lists, fenced code blocks, inline code, bold, italic,
@@ -421,7 +435,10 @@
       codes.push(p1);
       return "@@CS" + (codes.length - 1) + "@@";
     });
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, label, url) {
+      if (!isSafeLinkUrl(url)) return label + " (" + url + ")";
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + label + "</a>";
+    });
     s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
     s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
@@ -704,6 +721,15 @@
   }
 
   function boot() {
+    // window.MANIFEST can be falsy either because nothing was injected (opening this shell
+    // directly, the documented DEMO_MANIFEST case) or because injection happened but the
+    // payload failed to parse (a future escaping regression, a truncated/mangled file) --
+    // either way, a reader must not mistake the demo content for a real walkthrough.
+    if (!window.MANIFEST) {
+      console.error("walkthrough: no manifest was injected (or it failed to parse) -- rendering built-in demo content instead");
+      var banner = document.getElementById("demo-fallback-banner");
+      if (banner) banner.style.display = "block";
+    }
     renderApp(window.MANIFEST || DEMO_MANIFEST);
   }
 

@@ -24,8 +24,13 @@ well; only the content differs.
 - Extracts three helpers (`fail()`, the `<!--MANIFEST-->` injection helper, the temp-output-path
   helper) that are genuinely identical between `generate-explain.py` and the new
   `generate-walkthrough.py` into a small shared module, `plugins/review-tools/lib/html_shell.py`,
-  and refactors `generate-explain.py` to import from it instead of keeping its own copies —
-  **no behavior change** to `explain` (its own test suite must stay green throughout).
+  and refactors `generate-explain.py` to import from it instead of keeping its own copies.
+  **One deliberate exception to "no behavior change":** while building the shared
+  `inject_manifest()`, walkthrough's own hostile-content fixture surfaced a real gap in its
+  escaping (`</`-only escaping leaves an HTML script-data-tokenizer double-escape hole open —
+  see design.md decision 7) — fixed in the shared helper, so `explain`'s injected output changed
+  too (strictly safer, not a regression; both tools' full test suites, including a new regression
+  case added to `explain`'s own, stay green).
 - Bumps `plugins/review-tools/.claude-plugin/plugin.json`'s version and updates its
   `description`/`keywords` to mention `walkthrough` alongside `explain`.
 

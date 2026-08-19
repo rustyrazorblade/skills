@@ -71,6 +71,17 @@ def validate_diagram(diagram):
     if diagram_type not in DIAGRAM_TYPES:
         fail(f"'diagram.type' must be one of {'/'.join(DIAGRAM_TYPES)}, got {diagram_type!r} — "
              "diagrams are agent-authored inline markup; no diagramming library is bundled")
+    # The one thing this validator can cheaply enforce for spec.md's self-contained-output
+    # requirement: a network reference in the diagram markup itself. The most common way this
+    # slips in is an SVG author's default xmlns attribute -- SKILL.md tells the agent to omit
+    # it, but nothing short of this check stops a non-conforming artifact from being produced
+    # silently. Scoped to diagram.source only -- an excerpt's `code` legitimately contains URLs
+    # (e.g. a URL constant in real source) and must stay exempt.
+    source = diagram["source"]
+    if "http://" in source or "https://" in source:
+        fail("'diagram.source' contains an http:// or https:// reference — the rendered output "
+             "must be fully self-contained (a common cause: an SVG's default xmlns attribute; "
+             "see SKILL.md's authoring guidance to omit it)")
 
 
 def step_label(index, step):
@@ -159,19 +170,26 @@ def main():
     viewer_path = Path(__file__).resolve().parent.parent / "assets" / "viewer.html"
     if not viewer_path.is_file():
         fail(f"viewer shell not found at {viewer_path} — was assets/viewer.html removed?")
-    viewer_html = viewer_path.read_text(encoding="utf-8")
+    try:
+        viewer_html = viewer_path.read_text(encoding="utf-8")
+    except OSError as e:
+        fail(f"couldn't read {viewer_path}: {e}")
 
     out_html = inject_manifest(viewer_html, manifest, PROG)
 
     out_path = Path(args.out).resolve() if args.out else default_out_path("walkthrough-")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(out_html, encoding="utf-8")
+    try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(out_html, encoding="utf-8")
+    except OSError as e:
+        fail(f"couldn't write {out_path}: {e}")
 
     print(str(out_path))
     print(f"open {out_path}")
 
     if args.open:
-        webbrowser.open(f"file://{out_path}")
+        if not webbrowser.open(f"file://{out_path}"):
+            print(f"{PROG}: couldn't launch a browser — open the path above manually", file=sys.stderr)
 
 
 if __name__ == "__main__":

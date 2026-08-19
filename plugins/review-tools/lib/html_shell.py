@@ -20,7 +20,7 @@ def fail(message, prog):
 
 
 def inject_manifest(viewer_html, manifest, prog):
-    # ensure_ascii keeps the payload plain-ASCII-safe; every "<" then becomes a "<" escape,
+    # ensure_ascii keeps the payload plain-ASCII-safe; every "<" then becomes a "\u003c" escape,
     # which is safe because inside JSON a "<" can only ever appear within a string literal, and
     # the parser resolves the escape back to the same character. Escaping only "</" is not
     # enough: HTML's script-data tokenizer treats an embedded "<!--" followed by "<script" as

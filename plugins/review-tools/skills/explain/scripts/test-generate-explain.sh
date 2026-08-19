@@ -1184,6 +1184,59 @@ echo "$title_py_out"
 pass_count=$((pass_count + $(echo "$title_py_out" | grep -c '^PASS:')))
 fail_count=$((fail_count + $(echo "$title_py_out" | grep -c '^FAIL:')))
 
+# ---------------------------------------------------------------------------
+# inject_manifest() shares html_shell.py with the walkthrough skill (issue-42)
+# -- content containing "<!--" followed by "<script" would, under the old
+# "</" -only escaping, put HTML's script-data tokenizer into double-escaped
+# state and break the injected <script> tag open. explain is the consumer
+# that actually ingests hostile third-party content (docs, diffs, issue
+# bodies), so this needs its own regression coverage, not just walkthrough's.
+# ---------------------------------------------------------------------------
+hostile_doc="$out_dir/hostile-template.md"
+cat > "$hostile_doc" <<'EOF'
+# A doc quoting an HTML template
+
+```html
+<!--[if IE]><script src="shim.js"></script><![endif]-->
+<div id="app"></div>
+```
+EOF
+
+hostile_doc_html="$out_dir/explain-hostile-doc-test.html"
+(
+  cd "$repo" && python3 "$generate_explain" --doc "$hostile_doc" --out "$hostile_doc_html"
+)
+check "generate-explain.py --doc exits 0 for a doc quoting an HTML template with a script tag" $?
+
+hostile_py_out="$(python3 - "$hostile_doc_html" <<'PYEOF'
+import json
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+start_marker = "<script>window.MANIFEST = "
+start = content.index(start_marker) + len(start_marker)
+end = content.index(";</script>", start)
+payload = content[start:end]
+
+if "<" not in payload:
+    print("PASS: no raw angle bracket survives into the injected payload")
+else:
+    idx = payload.index("<")
+    print(f"FAIL: raw angle bracket in the injected payload — {payload[idx - 40:idx + 40]!r}")
+
+manifest = json.loads(payload)
+node = next((n for n in manifest.get("nodes", []) if n.get("path", "").endswith("hostile-template.md")), None)
+md = node.get("md", "") if node else ""
+if "<!--[if IE]><script src=" in md and "</script>" in md:
+    print("PASS: the escaped payload still parses back to the exact authored markdown, markup intact")
+else:
+    print(f"FAIL: markdown round-trip — got {md!r}")
+PYEOF
+)"
+echo "$hostile_py_out"
+pass_count=$((pass_count + $(echo "$hostile_py_out" | grep -c '^PASS:')))
+fail_count=$((fail_count + $(echo "$hostile_py_out" | grep -c '^FAIL:')))
+
 echo ""
 echo "----------------------------------------"
 echo "PASS: $pass_count  FAIL: $fail_count"

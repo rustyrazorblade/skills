@@ -1,4 +1,5 @@
-## 1. Extract shared helpers (do first — pure refactor, no behavior change)
+## 1. Extract shared helpers (do first — pure refactor at this step; see task 7 for a later,
+      deliberate departure discovered while building on top of it)
 
 - [x] 1.1 Create `plugins/review-tools/lib/html_shell.py` containing `fail()`, the
       `<!--MANIFEST-->` marker-injection helper (`inject_manifest()`), and the temp-output-path
@@ -101,3 +102,50 @@
       the current version is at implementation time).
 - [x] 6.2 Update `plugin.json`'s `description`/`keywords` to mention `walkthrough` alongside
       `explain`.
+
+## 7. Fixes from the implement review panel
+
+- [x] 7.1 Fixed a real bash 3.2 syntax error in `test-generate-walkthrough.sh` (an apostrophe
+      inside a Python comment nested in a heredoc within `$(...)` tripped a known bash 3.2
+      command-substitution parser quirk) — the suite silently died mid-run under macOS system
+      bash with no pass/fail tally at all, dropping ~60 of 108 assertions (every failure-mode
+      case, the vertical-default check, all viewer-shell structural checks). Only appeared to
+      pass because Homebrew bash was earlier in `$PATH` during earlier verification. Fixed by
+      removing every apostrophe from the affected block, not just the one that first triggered
+      it; verified 108/108 under real `/bin/bash` (bash 3.2.57) afterward.
+- [x] 7.2 Fixed a real medium-severity XSS: `viewer.html`'s markdown link renderer accepted
+      `javascript:`/`data:` URI schemes in step narration with no allow-list, so a link became
+      click-to-execute script. Added `isSafeLinkUrl()` (http(s)/mailto or no explicit scheme only)
+      and route link rendering through it — an unsafe URL renders as inert text instead of an
+      anchor. `explain`'s own viewer has the identical pre-existing gap, fed genuinely untrusted
+      GitHub content — flagged for the owner to triage separately, not fixed here (out of scope
+      for this change).
+- [x] 7.3 Fixed a real observability gap: if the injected manifest ever fails to parse for any
+      reason (a future escaping regression, a truncated file), the viewer silently rendered
+      `DEMO_MANIFEST` with zero diagnostic — a reviewer could mistake demo content for the real
+      thing. `boot()` now logs to the console and shows a visible banner whenever
+      `window.MANIFEST` is falsy, whatever the reason.
+- [x] 7.4 `generate-walkthrough.py`: guarded the two output-side filesystem operations (reading
+      `viewer.html`, writing the output file) with the same `try`/`except OSError` → `fail()`
+      pattern already used on the read-manifest path, instead of letting them surface as a raw
+      traceback. Also: `--open`'s `webbrowser.open()` return value is now checked, with a stderr
+      warning on failure (e.g. a headless host) — previously silent.
+- [x] 7.5 `generate-walkthrough.py`: `validate_diagram()` now rejects `http://`/`https://` in
+      `diagram.source` — the one network-reference check the tool can cheaply make itself for
+      spec.md's self-contained-output requirement, catching the most common real-world trigger
+      (an SVG author's default `xmlns` attribute, which `SKILL.md` already tells agents to omit
+      but nothing previously enforced).
+- [x] 7.6 Added a dedicated regression case to `explain`'s own `test-generate-explain.sh` for the
+      `inject_manifest()` escaping fix (7.7) — a `--doc` file quoting the same hostile
+      `<!--`+`<script` shape walkthrough's fixture uses. Verified non-vacuous by temporarily
+      reverting the escaping fix and confirming this exact case fails; 88/88 passing with the fix
+      restored, under real bash 3.2.
+- [x] 7.7 Corrected `proposal.md`, `design.md` (decision 7 and its matching Risks entry) to
+      honestly describe the `inject_manifest()` escaping change bundled into the shared-lib work,
+      instead of the original "pure extraction, no behavior change" claim — see design.md's Risks
+      section for the full account of what was found and why it was kept rather than reverted.
+      `overrides.md` needed no change: no requirement of the `explain` capability was added,
+      modified, or removed (confirmed against `openspec/specs/explain/spec.md`) — only its
+      implementation output changed, and strictly for the better.
+- [x] 7.8 Fixed a self-referential comment typo in `html_shell.py` ("every `<` then becomes a `<`
+      escape" → "... becomes a `\u003c` escape").

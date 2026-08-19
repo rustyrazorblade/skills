@@ -249,10 +249,13 @@ start = content.index(start_marker) + len(start_marker)
 end = content.index(";</script>", start)
 payload = content[start:end]
 
-if "<" not in payload:
-    print("PASS: no raw '<' survives into the injected payload (script-data tokenizer can't be re-entered)")
+lt = "<"
+script_open = "<script>"
+if lt not in payload:
+    print("PASS: no raw angle bracket survives into the injected payload (script-data tokenizer cannot be re-entered)")
 else:
-    print(f"FAIL: raw '<' in the injected payload — {payload[payload.index('<') - 40:payload.index('<') + 40]!r}")
+    idx = payload.index(lt)
+    print(f"FAIL: raw angle bracket in the injected payload - {payload[idx - 40:idx + 40]!r}")
 
 manifest = json.loads(payload)
 code = manifest["steps"][0]["excerpts"][0]["code"]
@@ -261,11 +264,12 @@ if code.startswith("<!--[if IE]><script src=") and "</script>" in code:
 else:
     print(f"FAIL: code round-trip — got {code!r}")
 
-# The shell's own <script> plus the injected one, and nothing the content opened.
-if content.count("<script>") == 2:
+# The viewer shell has its own <script> plus the injected one, and nothing the content opened.
+script_count = content.count(script_open)
+if script_count == 2:
     print("PASS: content markup never opens an extra script tag in the rendered document")
 else:
-    print(f"FAIL: unexpected <script> count — {content.count('<script>')}")
+    print(f"FAIL: unexpected <script> count — {script_count}")
 PYEOF
 )"
 

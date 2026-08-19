@@ -1,0 +1,11 @@
+{
+  "title": "An excerpt has endLine before startLine",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "The backwards-range step",
+      "narration": "Its only excerpt claims lines 10 through 5, which is backwards.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 10, "endLine": 5, "code": "x = 1" }]
+    }
+  ]
+}

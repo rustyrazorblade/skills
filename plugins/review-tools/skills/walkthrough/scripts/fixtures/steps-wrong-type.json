@@ -1,0 +1,5 @@
+{
+  "title": "steps is an object, not a list",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": {}
+}

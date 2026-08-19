@@ -1,0 +1,10 @@
+{
+  "title": "Diagram omitted entirely",
+  "steps": [
+    {
+      "title": "A step",
+      "narration": "Some narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    }
+  ]
+}

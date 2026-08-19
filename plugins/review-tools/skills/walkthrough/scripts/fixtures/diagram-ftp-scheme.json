@@ -1,0 +1,11 @@
+{
+  "title": "Diagram source references an ftp:// resource",
+  "diagram": { "type": "html", "source": "<img src=\"ftp://files.example.com/logo.png\">" },
+  "steps": [
+    {
+      "title": "A step",
+      "narration": "Narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    }
+  ]
+}

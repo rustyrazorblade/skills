@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic generator for an `explain` walkthrough: a single self-contained HTML file built
 from a git diff, a GitHub issue + its related issues, and/or optional docs/code, with zero
-model-authored markup. Stdlib only (json, argparse, subprocess, pathlib, tempfile, webbrowser) +
+model-authored markup. Stdlib only (json, argparse, subprocess, pathlib, webbrowser) +
 shelling out to `git`/`gh` — no pip dependencies. Must run on macOS system python3 and in CI
 (Linux); avoid anything requiring a compiled extension.
 
@@ -10,14 +10,21 @@ See plugins/review-tools/skills/explain/SKILL.md for the manifest schema and usa
 
 import argparse
 import fnmatch
+import functools
 import json
 import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import webbrowser
 from pathlib import Path, PurePosixPath
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from html_shell import default_out_path, inject_manifest  # noqa: E402
+from html_shell import fail as _fail  # noqa: E402
+
+PROG = "generate-explain"
+fail = functools.partial(_fail, prog=PROG)
 
 # The canonical "nothing here yet" tree — diffing against it renders a from-scratch add of
 # everything in <head>. Used only when no other base can be resolved (e.g. a repo with a single
@@ -33,11 +40,6 @@ LANG_BY_SUFFIX = {
     ".c": "c", ".h": "c", ".cpp": "cpp", ".hpp": "cpp", ".swift": "swift", ".html": "html",
     ".css": "css",
 }
-
-
-def fail(message):
-    print(f"generate-explain: {message}", file=sys.stderr)
-    sys.exit(1)
 
 
 def run_git(args, cwd=None):
@@ -881,28 +883,6 @@ def build_manifest(args, base, head):
     return manifest
 
 
-def inject_manifest(viewer_html, manifest):
-    # ensure_ascii keeps the payload plain-ASCII-safe; escaping "</" as "<\/" is the standard
-    # technique to stop an embedded "</script>" substring (e.g. inside a doc or diff) from
-    # prematurely closing the injected <script> tag.
-    manifest_json = json.dumps(manifest, ensure_ascii=True).replace("</", "<\\/")
-    script_tag = f"<script>window.MANIFEST = {manifest_json};</script>"
-    if "<!--MANIFEST-->" not in viewer_html:
-        fail("assets/viewer.html is missing its <!--MANIFEST--> marker — was it edited?")
-    return viewer_html.replace("<!--MANIFEST-->", script_tag, 1)
-
-
-def default_out_path():
-    fd_path = Path(tempfile.gettempdir())
-    fd_path.mkdir(parents=True, exist_ok=True)
-    # mkstemp for a guaranteed-unique name; we immediately overwrite via write_text below, so the
-    # empty file it creates is just a placeholder reservation.
-    import os
-    fd, name = tempfile.mkstemp(prefix="explain-", suffix=".html", dir=str(fd_path))
-    os.close(fd)
-    return Path(name)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate a deterministic IDE-style HTML explain view from a git diff, a GitHub issue, and/or docs.")
     parser.add_argument("--diff", action="store_true",
@@ -971,9 +951,9 @@ def main():
         fail(f"viewer shell not found at {viewer_path} — was assets/viewer.html removed?")
     viewer_html = viewer_path.read_text(encoding="utf-8")
 
-    out_html = inject_manifest(viewer_html, manifest)
+    out_html = inject_manifest(viewer_html, manifest, PROG)
 
-    out_path = Path(args.out).resolve() if args.out else default_out_path()
+    out_path = Path(args.out).resolve() if args.out else default_out_path("explain-")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(out_html, encoding="utf-8")
 

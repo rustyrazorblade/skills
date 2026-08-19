@@ -1,0 +1,58 @@
+{
+  "title": "How the widget store loads",
+  "subtitle": "Three steps from request to cached row",
+  "diagram": {
+    "type": "html",
+    "source": "<div class=\"dg-row\"><span class=\"dg-box\">Request</span><span class=\"dg-arrow\">-&gt;</span><span class=\"dg-box\">WidgetStore</span><span class=\"dg-arrow\">-&gt;</span><span class=\"dg-box\">Cache</span></div>",
+    "caption": "A read goes through the store, which consults the cache before the database."
+  },
+  "steps": [
+    {
+      "title": "The entry point",
+      "narration": "Every read enters through `get`, which is the **only** public accessor.\n\nIt never touches the database directly.",
+      "kind": "explanation",
+      "excerpts": [
+        {
+          "path": "src/widget_store.py",
+          "startLine": 12,
+          "endLine": 15,
+          "lang": "python",
+          "code": "def get(self, widget_id):\n    cached = self._cache.get(widget_id)\n    if cached is not None:\n        return cached",
+          "highlight": [13]
+        }
+      ]
+    },
+    {
+      "title": "The cache miss path",
+      "narration": "On a miss the store falls through to the loader, then writes the result back.",
+      "excerpts": [
+        {
+          "path": "src/widget_store.py",
+          "startLine": 16,
+          "endLine": 18,
+          "lang": "python",
+          "code": "    row = self._loader.load(widget_id)\n    self._cache.put(widget_id, row)\n    return row"
+        },
+        {
+          "path": "src/loader.py",
+          "startLine": 40,
+          "lang": "python",
+          "code": "def load(self, widget_id):\n    return self._db.query(WIDGET_BY_ID, widget_id)"
+        }
+      ]
+    },
+    {
+      "title": "Where invalidation happens",
+      "narration": "Writes evict the entry rather than updating it in place.",
+      "kind": "tech-debt",
+      "excerpts": [
+        {
+          "path": "src/widget_store.py",
+          "startLine": 30,
+          "endLine": 32,
+          "code": "def save(self, widget):\n    self._db.upsert(widget)\n    self._cache.evict(widget.id)"
+        }
+      ]
+    }
+  ]
+}

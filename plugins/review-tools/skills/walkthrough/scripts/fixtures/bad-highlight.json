@@ -1,0 +1,11 @@
+{
+  "title": "An excerpt's highlight is not a list of line numbers",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "The bad-highlight step",
+      "narration": "Its only excerpt highlights a string instead of a line number.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1", "highlight": "1" }]
+    }
+  ]
+}

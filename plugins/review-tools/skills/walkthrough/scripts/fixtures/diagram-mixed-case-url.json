@@ -1,0 +1,11 @@
+{
+  "title": "Diagram source has a mixed-case URL scheme",
+  "diagram": { "type": "svg", "source": "<svg xmlns=\"HTTPS://www.w3.org/2000/svg\"></svg>" },
+  "steps": [
+    {
+      "title": "A step",
+      "narration": "Narration.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 1, "code": "x = 1" }]
+    }
+  ]
+}

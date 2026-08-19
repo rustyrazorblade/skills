@@ -125,6 +125,18 @@ def validate_excerpt(excerpt, index, label):
         # and breaking every `highlight` entry that was written to line up with 0-based input.
         fail(f"{where}: 'startLine' must be 1 or greater, got {start_line}")
 
+    # endLine is optional, but when given it hits the exact same falsy-zero trap startLine just
+    # got rejected for: the viewer renders it as `excerpt.endLine ? "-" + endLine : ""`, so an
+    # `endLine: 0` (or any falsy/wrong-typed value) would be silently treated as absent instead
+    # of failing loudly here.
+    end_line = excerpt.get("endLine")
+    if end_line is not None:
+        if isinstance(end_line, bool) or not isinstance(end_line, int):
+            fail(f"{where}: 'endLine' must be an integer, got {type(end_line).__name__}")
+        if end_line < start_line:
+            fail(f"{where}: 'endLine' ({end_line}) must be greater than or equal to 'startLine' "
+                 f"({start_line})")
+
     # The one optional field the viewer can't shrug off: it iterates `highlight` directly, so a
     # non-list here would blank the whole presentation at open time while this script still
     # exited 0. Every other optional field renders harmlessly whatever its type.

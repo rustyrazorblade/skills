@@ -398,6 +398,10 @@ expect_failure "an excerpt missing its startLine" "excerpt-missing-startline.jso
 # startLine 0 (or negative) is not "unset" -- 0 must fail loudly, not silently become line 1 in
 # the viewer via a falsy-coercion fallback (the exact bug this rejects at generation time).
 expect_failure "an excerpt with startLine 0" "excerpt-startline-zero.json" "excerpt 1" "startLine" "1 or greater"
+# endLine hits the exact same falsy-zero trap startLine was just rejected for -- the viewer
+# treats a falsy endLine as "absent" via a ternary, so 0 must fail loudly here instead.
+expect_failure "an excerpt with endLine 0" "excerpt-endline-zero.json" "excerpt 1" "endLine"
+expect_failure "an excerpt whose endLine is before its startLine" "excerpt-endline-before-start.json" "excerpt 1" "endLine" "startLine"
 expect_failure "an excerpt missing its code" "excerpt-missing-code.json" "step 1" "The codeless-excerpt step" "excerpt 1" "code"
 
 # `highlight` is the one optional field the viewer iterates directly — a wrong type there would

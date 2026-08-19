@@ -1,0 +1,11 @@
+{
+  "title": "An excerpt has endLine 0",
+  "diagram": { "type": "html", "source": "<div>A -&gt; B</div>" },
+  "steps": [
+    {
+      "title": "The zero-endLine step",
+      "narration": "Its only excerpt claims an end line of 0, which does not exist.",
+      "excerpts": [{ "path": "src/a.py", "startLine": 5, "endLine": 0, "code": "x = 1" }]
+    }
+  ]
+}

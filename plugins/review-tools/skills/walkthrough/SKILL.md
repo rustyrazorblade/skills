@@ -173,9 +173,15 @@ only for an interactive, same-machine, foreground invocation — e.g. the owner 
 - `assets/viewer.html` is a checked-in static shell — never edit it per-use. The generator injects
   the manifest by replacing its single `<!--MANIFEST-->` marker; don't reproduce that literal
   marker text anywhere else in the file (the generator's replace targets exactly one occurrence).
-- The output must stay self-contained: no `http://`, no `https://`, no `fetch(` — anywhere,
-  including inside your diagram markup and narration. No remote images, no linked stylesheets, no
-  fonts.
+- The output must stay self-contained: no remote images, no linked stylesheets, no fonts, no live
+  network reference anywhere. `generate-walkthrough.py` enforces this mechanically for
+  `diagram.source` (rejects `http://`/`https://`/`ftp://`/`ws(s)://` there — that is the one
+  field whose markup is embedded and executes as-is, so it is the one place a stray remote
+  reference would actually be live). Mentioning a URL as plain text in narration or a code
+  excerpt is fine — it renders as inert text, not a fetched resource, and is exempt from the
+  check on purpose (source code legitimately references URL constants). Nothing outside
+  `diagram.source` is mechanically checked, though: if you hand-author markup anywhere else that
+  could reference something remote, that is on you, not the tool.
 - No interactivity beyond the layout toggle and its nav chrome (counter, prev/next, arrow keys).
   There is no comment channel and no persistence — a static `file://` page has nothing to send
   anything back to.

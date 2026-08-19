@@ -229,3 +229,28 @@ this change's scope, found by the same pass):**
 - `explain`'s own markdown link renderer has the identical missing-scheme-allow-list gap as
   SEC-1 (7.2), fed genuinely untrusted GitHub content (already flagged there; repeated here for
   visibility since a second independent pass found it too).
+
+## 12. Fixes from a third correctness pass (nothing new caused by rounds 11's fixes themselves)
+
+- [x] 12.1 Fixed the exact falsy-zero class of bug the `startLine` fix (8.1) closed, but left
+      open for `endLine`: `validate_excerpt()` never validated `endLine` at all, so
+      `endLine: 0` (or any wrong-typed value) passed silently while the viewer's
+      `excerpt.endLine ? "-" + endLine : ""` treats it as absent -- the reference silently
+      renders as `path:100` instead of the intended range, with no error at generation time.
+      Now validated the same way as `startLine` (must be an int, and `>= startLine` when
+      present).
+- [x] 12.2 Corrected `SKILL.md`'s self-containment claim, which overstated actual enforcement
+      scope ("anywhere, including inside your diagram markup and narration") when the check is
+      deliberately `diagram.source`-only (7.5/8.2/11.2) -- narration/excerpt text mentioning a
+      URL is fine (inert text, not a live reference) and always has been; the doc now says so
+      accurately instead of promising an enforcement that does not exist and would be wrong to
+      add (it would contradict the deliberate diagram-only scope and break the already-tested
+      excerpt-code URL exemption, 9.2).
+      Both from a third, focused correctness pass -- confirmed nothing NEW was introduced by
+      round 11's own fixes; these are pre-existing gaps adjacent to what was fixed, not
+      regressions. Regression-tested (`excerpt-endline-zero.json`,
+      `excerpt-endline-before-start.json`); `test-generate-walkthrough.sh`: 142 -> 151 passing,
+      verified under real `/bin/bash` (3.2.57); `test-generate-explain.sh` unaffected at 88.
+
+Three passes of the built-in `/code-review` skill in a row now confirm no new issues introduced
+by the fixes themselves -- converging. Moving to Build (format/lint) and Polish.

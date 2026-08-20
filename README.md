@@ -349,8 +349,10 @@ See [`plugins/spec-flow/docs/workflow.md`](plugins/spec-flow/docs/workflow.md) f
 
 ### review-tools
 
-Two skills that render a change or a subsystem as one self-contained HTML page — no server, no
-CDN, opens over `file://`. Standalone — no other plugin required, useful in any repo.
+Three skills, standalone — no other plugin required, useful in any repo. `explain` and
+`walkthrough` render a change or a subsystem as one self-contained HTML page — no server, no CDN,
+opens over `file://`. `tech-debt` audits the repo and files GitHub issues for what the owner
+confirms.
 
 - **`explain`** — an IDE-style view: a file tree on the left (code diffs and plain files in one
   panel, docs/issue text in another, whichever's non-empty), a code/diff/doc editor top-right, and
@@ -360,6 +362,9 @@ CDN, opens over `file://`. Standalone — no other plugin required, useful in an
   how something works, a technical-debt review, an areas-for-improvement pass, recommendations, or
   a performance analysis. You investigate and author every word; the renderer turns it into a
   presentation — vertical scroll by default, one button away from horizontal slide-by-slide.
+- **`tech-debt`** — a repo-wide structural-debt audit: three parallel review agents rank the 10
+  most impactful SOLID/composability, duplication, and layering findings, and the owner decides —
+  one at a time — whether each becomes a GitHub issue.
 
 Claude Code:
 
@@ -373,14 +378,17 @@ Claude Code:
 |-------|---------|
 | `/explain <issue-N \| base-ref> [docs...]` | Render the HTML view — an issue (body, comments, related/linked issues), a diff, docs, or any combination |
 | `/walkthrough [what to walk through]` | Render a diagram-first, ordered-step presentation — how something works, a tech-debt review, recommendations, a performance analysis |
+| `/tech-debt [optional: scope to a path/module]` | Audit the codebase for structural debt, rank the top findings, and file what the owner confirms as GitHub issues |
 
 If the [`spec-flow`](#spec-flow) plugin is also installed, its `activate`/`implement` skills call
 `explain` automatically at both owner seams once `SPEC_FLOW_SEAM_VIEW=explain` is set (via
-`/spec-flow:setup`) — see **Seam visualization** in `plugins/spec-flow/docs/workflow.md`. That
-integration is optional and one-directional; `review-tools` has no dependency on spec-flow.
+`/spec-flow:setup`) — see **Seam visualization** in `plugins/spec-flow/docs/workflow.md`; and its
+`project-manager` recommends running `tech-debt` on a cadence. Both integrations are optional and
+one-directional; `review-tools` has no dependency on spec-flow.
 
-See [`plugins/review-tools/skills/explain/SKILL.md`](plugins/review-tools/skills/explain/SKILL.md)
-and [`plugins/review-tools/skills/walkthrough/SKILL.md`](plugins/review-tools/skills/walkthrough/SKILL.md)
+See [`plugins/review-tools/skills/explain/SKILL.md`](plugins/review-tools/skills/explain/SKILL.md),
+[`plugins/review-tools/skills/walkthrough/SKILL.md`](plugins/review-tools/skills/walkthrough/SKILL.md),
+and [`plugins/review-tools/skills/tech-debt/SKILL.md`](plugins/review-tools/skills/tech-debt/SKILL.md)
 for the full CLI and manifest schemas.
 
 ## License

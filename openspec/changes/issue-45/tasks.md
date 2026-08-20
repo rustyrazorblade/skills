@@ -46,7 +46,7 @@
 
 ## 3. Repo-root documentation
 
-- [ ] 3.1 `README.md` (repo root): add a `/tech-debt` row to the `review-tools` skills table
+- [x] 3.1 `README.md` (repo root): add a `/tech-debt` row to the `review-tools` skills table
       (~lines 374-375), matching the existing `/explain`/`/walkthrough` row format, linking to
       `plugins/review-tools/skills/tech-debt/SKILL.md`.
 

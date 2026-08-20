@@ -368,6 +368,32 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"                     # ensure the final state is pushed
+   ```
+   **Before marking ready, check once whether CI already resolved this exact push** — the panel
+   review in step 4 often takes long enough that CI has already finished on this SHA, and pushing a
+   guess-fix and waiting another 20-30 minutes for CI to confirm it is exactly the round-trip Test
+   tiering exists to avoid. This is a single check, not a wait or a poll loop — if CI hasn't
+   finished yet, move on:
+   ```bash
+   HEAD_SHA=$(git -C <worktree> rev-parse HEAD)
+   gh run list --branch "$BR" --json databaseId,status,conclusion,headSha --limit 10 \
+     --jq ".[] | select(.headSha == \"$HEAD_SHA\")"
+   ```
+   **Not found, or `status` isn't `completed`** → CI hasn't reported on this SHA yet; proceed to
+   `gh pr ready` below as normal — the existing owner-notices-red path still covers it later.
+   **`conclusion` is `failure`** → run `/spec-flow:sync-ci <N>`'s own mechanics right here (its
+   SKILL.md steps 2-4: download the `spec-flow-failures` artifact, append the ids to
+   `.spec-flow/flagged-tests`). If it produced no artifact (a build/lint break, not a test
+   failure), skip the fix round below and surface it as a residual finding instead — don't guess
+   at a fix for something that isn't a flagged test. Otherwise, run **one bounded fix round**:
+   respawn `tdd-developer` (named `fix-ci`) with the newly flagged test id(s), the TEST
+   INSTRUCTION (step 3 — which already runs `.spec-flow/flagged-tests` locally), and the
+   implementer GUARDRAILS, and explicitly instruct it to **confirm the flagged test(s) pass
+   locally before pushing** — never push a fix for a known failure without reproducing and
+   clearing it locally first. Once it reports back and pushes, repeat this same single check
+   against the new HEAD sha once more, then proceed either way — this is one bounded pass, not a
+   loop back into step 4's panel.
+   ```bash
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 

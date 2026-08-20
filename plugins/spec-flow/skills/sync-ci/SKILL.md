@@ -1,6 +1,6 @@
 ---
 name: sync-ci
-description: Pull the branch's latest CI test failures into the issue's local flagged set — download the spec-flow-failures artifact from the most recent CI run and append the failing test ids to .spec-flow/flagged-tests in the worktree, so the local loop runs them for the rest of the branch. Part of the flow delivery workflow (see docs/workflow.md, "Test tiering"). Owner-invoked when CI reports red; never polls.
+description: Pull the branch's latest CI test failures into the issue's local flagged set — download the spec-flow-failures artifact from the most recent CI run and append the failing test ids to .spec-flow/flagged-tests in the worktree, so the local loop runs them for the rest of the branch. Part of the flow delivery workflow (see docs/workflow.md, "Test tiering"). Invoked by the owner when they notice CI go red, or by issue-pm itself the moment its own push's CI run reports red (see implement/address) — a single check tied to a specific run, never a standing poll loop.
 argument-hint: [issue number, or its PR number]
 ---
 
@@ -9,8 +9,12 @@ argument-hint: [issue number, or its PR number]
 You are this issue's `issue-pm`, running as your own dedicated background session. CI ran the full
 suite on issue `#N`'s branch and something failed. Pull those failures into the branch's
 **flagged set** so the fast local loop (`/spec-flow:implement`'s gate and your own runs) guards
-them for the rest of the branch. This is owner-invoked — run it when you see CI go red — there is
-**no polling**.
+them for the rest of the branch. Run this the moment CI-red on this branch is known — whether the
+owner points it out, or you noticed it yourself checking the run tied to a push you just made (see
+`implement` step 5 and `address` step 4). Either way this is a single check against a specific run,
+never a standing watch loop — **no polling**. Never let a fix for a known CI failure go out on a
+guess: sync first, confirm the flagged test(s) pass locally, then push — a blind push-and-wait
+turns a ~1-minute local check into a 20-30 minute CI round trip for no reason.
 
 Input: an issue number `#N` (or its PR number). You're already running inside this issue's
 worktree — Claude Code's own background-session isolation put you there, on whatever branch it
@@ -95,7 +99,10 @@ CI-caught test is added here and run locally until the branch merges, then evapo
 
 ## Rules
 
-- **Owner-invoked, never polls.** Run it when CI reports red; there is no watch loop.
+- **Self-invoked on a known red run, never a watch loop.** Run it the moment CI-red on this branch
+  is known — you notice it, or `issue-pm` does via a single bounded check of the run tied to its
+  own push (`implement` step 5, `address` step 4). Either way there is no polling: one check
+  against one specific run, not a standing watch.
 - **Never fabricate entries.** Only ids that came from the `spec-flow-failures` artifact go in. A
   failed run with no artifact means "not a test failure" or "CI not wired" — report, don't invent.
 - **The flagged set is local and gitignored** — it never commits and never leaves the branch.

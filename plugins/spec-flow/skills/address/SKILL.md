@@ -44,7 +44,11 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    Instruct it to make focused commits, keep the **unit tier** (plus the branch's
    `.spec-flow/flagged-tests`, if any) green locally as its gate — never the full/integration
    suite, which is CI's gate — and **never push or touch main**. See **Test tiering (unit /
-   integration)** in `docs/workflow.md`.
+   integration)** in `docs/workflow.md`. **If any comment references a CI failure rather than a
+   human review note**, run `/spec-flow:sync-ci <N>`'s own mechanics first (its SKILL.md steps
+   2-4) so the failing test lands in `.spec-flow/flagged-tests` before the fix agent starts —
+   otherwise its local gate has nothing to catch the actual failure against, and it ends up
+   fixing blind and pushing on a guess.
 
 4. **Push the branch** (outward-facing — done here, narrated). Re-resolve `$BR` fresh — cheap,
    and this may be a separate Bash call from step 1's, which wouldn't have carried it over:
@@ -52,6 +56,12 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"
    ```
+   **Single check, not a wait:** if step 3 synced a CI failure in, check once whether the flagged
+   test(s) still show red on the run tied to this new push —
+   `gh run list --branch "$BR" --json databaseId,status,conclusion,headSha --limit 10 --jq '.[] |
+   select(.headSha == "'"$(git -C <worktree> rev-parse HEAD)"'")'`. `status` not yet `completed` →
+   move on, nothing more to do here. `conclusion` is `failure` again → don't loop silently; report
+   it plainly in step 6 as still broken (or flaky) rather than declaring the round done.
 
 5. **Reply per thread.** For each review comment you addressed, post a reply noting the commit
    that resolved it. Reply to the thread's **root** comment id, not to a reply within it — the

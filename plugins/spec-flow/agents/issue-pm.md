@@ -83,9 +83,14 @@ exists specifically to work this issue without routing each step back through th
    subagent — a subagent can never spawn its own team. Invoking it is the explicit opt-in to that
    team's cost; launch it only after approval.
    **If CI reports red on the PR** at any point from here on (during `implement`, or while
-   waiting on the owner's review) → `/spec-flow:sync-ci <N>`, owner-invoked when they see it go
-   red — never poll for it. This pulls the failures into the branch's flagged set so the local
-   loop guards them for the rest of the branch.
+   waiting on the owner's review) → run `/spec-flow:sync-ci <N>` yourself, immediately — don't
+   wait for the owner to notice and ask. `implement` step 5 and `address` step 4 each do one
+   bounded check of the CI run tied to the push they just made (never a standing poll loop) and
+   self-invoke `sync-ci` right there if it's already red; the owner can still point out a red run
+   at any other time and you handle it the same way. Either way, once a failure is synced into the
+   branch's flagged set, fix it and **confirm the flagged test(s) pass locally before pushing
+   again** — never push a guess and wait 20-30 minutes for CI to tell you whether it worked, when
+   the specific failing test gives you that answer in about a minute.
    **At the end of `implement`, the PR is marked ready and Seam 2 defaults to waiting for the
    owner's GitHub review.** Only if the `merge-on-green` label is set, or
    `.spec-flow/owner-instructions` (read fresh at that point) explicitly says to merge

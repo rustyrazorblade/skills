@@ -1,0 +1,9 @@
+{
+  "name": "ste-house-style",
+  "version": "0.1.0",
+  "description": "STE House Style — ASD-STE100 Simplified Technical English plus the house writing style, as a selectable Claude Code output style. Standalone; no other plugin required.",
+  "author": { "name": "Jon Haddad" },
+  "repository": "https://github.com/rustyrazorblade/skills",
+  "license": "Apache-2.0",
+  "keywords": ["output-style", "writing", "ste", "simplified-technical-english", "style-guide"]
+}

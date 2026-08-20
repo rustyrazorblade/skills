@@ -64,10 +64,13 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Grep the whole repo for `spec-flow:tech-debt` and `skills/tech-debt` (excluding
+- [x] 5.1 Grep the whole repo for `spec-flow:tech-debt` and `skills/tech-debt` (excluding
       `openspec/changes/` historical text and this change's own files) — zero remaining hits outside
-      historical/changelog context.
-- [ ] 5.2 Confirm `plugins/spec-flow/skills/tech-debt/` no longer exists.
-- [ ] 5.3 Read the moved `SKILL.md` once more in isolation to confirm no spec-flow-specific
+      historical/changelog context. (Zero hits for `spec-flow:tech-debt` anywhere in tracked files.
+      `skills/tech-debt` hits are only the two expected pointers at the new
+      `plugins/review-tools/skills/tech-debt/SKILL.md` location, in README.md and
+      project-manager.md.)
+- [x] 5.2 Confirm `plugins/spec-flow/skills/tech-debt/` no longer exists.
+- [x] 5.3 Read the moved `SKILL.md` once more in isolation to confirm no spec-flow-specific
       vocabulary remains (per `specs/tech-debt/spec.md`'s "Skill instructions carry no dependency on
       another plugin" requirement).

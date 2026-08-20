@@ -1,20 +1,20 @@
-# Skills Repository — Claude Instructions
+# Skills Repository: Claude Instructions
 
-## Local Development
+## Local development
 
-To test plugin skills locally as slash commands, install the local directory as a marketplace, then add all the plugins.
+To test plugin skills locally as slash commands, install the local directory as a marketplace.  Then add all the plugins.
 
-## Plugin settings.json — NEVER set a default `agent`
+## Plugin settings.json: never set a default agent
 
-Do NOT create a `settings.json` at a plugin root (e.g. `plugins/<plugin>/settings.json`) with an `"agent"` field. When a plugin ships `{"agent": "..."}`, Claude Code runs the **main thread as that agent** whenever the plugin is enabled — so it becomes the active agent at startup in *every* project, before the user types anything, not just relevant ones. This is almost never what we want. Agents should be available for explicit invocation, not hijack the main thread. If you find such a file, remove it.
+Do not create a settings.json file at a plugin root, such as plugins/<plugin>/settings.json, with an "agent" field.  This field makes Claude Code run the main thread as that agent at startup, in every project, whenever the plugin is enabled.  Keep agents available for explicit invocation; do not let one hijack the main thread.  If you find such a file, remove it.
 
-## Version Bumping
+## Version bumping
 
-When working on a branch or PR, ask if the user wants to bump the plugin version. Show the current version and ask for the new one before making any changes.
+When you work on a branch or PR, ask if the user wants to bump the plugin version.  Show the current version.  Ask for the new version before you make any changes.
 
-Version is declared in two files per plugin — both must be updated together:
-- `plugins/<plugin>/.claude-plugin/plugin.json` — `version` field
-- `plugins/<plugin>/.codex-plugin/plugin.json` — `version` field
+Two files hold the version for each plugin; update both together:
+- `plugins/<plugin>/.claude-plugin/plugin.json`, the `version` field
+- `plugins/<plugin>/.codex-plugin/plugin.json`, the `version` field
 
 Example:
 ```
@@ -22,13 +22,11 @@ Current version: 0.1.0
 What should the new version be?
 ```
 
-Once confirmed, update both files. Do not bump the version without asking first.
+Once the user confirms, update both files.  Do not bump the version without asking first.
 
-## easy-db-lab Plugin
+## easy-db-lab plugin: testing
 
-### Testing
-
-Local test runs live in `tests/` at the repo root — this directory is gitignored. Plans go under `tests/plans/` and cluster workspaces under `tests/clusters/`. For example:
+Local test runs live in `tests/` at the repo root; this directory is gitignored.  Plans go under `tests/plans/`.  Cluster workspaces go under `tests/clusters/`.  For example:
 
 ```
 tests/
@@ -38,21 +36,19 @@ tests/
     20240530-143022/     ← cluster workspace created by setup-cluster.sh
 ```
 
-Use this directory when running end-to-end tests of the plan → run flow locally.
+Use this directory for end-to-end tests of the plan-to-run flow, locally.
 
-## cassandra-expert Plugin
-
-### Training Skill Architecture
+## cassandra-expert plugin: training skill architecture
 
 The `cassandra-expert:training` skill delivers interactive, session-based Cassandra training.
 
-**How it's structured:**
+Structure:
 
 ```
 plugins/cassandra-expert/skills/training/
-  SKILL.md                           ← instructor persona + methodology
+  SKILL.md                           ← instructor persona and methodology
   sessions/
-    01-fundamentals.md               ← session index (topic list + reference file paths)
+    01-fundamentals.md               ← session index: topic list plus reference file paths
     02-query-anti-patterns.md
     03-schema-anti-patterns.md
     04-sai.md
@@ -69,57 +65,47 @@ plugins/cassandra-expert/references/training/
   04-sai/
 ```
 
-Both the session file names and the reference folder names are numbered (`NN-session-name`) to give sessions a canonical order.
+Session file names and reference folder names both follow the `NN-session-name` pattern.  This numbering gives each session a canonical order.
 
-**Key design principles:**
-- Each topic is a **separate reference file**, loaded on demand (not all in context at once)
-- Session files are lightweight indexes: topic name + path to reference file
-- The SKILL.md defines pedagogy; it does NOT contain topic content
+Key design principles:
+- Each topic lives in its own reference file, loaded on demand, not all held in context at once.
+- Session files stay lightweight: a topic name plus a path to its reference file.
+- SKILL.md defines the pedagogy. It does not hold topic content.
 
-**Adding a new session:**
-1. Create `sessions/NN-<session-name>.md` with a topic table (name + reference file path)
-2. Add topic files to `references/training/NN-<session-name>/NN-topic-name.md`
-3. Register the session in `skills/training/SKILL.md` under "Available Sessions"
+To add a session: create `sessions/NN-<session-name>.md` with a topic table (name plus reference path), add topic files under `references/training/NN-<session-name>/NN-topic-name.md`, and register the session in `skills/training/SKILL.md` under "Available Sessions."
 
-**Adding a new topic to an existing session:**
-1. Create `references/training/NN-<session>/NN-topic-name.md`
-2. Add a row to the session index file (`sessions/NN-<session>.md`)
-3. Number topics sequentially (NN = two-digit number)
+To add a topic to an existing session: create `references/training/NN-<session>/NN-topic-name.md`, add a row to `sessions/NN-<session>.md`, and number it in sequence (NN = a two-digit number).
 
-**Topic file structure (required sections):**
-- `## Objective` — one sentence: what the learner will know
-- `## Why This Matters` — the critical reasoning for correct Cassandra usage
-- `## Concept` — explanation with tables/diagrams as needed
-- `## Examples` — CQL and code (Go, Java, Python) — all three where relevant
-- `## Pulse Check` — one or more questions, each followed by the expected answer in italics and parentheses. Topics that cover multiple distinct ideas (e.g. types, table options, DML basics) should have a pulse check per major idea so each one gets tested.
+Each topic file needs these sections:
+- `## Objective`, one sentence on what the learner will know.
+- `## Why This Matters`, the key reasoning for correct Cassandra usage.
+- `## Concept`, an explanation, with tables or diagrams as needed.
+- `## Examples`, CQL and code in Go, Java, and Python, where relevant.
+- `## Pulse Check`, one or more questions, each followed by the expected answer in italics and parentheses.  A topic that covers several distinct ideas needs a pulse check per idea, so each one gets tested.
 
-**Sessions planned:**
-- `01-fundamentals` — developer focused (DONE)
-- `02-query-anti-patterns` — query and application anti-patterns (DONE)
-- `03-schema-anti-patterns` — schema design anti-patterns (DONE)
-- `04-sai` — Storage-Attached Indexes deep dive (DONE)
-- `operators` — operator focused (TODO)
+Sessions planned: `01-fundamentals`, `02-query-anti-patterns`, `03-schema-anti-patterns`, and `04-sai` are done.  `operators`, an operator-focused session, is next.
 
-**Validation scripts (strongly preferred for any factual claim):**
+### Validation scripts
 
-When training material or reference docs make a concrete claim about what Cassandra accepts, rejects, or does — column kinds that can be indexed, operators that parse, specific yaml settings, driver behavior — write a Python script that exercises the claim against a live cluster and records PASS/FAIL vs. expected. These scripts sit in `plugins/cassandra-expert/skills/training/scripts/` with a `README.md` cataloguing what each one tests.
+Prefer these for any factual claim: which column kinds Cassandra can index, which operators parse, a specific yaml setting, or driver behavior.  For each claim, write a Python script that exercises it against a live cluster and records PASS or FAIL against the expected result.  Keep these scripts under `plugins/cassandra-expert/skills/training/scripts/`, with a `README.md` that catalogs what each one tests.
 
-Reference: `skills/training/scripts/verify-sai-capabilities.py` is the canonical pattern. It follows these conventions:
-- **Self-contained, uv-runnable via PEP 723 inline metadata.** First two lines are `#!/usr/bin/env -S uv run --script` and a `# /// script` block declaring `requires-python` and `dependencies`. Users run with a single `uv run path/to/script.py`; no venv setup needed.
-- **List of case dicts**, each with `name`, the CQL / action under test, and `expect_accept` (boolean). Queries/operators and column-kind tests live in separate lists (`OPERATOR_CASES`, `CASES`, etc.) so they can be extended independently.
-- **Catches the specific server exceptions** (`InvalidRequest`, `SyntaxException`) and reports the first line of the server message alongside PASS/FAIL — so when a case fails, the output tells you *why* the server rejected it, not just that it did.
-- **Creates and drops its own keyspace** (e.g. `sai_verify`) so runs are idempotent and don't pollute the cluster.
-- **Exits 0 if every case matches expectation, non-zero otherwise.** This makes the script usable in CI.
-- **Documented in a sibling `README.md`** with requirements (uv, reachable 5.0+ cluster), an invocation example, and a bulleted list of cases expected to accept vs. reject.
+`skills/training/scripts/verify-sai-capabilities.py` is the canonical pattern:
+- Self-contained, uv-runnable via PEP 723 metadata: the first two lines are `#!/usr/bin/env -S uv run --script` and a `# /// script` block declaring `requires-python` and `dependencies`. Run it with one command, `uv run path/to/script.py`; no venv setup needed.
+- A list of case dicts, each with `name`, the CQL or action under test, and `expect_accept` (a boolean). Keep query/operator cases and column-kind cases in separate lists (`OPERATOR_CASES`, `CASES`), so each grows independently.
+- Catches `InvalidRequest` and `SyntaxException` and reports the first line of the server message with PASS or FAIL, so a failure shows why the server rejected it.
+- Creates and drops its own keyspace, such as `sai_verify`, so runs stay idempotent.
+- Exits 0 only if every case matches its expectation, so it works in CI.
+- Ships with a sibling `README.md`: requirements (uv, a reachable 5.0+ cluster), an invocation example, and the cases expected to accept or reject.
 
-When new features or claims are added to the training, add cases to the existing scripts where they fit, or create a new script in the same directory with the same pattern. Claims that can be mechanically verified should be — the cost of a broken claim in teaching material is much higher than the cost of a few lines of Python.
+When you add a new feature or claim to the training, add cases to an existing script where they fit, or create a new script in the same directory, in the same pattern.  Verify any claim you can verify mechanically: a broken claim in teaching material costs far more than a few lines of Python.
 
-**Cassandra documentation source (for auditing training material):**
-- Use these to verify CQL syntax, version-specific features, and command accuracy
-- Jon's recommendations in reference files OVERRIDE generic Cassandra docs
+### Cassandra documentation source
 
-**Coding standards for examples:**
-- Always show Go, Java, AND Python examples for driver-level code
-- Go: gocql auto-prepares — note this explicitly
-- Java/Python: must explicitly call `session.prepare()` — show this pattern
-- Always use prepared statements with `?` placeholders, never string concatenation
+When you audit training material, use the official Cassandra docs to verify CQL syntax, version-specific features, and command accuracy.  Jon's recommendations in reference files override generic Cassandra docs.
+
+### Coding standards for examples
+
+- Show Go, Java, and Python examples for driver-level code.
+- Go: note explicitly that gocql auto-prepares.
+- Java and Python: show the explicit `session.prepare()` call.
+- Always use prepared statements with `?` placeholders.  Never use string concatenation.

@@ -1,20 +1,20 @@
 ## 1. Move and generalize the skill
 
-- [ ] 1.1 Create `plugins/review-tools/skills/tech-debt/SKILL.md` starting from
+- [x] 1.1 Create `plugins/review-tools/skills/tech-debt/SKILL.md` starting from
       `plugins/spec-flow/skills/tech-debt/SKILL.md`, then rewrite the intro paragraph (currently
       "You are the central `project-manager` (like `groom`/`board`/`archive`...)" plus the
       "`architect`'s 'Nearby structural debt' step during `activate`" mention) to describe the
       skill's own execution shape generically — foreground, standalone, no worktree, no issue
       coupling, no code edits — with zero references to spec-flow's agents/skills/vocabulary.
-- [ ] 1.2 Step 6 (issue filing): remove the sentences naming `activate`'s tech-debt fast path and
+- [x] 1.2 Step 6 (issue filing): remove the sentences naming `activate`'s tech-debt fast path and
       `/spec-flow:activate` by name; replace with generic prose stating the `## Direction` section
       must stay a distinct heading (some downstream consumer may key off it) — do not touch the
       actual issue-body template (title/labels/body structure) itself, only the surrounding
       provenance prose.
-- [ ] 1.3 Update the frontmatter `description` to drop the spec-flow-specific
+- [x] 1.3 Update the frontmatter `description` to drop the spec-flow-specific
       "`project-manager` recommends... see `docs/workflow.md`" tail; keep the substantive
       description of what the audit does.
-- [ ] 1.4 Delete `plugins/spec-flow/skills/tech-debt/` (the whole directory).
+- [x] 1.4 Delete `plugins/spec-flow/skills/tech-debt/` (the whole directory).
 
 ## 2. Update spec-flow's cross-references
 

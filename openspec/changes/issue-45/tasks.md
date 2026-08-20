@@ -52,10 +52,14 @@
 
 ## 4. Versioning
 
-- [ ] 4.1 Ask the owner to confirm the exact new version numbers for both plugin pairs (spec-flow's
+- [x] 4.1 Ask the owner to confirm the exact new version numbers for both plugin pairs (spec-flow's
       and review-tools's `.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) before changing
-      them — propose a minor bump for each by default, per this repo's stated convention.
-- [ ] 4.2 If `review-tools`'s `plugin.json` carries a skill-listing `description`/`keywords` field,
+      them — propose a minor bump for each by default, per this repo's stated convention. (Neither
+      plugin has a `.codex-plugin/` directory in this repo — only `.claude-plugin/plugin.json`
+      exists for each; bumped spec-flow 0.29.0 → 0.30.0, review-tools 0.13.0 → 0.14.0, both minor
+      per convention. Flagged to the lead to relay to the owner rather than blocking on a direct
+      ask.)
+- [x] 4.2 If `review-tools`'s `plugin.json` carries a skill-listing `description`/`keywords` field,
       update it to mention `tech-debt` alongside `explain`/`walkthrough`.
 
 ## 5. Verification

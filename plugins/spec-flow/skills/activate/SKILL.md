@@ -162,7 +162,7 @@ qualify), and confirm the choice with the owner.
 
    **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
    **Tech-debt fast path** in `docs/workflow.md`). The issue body already carries a `## Direction`
-   from `/spec-flow:tech-debt` — a concrete shape, not a design brief — so spawn `architect` with a
+   from `/tech-debt` (review-tools) — a concrete shape, not a design brief — so spawn `architect` with a
    **narrowed charter** instead of the normal design-from-scratch mandate: *"Direction (already
    confirmed by the owner when this issue was filed): `<the issue's Direction section, verbatim>`.
    Don't design from scratch — verify this specific fix still applies (the finding's file:line
@@ -217,7 +217,7 @@ qualify), and confirm the choice with the owner.
    `gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."`
    Then go straight to step 5's tech-debt branch. This is the *default* for `type:tech-debt`, not
    conditional on `.spec-flow/owner-instructions` — the owner already made this decision once, item
-   by item, when they confirmed the finding in `/spec-flow:tech-debt`; step 4 here is a safety check
+   by item, when they confirmed the finding in `/tech-debt` (review-tools); step 4 here is a safety check
    against staleness/scope-creep, not a second design-choice gate.
 
    **Otherwise (a normal issue):** every consequential
@@ -538,7 +538,7 @@ qualify), and confirm the choice with the owner.
    instead: the issue's `## Direction` (as confirmed or corrected by step 3's architect brief), the
    `## Adjacent specified behavior (must be preserved)` section step 5 appended, and architect's
    risks/blast-radius from its brief. This is genuinely quick — the owner already confirmed this
-   exact Direction, item by item, in `/spec-flow:tech-debt`; this stop exists to catch staleness and
+   exact Direction, item by item, in `/tech-debt` (review-tools); this stop exists to catch staleness and
    let them see the adjacent-behavior list before implementation starts, not to re-litigate the
    fix:
    ```bash
@@ -649,7 +649,7 @@ qualify), and confirm the choice with the owner.
   acceptance criteria, or Direction + adjacent-behavior list) matches what was actually produced —
   neither exception ever removes Seam 1 itself.
 - **`type:docs` and `type:tech-debt` never combine.** If an issue somehow carries both (hand-edited
-  in GitHub — `/spec-flow:tech-debt` and `groom` each only ever apply one), don't silently pick
+  in GitHub — `/tech-debt` (review-tools) and `groom` each only ever apply one), don't silently pick
   either fast path: say so to the owner and fall back to the full pipeline (design stop + real
   spec) — the safer default when the labeling itself is ambiguous about what kind of change this
   actually is.

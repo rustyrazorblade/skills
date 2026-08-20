@@ -18,29 +18,29 @@
 
 ## 2. Update spec-flow's cross-references
 
-- [ ] 2.1 `plugins/spec-flow/README.md` (~line 120): replace the `/spec-flow:tech-debt` command row
+- [x] 2.1 `plugins/spec-flow/README.md` (~line 120): replace the `/spec-flow:tech-debt` command row
       with a pointer noting the audit now lives in review-tools's `/tech-debt`.
-- [ ] 2.2 `plugins/spec-flow/agents/reviewer.md` (~line 30): reword "`/spec-flow:tech-debt` found
+- [x] 2.2 `plugins/spec-flow/agents/reviewer.md` (~line 30): reword "`/spec-flow:tech-debt` found
       this..." to name the moved command; no detection logic needed here (this agent only reacts to
       an already-filed issue's shape).
-- [ ] 2.3 `plugins/spec-flow/agents/project-manager.md` — "Watching for tech-debt review cadence"
+- [x] 2.3 `plugins/spec-flow/agents/project-manager.md` — "Watching for tech-debt review cadence"
       section (~lines 102-134): reword the section's opening to name the moved command; replace the
       unconditional recommendation with conditional prose per `design.md` decision 2 — **no
       `claude plugin list --json`/jq check anywhere in this file.** Add an explicit branch: if the
       agent doesn't have a tech-debt-style audit skill available to it, say so plainly ("the
       periodic-audit feature needs `review-tools` installed") instead of recommending a command
       that might not exist.
-- [ ] 2.4 `plugins/spec-flow/docs/workflow.md` — update every `/spec-flow:tech-debt` occurrence
+- [x] 2.4 `plugins/spec-flow/docs/workflow.md` — update every `/spec-flow:tech-debt` occurrence
       (~15, across the "Tech-debt review cadence" section, the "Tech-debt fast path" section's
       provenance mentions, the label table's two label descriptions, and the reference-list line
       ~477) to name the moved command. The "Tech-debt fast path" section's actual mechanics (how
       `activate`/`implement` consume a `type:tech-debt` issue) stay unchanged — only the filer's
       name updates.
-- [ ] 2.5 `plugins/spec-flow/skills/activate/SKILL.md` — update every `/spec-flow:tech-debt`
+- [x] 2.5 `plugins/spec-flow/skills/activate/SKILL.md` — update every `/spec-flow:tech-debt`
       provenance mention (frontmatter description, step 3's narrowed-charter text, step 4's
       confirmation-comment text, step 7's render text) to name the moved command; no new detection
       logic needed (`activate` only reacts to already-filed issues).
-- [ ] 2.6 `plugins/spec-flow/bin/bootstrap-labels.sh` (lines 35, 37, 38): update the comment and the
+- [x] 2.6 `plugins/spec-flow/bin/bootstrap-labels.sh` (lines 35, 37, 38): update the comment and the
       two `--description` string literals to name the moved command instead of
       `/spec-flow:tech-debt`.
 

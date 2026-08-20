@@ -27,7 +27,7 @@ A scenario the code doesn't truly satisfy — even if a file was changed near it
 ## Tech-debt fast path mode
 
 Triggered whenever `change` is `none — type:tech-debt fast path` rather than a real change name —
-`/spec-flow:tech-debt` found this a purely structural, behavior-preserving fix, and `activate`
+`/tech-debt` (review-tools) found this a purely structural, behavior-preserving fix, and `activate`
 skipped OpenSpec generation entirely for it (see **Tech-debt fast path** in `docs/workflow.md`).
 There is no `openspec/changes/<change>/` to read — don't try. Your contract shifts from "does the
 diff conform to a generated spec" to **"does the diff preserve existing behavior while matching the

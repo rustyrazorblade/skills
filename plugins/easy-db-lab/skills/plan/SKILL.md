@@ -47,6 +47,32 @@ Use `kit list` output as the authoritative list of installable software. Any dat
 
 If the binary cannot be found, load `../../references/commands.md` as a fallback and warn the user to verify flags when running the plan.
 
+### `commands` is the index, not the documentation — run `--help` per command
+
+**`$EDB commands` prints only a one-line description per subcommand. It silently drops the full help text, which is where the load-bearing warnings live.** Treat it as a table of contents for finding what exists, then read the actual entry.
+
+**Once you know which commands the plan will use, run `--help` on each one** before writing any step that invokes it:
+
+```bash
+$EDB <subcommand path> --help
+```
+
+This is not optional and it is not redundant with `commands`. A worked example of the difference: `commands` renders `cassandra profiling start` as the single line *"Enable continuous profiling on Cassandra nodes."* Its `--help` additionally documents which async-profiler arguments the tool reserves and rejects, and carries a multi-paragraph warning that combining a CPU event with wall-clock sampling in one recording silently corrupts the resulting profile by up to three orders of magnitude. A plan written from `commands` alone can therefore contain a command that runs cleanly, produces plausible output, and is wrong — with the warning against it sitting unread in help the whole time.
+
+Read `--help` for **every** command the plan will invoke, including ones you are confident about. Confidence is exactly the state in which a `--name` gets written where a positional belongs.
+
+### What help cannot tell you
+
+`--help` documents the *command surface*: flags, positionals, defaults, and whatever prose the author wrote. It does not document the system's *behavior*, and that is where the costlier planning errors live. Help will not tell you:
+
+- **Where a command's output actually lands.** A wrapper script may `cd` before exec'ing the binary, so a relative output path resolves somewhere other than your shell's directory.
+- **What runtime artifacts are named or where they live** — state files, metrics files, rotated or renamed data files.
+- **The format of an identifier used for filtering** — a label, a series name, a job name. These are frequently derived (`<name>-<id>`), not the literal value you supplied.
+- **Whether a command takes effect immediately.** A command that writes desired state and returns may rely on a reconciler, timer, or operator to act later. Verifying immediately after such a command reports a false failure.
+- **How a third-party tool the command wraps behaves** — for instance, whether a converter merges all its inputs into one output.
+
+For all of these, prefer the tool's own read-back commands (`status`, `list`, `info`) over asserting a path or filename you inferred. When a plan genuinely must reference a runtime path or identifier, derive it at run time from a workspace artifact or a command's output and bind it to a shell variable — never hardcode it into a step.
+
 ## Interactive Mode (`--interactive`)
 
 If `--interactive` was passed, engage the Socratic dialogue protocol described below throughout this skill. If it was not passed, follow the steps as written — ask the required questions, collect answers, and build the plan without the extra probing and incremental display.
@@ -186,12 +212,34 @@ In **interactive mode**, show the step outline (step names and brief description
 (a) Confirm it matches a real subcommand and flag in the `$EDB commands` output captured during discovery.
 (b) Confirm every required positional argument is present.
 (c) Confirm any `--kit`, name, or enum-like argument value corresponds to something real — kit names against `kit list`, node types/hosts against the actual cluster config. Some flags accept a free-form string with no runtime validation (e.g. `--kit` on non-install commands like `cleanup`) — the tool will not catch a wrong value for you, so you must check it against the same authoritative source yourself.
+(d) Confirm you have read that command's `--help`, not just its `commands` line, and that no warning or restriction in it contradicts what the step does.
+(e) Confirm every file path, filename, and identifier the step references is either derived at run time from a command or workspace artifact, or was read from `--help` — never inferred from a design document, a naming convention, or memory.
 
 Do this pass before showing the plan to the user, not after they've approved it.
 
+**Check the plan's sequencing, not just its individual commands.** A plan can consist entirely of valid commands and still produce a meaningless result because of the order they run in.
+
+- **Steps that change what is being produced must come after steps that consume what was already produced.** If step N reads accumulated artifacts — log files, data chunks, captured output — then any step that changes the *kind* of artifact being accumulated must come after it. Otherwise the consuming step silently mixes two kinds of data and reports a confident, wrong answer.
+- **A cumulative counter or metric must be read in a window that isolates what you are testing.** Many counters increment on deliberate operations as well as on the fault you are hunting. Read them before the deliberate operations, or state an explicit quiet period first. A check placed where it cannot help but report a failure is worse than no check: it teaches the operator to ignore it.
+- **A command that returns is not necessarily a command that has taken effect.** Where a reconciler, timer, or background process does the real work, put an explicit wait between the command and its verification, and say in the step how long and why.
+- **Do not break something in one step and depend on it in a later one** without an explicit restore step in between, and a stated precondition on the step that follows.
+
+**Make the workload outlast the observation.** Add up the waits every step in the plan needs — including the ones expressed as "wait a few minutes" — then set the workload duration comfortably beyond that total. A workload that expires two-thirds of the way through leaves the remaining steps observing an idle system, which quietly invalidates them rather than failing them. Where a step has a minimum elapsed time before it is meaningful, state that floor in the step itself rather than leaving it to the operator's pace.
+
 ## Step 4 — Write the Plan
 
-In **interactive mode**, run the gap analysis defined in the Socratic Dialogue Protocol above before writing. Present each gap as a question and wait for the user's answer before continuing. Only write the plan after all gaps are resolved.
+**Run this quality gate before writing, in every mode.** Interactive mode additionally presents each gap to the user as a question and waits for an answer (see the Socratic Dialogue Protocol above); non-interactive mode still applies the gate itself and states any gap it could not close in the plan's Notes. The gate is not the part that is optional — only the conversation around it is.
+
+For each of the following, state whether the plan covers it:
+
+- **Every check is falsifiable.** For each verification step, say what a pass looks like and what a failure looks like, and confirm the plan's own earlier steps make both outcomes genuinely possible. A check on a value the plan never varies from its default cannot fail, and is therefore not a check. This is the single most common defect in a generated plan.
+- **"The artifact exists" is not "the feature works."** For anything that produces data — files, metrics, profiles, logs, rows — include at least one check on whether the content is non-trivial and well-formed, not merely present. A feature can produce perfectly valid empty output indefinitely.
+- **The plan verifies environmental preconditions it depends on** rather than assuming them: kernel settings, capabilities, installed binaries, service state. Settings applied imperatively by a provisioning script may not survive a reboot.
+- **Multi-node claims are checked on more than one node.** If a command targets all nodes, verify more than the first one at least once.
+- **Counts and aggregates are computed over the right unit.** When parsing tool output, confirm what one line or one record actually represents before counting them; many formats are one line per *distinct* item with a weight field, so a line count answers a different question than the one being asked.
+- The test produces a specific, measurable output.
+- There is a step that collects and records results, not just "look at the dashboard".
+- Teardown is included if cost matters.
 
 Load `../../references/plan-template.md` and use it as the starting point. Fill in every section — do not leave any placeholder text in the output. Write the completed plan to the path specified by `--output`, if provided; otherwise default to `plan.md` in the current directory. Create any intermediate directories if needed.
 

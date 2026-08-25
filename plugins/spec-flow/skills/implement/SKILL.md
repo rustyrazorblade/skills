@@ -150,6 +150,36 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    path"`, the literal sentinel `agents/reviewer.md` and `implement.workflow.js` both key off of to
    switch into behavior-preservation mode.
 
+   **Resolve `BREAKER_PARAM` here too, but only when `CHANGE_PARAM` is the tech-debt sentinel** —
+   the refactor circuit breaker (see **Refactor circuit breaker** in `docs/workflow.md`). It applies
+   to **behavior-preserving runs only**. Under ordinary feature TDD, editing one test file three
+   times is routine — several tests for one module — so appending it on the normal path would stall
+   almost every run. On the normal path, set `BREAKER_PARAM = "off"` and append nothing. The
+   non-configurable triage gate in `agents/tdd-developer.md` still applies on every path; only this
+   mechanical backstop is scoped.
+
+   On the tech-debt path, read `SPEC_FLOW_REFACTOR_BREAKER` from the environment; unset or
+   unrecognized → `ask`, the default. In **Team mode** each value maps to one BREAKER SENTENCE you
+   append to the implementer GUARDRAILS below:
+   - **`ask`** (default) → *"If you have edited the same test file more than twice in this run,
+     STOP: leave the tree exactly as it is, do not revert, and report the blocker and the
+     classification you could not make. Wait for my decision — do not keep editing that file."*
+   - **`revert`** → *"If you have edited the same test file more than twice in this run, STOP:
+     revert to the last green commit (`git reset --hard <sha>` on the issue branch only) and
+     report the blocker and the classification you could not make. Do not keep editing that
+     file."*
+   - **`off`** → no BREAKER SENTENCE at all. Append nothing.
+
+   In Team mode a stopped teammate messages you mid-run: surface it to the owner, let them choose
+   continue or revert, then respawn a fresh `tdd-developer` with their decision. **In Workflow mode
+   you append nothing** — you pass `BREAKER_PARAM` in the script's `args` and the script composes
+   its own equivalent sentences, worded for a script that cannot pause: they ask the agent to
+   prefix its summary with the token `BREAKER-STOP:`, and on seeing it the script returns
+   immediately with `approved: false` and the stop in `residual_findings`, skipping the panel
+   entirely. The owner sees the stop when the run returns, not during it. Never let a fix round
+   continue past a trip — a fresh agent's "in this run" counter resets, so it would resume editing
+   the file the breaker just stopped.
+
    `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
    you, spawned fresh each run — richer (teammates message each other, self-claim work) but
    experimental and token-heavier. `workflow` is the original bounded `Workflow`-tool script
@@ -189,6 +219,11 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    > work, related bugs, or
    > candidate new issues, LIST them in your final report for the owner to triage — never file
    > them yourself. Backlog creation and prioritization are the owner's job, not yours.
+
+   **On a tech-debt run in Team mode**, append the **BREAKER SENTENCE** resolved above to this
+   block for the implementer spawns only — step 4a's Implement, every fix round in step 4d, and
+   step 5's `fix-ci`. Never append it to `build-engineer` or the docs polish pass, and never on the
+   normal (spec) path. If `BREAKER_PARAM` is `off`, append nothing anywhere.
 
    **REVIEW GUARDRAILS (review-lens teammates — everyone else in step b):**
    > GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree.
@@ -339,7 +374,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        "change":   "<CHANGE_PARAM — resolved at the top of this step: \"issue-<N>\", or the tech-debt sentinel>",
        "issue":    <N>,
        "base":     "origin/<DEFAULT_BR>",
-       "buildSystem": "auto"
+       "buildSystem": "auto",
+       "breaker":  "<BREAKER_PARAM — \"ask\" (default) or \"revert\" on the tech-debt path; \"off\" on the normal path>"
      }
    }
    ```

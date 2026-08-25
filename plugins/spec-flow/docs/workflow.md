@@ -643,7 +643,7 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
 | `/spec-flow:tech-debt` | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** above. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
-| `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
+| `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 
 ## Agents
 
@@ -689,7 +689,10 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   plugin as canonical bases; see the README's "Extending the agents"). `tdd-developer` reads the
   bundled `references/rust-style-guide.md` when the project is Rust, or
   `references/kotlin-style-guide.md` when the project is Kotlin, and holds itself to the matching
-  guide.
+  guide. It also reads `references/refactoring-discipline.md` whenever the work is
+  behavior-preserving — a refactor, a `type:tech-debt` fix, or its own REFACTOR step — which is
+  where the failing-test triage gate and the revert reflex live (see **Refactor circuit breaker**
+  below).
 
 **Review panel** — `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer`,
 `observability-reviewer`; the five lenses run in parallel during `/spec-flow:implement`. Their
@@ -697,6 +700,50 @@ individual mandates are described once, in full, in **Review panel** below — n
 
 > If the consuming repo defines its own agent with one of these names (project or user scope),
 > that one **overrides** the plugin's. Use that to specialize a reviewer for a repo's stack.
+
+## Refactor circuit breaker
+
+A refactor preserves behavior by definition. So a test that fails during one means either the
+refactor is wrong, or the test asserts something outside the contract. "Edit the test until it
+passes" is not a third option, and an agent that takes it turns an unreviewed behavior change into
+a day-long rathole.
+
+Two mechanisms guard this, and only one of them is configurable.
+
+**The triage gate is not configurable.** `agents/tdd-developer.md` requires the agent to classify
+a failing test before editing it, **from the spec** (the committed OpenSpec spec, or a
+`type:tech-debt` issue's `## Direction` and `## Acceptance criteria`) and never from the test body:
+the code is wrong (fix the code), the spec deliberately removed the behavior (delete the test, cite
+the spec line), or it asserts a structure that no longer exists (delete the test). An agent may
+never repair a test whose subject was removed — only delete it. A test it cannot classify is a spec
+gap, and the owner decides spec gaps. A repo that turns this off is not refactoring.
+
+**The stopping condition is configurable**, per repo, via `SPEC_FLOW_REFACTOR_BREAKER` in
+`.claude/settings.json`'s `env` block. It trips when the same test file has been edited more than
+twice in one run — a sign the classification was wrong, or the step was too big:
+
+- **`ask`** (the default, also used when unset or unrecognized) — the agent stops, leaves the tree
+  untouched, and reports the blocker. The owner decides: continue, or revert.
+- **`revert`** — the agent reverts to the last green commit and reports. The strict reflex: an
+  attempt that breaks something unexpected is reverted, not patched outward from.
+- **`off`** — no breaker. The agent keeps working.
+
+`/spec-flow:setup` asks for this once, recommending `ask`.
+
+**It applies to behavior-preserving runs only** — the `type:tech-debt` fast path's Implement spawn
+and its fix rounds. Under ordinary feature TDD, editing one test file three times is routine
+(several tests for one module), so arming it on the normal path would stall almost every run.
+`build-engineer` and the docs polish pass never carry it. The triage gate above is what covers
+every other path, and it needs no counter.
+
+**The two modes stop differently.** In `team` mode the teammate messages `issue-pm` mid-run, which
+surfaces the stop to the owner live; the owner chooses continue or revert, and a fresh
+`tdd-developer` is respawned with that decision. In `workflow` mode the script cannot pause, so it
+asks the agent to prefix its summary with the token `BREAKER-STOP:`; on seeing that token the
+script returns immediately with `approved: false` and the stop in `residual_findings`, skipping the
+review panel entirely. The owner sees the stop when the run returns, not during it. The script must
+not run a fix round after a trip: a fresh agent's "in this run" counter resets, so it would resume
+editing the file the breaker just stopped.
 
 ## Review panel (`/spec-flow:implement`)
 

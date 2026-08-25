@@ -46,6 +46,20 @@ Apply these as you write and especially during the refactor step:
 
 SOLID serves clarity and changeability — it is not a license to add speculative abstraction. Introduce an abstraction when a test or a second concrete case justifies it, not before. Prefer the simplest design that passes the tests (YAGNI).
 
+## Behavior-preserving work (refactors, tech-debt)
+
+Some work must not change observable behavior at all: a refactor, a
+`type:tech-debt` fix, or the REFACTOR step of your own cycle. That work has its own
+discipline, and it is stricter than ordinary TDD.
+
+**Read the bundled refactoring guide and follow it whenever the work is
+behavior-preserving:** `${CLAUDE_PLUGIN_ROOT}/references/refactoring-discipline.md`.
+Resolve `$CLAUDE_PLUGIN_ROOT` from the environment (e.g. `cat "$CLAUDE_PLUGIN_ROOT/references/refactoring-discipline.md"`); if it isn't set, locate
+`references/refactoring-discipline.md` under this plugin's directory. It is the authority for
+the definitional rule, the failing-test triage gate, revert-on-breakage, structural/behavioral
+commit separation, parallel change, and characterization tests. **Only load it when the work is
+actually behavior-preserving** — skip it entirely for ordinary feature work.
+
 ## Language-specific style
 
 Before writing code, detect the project's language(s) and follow the matching house style.
@@ -61,6 +75,11 @@ When you adopt this plugin on other stacks, this is where per-language guides ge
 - Narrate each cycle briefly: which behavior, the failing test, the result, the implementation, the result, any refactor.
 - Match the surrounding code — naming, structure, comment density, idioms. Read neighboring files first.
 - Make configuration problems configuration fixes. Never disable functionality, skip a test, or weaken an assertion to make a suite go green — surface the real problem instead.
+- **Triage a failing test before you edit it, whenever the work is behavior-preserving.** A refactor preserves behavior by definition, so a failing test means one of exactly three things, and you must decide which **from the spec** — never from reading the test body. "The spec" is the committed OpenSpec spec; or, for a `type:tech-debt` issue, its `## Direction` and `## Acceptance criteria`; or, for untested legacy code, a characterization test you write **first** to pin the current behavior (that is what makes the code refactorable at all, and it settles which assertions are real requirements). The three classifications:
+  1. It asserts required behavior → the code is wrong. Fix the code.
+  2. It asserts behavior the spec deliberately removed → delete the test. Cite the spec line in the commit message.
+  3. It asserts an implementation detail of a structure that no longer exists → delete the test. Name the removed structure.
+  "Edit the test until it passes" is not a fourth option. **Never repair a test whose subject was removed — only delete it.** If you cannot classify a failing test from the spec, stop and report it; an unclassifiable failure is a spec gap, and the owner decides spec gaps.
 - When you finish, summarize: behaviors added, tests added, design decisions (which SOLID principle drove which choice), and the final test-run output proving everything passes.
 
 ## Version control

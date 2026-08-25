@@ -10,7 +10,7 @@ export const meta = {
   ],
 }
 
-// args: { worktree, change, issue, base, buildSystem }
+// args: { worktree, change, issue, base, buildSystem, breaker }
 // buildSystem: the project's build tool, used only as a hint for the build phase (e.g. 'cargo',
 // 'gradle', 'npm', 'go', 'pytest', or 'auto' to let the agent discover it). NOT an exhaustive
 // switch — the agents detect the real runner from the repo.
@@ -22,7 +22,7 @@ const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // base should always be passed explicitly (SKILL.md resolves the repo's actual default branch
 // and passes it) — 'origin/main' here is only a last-resort fallback if it's ever omitted, not
 // an assumption this repo uses `main`.
-const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto' } = _args
+const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto', breaker = 'ask' } = _args
 if (!worktree || !change || issue === undefined || issue === null) {
   // Fail fast — never run a review against an empty/clean tree and report a false blocker.
   throw new Error(
@@ -69,6 +69,33 @@ const REVIEW_SCHEMA = {
 // full/integration suite is CI's gate and is never run locally.
 const testInstruction = `Run the UNIT tier locally as your gate — the repo's fast, no-container / no-I/O unit tests, i.e. the runner's default fast selection (e.g. \`cargo nextest run\`, \`./gradlew test\`, \`npm test\`, \`go test -short ./...\`, \`pytest -m 'not integration'\`). ALSO run any tests listed in \`.spec-flow/flagged-tests\` at the worktree root if that file exists (one runner-selectable test id per line; '#' and blank lines ignored) — these are tests CI flagged on this branch, guarded locally. Do NOT run the full/integration suite locally — that is CI's gate. State plainly in your summary that the unit tier (plus any flagged tests) ran locally and the full suite runs in CI. If the repo has not split its tests into unit/integration tiers yet, run its default test command and say so.`
 
+// Refactor circuit breaker — set per repo by SPEC_FLOW_REFACTOR_BREAKER (docs/workflow.md,
+// "Refactor circuit breaker"). SKILL.md resolves it and passes it as `breaker`; this script cannot
+// read env itself.
+//
+// SCOPE: behavior-preserving runs ONLY — the tech-debt Implement spawn and its fix rounds. Under
+// ordinary feature TDD, editing one test file three times is routine (several tests for one
+// module), so appending this to the normal path would stall almost every run. The non-configurable
+// triage gate in agents/tdd-developer.md still applies everywhere; only this mechanical backstop
+// is scoped.
+//
+// Both modes ask the agent to prefix its summary with BREAKER_STOP_TOKEN when it trips, because
+// this script has no hook back out to the lead mid-run: the token is the only way a stop can
+// reach the owner. On seeing it the script returns immediately (below) rather than running the
+// panel — a fix round would spawn a FRESH agent whose "in this run" edit counter resets, which
+// would let it resume editing the very file the breaker just stopped.
+const BREAKER_STOP_TOKEN = 'BREAKER-STOP:'
+const BREAKER_SENTENCES = {
+  ask: ` If you have edited the same test file more than twice in this run, STOP: leave the tree exactly as it is, do NOT revert, and return a summary whose FIRST characters are the exact token \`${BREAKER_STOP_TOKEN}\` followed by the blocker and the classification you could not make. Do not keep editing that file.`,
+  revert: ` If you have edited the same test file more than twice in this run, STOP: revert to the last green commit (\`git reset --hard <sha>\`, on the issue branch only) and return a summary whose FIRST characters are the exact token \`${BREAKER_STOP_TOKEN}\` followed by the blocker and the classification you could not make. Do not keep editing that file.`,
+  off: ``,
+}
+// Own-property lookup only: an inherited key ('constructor', 'toString', ...) would otherwise
+// resolve to a function and interpolate into every prompt instead of falling back to 'ask'.
+const BREAKER = Object.prototype.hasOwnProperty.call(BREAKER_SENTENCES, breaker)
+  ? BREAKER_SENTENCES[breaker]
+  : BREAKER_SENTENCES.ask
+
 // Strict guardrail appended to every agent prompt: implement agents must stay inside the
 // worktree and never take outward/backlog actions. Prioritization + issue creation are the
 // owner's job (a dogfooding finding: agents were auto-creating GitHub issues with self-assigned
@@ -105,11 +132,12 @@ async function agentNS(prompt, opts = {}) {
 // tech-debt issue commits no spec, so there's nothing to push until THIS agent's first commit
 // lands, and nothing outside this script regains control mid-run to open it the way the docs fast
 // path's lead does. This agent is the first (and only) actor with a commit to push.
-const GUARDRAILS_TECH_DEBT_IMPLEMENT = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints. Because no PR exists yet for this branch (no spec was committed for this type:tech-debt issue), you MAY also open ONE draft PR for it — after your first commit, check for an existing one first (\`gh pr list --head <branch> --json number\`); if none exists, open it (mechanics in the prompt above). This is the one exception to "don't touch PRs," specific to this no-spec case — do NOT mark it ready or edit it again after opening it. Do NOT create or edit GitHub issues, do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
+const GUARDRAILS_TECH_DEBT_IMPLEMENT = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints. Because no PR exists yet for this branch (no spec was committed for this type:tech-debt issue), you MAY also open ONE draft PR for it — after your first commit, check for an existing one first (\`gh pr list --head <branch> --json number\`); if none exists, open it (mechanics in the prompt above). This is the one exception to "don't touch PRs," specific to this no-spec case — do NOT mark it ready or edit it again after opening it. Do NOT create or edit GitHub issues, do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.${BREAKER}`
 
 phase('Implement')
+let implementReturn = null
 if (isTechDebt) {
-  await agentNS(
+  implementReturn = await agentNS(
     `You are implementing a BEHAVIOR-PRESERVING structural fix in an existing git worktree. This is a type:tech-debt fast path issue — no OpenSpec change exists, so there is no tasks.md to follow.
 WORKTREE (run everything here, cwd): ${worktree}
 ISSUE: #${issue} — read its body for the plan: \`gh issue view ${issue} --json title,body\`. Its '## Direction' section is the shape of the fix; '## Acceptance criteria' states the behavior-preservation bar explicitly; '## Adjacent specified behavior (must be preserved)' (if present) names existing openspec/specs/ requirements this surface touches — do not contradict them.
@@ -123,6 +151,22 @@ Return a short summary of what you implemented (or the behavior-delta question, 
 ${GUARDRAILS_TECH_DEBT_IMPLEMENT}`,
     { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
   )
+  // Only the behavior-preserving path carries the breaker, so only it can trip one.
+  if (typeof implementReturn === 'string' && implementReturn.trim().startsWith(BREAKER_STOP_TOKEN)) {
+    log('Refactor circuit breaker tripped during Implement — returning to the owner without running the panel.')
+    return {
+      change,
+      issue,
+      tests_ran: 'unit',
+      spec_conformance: 'unknown',
+      approved: false,
+      review_rounds: 0,
+      residual_findings: [`refactor circuit breaker (${breaker}) stopped the implement phase: ${implementReturn.trim()}`],
+      non_blocking_findings: [],
+      review_summary: 'stopped by the refactor circuit breaker before review — see residual_findings',
+      polish: 'n/a',
+    }
+  }
 } else {
   await agentNS(
     `You are implementing an approved OpenSpec change in an existing git worktree.
@@ -267,7 +311,7 @@ ${fixList}
 Fix each, keep the unit tier (plus the branch's \`.spec-flow/flagged-tests\`) green, commit with focused messages.
 Push the branch at checkpoints so CI keeps running the full suite on the draft PR. Never touch main; leave the PR a draft. Return what you changed.
 
-${GUARDRAILS}`,
+${GUARDRAILS}${isTechDebt ? BREAKER : ''}`,
     { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
   )
 }

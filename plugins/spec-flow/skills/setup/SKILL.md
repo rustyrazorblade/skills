@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the .gitignore entries, and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
+description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
 argument-hint: [optional notes; run from inside the target repo]
 ---
 
@@ -31,6 +31,8 @@ later question moot.
    - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and
      whether the standalone `review-tools` plugin is installed/enabled:
      `claude plugin list --json | jq -e '[.[] | select(.id | startswith("review-tools@")) | select(.enabled)] | length > 0'`.
+   - **Refactor circuit breaker**: read `.claude/settings.json` for
+     `env.SPEC_FLOW_REFACTOR_BREAKER`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
      entries.
    - **CI tiering**: the same detection `adopt-tiering` step 1 uses — Gradle
@@ -88,6 +90,19 @@ later question moot.
      merging into whatever's already there. `activate`/`implement` read this fresh at each seam,
      and re-check `review-tools`'s availability every time rather than trusting this one-time
      detection — see **Seam visualization** in `docs/workflow.md`.
+   - **Refactor circuit breaker unset** → explain the choice in one line: on a `type:tech-debt`
+     run (behavior-preserving work), `implement` stops a developer agent that has edited the same
+     test file more than twice, because three edits to one test file means the classification was
+     wrong or the step was too big. It does not arm on ordinary feature work, where repeated edits
+     to one test file are normal. Ask what should happen at that point. Recommend `ask`, the default —
+     the run stops and the owner decides whether to continue or revert:
+     ```json
+     { "env": { "SPEC_FLOW_REFACTOR_BREAKER": "ask" } }
+     ```
+     For a repo that wants the strict Mikado reflex instead, `"revert"` reverts to the last green
+     commit automatically. For a repo that wants no breaker at all, `"off"`. Merge into whatever's
+     already there. Leaving it unset is fine too; `ask` applies either way — see **Refactor
+     circuit breaker** in `docs/workflow.md`.
    - **CI not tiered** → don't attempt this here, it's its own migration. Just point at
      `/spec-flow:adopt-tiering` and explain in one line what it does; recommend running it next,
      but leave the decision (and the run) to the owner.

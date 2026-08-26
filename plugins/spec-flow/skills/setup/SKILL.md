@@ -95,14 +95,18 @@ later question moot.
      and re-check `dev-skills`'s availability every time rather than trusting this one-time
      detection — see **Seam visualization** in `docs/workflow.md`.
    - **Developer agent unset, AND the `dev-skills` plugin is installed/enabled, AND the project
-     is a language it covers** (Rust today) → explain the choice in one line: `implement` spawns
-     spec-flow's own `tdd-developer` by default, which is language-neutral; `dev-skills` ships
-     `rust-dev`, which reads the full Rust style guide, carries a token-frugal `nextest` recipe,
-     and hands build problems to its `cargo` agent. Recommend the language agent, default yes. If
-     yes:
+     is a language it covers** (Rust, Kotlin, and Java today) → explain the choice in one line:
+     `implement` spawns spec-flow's own `tdd-developer` by default, which is language-neutral;
+     `dev-skills` ships an agent that knows the language. For Rust, `rust-dev` reads the full Rust
+     style guide, carries a token-frugal `nextest` recipe, and hands build problems to its `cargo`
+     agent. For Kotlin, `kotlin-dev` reads the full Kotlin style guide and hands builds to its
+     `gradle-expert` agent. For Java, `java-dev` matches the project's own conventions exactly,
+     which is what an OSS contribution needs. Recommend the language agent, default yes. Name the
+     agent that matches the language you detected. If yes, for Rust:
      ```json
      { "env": { "SPEC_FLOW_DEVELOPER_AGENT": "rust-dev" } }
      ```
+     Use `kotlin-dev` or `java-dev` in place of `rust-dev` for those languages.
      merging into whatever's already there. If the owner declines, write nothing; unset already
      means `tdd-developer`. Skip this item entirely if `dev-skills` isn't installed, or if the
      project's language has no agent in it yet; don't offer a preference the owner can't use. See

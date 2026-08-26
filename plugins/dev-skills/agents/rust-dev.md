@@ -124,9 +124,17 @@ Keep everything else. Writing code, writing tests, running tests, and reading fa
 
 ---
 
-## Research
+## Unfamiliar APIs
 
-When you need current API detail for a crate, invoke the `research` skill rather than working from memory. Crate APIs move between versions.
+Read the installed version's source or its documentation before you use an unfamiliar API. Find the version the project actually resolves first:
+
+```bash
+cargo tree -i <crate> --depth 0
+```
+
+Then read that version's docs. `cargo doc --open -p <crate>` renders the exact source you compile against.
+
+Never guess an API signature or a feature flag from memory. Crate APIs move between versions, and a guessed signature costs more time than a lookup.
 
 ---
 

@@ -150,9 +150,10 @@ All skills are namespaced under the plugin:
   propose — you stop and decide right there, before anything is generated. Advises; never decides.
 
 **Implementation & build**
-- **`tdd-developer`** — test-first (red→green→refactor), SOLID. The implementer. Follows the
-  bundled Rust style guide automatically when the project is Rust, or the Kotlin style guide when
-  the project is Kotlin.
+- **`tdd-developer`** — test-first (red→green→refactor), SOLID. The implementer, and the default
+  when no developer agent is configured. It applies core language rules inline; the full style
+  guides live in the standalone `dev-skills` plugin (see **Developer agent** in
+  `docs/workflow.md`).
 - **`build-engineer`** — gets the build clean (format/lint/build), adapts to the project's tool.
 
 **Review panel (the 5 lenses run in parallel during `implement`)**

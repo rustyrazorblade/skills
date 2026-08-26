@@ -55,12 +55,12 @@ A design proposal that issue-pm presents to the owner (and that feeds `openspec-
   (newtypes, monomorphized generics, enum dispatch) over runtime machinery, and no speculative
   over-engineering. If `dev-skills` is installed, read
   `references/rust/style-guide.md` under its installed root for the full guide.
-- **If the project is Kotlin**, hold the design to the bundled Kotlin style guide
-  (`${CLAUDE_PLUGIN_ROOT}/references/kotlin-style-guide.md` — resolve `$CLAUDE_PLUGIN_ROOT` from the
-  env, or locate `references/kotlin-style-guide.md` under the plugin): make illegal states
-  unrepresentable with sealed hierarchies + exhaustive `when`, non-null types by default (no `!!`),
-  immutable `data`/`value class` values with invariants in `init`, structured concurrency, no
-  speculative over-engineering.
+- **If the project is Kotlin**, hold the design to the same principles the standalone `dev-skills`
+  plugin's Kotlin style guide enforces: make illegal states unrepresentable with sealed hierarchies
+  and an exhaustive `when`, non-null types by default (no `!!`), immutable `data`/`value class`
+  values with invariants in `init`, structured concurrency, and no speculative over-engineering. If
+  `dev-skills` is installed, read `references/kotlin/style-guide.md` under its installed root for
+  the full guide.
 - **Match the repo's documented conventions** — its build tool, layering, error-handling style,
   testing approach. Don't propose a pattern the repo doesn't already use without flagging it as a
   deliberate change with a reason.

@@ -16,7 +16,7 @@
     {
       "name": "dev-skills",
       "source": "./plugins/dev-skills",
-      "description": "Language developer agents and generic development skills: `rust-dev` + `cargo` for Rust; `refactor` for behavior-preserving work in any language; `tech-debt` for a repo-wide structural audit; `explain` and `walkthrough` to render a change as a self-contained HTML page; `prose-review` for comments, commit messages, and PR descriptions",
+      "description": "Language developer agents and generic development skills: `rust-dev` + `cargo` for Rust; `kotlin-dev` + `gradle-expert` for Kotlin and the JVM; `java-dev` for convention-matching Java work; `refactor` for behavior-preserving work in any language; `tech-debt` for a repo-wide structural audit; `ide-explain` and `walkthrough` to render a change as a self-contained HTML page; `prose-review` for comments, commit messages, and PR descriptions",
       "category": "development"
     },
     {

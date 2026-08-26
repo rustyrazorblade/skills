@@ -19,12 +19,18 @@ Skills and agents, unlike files, are addressable by name from anywhere. That is 
 |-------|---------|
 | `rust-dev` | Rust developer. Reads the bundled Rust style guide, works test-first with a stated escape hatch, and runs `nextest` with a token-frugal recipe. |
 | `cargo` | Cargo expert. Owns `Cargo.toml`, workspaces, features, profiles, dependencies, MSRV, and `.config/nextest.toml`. Never writes application or test code. |
+| `kotlin-dev` | Kotlin developer. Reads the bundled Kotlin style guide, works test-first, and never writes `!!`. Loads the house stack only when the build declares it. |
+| `gradle-expert` | Gradle expert. Runs builds and tests, interprets results, and owns the build files and the version catalog. Never writes application or test code. |
+| `java-dev` | Java developer. Works test-first. Built for OSS contributions: it bundles no style guide, and the project's own conventions override every default it carries. |
 
-The split follows one boundary: `rust-dev` owns the code, `cargo` owns the build definition.
-`rust-dev` runs its own tests, because delegating a routine test run would cost an agent round trip
-per cycle. It hands off to `cargo` only when the failure is in the build, not the code.
+Every language follows one boundary: the developer agent owns the code, the build agent owns the
+build definition. The developer agent runs its own tests, because delegating a routine test run
+would cost an agent round trip per cycle. It hands off only when the failure is in the build, not
+the code. `rust-dev` pairs with `cargo`; `kotlin-dev` and `java-dev` both pair with
+`gradle-expert`.
 
-`java-dev`, `kotlin-dev`, and `gradle` join them later.
+Each agent is self-contained. None of them calls an agent this plugin does not ship, so they all
+resolve in any repo where the plugin is installed.
 
 ## Skills
 
@@ -48,20 +54,23 @@ over `file://`.
 
 | File | Read by |
 |------|---------|
-| `references/refactoring-discipline.md` | The `refactor` skill and every language agent. |
+| `references/refactoring-discipline.md` | The `refactor` skill. Every language agent reaches it by invoking that skill for behavior-preserving work. |
 | `references/prose-style.md` | `prose-review`, as the fallback when a repo has no copy of its own. |
 | `references/rust/style-guide.md` | `rust-dev`, on every task. |
 | `references/rust/nextest.md` | `cargo`. |
+| `references/kotlin/style-guide.md` | `kotlin-dev`, on every task. |
+| `references/kotlin/house-stack.md` | `kotlin-dev` and `gradle-expert`, only when the build declares one of the libraries it covers. |
 
-A repo's own `prose-style.md` always wins over the bundled copy.
+A repo's own `prose-style.md` always wins over the bundled copy. `house-stack.md` holds the
+author's default JVM libraries; a project's existing choices always win over it.
 
 ## Working with spec-flow
 
 The two plugins pair one-directionally. `dev-skills` never calls `spec-flow`.
 
-Set `SPEC_FLOW_DEVELOPER_AGENT=rust-dev` in a repo's `.claude/settings.json` and
-`/spec-flow:implement` spawns `rust-dev` in place of its bundled `tdd-developer`. Leave it unset and
-spec-flow behaves exactly as it did before.
+Set `SPEC_FLOW_DEVELOPER_AGENT` in a repo's `.claude/settings.json` to `rust-dev`, `kotlin-dev`, or
+`java-dev`, and `/spec-flow:implement` spawns that agent in place of its bundled `tdd-developer`.
+Leave it unset and spec-flow behaves exactly as it did before.
 
 Set `SPEC_FLOW_SEAM_VIEW=explain` and `activate` and `implement` render both owner seams with
 `ide-explain`.

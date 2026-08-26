@@ -686,10 +686,10 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 
 **Implementation & build**
 - `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the
-  plugin as canonical bases; see the README's "Extending the agents"). `tdd-developer` reads the
-  bundled `references/kotlin-style-guide.md` when the project is Kotlin and holds itself to it.
-  Rust guidance now lives in the standalone `dev-skills` plugin's `rust-dev` agent; point
-  `SPEC_FLOW_DEVELOPER_AGENT` at it to use the full guide (see **Developer agent** below). It also reads `references/refactoring-discipline.md` whenever the work is
+  plugin as canonical bases; see the README's "Extending the agents"). `tdd-developer` bundles no
+  language style guide. Rust and Kotlin guidance both live in the standalone `dev-skills` plugin,
+  in its `rust-dev` and `kotlin-dev` agents; point `SPEC_FLOW_DEVELOPER_AGENT` at one of them to
+  use the full guide (see **Developer agent** below). It also reads `references/refactoring-discipline.md` whenever the work is
   behavior-preserving — a refactor, a `type:tech-debt` fix, or its own REFACTOR step — which is
   where the failing-test triage gate and the revert reflex live (see **Refactor circuit breaker**
   below).
@@ -709,7 +709,10 @@ per-language style.
 
 Deep language expertise lives elsewhere, in the standalone **`dev-skills`** plugin. Its `rust-dev`
 agent reads the full Rust style guide, carries a nextest recipe tuned for low token use, and
-delegates build problems to its `cargo` agent. `java-dev` and `kotlin-dev` join it later.
+delegates build problems to its `cargo` agent. Its `kotlin-dev` agent reads the full Kotlin style
+guide and delegates builds to its `gradle-expert` agent. Its `java-dev` agent bundles no style guide on
+purpose. It carries defaults, and the conventions a project already has override every one of
+them, which is what an OSS contribution needs.
 
 **`SPEC_FLOW_DEVELOPER_AGENT` names the agent `/spec-flow:implement` spawns for implementation
 work.** Set it per repo, in `.claude/settings.json`:
@@ -717,6 +720,9 @@ work.** Set it per repo, in `.claude/settings.json`:
 ```json
 { "env": { "SPEC_FLOW_DEVELOPER_AGENT": "rust-dev" } }
 ```
+
+`dev-skills` covers three languages today: `rust-dev` for Rust, `kotlin-dev` for Kotlin, and
+`java-dev` for Java.
 
 - **Unset (the default)** — spawn the bundled `tdd-developer`. This is exactly the behavior that
   shipped before the setting existed. spec-flow stays self-contained; nothing else is required.

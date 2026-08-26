@@ -37,6 +37,38 @@ Use this output as the authoritative source for flag names and available options
 $EDB kit info <name>
 ```
 
+## `state.json` Is Internal — Never Read It
+
+`state.json` is an internal file of the `easy-db-lab` tool. It is not a documented interface. Its
+shape can change at any time. Never read it, never parse it, and never quote its contents to the
+user.
+
+To learn the cluster state, run a command instead:
+
+```bash
+$EDB status
+```
+
+The one exception is a file-existence check. `detect-cluster-layout.sh` tests only whether the file
+is present, to set `STATE=provisioned`. That is allowed. Reading the contents is not.
+
+## Run Commands to Completion
+
+Every cluster action goes through an `easy-db-lab` command. Run the command and wait for it to
+finish before you do anything else.
+
+- Do not run an `easy-db-lab` command in the background.
+- Do not stop a command early with a short timeout.
+- Do not poll `$EDB status` while another command is still running.
+- Do not report a step as complete until the command exits.
+
+Some commands are slow. `$EDB init ... --up` provisions AWS instances; it takes a few minutes to
+finish. This is normal. Set the Bash tool timeout to its maximum (600000 ms) for these commands,
+and let them run.
+
+If a command does exceed the maximum timeout, do not retry it blindly. Run `$EDB status` first to
+see what the command already did, then write an entry to `<cluster-dir>/docs/issues.md`.
+
 ## Before Starting
 
 ### 1. Determine the invocation mode
@@ -170,6 +202,9 @@ Immediately append a new entry: timestamp + step name + "starting". See `../../r
 **3. Execute**
 
 Run the required `$EDB` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
+
+Wait for each command to finish before you continue — see "Run Commands to Completion" above.
+A provisioning step is slow; that is expected. Never read `state.json` to check progress.
 
 Every command you run — including any debugging, log inspection, status checks, or investigation not in the plan — must be appended to `<cluster-dir>/docs/journal.md` as it happens. Do not wait until the step is done. If you ran it, log it.
 

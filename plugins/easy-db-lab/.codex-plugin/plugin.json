@@ -1,6 +1,6 @@
 {
   "name": "easy-db-lab",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Guided workflow assistant for easy-db-lab \u2014 provision AWS lab environments, manage Cassandra and ClickHouse clusters, run stress tests, and operate observability tooling.",
   "author": {
     "name": "Jon Haddad"

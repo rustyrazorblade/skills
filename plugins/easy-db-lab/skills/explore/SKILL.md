@@ -41,6 +41,10 @@ ls state.json 2>/dev/null && echo EXISTS || echo EMPTY
 - **`state.json` exists** → a workspace is already initialized. Run `$EDB status` immediately. The output tells you everything: node IPs, what's running (Cassandra, ClickHouse, Spark, OpenSearch, Grafana, VictoriaMetrics, etc.), and the current cluster state. Use this as ground truth before proceeding to Step 3.
 - **No `state.json`** → no environment has been provisioned yet. Proceed to Step 2.
 
+**This is an existence check only.** `state.json` is an internal file of the `easy-db-lab` tool. It
+is not a documented interface, and its shape can change at any time. Never read it, never parse it,
+and never quote its contents to the user. `$EDB status` is the only source of cluster state.
+
 ## Step 2 — Provision (if needed)
 
 If no environment exists, guide the user through provisioning before anything else. Ask:
@@ -62,6 +66,13 @@ $EDB init <name> --db <count> --app <count> --up
 wait
 ```
 
+`init --up` provisions AWS instances. It takes a few minutes to finish. This is normal. Set the
+Bash tool timeout to its maximum (600000 ms) and let the command run to completion. Do not stop it
+early, and do not check progress by reading `state.json`.
+
+The multi-DC form above is the one allowed background pattern: each DC provisions in parallel, and
+`wait` blocks until both finish. Do not continue past `wait`.
+
 For multi-DC, after `init --up` completes, set up VPC peering — see `../../references/cassandra.md` Multi-DC Setup.
 
 Once provisioning completes, continue to Step 3.
@@ -80,7 +91,7 @@ Stay interactive — confirm each action before running it, and summarize result
 
 ## Working Directory
 
-All `easy-db-lab` commands must be run from the **lab workspace directory** — the directory initialized with `easy-db-lab init`. This directory holds `state.json` and other cluster configuration files. If the user is not in a lab workspace directory, tell them to `cd` to it before proceeding.
+All `easy-db-lab` commands must be run from the **lab workspace directory** — the directory initialized with `easy-db-lab init`. This directory holds `state.json` and other internal cluster configuration files, which you never read. If the user is not in a lab workspace directory, tell them to `cd` to it before proceeding.
 
 ## Teardown
 
@@ -176,7 +187,8 @@ $EDB server --port 8080
 
 1. **Always run `$EDB commands` first** to get the current command surface before advising on flags.
 2. **Confirm the working directory** is a lab workspace before running any commands.
-3. **If `state.json` exists, run `$EDB status`** before any action — it is the source of truth.
-4. **Use `--dry-run`** for `down` when the user isn't sure what will be deleted.
-5. **Prefer config patches** over full cassandra.yaml replacements — `write-config` + `update-config` is the safe workflow.
-6. **Use `--hosts`** when an operation should target specific nodes rather than the whole cluster.
+3. **If `state.json` exists, run `$EDB status`** before any action — it is the source of truth. Test only that the file exists; never read its contents.
+4. **Run every `easy-db-lab` command to completion** before you do anything else. Do not background it, do not cut it short with a timeout, and do not poll `$EDB status` while it runs.
+5. **Use `--dry-run`** for `down` when the user isn't sure what will be deleted.
+6. **Prefer config patches** over full cassandra.yaml replacements — `write-config` + `update-config` is the safe workflow.
+7. **Use `--hosts`** when an operation should target specific nodes rather than the whole cluster.

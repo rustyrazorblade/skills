@@ -2,7 +2,7 @@
 
 ## explain-preview.html
 
-A sample output of the `explain` skill (`plugins/review-tools/skills/explain/`) — a
+A sample output of the `ide-explain` skill (`plugins/dev-skills/skills/ide-explain/`) — a
 self-contained, single-file HTML view combining a code diff, an OpenSpec delta spec (with a
 Currently:/This change: baseline comparison), docs, blast-radius search, and GitHub issue/PR
 review comments, all in one page.
@@ -17,7 +17,7 @@ htmlpreview.github.io).
 **To regenerate it:**
 
 ```bash
-plugins/review-tools/skills/explain/scripts/preview.sh
+plugins/review-tools/skills/ide-explain/scripts/preview.sh
 ```
 
 then copy the generated file here. (`preview.sh` opens it in a browser and writes it to a temp

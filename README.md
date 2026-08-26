@@ -367,11 +367,11 @@ without `spec-flow`.
 |-------|---------|
 | `/refactor [target]` | Behavior-preserving change, in any language. Produces a plan you approve, then holds the calling agent to a standing contract: triage a failing test from the spec, never edit it to go green, revert instead of grinding |
 | `/tech-debt [path]` | Repo-wide structural audit: review agents find SOLID, duplication, and layering problems, rank the 10 most impactful, drop anything already an open issue, and walk you through the rest one at a time. You decide per finding whether to file it |
-| `/explain <issue-N \| base-ref> [docs...]` | Render an IDE-style HTML view — an issue with its comments and linked issues, a diff, docs, or any combination |
+| `/ide-explain <issue-N \| base-ref> [docs...]` | Render an IDE-style HTML view — an issue with its comments and linked issues, a diff, docs, or any combination |
 | `/walkthrough [what to walk through]` | Render a diagram-first, ordered-step presentation — how something works, a tech-debt review, recommendations, a performance analysis |
 | `/prose-review [target] [--fix]` | Grade comments, commit messages, PR descriptions, and release notes against `prose-style.md`. Reports by default; edits only with `--fix` |
 
-`explain` and `walkthrough` render one self-contained HTML page each: no server, no CDN, opens over
+`ide-explain` and `walkthrough` render one self-contained HTML page each: no server, no CDN, opens over
 `file://`.
 
 Claude Code:
@@ -387,10 +387,10 @@ The two plugins pair, one-directionally. `dev-skills` has no dependency on `spec
 - Set `SPEC_FLOW_DEVELOPER_AGENT=rust-dev` and `/spec-flow:implement` spawns `rust-dev` instead of
   its own bundled `tdd-developer`. Leave it unset and spec-flow behaves exactly as it did before.
 - Set `SPEC_FLOW_SEAM_VIEW=explain` (via `/spec-flow:setup`) and `activate`/`implement` call
-  `explain` at both owner seams. See **Seam visualization** in
+  `ide-explain` at both owner seams. See **Seam visualization** in
   `plugins/spec-flow/docs/workflow.md`.
 
-See [`plugins/dev-skills/skills/explain/SKILL.md`](plugins/dev-skills/skills/explain/SKILL.md)
+See [`plugins/dev-skills/skills/ide-explain/SKILL.md`](plugins/dev-skills/skills/ide-explain/SKILL.md)
 and [`plugins/dev-skills/skills/walkthrough/SKILL.md`](plugins/dev-skills/skills/walkthrough/SKILL.md)
 for the full CLI and manifest schemas.
 

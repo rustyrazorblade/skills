@@ -1,10 +1,10 @@
 ---
-name: explain
+name: ide-explain
 description: Render an IDE-style single-page HTML view that explains anything the owner needs to see whole — a code diff, a GitHub issue plus everything linked to it, project docs, or any mix — as a file tree on the left, a code/diff/doc editor top-right, and an explanation pane bottom-right. Deterministic by default (no model tokens spent on markup); a hand-authored manifest mode exists for taught narratives. Self-contained output, no server, no CDN. Standalone — works in any repo, no other plugin required. Use whenever the owner wants one visual, walkable view instead of raw diff output or hopping between GitHub tabs — including looking at a plain backlog issue before any worktree or diff exists.
 argument-hint: [issue N | base-ref] [doc paths...]
 ---
 
-# explain — IDE-style HTML view of a change, an issue, or both
+# ide-explain — IDE-style HTML view of a change, an issue, or both
 
 Renders a single, self-contained HTML file: a file tree on the left, a diff/code/doc editor
 top-right, and an explanation pane bottom-right. No server, no CDN, opens correctly via `file://`.
@@ -26,7 +26,7 @@ Zero model-authored markup. Run the generator against whichever inputs are relev
 input is independently optional; pass only what applies**:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/generate-explain.py \
+${CLAUDE_PLUGIN_ROOT}/skills/ide-explain/scripts/generate-explain.py \
   --issue <N> \
   --diff --base <ref> \
   --change <openspec-change-dir> \
@@ -153,7 +153,7 @@ to choose exactly which lines get a badge or an explanation — bootstrap a dire
 manifest by hand:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/explain/scripts/init-explain.sh <target-dir>
+${CLAUDE_PLUGIN_ROOT}/skills/ide-explain/scripts/init-explain.sh <target-dir>
 ```
 
 This copies the viewer shell into `<target-dir>/viewer.html` and writes a skeleton
@@ -195,7 +195,7 @@ A background/headless caller (a spawned agent process, a CI job) cannot reliably
 the owner's screen — there is no display to open one on. The contract in that case is: **generate
 the file, print its absolute path plus an `open <path>` line, never assume a display.** `--open` is
 only for an interactive, same-machine, foreground invocation — e.g. the owner directly running
-`/explain` themselves. Any headless/background usage must omit `--open` and just report the printed
+`/ide-explain` themselves. Any headless/background usage must omit `--open` and just report the printed
 path/command to the owner.
 
 ## Standalone usage
@@ -203,8 +203,8 @@ path/command to the owner.
 Generate a view on demand, independent of whether any code has changed yet:
 
 ```
-/explain <issue-N>
-/explain <base-ref> [docs...]
+/ide-explain <issue-N>
+/ide-explain <base-ref> [docs...]
 ```
 
 The first form calls `generate-explain.py --issue <N>` — the primary way to look at a backlog
@@ -217,7 +217,7 @@ if the owner wants the browser to open automatically — ask, or default to just
 However invoked — via this shorthand, or with explicit flags passed straight through by a calling
 skill from another plugin (e.g. spec-flow's seam wiring) — treat any string beginning with `--` as
 literal `generate-explain.py` flags and run them as-is; the shorthand above is a convenience for a
-human typing `/explain`, not the only supported call shape.
+human typing `/ide-explain`, not the only supported call shape.
 
 ## Referencing a specific section precisely
 
@@ -259,5 +259,5 @@ reasoning should post it as an issue comment), not here.
 
 ## Testing
 
-`plugins/dev-skills/skills/explain/scripts/test-generate-explain.sh` is a structural self-test —
+`plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` is a structural self-test —
 see `scripts/README.md` for what it checks and how to run it.

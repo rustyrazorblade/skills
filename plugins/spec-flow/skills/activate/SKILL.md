@@ -475,7 +475,7 @@ qualify), and confirm the choice with the owner.
    (set once, repo-wide, by `/spec-flow:setup` — see **Seam visualization** in `docs/workflow.md`).
    Unset or `terminal` → skip straight to the branches below; each one's inline text render is the
    whole deliverable, exactly as written. `explain` → resolve the `dev-skills` plugin's installed
-   root (it's a separate, standalone plugin — spec-flow calls its `explain` skill, never vendors or
+   root (it's a separate, standalone plugin — spec-flow calls its `ide-explain` skill, never vendors or
    assumes its files live alongside spec-flow's own):
    ```bash
    EXPLAIN_ROOT=$(claude plugin list --json 2>/dev/null | jq -r '
@@ -492,7 +492,7 @@ qualify), and confirm the choice with the owner.
    `--issue <N>` — the issue itself (body, comments, related/linked issues) belongs in the same
    view as the spec, not a second lookup:
    - A spec exists (the non-docs/non-tech-debt branch, or a structural/tech-accompanying
-     `type:docs` one), **fresh look or nothing changed** → `"$EXPLAIN_ROOT/skills/explain/scripts/
+     `type:docs` one), **fresh look or nothing changed** → `"$EXPLAIN_ROOT/skills/ide-explain/scripts/
      generate-explain.py" --issue <N> --change openspec/changes/issue-<N> --doc
      openspec/changes/issue-<N>/ac-coverage.md --doc openspec/changes/issue-<N>/overrides.md
      --title "issue-<N>" --subtitle "<issue title>" --out <path>`. The two `--doc` flags are
@@ -510,12 +510,12 @@ qualify), and confirm the choice with the owner.
    - No spec (content-only `type:docs`, or `type:tech-debt`) → there's no change dir to point at,
      so first write the branch's own rendered substance (scope + acceptance criteria, or Direction +
      adjacent-behavior list) to `.spec-flow/seam1-review.md` inside the worktree (gitignored, same
-     entry every worktree already inherits), then `"$EXPLAIN_ROOT/skills/explain/scripts/
+     entry every worktree already inherits), then `"$EXPLAIN_ROOT/skills/ide-explain/scripts/
      generate-explain.py" --issue <N> --doc .spec-flow/seam1-review.md --title "issue-<N>"
      --subtitle "<issue title>" --out <path>`.
    Neither branch passes `--diff` — there's no code change to show at this seam, only the spec/scope
    and the issue itself. Either way: never pass `--open` (this is a background session — see the
-   display constraint in `dev-skills`'s own `skills/explain/SKILL.md`); tell the owner the view's
+   display constraint in `dev-skills`'s own `skills/ide-explain/SKILL.md`); tell the owner the view's
    absolute path plus
    the printed `open <path>` line, and still state plainly that nothing will be implemented until
    they approve — the explain view satisfies "render the spec at the seam," it doesn't relax the

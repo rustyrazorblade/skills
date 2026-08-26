@@ -159,7 +159,7 @@ you've already seen it once at Seam 1 — you redirected `activate`, or you're r
 change — step 7 doesn't re-dump the whole spec again. It tracks the commit SHA it last showed you
 in `.spec-flow/seam1-last-shown-sha` (gitignored, same category as `.spec-flow/owner-instructions`)
 and, on a later re-entry, renders a diff scoped to just `openspec/changes/issue-<N>` between that
-SHA and the current one — a real diff view via `dev-skills`'s `explain` skill (its `--path` flag
+SHA and the current one — a real diff view via `dev-skills`'s `ide-explain` skill (its `--path` flag
 scopes `--diff` to one directory instead of the whole repo) when `SPEC_FLOW_SEAM_VIEW=explain`, or
 a scoped `git diff` in terminal mode. `ac-coverage.md`/`overrides.md` still render in full either
 way — they're conclusions to re-check as a whole, not something that makes sense line-by-line.
@@ -188,20 +188,20 @@ at Seam 2 — can be shown two ways, an owner preference set once per repo by `/
 only ever offered if the standalone **`dev-skills`** plugin (separate from spec-flow — see
 **A note on `dev-skills`** below) is installed: `SPEC_FLOW_SEAM_VIEW=explain` (recommended
 default when `dev-skills` is available) generates an interactive, self-contained HTML view via
-its `explain` skill (file tree, diff/doc view, and per-node explanations in one page) and prints
+its `ide-explain` skill (file tree, diff/doc view, and per-node explanations in one page) and prints
 its path + an `open <path>` command — a background `issue-pm` can't reliably pop a browser on your
 screen, so it never tries; `SPEC_FLOW_SEAM_VIEW=terminal` renders the same content as plain text in
-the conversation, the original behavior from before `explain` existed, and is what's used
+the conversation, the original behavior from before `ide-explain` existed, and is what's used
 automatically if `dev-skills` isn't installed on the machine an `issue-pm` happens to be running
 on, even when the preference says `explain`. Read fresh from `.claude/settings.json` at each seam,
 not cached from an earlier stop; `dev-skills`'s own availability is re-checked fresh too (via
-`claude plugin list --json`), not assumed from setup time. `/explain` (from `dev-skills`) is also
+`claude plugin list --json`), not assumed from setup time. `/ide-explain` (from `dev-skills`) is also
 the owner's own primary way to look at any issue — including a plain backlog issue, before it's
 even activated, with no diff or worktree required (its `--issue` mode pulls the issue's body,
 comments, and related/linked issues straight from GitHub) — usable with or without spec-flow
 installed at all.
 
-**Seam 2's explain view includes real per-file explanations, not commit history.** `explain`'s
+**Seam 2's ide-explain view includes real per-file explanations, not commit history.** `ide-explain`'s
 own `--blame` can only quote a historical commit message, never explain what the *current* diff
 does — so `implement` step 5, right before generating the view, writes a real 1–3 sentence
 explanation per changed file into `.spec-flow/explain-map.json`, drawing on what it already
@@ -213,7 +213,7 @@ about what changed and why, instead of either nothing or a quote from an unrelat
 independently, useful in any repo whether or not that repo uses spec-flow at all. spec-flow depends
 on it only optionally, one-directionally, and at runtime (resolving its installed root fresh via
 `claude plugin list --json`, never a hardcoded path) — spec-flow ships and works completely without
-it, just without the HTML seam views. See its own `skills/explain/SKILL.md` for the format itself,
+it, just without the HTML seam views. See its own `skills/ide-explain/SKILL.md` for the format itself,
 and `skills/setup/SKILL.md` here for how the seam-view preference gets set.
 
 **Two more standing preferences, asked once by `project-manager` itself (not `/spec-flow:setup`,

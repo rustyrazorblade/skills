@@ -11,10 +11,10 @@ steps, each carrying one or more real code excerpts. No server, no CDN, opens co
 `file://`. It defaults to vertical scroll and toggles, at runtime, to horizontal slide-by-slide
 navigation — the same generated file serves both, so nothing is regenerated to switch.
 
-**This is the sibling of `explain`, not a replacement for it.** `explain` reviews a *change* — a
+**This is the sibling of `ide-explain`, not a replacement for it.** `ide-explain` reviews a *change* — a
 diff, an issue, a PR — as a file tree the owner navigates themselves. `walkthrough` presents a
 *narrative* about a topic, in an order you chose, when there is no diff to open it against. Reach
-for `explain` when the subject is "what changed"; reach for this when the subject is "how this
+for `ide-explain` when the subject is "what changed"; reach for this when the subject is "how this
 works", "what's wrong with this", or "what we should do about it".
 
 ## The load-bearing part: you author everything
@@ -31,7 +31,7 @@ of the investigation you do **before** writing the manifest:
    Nothing checks it for you.
 3. **Decide the order deliberately.** A walkthrough's whole value is that step N+1 only makes sense
    once step N has landed. If the steps could be read in any order, you have written a reference
-   page, not a walkthrough — use `explain` instead.
+   page, not a walkthrough — use `ide-explain` instead.
 4. **Then draw the diagram**, once you understand the shape well enough to draw it honestly.
 
 Keep it short. Five to nine steps is a walkthrough; twenty is a document nobody finishes.
@@ -165,7 +165,7 @@ only for an interactive, same-machine, foreground invocation — e.g. the owner 
 
 - Never derive content mechanically and never guess it — read the code, then write the manifest.
   Excerpts must be verbatim, with real line numbers, from the paths named.
-- Never ship a walkthrough whose steps could be read in any order. That's `explain`'s job.
+- Never ship a walkthrough whose steps could be read in any order. That's `ide-explain`'s job.
 - Never pass `--open` from a background/headless caller — print the path + `open <path>` line
   instead.
 - `generate-walkthrough.py` is stdlib-only (no pip dependencies, no `git`/`gh`, no network) and

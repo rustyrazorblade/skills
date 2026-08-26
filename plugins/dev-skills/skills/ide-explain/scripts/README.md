@@ -14,7 +14,7 @@ sibling `walkthrough` skill's generator — a change there affects both.
 ## Running the test
 
 ```bash
-plugins/dev-skills/skills/explain/scripts/test-generate-explain.sh
+plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh
 ```
 
 No arguments. It builds a throwaway git repo + fixture files under `mktemp -d`, runs

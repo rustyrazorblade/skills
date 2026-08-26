@@ -5,7 +5,7 @@ model-authored markup. Stdlib only (json, argparse, subprocess, pathlib, webbrow
 shelling out to `git`/`gh` — no pip dependencies. Must run on macOS system python3 and in CI
 (Linux); avoid anything requiring a compiled extension.
 
-See plugins/dev-skills/skills/explain/SKILL.md for the manifest schema and usage from the skill.
+See plugins/dev-skills/skills/ide-explain/SKILL.md for the manifest schema and usage from the skill.
 """
 
 import argparse

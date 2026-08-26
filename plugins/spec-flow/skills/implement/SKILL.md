@@ -469,7 +469,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    account of what changed.** `dev-skills`' own `--blame` can only quote historical commit
    messages; the only way the explain view's explanation pane says something genuinely useful is
    a caller that has actually read the diff supplying that content itself — see `--explain-map` in
-   `dev-skills`'s `skills/explain/SKILL.md`. You already have this understanding from driving
+   `dev-skills`'s `skills/ide-explain/SKILL.md`. You already have this understanding from driving
    the implementation and the review panel — this is externalizing what you already know, not a
    fresh re-read of the diff. For every file `git diff --name-only "$(git merge-base HEAD
    origin/<DEFAULT_BR>)" "$BR"` lists, write 1–3 concrete sentences (what changed in this file,
@@ -477,7 +477,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    if it's genuinely mechanical with nothing to say (a lockfile regeneration, pure formatting).
    Then generate a "what changed" explain view alongside the PR before posting the comment below:
    ```bash
-   "$EXPLAIN_ROOT/skills/explain/scripts/generate-explain.py" \
+   "$EXPLAIN_ROOT/skills/ide-explain/scripts/generate-explain.py" \
      --diff --base "$(git merge-base HEAD origin/<DEFAULT_BR>)" --head "$BR" \
      --change "openspec/changes/issue-<N>" \
      --explain-map .spec-flow/explain-map.json \
@@ -486,7 +486,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    (omit `--change` if this issue never generated an OpenSpec change — the docs-fast-path/tech-debt
    case; omit `--explain-map` only if it ended up empty, e.g. every file was genuinely mechanical).
    Never pass `--open` — same display constraint as `activate`, see `dev-skills`'s own
-   `skills/explain/SKILL.md`.
+   `skills/ide-explain/SKILL.md`.
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>
 

@@ -32,7 +32,7 @@ per cycle. It hands off to `cargo` only when the failure is in the build, not th
 |-------|---------|
 | `/refactor [target]` | Behavior-preserving change, in any language. |
 | `/tech-debt [path]` | Repo-wide structural audit: review agents find SOLID, duplication, and layering problems, rank the 10 most impactful, drop anything already an open issue, and walk you through the rest one at a time. You decide per finding whether to file it |
-| `/explain <issue-N \| base-ref> [docs...]` | An IDE-style HTML view of an issue, a diff, docs, or any mix. |
+| `/ide-explain <issue-N \| base-ref> [docs...]` | An IDE-style HTML view of an issue, a diff, docs, or any mix. |
 | `/walkthrough [what to walk through]` | A diagram-first, ordered-step presentation. |
 | `/prose-review [target] [--fix]` | Grade prose against `prose-style.md`. Reports by default. |
 
@@ -41,7 +41,7 @@ before anything is deleted, and it carries a standing contract that binds the ca
 whole run: triage a failing test from the spec, never edit one to make it go green, and revert
 instead of grinding.
 
-`explain` and `walkthrough` each render one self-contained HTML page. No server, no CDN; it opens
+`ide-explain` and `walkthrough` each render one self-contained HTML page. No server, no CDN; it opens
 over `file://`.
 
 ## References
@@ -64,7 +64,7 @@ Set `SPEC_FLOW_DEVELOPER_AGENT=rust-dev` in a repo's `.claude/settings.json` and
 spec-flow behaves exactly as it did before.
 
 Set `SPEC_FLOW_SEAM_VIEW=explain` and `activate` and `implement` render both owner seams with
-`explain`.
+`ide-explain`.
 
 ## Installation
 
@@ -77,6 +77,6 @@ Set `SPEC_FLOW_SEAM_VIEW=explain` and `activate` and `implement` render both own
 The two HTML generators carry their own structural self-tests:
 
 ```
-bash skills/explain/scripts/test-generate-explain.sh
+bash skills/ide-explain/scripts/test-generate-explain.sh
 bash skills/walkthrough/scripts/test-generate-walkthrough.sh
 ```

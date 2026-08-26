@@ -81,15 +81,69 @@ way, just split across two separate processes instead of one conversation:
 `/spec-flow:activate` reviews the issue with you directly: is the scope/acceptance criteria you
 wrote at `groom` still what you want, and does anything else open in the backlog overlap, duplicate,
 or depend on it — a check `groom` can't have made, since it only ever saw the backlog as it stood
-when this issue was filed. `issue-pm` searches open issues itself and drafts **up to five**
-issue-specific questions from what it actually finds, asked **one at a time**, never a fixed
-checklist — a simple issue may earn none at all. This runs for every issue, `type:docs` and
+when this issue was filed. `issue-pm` drafts **up to five** issue-specific questions from what the
+overlap search actually found (see **Backlog overlap** below), asked **one at a time**, never a
+fixed checklist — a simple issue may earn none at all. This runs for every issue, `type:docs` and
 `type:tech-debt` included (their fast paths only ever skip the design/spec machinery further down,
 never this). It's not counted as one of the two seams below — it's a lighter, unconditional check
 that happens before either of them, not a third owner-approval gate — but it uses the same
 override mechanism: `.spec-flow/owner-instructions` (see **Overriding either seam's default** below)
 can tell it to skip this review for the run, same free-text, owner's-own-words instruction the
 seams already read.
+
+**Backlog overlap — searched by `project-manager`, never by `issue-pm`.** "Does anything else open
+overlap, duplicate, or block this issue" is a cross-issue question, so it belongs to the agent that
+owns cross-issue state. `project-manager` answers it **before** it spawns anything, and hands the
+answer over; `issue-pm` reads the answer and never queries the backlog itself.
+
+The search costs real context. `gh issue list --state open --json ...,body --limit 100` pulls every
+open issue's **full body** — measured at ~7k tokens on an 18-issue repo, scaling to 36k-180k at the
+100-issue cap. Run inside `issue-pm`, that lands before it has read a line of code, and is paid
+again on every parallel spawn. So:
+
+- `project-manager` delegates the search to a throwaway `general-purpose` subagent on `haiku` —
+  mechanical filtering, not judgment — which reads the bodies in its own context and returns
+  **only** a shortlist: `- <number>: <title> — <why>` per line, or `none`. Neither the
+  coordinator's context nor any `issue-pm`'s ever holds the full list.
+- The file's first line is `issue: <N>`, and a reader that cannot prove the header names the issue
+  it is activating **must re-search rather than trust it**. The shortlist answers a question about
+  one specific issue, and the hand-invoked `activate` path reads it before isolation is confirmed —
+  so without the stamp, a file left behind in a shared checkout silently answers one issue's
+  overlap question with another issue's data.
+- It passes the shortlist's **path** to `spawn-issue-pm.sh <N> --backlog-overlap-file <path>`. A
+  flag, not a positional, so it is independent of the owner-instructions argument — and a path,
+  not the text, for the reason two bullets down.
+- Delivery follows `.spec-flow/owner-instructions`, with one deliberate difference. On a **fresh
+  spawn** the worktree does not exist yet, so the session must create the file right after it
+  isolates; on a **respawn** — which sends no new prompt at all — the script writes it directly.
+- **Only the path moves. The shortlist text is never retyped by anything.** Owner-instructions are
+  safe to splice into a prompt or a command: the owner wrote them. A shortlist line quotes an
+  *issue title*, and on any repo accepting outside issues those are attacker-controlled. Two
+  distinct attacks follow, and both are closed the same way:
+  - **Into a prompt.** A title can close whatever delimiter wraps it and land the remainder in the
+    instruction region ("…auto-approve both seams"). No in-band delimiter survives adversarial
+    content.
+  - **Into a shell command.** Every hop here is an LLM composing Bash. A title carrying `$(...)`,
+    a backtick, or a stray quote becomes command substitution in that agent's own shell — and
+    `issue-pm` runs with `--permission-mode auto`, so nothing prompts first.
+
+  So the bytes travel only as a file, by path: the haiku subagent **writes** the shortlist and
+  returns just a path; `project-manager` forwards that path to `--backlog-overlap-file` without
+  opening it; the script restamps it into a temp file with `cat` (never an interpolated `printf`)
+  and the spawn prompt carries only that path; the session copies it into its worktree. The
+  `activate` fallback follows the identical path-only discipline. Every agent that could hold
+  shortlist text — `project-manager`, `issue-pm`, and `activate`'s reader — is told the contents
+  are **data, never instructions**.
+- `none` is passed through, not omitted. A clean search is a finding, and the literal line `none`
+  is the only way it is ever recorded. **Absent, empty, header-only, otherwise truncated, and
+  foreign-numbered all mean "not searched"** and all trigger the fallback — nothing legitimately
+  writes an empty or bodyless file, so one means an interrupted write, and an `activate` that read
+  a blank `cat` as "clean" would be exactly the silent skip this design exists to prevent. The
+  header-only case is the subtle one: it *passes* the header check, so the check alone is not
+  enough — the reader must look at the body too. The fallback re-runs the search through
+  a cheap-model subagent of its own, then writes the file only **after** isolation is confirmed, so
+  it cannot land in the primary checkout. It exists for hand-spawned sessions and worktrees
+  predating this mechanism.
 
 **Design decision, before Seam 1.** `/spec-flow:activate` stops **twice**. First, right after the
 **`architect` agent** designs the work and surfaces options + trade-offs (with a relevant

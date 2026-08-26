@@ -44,7 +44,7 @@ qualify), and confirm the choice with the owner.
    named `issue-<N>` — deterministic, nothing to derive from the title.
 
    **Announce it clearly, first thing.** Before anything else, output a one-line header —
-   `Issue #N: <title>` — as your first visible text. This is what the owner sees first when they
+   `Issue <N>: <title>` — as your first visible text. This is what the owner sees first when they
    attach; with several `issue-pm` sessions possibly running at once, it's how they tell this tab
    apart from the others and rename it.
 
@@ -685,4 +685,5 @@ qualify), and confirm the choice with the owner.
   `finalize` is what removes it. If you (this session) end for any other reason before finalize —
   the owner tells you to stop, you're abandoning the issue — remove it yourself rather than
   leaving a stale "active" signal for the next person to trust.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence.

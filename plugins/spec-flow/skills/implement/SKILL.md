@@ -545,4 +545,5 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 - The PR body must state plainly that the unit tier ran locally and the full suite runs in CI — the
   reviewer relies on CI (gate is green CI) for full-suite results. Never imply the full suite ran locally.
 - All code work happens in the worktree; this session only orchestrates, pushes, and manages the PR.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence.

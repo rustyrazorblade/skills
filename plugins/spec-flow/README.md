@@ -223,4 +223,5 @@ they are the single source you maintain, and every repo using the plugin inherit
   `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
   trade-offs, you decide right there before anything is generated; Seam 1 then confirms the
   resulting spec faithfully reflects your choice. The agents never make the call.
-- Issue/PR numbers are always rendered with a brief `(description)` — a bare number is meaningless.
+- Issues and PRs are always rendered as `<number>: <title>`, one per line with a `-` prefix — a
+  bare number is meaningless, and a comma-joined run of issues is hard to read.

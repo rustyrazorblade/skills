@@ -936,10 +936,18 @@ set's blind-append safety rests on.
 
 ## Conventions
 
-- **Issue/PR numbers always carry a `(description)`.** Every issue or PR number rendered in a
-  board, status update, PR body, or prose is paired with a brief parenthetical description —
-  `#85 (field identity)`, `PR #97 (test-rigor agent)` — never a bare number. A number alone is
-  meaningless to the reader.
+- **Issue/PR numbers always carry the title.** Every issue or PR an agent writes — in a status
+  update, a PR body, a GitHub comment, or prose — is written as `<number>: <title>`: `85: Field
+  identity in the sync path`, `PR 97: Add the test-rigor agent`. Never a bare number. A number
+  alone is meaningless to the reader.
+- **Issues go on their own lines, never inline.** Put each issue on its own line, prefixed with
+  `-`, in the format above. This applies to a single issue too, not only to a list of them. Do not
+  run several issues together in one sentence, separated by commas.
+- **One exception: the aligned table `scripts/board.py` prints.** Its bucket rows put the status,
+  number, priority, title, assignee, and PR in fixed columns, one issue per line. That layout
+  already gives the reader the title, so it keeps its `#N` column instead of the `<number>:
+  <title>` form. The script's own prose lines (Next up, Stalled, Blocked, epic sub-issues) do
+  follow the convention. Print the script's output as-is; never reformat it by hand.
 
 ## Bootstrap
 

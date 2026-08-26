@@ -1,16 +1,17 @@
 {
-  "enabledPlugins": {
-    "skill-creator@claude-plugins-official": true
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "SPEC_FLOW_UNIFIED_MEMORY": "1",
+    "SPEC_FLOW_AUTO_INDEX": "1"
   },
   "permissions": {
     "allow": [
       "Bash(easy-db-lab *)"
     ]
   },
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "SPEC_FLOW_UNIFIED_MEMORY": "1",
-    "SPEC_FLOW_AUTO_INDEX": "1"
+  "enabledPlugins": {
+    "skill-creator@claude-plugins-official": true,
+    "dev-skills@rustyrazorblade-plugins": true
   },
   "agent": "spec-flow:project-manager"
 }

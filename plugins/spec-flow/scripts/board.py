@@ -216,7 +216,8 @@ PAST_READY_STATUSES = ("spec-review", "in-review", "in-progress", "addressing")
 
 
 def describe(row):
-    return f"#{row['number']} ({row['title']})"
+    # Convention: an issue is always `<number>: <title>`, never a bare number.
+    return f"{row['number']}: {row['title']}"
 
 
 def liveness_marker(row):
@@ -300,24 +301,36 @@ def render_board(rows, me, archive_pending):
     if epics:
         out.append("📦 EPICS (not directly workable — see sub-issues)")
         for r in epics:
-            subs = ", ".join(f"#{s.get('number')} ({s.get('title', '')})" for s in r["sub_issues"]) or "(no sub-issues listed)"
             out.append(f"  {r['status'] or '(no status)':13} #{r['number']:<5} {r['priority'] or '--':3} {r['title']}  "
-                        f"{r['sub_total']} sub-issues ({r['sub_completed']} done)  → {subs}")
+                        f"{r['sub_total']} sub-issues ({r['sub_completed']} done)")
+            # Convention: one issue per line, `- <number>: <title>` — never a comma-joined
+            # run of issues inline. See docs/workflow.md, "Conventions".
+            if r["sub_issues"]:
+                for s in r["sub_issues"]:
+                    out.append(f"      - {s.get('number')}: {s.get('title', '')}")
+            else:
+                out.append("      (no sub-issues listed)")
         out.append("")
 
     # --- Next up (scoped to `me`, never an epic) -------------------------------------------
+    # (verb, row, action) — rendered as a header plus one `- <number>: <title> → <action>` line,
+    # so the title is never wedged between two colons in a single sentence. See the convention in
+    # docs/workflow.md.
     next_up = None
     mine_in_review_green = [r for r in staged if r["mine"] and r["status"] == "in-review" and r["ci"] == "green"]
     if mine_in_review_green:
         mine_in_review_green.sort(key=lambda r: priority_key(r["priority"]))
-        next_up = f"finish {describe(mine_in_review_green[0])} — PR #{mine_in_review_green[0]['pr_number']} is green, merge it"
+        top = mine_in_review_green[0]
+        next_up = ("finish", top, f"PR #{top['pr_number']} is green, merge it")
     else:
         unclaimed_ready = [r for r in ready_rows if r["assignee"] is None]
         if unclaimed_ready:
             unclaimed_ready.sort(key=lambda r: priority_key(r["priority"]))
-            next_up = f"activate {describe(unclaimed_ready[0])} — /spec-flow:activate {unclaimed_ready[0]['number']}"
+            top = unclaimed_ready[0]
+            next_up = ("activate", top, f"/spec-flow:activate {top['number']}")
         elif backlog:
-            next_up = f"groom {describe(backlog[0])} — /spec-flow:groom {backlog[0]['number']}"
+            top = backlog[0]
+            next_up = ("groom", top, f"/spec-flow:groom {top['number']}")
 
     stalled = [r for r in staged if is_stalled(r)]
     blocked_rows = [r for r in non_epics if r["blocked"]]
@@ -335,14 +348,21 @@ def render_board(rows, me, archive_pending):
 
     if next_up:
         out.append("")
-        out.append(f"➡️  Next up: {next_up}")
+        verb, row, action = next_up
+        out.append(f"➡️  Next up — {verb}:")
+        out.append(f"  - {describe(row)} → {action}")
+    # Convention: one issue per line, `- <number>: <title>` — never comma-joined inline.
+    # See docs/workflow.md, "Conventions".
     if stalled:
         out.append("")
-        out.append("🔴 Stalled (yours, no agent:active): " +
-                    ", ".join(f"{describe(r)} → {SPAWN_SCRIPT} {r['number']}" for r in stalled))
+        out.append("🔴 Stalled (yours, no agent:active):")
+        for r in stalled:
+            out.append(f"  - {describe(r)} → {SPAWN_SCRIPT} {r['number']}")
     if blocked_rows:
         out.append("")
-        out.append("🔒 Blocked: " + ", ".join(f"{describe(r)} — {r['blocked_note']}" for r in blocked_rows))
+        out.append("🔒 Blocked:")
+        for r in blocked_rows:
+            out.append(f"  - {describe(r)} — {r['blocked_note']}")
 
     return "\n".join(out)
 

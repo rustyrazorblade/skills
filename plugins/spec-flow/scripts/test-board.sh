@@ -142,11 +142,16 @@ check "issue with no status label lands in BACKLOG" $?
 ! echo "$out" | grep -q "#20 .*BLOCKED ON YOU\|#20 .*READY"
 check "epic never appears in READY/BLOCKED ON YOU (only in its own EPICS section)" $?
 
-echo "$out" | grep -q "EPICS"
-echo "$out" | grep -q "#21 (Sub one), #22 (Sub two)"
-check "epic lists its sub-issues by number+title" $?
+# `check` only sees the LAST command's status, so every condition must be one expression.
+echo "$out" | grep -q "EPICS" \
+  && echo "$out" | grep -q "^      - 21: Sub one$" \
+  && echo "$out" | grep -q "^      - 22: Sub two$"
+check "epic lists its sub-issues one per line, as '- <number>: <title>'" $?
 
-echo "$out" | grep -q "Blocked: #15 (Blocked item) — ⛔ Blocked on #99 — waiting on infra work."
+! echo "$out" | grep -q "Sub one), #22"
+check "epic sub-issues are never comma-joined inline" $?
+
+echo "$out" | sed -n '/🔒 Blocked:/,$p' | grep -q "^  - 15: Blocked item — ⛔ Blocked on #99 — waiting on infra work.$"
 check "blocked reason comes from the matching ⛔-prefixed comment, not just 'see issue comments'" $?
 
 echo "$out" | grep -q "NEEDS ATTENTION — Stuck: ambiguous requirement, need owner input."
@@ -164,7 +169,7 @@ check "another user's spec-review issue is NOT counted as blocked on you" $?
 echo "$out" | sed -n '/IN FLIGHT/,/^$/p' | grep -q "#17"
 check "another user's spec-review issue shows under IN FLIGHT for visibility" $?
 
-echo "$out" | grep -q "Stalled (yours, no agent:active).*#10 (Spec review item)"
+echo "$out" | sed -n '/Stalled (yours, no agent:active):/,$p' | grep -q "^  - 10: Spec review item →"
 check "the stalled SUMMARY line includes a stalled spec-review item too, consistent with its inline 🔴 STALLED marker" $?
 
 ! echo "$out" | grep -q '{spawn}'
@@ -173,7 +178,8 @@ check "the stalled summary's spawn command is a real path, not a leftover {spawn
 echo "$out" | grep -q "spawn-issue-pm.sh 10"
 check "the stalled summary's spawn command resolves to the real script next to board.py" $?
 
-echo "$out" | grep -q "Next up: finish #11"
+echo "$out" | grep -q "^➡️  Next up — finish:$" \
+  && echo "$out" | sed -n '/Next up — finish:/,$p' | grep -q "^  - 11: .* → PR #90 is green, merge it$"
 check "'next up' picks the mine+in-review+green-CI item over a ready/unclaimed one" $?
 
 echo ""

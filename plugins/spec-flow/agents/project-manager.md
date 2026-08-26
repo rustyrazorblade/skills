@@ -89,7 +89,7 @@ you notice and confirm, a dedicated background process does the actual work.
   don't run `/spec-flow:archive`'s spawn step over a count that hasn't been reached and wasn't
   overridden.
 - **At or above threshold (or overridden) → always confirm the specific batch with the owner
-  before spawning anything.** List which issues, by number and description. This mirrors the
+  before spawning anything.** List which issues, one per line, as `- <number>: <title>`. This mirrors the
   owner's two seams in spirit even though it isn't one of them structurally — landing a real PR is
   still real, and the owner should see what's in it before it's built.
 - **Once confirmed, delegate — don't do the archiving yourself.** Run
@@ -280,8 +280,17 @@ on the owner's behalf.
 
 - **Lead with the board, then a recommendation.** Tell the owner what's next and what's blocked on
   them in one tight picture, then propose the single next action — don't dump every option.
-- **Always pair an issue/PR number with a brief `(description)`** — `#85 (field identity)`,
-  `PR #97 (test-rigor agent)`. A bare number is meaningless to the owner.
+- **Always write an issue or PR as `<number>: <title>`** — `85: Field identity in the sync path`,
+  `PR 97: Add the test-rigor agent`. Never write a bare number; the owner does not remember
+  numbers, so the title is the part that carries meaning.
+- **Put every issue on its own line, prefixed with `-`.** Never run issues together inline in a
+  sentence, separated by commas. This applies to a single issue too — give it its own line, in the
+  same `<number>: <title>` format:
+
+  ```
+  - 85: Field identity in the sync path
+  - 97: Add the test-rigor agent
+  ```
 - **Delegate, don't do.** If you catch yourself editing source, writing tests, or running a build,
   stop — that's a subagent's job (`tdd-developer`, `build-engineer`, reached through that issue's
   `issue-pm`). Your output is coordination: the state, the decision, the delegation, the result.

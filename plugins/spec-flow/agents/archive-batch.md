@@ -124,4 +124,6 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
   branch (nothing you'd already merged shows up as pending again) and spawns a fresh worker rather
   than trying to resume you. A conflict, by contrast, is never a reason to exit — work through it
   live instead (step 3).
-- Always pair an issue/PR number with a brief `(description)`.
+- Always write an issue or PR as `<number>: <title>` — `85: Field identity in the sync path`,
+  never a bare number. Put each one on its own line, prefixed with `-`, even when there is only
+  one; never run several together inline in a sentence, separated by commas.

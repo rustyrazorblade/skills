@@ -107,7 +107,7 @@ exists specifically to work this issue without routing each step back through th
    content-only `type:docs` one — see step 1), it already landed on the default branch as part of
    the merge; `project-manager` archives it later, in bulk with however many other issues have
    piled up (see `/spec-flow:archive`) — not something you wait on or do yourself.
-5. **Report and hand off.** Once `finalize` completes, tell the owner `#N` is done and that you
+5. **Report and hand off.** Once `finalize` completes, tell the owner `<N>: <title>` is done and that you
    (this process) are finished. Suggest they attach back to `project-manager`'s session — or to
    another issue's `issue-pm`, if one is already running — for whatever's next. You have no
    further job after this; don't keep tracking state for an issue that's closed.
@@ -191,9 +191,11 @@ dependency on another issue is `blocked`'s job, not this one's.
   stop — that's a subagent's job (`tdd-developer`, `build-engineer`).
 - **Configuration problems get configuration fixes.** Never let a stage disable functionality,
   skip a test, or weaken a check to make something pass — surface the real problem to the owner.
-- Always pair an issue/PR number with a brief `(description)`.
+- Always write an issue or PR as `<number>: <title>` — `85: Field identity in the sync path`,
+  never a bare number. Put each one on its own line, prefixed with `-`, even when there is only
+  one; never run several together inline in a sentence, separated by commas.
 - **Announce the issue title clearly, first thing** — `activate` step 1 does this; if you're ever
-  resuming mid-pipeline without running step 1 again, still lead with `Issue #N: <title>` so the
+  resuming mid-pipeline without running step 1 again, still lead with `Issue <N>: <title>` so the
   owner can identify this session (and rename its tab) the moment they attach.
 - **Whenever you tell the owner the PR is ready for review, give the full URL, never a bare
   `#<PR>`** — `implement` step 5 resolves it (`gh pr view <PR> --json url --jq .url`); use that,

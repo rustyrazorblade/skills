@@ -79,4 +79,6 @@ to a dedicated background worker, the same way you delegate an issue to `issue-p
 - **This never touches any issue's own feature branch or PR.** It only ever operates on the
   default branch's already-merged `openspec/changes/` content — a completely separate, code-free
   bookkeeping lane.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence. The batch
+  confirmation list in step 2 follows this format too.

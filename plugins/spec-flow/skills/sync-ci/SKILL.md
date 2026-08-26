@@ -108,4 +108,5 @@ CI-caught test is added here and run locally until the branch merges, then evapo
 - **The flagged set is local and gitignored** — it never commits and never leaves the branch.
 - **Additive + idempotent.** Re-running after another red CI run merges new ids without dropping the
   ones already being guarded; running when CI is green is a no-op.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence.

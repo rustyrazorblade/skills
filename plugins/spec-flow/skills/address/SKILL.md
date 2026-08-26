@@ -84,4 +84,5 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
 - Never merge, never push to `main` — only the issue branch.
 - Tolerate the zero-new-comments case gracefully.
 - Reply to the actual review threads so the owner sees resolution in context, not just a force-push.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence.

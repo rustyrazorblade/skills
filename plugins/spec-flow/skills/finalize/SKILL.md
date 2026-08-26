@@ -100,4 +100,5 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
   before it forces.
 - **Safe to re-run at any step.** Step 2 only closes/comments/relabels what isn't already done;
   step 3's script only removes what still exists.
-- When you cite an issue/PR number, always pair it with a brief `(description)`.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — never a bare number, and never several run together inline in a sentence.

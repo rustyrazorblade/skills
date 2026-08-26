@@ -42,9 +42,11 @@ anything.
   docstring/rules below), not to patch around it inline.
 - **If the script fails** (e.g. `gh`/`git` not on PATH, a real API error), relay its stderr
   verbatim and stop — don't silently fall back to querying GitHub yourself to paper over it.
-- Every issue/PR number in your own added commentary (step 2) still carries a brief
-  `(description)` — `#85 (field identity)`, never a bare `#85`. (Workflow convention; see
-  `docs/workflow.md`.)
+- Every issue/PR in your own added commentary (step 2) is written as `<number>: <title>` —
+  `85: Field identity in the sync path`, never a bare `85`. Put each one on its own line, prefixed
+  with `-`, even when there is only one; never run several together inline in a sentence.
+  (Workflow convention; see `docs/workflow.md`.) The script's own aligned bucket rows are the
+  documented exception — print them as-is, never reformat them into this shape.
 
 ## Extending the board
 

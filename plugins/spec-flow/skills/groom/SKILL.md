@@ -110,8 +110,8 @@ refines. Stay in the foreground — no worktrees, no implementation.
   outcomes where you can.
 - Keep titles concrete and short — the OpenSpec change name is `issue-<N>` (deterministic, not
   derived from the title), so the title only has to be a good title, not double as a slug source.
-- When you cite an issue/PR number, always pair it with a brief `(description)` — the owner does
-  not track raw numbers.
+- When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
+  prefix — the owner does not track raw numbers. Never run several together inline in a sentence.
 - **Bug verification (step 2) is read-only, always.** No worktree, no file writes, no commits —
   run existing commands/tests and observe; if verifying would require changing anything, that's
   past `groom`'s scope, not a reason to skip verification (fall back to "not practically verifiable

@@ -7,7 +7,7 @@ system python3 and in CI (Linux).
 Unlike generate-explain.py, this script derives NOTHING: it validates the manifest and injects it
 into the viewer shell, nothing more. Every byte of content — the diagram markup, each step's
 narration, each code excerpt — is written by the invoking agent. See
-plugins/review-tools/skills/walkthrough/SKILL.md for the manifest schema and authoring guidance.
+plugins/dev-skills/skills/walkthrough/SKILL.md for the manifest schema and authoring guidance.
 """
 
 import argparse

@@ -259,5 +259,5 @@ reasoning should post it as an issue comment), not here.
 
 ## Testing
 
-`plugins/review-tools/skills/explain/scripts/test-generate-explain.sh` is a structural self-test —
+`plugins/dev-skills/skills/explain/scripts/test-generate-explain.sh` is a structural self-test —
 see `scripts/README.md` for what it checks and how to run it.

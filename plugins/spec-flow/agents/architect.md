@@ -50,11 +50,11 @@ A design proposal that issue-pm presents to the owner (and that feeds `openspec-
 - **Ground every recommendation in the actual codebase.** Read the relevant modules, existing
   patterns, conventions (`CLAUDE.md`/`CONTRIBUTING`/architecture docs), and neighboring code so your
   design *fits* the repo instead of importing a foreign style. Cite `file:line`.
-- **If the project is Rust**, hold the design to the bundled Rust style guide
-  (`${CLAUDE_PLUGIN_ROOT}/references/rust-style-guide.md` — resolve `$CLAUDE_PLUGIN_ROOT` from the
-  env, or locate `references/rust-style-guide.md` under the plugin): single-responsibility
-  components, zero-cost abstractions (newtypes, monomorphized generics, enum dispatch) over runtime
-  machinery, no speculative over-engineering.
+- **If the project is Rust**, hold the design to the same principles the standalone `dev-skills`
+  plugin's Rust style guide enforces: single-responsibility components, zero-cost abstractions
+  (newtypes, monomorphized generics, enum dispatch) over runtime machinery, and no speculative
+  over-engineering. If `dev-skills` is installed, read
+  `references/rust/style-guide.md` under its installed root for the full guide.
 - **If the project is Kotlin**, hold the design to the bundled Kotlin style guide
   (`${CLAUDE_PLUGIN_ROOT}/references/kotlin-style-guide.md` — resolve `$CLAUDE_PLUGIN_ROOT` from the
   env, or locate `references/kotlin-style-guide.md` under the plugin): make illegal states

@@ -15,7 +15,7 @@ Then install whichever plugins you want:
 /plugin install cassandra-expert@rustyrazorblade-plugins
 /plugin install easy-db-lab@rustyrazorblade-plugins
 /plugin install spec-flow@rustyrazorblade-plugins
-/plugin install review-tools@rustyrazorblade-plugins
+/plugin install dev-skills@rustyrazorblade-plugins
 ```
 
 ### Codex
@@ -25,7 +25,7 @@ codex plugin marketplace add rustyrazorblade/skills
 
 Codex exposes skills through `$` mentions instead of slash commands. `cassandra-expert` and
 `easy-db-lab` ship Codex manifests; `spec-flow` is Claude Code only (it depends on Claude Code
-agents and the `Workflow` runtime). `review-tools` is Claude Code only too for now.
+agents and the `Workflow` runtime). `dev-skills` is Claude Code only too for now.
 
 ## Available Plugins
 
@@ -234,7 +234,7 @@ yourself.
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
 | `/spec-flow:adopt-tiering` | One-time per repo: split an existing suite into the unit/integration tiers the tiering model needs, then open a PR |
 
-If the standalone [`review-tools`](#review-tools) plugin is also installed, set
+If the standalone [`dev-skills`](#dev-skills) plugin is also installed, set
 `SPEC_FLOW_SEAM_VIEW=explain` (via `/spec-flow:setup`) to have `activate`/`implement` render both
 owner seams as an interactive HTML view instead of plain text — see **Seam visualization** in
 `docs/workflow.md`.
@@ -347,40 +347,51 @@ wins — a deliberate way to specialize a reviewer or the developer for a repo's
 
 See [`plugins/spec-flow/docs/workflow.md`](plugins/spec-flow/docs/workflow.md) for the full design.
 
-### review-tools
+### dev-skills
 
-Two skills that render a change or a subsystem as one self-contained HTML page — no server, no
-CDN, opens over `file://`. Standalone — no other plugin required, useful in any repo.
+Language developer agents plus generic development skills. Standalone; useful in any repo, with or
+without `spec-flow`.
 
-- **`explain`** — an IDE-style view: a file tree on the left (code diffs and plain files in one
-  panel, docs/issue text in another, whichever's non-empty), a code/diff/doc editor top-right, and
-  an explanation pane bottom-right — of a git diff, a GitHub issue plus everything linked to it,
-  project docs, or any mix.
-- **`walkthrough`** — a diagram-first, ordered-step presentation for when there is no diff to open:
-  how something works, a technical-debt review, an areas-for-improvement pass, recommendations, or
-  a performance analysis. You investigate and author every word; the renderer turns it into a
-  presentation — vertical scroll by default, one button away from horizontal slide-by-slide.
+#### Agents
 
-Claude Code:
+| Agent | Purpose |
+|-------|---------|
+| `rust-dev` | Rust developer. Reads the bundled Rust style guide, works test-first with a stated escape hatch, and runs `nextest` with a token-frugal recipe |
+| `cargo` | Cargo expert. Owns `Cargo.toml`, workspaces, features, profiles, dependencies, MSRV, and `.config/nextest.toml`. Never writes application or test code |
 
-```
-/plugin install review-tools@rustyrazorblade-plugins
-```
+`java-dev`, `kotlin-dev`, and `gradle` join them later.
 
 #### Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `/explain <issue-N \| base-ref> [docs...]` | Render the HTML view — an issue (body, comments, related/linked issues), a diff, docs, or any combination |
+| `/refactor [target]` | Behavior-preserving change, in any language. Produces a plan you approve, then holds the calling agent to a standing contract: triage a failing test from the spec, never edit it to go green, revert instead of grinding |
+| `/tech-debt [path]` | Repo-wide structural audit: review agents find SOLID, duplication, and layering problems, rank the 10 most impactful, drop anything already an open issue, and walk you through the rest one at a time. You decide per finding whether to file it |
+| `/explain <issue-N \| base-ref> [docs...]` | Render an IDE-style HTML view — an issue with its comments and linked issues, a diff, docs, or any combination |
 | `/walkthrough [what to walk through]` | Render a diagram-first, ordered-step presentation — how something works, a tech-debt review, recommendations, a performance analysis |
+| `/prose-review [target] [--fix]` | Grade comments, commit messages, PR descriptions, and release notes against `prose-style.md`. Reports by default; edits only with `--fix` |
 
-If the [`spec-flow`](#spec-flow) plugin is also installed, its `activate`/`implement` skills call
-`explain` automatically at both owner seams once `SPEC_FLOW_SEAM_VIEW=explain` is set (via
-`/spec-flow:setup`) — see **Seam visualization** in `plugins/spec-flow/docs/workflow.md`. That
-integration is optional and one-directional; `review-tools` has no dependency on spec-flow.
+`explain` and `walkthrough` render one self-contained HTML page each: no server, no CDN, opens over
+`file://`.
 
-See [`plugins/review-tools/skills/explain/SKILL.md`](plugins/review-tools/skills/explain/SKILL.md)
-and [`plugins/review-tools/skills/walkthrough/SKILL.md`](plugins/review-tools/skills/walkthrough/SKILL.md)
+Claude Code:
+
+```
+/plugin install dev-skills@rustyrazorblade-plugins
+```
+
+#### Working with spec-flow
+
+The two plugins pair, one-directionally. `dev-skills` has no dependency on `spec-flow`.
+
+- Set `SPEC_FLOW_DEVELOPER_AGENT=rust-dev` and `/spec-flow:implement` spawns `rust-dev` instead of
+  its own bundled `tdd-developer`. Leave it unset and spec-flow behaves exactly as it did before.
+- Set `SPEC_FLOW_SEAM_VIEW=explain` (via `/spec-flow:setup`) and `activate`/`implement` call
+  `explain` at both owner seams. See **Seam visualization** in
+  `plugins/spec-flow/docs/workflow.md`.
+
+See [`plugins/dev-skills/skills/explain/SKILL.md`](plugins/dev-skills/skills/explain/SKILL.md)
+and [`plugins/dev-skills/skills/walkthrough/SKILL.md`](plugins/dev-skills/skills/walkthrough/SKILL.md)
 for the full CLI and manifest schemas.
 
 ## License

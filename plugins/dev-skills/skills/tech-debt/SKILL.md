@@ -1,17 +1,14 @@
 ---
 name: tech-debt
-description: Audit the codebase for structural improvement opportunities — SOLID/composability, code duplication, and unnecessary layering — using a parallel team of review agents. Ranks the 10 most impactful findings, excludes anything already in the open backlog, and walks the owner through them one at a time with full context; the owner decides per item whether to file it as a GitHub issue. Not tied to any issue. project-manager recommends running this once a week or every 20 merged PRs, whichever comes first — never automatic. See docs/workflow.md.
+description: Audit the codebase for structural improvement opportunities — SOLID/composability, code duplication, and unnecessary layering — using a parallel team of review agents. Ranks the 10 most impactful findings, excludes anything already in the open backlog, and walks the owner through them one at a time with full context; the owner decides per item whether to file it as a GitHub issue. Not tied to any issue; owner-invoked, never automatic.
 argument-hint: [optional: scope to a path/module — default is the whole repo]
 ---
 
 # tech-debt — structural audit → ranked findings → owner files what's worth it
 
-You are the central `project-manager` (like `groom`/`board`/`archive` — not tied to any issue, no
-worktree, no code changes). Everywhere else in this pipeline, structural debt only ever surfaces as
-a side effect of touching nearby code (`architect`'s "Nearby structural debt" step during
-`activate`). This skill is the deliberate, repo-wide sweep: a team of review agents reads the whole
-codebase looking for nothing else, ranks what it finds, and the owner decides — one finding at a
-time — what's worth turning into real backlog work.
+Foreground, standalone: no worktree, no issue coupling, no code edits. A team of review agents
+reads the whole codebase looking for structural debt, ranks what it finds, and the owner decides —
+one finding at a time — what's worth turning into real backlog work.
 
 ## Steps
 
@@ -73,14 +70,12 @@ time — what's worth turning into real backlog work.
    Impact: <why this one ranked where it did>
    ```
    Ask: file as a GitHub issue, skip, or adjust (owner can narrow/reshape it before it's filed).
-   **Never file anything without that per-item confirmation** — this mirrors the owner's seams
-   everywhere else in this pipeline: the owner decides what enters the backlog, this skill only
-   surfaces candidates.
+   **Never file anything without that per-item confirmation** — the owner decides what enters the
+   backlog, this skill only surfaces candidates.
 
 6. **File exactly what the owner accepted**, drafted with a distinct `## Direction` section (not
-   folded into Notes) — `activate`'s tech-debt fast path (see **Tech-debt fast path** in
-   `docs/workflow.md`) gates on that section actually being present, since it's what lets `activate`
-   auto-adopt the fix's shape instead of re-running a full design-choice stop:
+   folded into Notes) — keep it as its own heading, verbatim; some downstream consumer of the filed
+   issue may key off that section being present:
    ```bash
    gh issue create --title "<concise title>" --label "<P0|P1|P2|P3>" --label "status:ready" --label "type:tech-debt" \
      --body "## Scope
@@ -99,13 +94,10 @@ time — what's worth turning into real backlog work.
    The first acceptance criterion is always the behavior-preservation one, worded plainly — this is
    the contract the whole fast path rests on, not optional boilerplate. Propose a priority (default
    **P2** — real but not urgent, unless the finding's impact argues otherwise) and confirm before
-   creating, same as `groom` step 6. Filed issues enter `/spec-flow:activate` like any other
-   `status:ready` issue, but take the **tech-debt fast path** there (no OpenSpec spec, a narrowed
-   architect brief instead of a full design-choice stop) — see `docs/workflow.md`.
+   creating.
 
-7. **Log the run, even if nothing got filed.** This is what lets `project-manager` compute the
-   once-a-week / every-20-merges cadence later without guessing — see **Tech-debt review cadence**
-   in `docs/workflow.md`:
+7. **Log the run, even if nothing got filed.** This creates an audit trail a consuming pipeline can
+   use to compute a review cadence later, without guessing:
    ```bash
    LOG_URL=$(gh issue create --title "Tech debt review — $(date +%Y-%m-%d)" \
      --body "Scope: <repo or path>. Candidates found: <N>. Filed: <issue numbers>. Skipped: <count>." \
@@ -116,23 +108,22 @@ time — what's worth turning into real backlog work.
    number-parsing needed.
    Immediately closed — it's an audit-trail marker, not a work item.
 
-8. **Report.** List what got filed (numbers + brief descriptions, pipeline-standard), what got
-   skipped, and confirm the run is logged for cadence tracking.
+8. **Report.** List what got filed (numbers + brief descriptions), what got skipped, and confirm
+   the run is logged for cadence tracking.
 
 ## Rules
 
 - **Foreground, read-only except for the `gh issue create` calls in steps 6-7.** No worktree, no
   code edits — this skill finds and files, it never fixes anything itself. A finding worth fixing
-  becomes a normal issue that goes through `/spec-flow:activate` → `/spec-flow:implement` like any
-  other.
+  becomes a normal issue that goes through the repo's own issue pipeline like any other.
 - **Never file anything the owner hasn't individually confirmed.** Presenting the full top-10 list
   and asking for a blanket "file all of these" defeats the point — one at a time, each with room to
   actually be read before the next one shows up.
 - **Never re-surface an existing open issue.** Step 2's snapshot exists specifically so lens agents
   and your own final pass can filter against it — a finding that's already backlog isn't a finding.
 - **Never invent an automatic schedule for this skill itself.** It's owner-invoked, or recommended
-  by `project-manager` when the cadence check in `docs/workflow.md` says it's due — recommended,
-  never auto-run; same rule `archive` follows for its own threshold.
+  by whatever pipeline consumes it when its own cadence check says a review is due — recommended,
+  never auto-run.
 - **Never file an issue that also carries (or should carry) `type:docs`.** The two fast paths are
   mutually exclusive — a finding is either a structural code change or a documentation change, never
   both from this skill. Filed issues get `type:tech-debt` and nothing else in that label kind.

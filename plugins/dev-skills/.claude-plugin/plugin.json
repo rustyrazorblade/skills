@@ -1,0 +1,24 @@
+{
+  "name": "dev-skills",
+  "version": "0.1.0",
+  "description": "Language developer agents and generic development skills: rust-dev and cargo for Rust; refactor for behavior-preserving work in any language; tech-debt for a repo-wide structural audit; explain and walkthrough to render a change as a self-contained HTML page; prose-review to grade comments, commit messages, and PR descriptions. Pairs with spec-flow, which delegates to whichever developer agent a repo configures.",
+  "author": {
+    "name": "Jon Haddad"
+  },
+  "repository": "https://github.com/rustyrazorblade/skills",
+  "license": "Apache-2.0",
+  "keywords": [
+    "rust",
+    "cargo",
+    "nextest",
+    "refactoring",
+    "tech-debt",
+    "tdd",
+    "code-review",
+    "diff",
+    "html",
+    "visualization",
+    "walkthrough",
+    "prose"
+  ]
+}

@@ -100,6 +100,18 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
 4. **Resolve the implement mode, then drive Implement → Review → Fix (bounded) → Build → Polish.**
 
+   **Resolve the developer agent first.** Read `SPEC_FLOW_DEVELOPER_AGENT` from the environment.
+   If it is unset or empty, the developer agent is `tdd-developer`, the bundled default; this is
+   the behavior that shipped before the setting existed. If it is set, the developer agent is the
+   agent it names, for example `rust-dev` from the standalone `dev-skills` plugin (see **Developer
+   agent** in `docs/workflow.md`). If the named agent cannot be resolved, stop and report the
+   missing agent by name; never fall back silently, because a configured agent that vanishes takes
+   its discipline with it. **Everywhere below that says `tdd-developer` means this resolved
+   developer agent**, in every mode and on every path, including the docs fast path, the fix loop,
+   the polish pass, and the CI fix respawn. Only the review-panel agents and `build-engineer` are
+   always the bundled ones.
+
+
    **Docs fast path.** If the issue carries `type:docs` (set at `groom`, carried through
    `activate` — see **Docs fast path** in `docs/workflow.md`), skip everything else in this step —
    Team/Workflow mode, the five-lens panel, the fix loop, Build, Polish — entirely and run this
@@ -444,20 +456,20 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
    **If `SPEC_FLOW_SEAM_VIEW=explain`** (set once, repo-wide, by `/spec-flow:setup` — see **Seam
    visualization** in `docs/workflow.md`; unset or `terminal` skips this entirely), resolve the
-   standalone `review-tools` plugin's installed root the same way `activate` step 7 does:
+   standalone `dev-skills` plugin's installed root the same way `activate` step 7 does:
    ```bash
    EXPLAIN_ROOT=$(claude plugin list --json 2>/dev/null | jq -r '
-     [.[] | select(.id | startswith("review-tools@")) | select(.enabled)]
+     [.[] | select(.id | startswith("dev-skills@")) | select(.enabled)]
      | sort_by(.installedAt) | last.installPath // empty')
    ```
    `EXPLAIN_ROOT` empty → skip straight to **Otherwise** below, and mention once, in passing, that
-   the seam-view preference is set but `review-tools` isn't available here. Otherwise:
+   the seam-view preference is set but `dev-skills` isn't available here. Otherwise:
 
    **First, write a real explanation for each changed file — not commit history, an actual
-   account of what changed.** `review-tools`' own `--blame` can only quote historical commit
+   account of what changed.** `dev-skills`' own `--blame` can only quote historical commit
    messages; the only way the explain view's explanation pane says something genuinely useful is
    a caller that has actually read the diff supplying that content itself — see `--explain-map` in
-   `review-tools`'s `skills/explain/SKILL.md`. You already have this understanding from driving
+   `dev-skills`'s `skills/explain/SKILL.md`. You already have this understanding from driving
    the implementation and the review panel — this is externalizing what you already know, not a
    fresh re-read of the diff. For every file `git diff --name-only "$(git merge-base HEAD
    origin/<DEFAULT_BR>)" "$BR"` lists, write 1–3 concrete sentences (what changed in this file,
@@ -473,14 +485,14 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    ```
    (omit `--change` if this issue never generated an OpenSpec change — the docs-fast-path/tech-debt
    case; omit `--explain-map` only if it ended up empty, e.g. every file was genuinely mechanical).
-   Never pass `--open` — same display constraint as `activate`, see `review-tools`'s own
+   Never pass `--open` — same display constraint as `activate`, see `dev-skills`'s own
    `skills/explain/SKILL.md`.
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>
 
    🗂️ Explain (what changed): <explain path> — open <explain path>"
    ```
-   **Otherwise** (unset, `terminal`, or `review-tools` unavailable):
+   **Otherwise** (unset, `terminal`, or `dev-skills` unavailable):
    ```bash
    gh issue comment <N> --body "👀 PR #<PR> ready for your review: <PR_URL>"
    ```

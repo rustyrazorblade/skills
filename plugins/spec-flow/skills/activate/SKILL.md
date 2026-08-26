@@ -162,7 +162,7 @@ qualify), and confirm the choice with the owner.
 
    **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
    **Tech-debt fast path** in `docs/workflow.md`). The issue body already carries a `## Direction`
-   from `/spec-flow:tech-debt` — a concrete shape, not a design brief — so spawn `architect` with a
+   from `/tech-debt` (dev-skills) — a concrete shape, not a design brief — so spawn `architect` with a
    **narrowed charter** instead of the normal design-from-scratch mandate: *"Direction (already
    confirmed by the owner when this issue was filed): `<the issue's Direction section, verbatim>`.
    Don't design from scratch — verify this specific fix still applies (the finding's file:line
@@ -217,7 +217,7 @@ qualify), and confirm the choice with the owner.
    `gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."`
    Then go straight to step 5's tech-debt branch. This is the *default* for `type:tech-debt`, not
    conditional on `.spec-flow/owner-instructions` — the owner already made this decision once, item
-   by item, when they confirmed the finding in `/spec-flow:tech-debt`; step 4 here is a safety check
+   by item, when they confirmed the finding in `/tech-debt` (dev-skills); step 4 here is a safety check
    against staleness/scope-creep, not a second design-choice gate.
 
    **Otherwise (a normal issue):** every consequential
@@ -474,18 +474,18 @@ qualify), and confirm the choice with the owner.
    **Then check `SPEC_FLOW_SEAM_VIEW`**
    (set once, repo-wide, by `/spec-flow:setup` — see **Seam visualization** in `docs/workflow.md`).
    Unset or `terminal` → skip straight to the branches below; each one's inline text render is the
-   whole deliverable, exactly as written. `explain` → resolve the `review-tools` plugin's installed
+   whole deliverable, exactly as written. `explain` → resolve the `dev-skills` plugin's installed
    root (it's a separate, standalone plugin — spec-flow calls its `explain` skill, never vendors or
    assumes its files live alongside spec-flow's own):
    ```bash
    EXPLAIN_ROOT=$(claude plugin list --json 2>/dev/null | jq -r '
-     [.[] | select(.id | startswith("review-tools@")) | select(.enabled)]
+     [.[] | select(.id | startswith("dev-skills@")) | select(.enabled)]
      | sort_by(.installedAt) | last.installPath // empty')
    ```
-   `EXPLAIN_ROOT` empty (the preference is set but `review-tools` isn't installed/enabled on this
+   `EXPLAIN_ROOT` empty (the preference is set but `dev-skills` isn't installed/enabled on this
    machine — e.g. set on a different machine than this one) → fall back to the branches below
    exactly as if `SPEC_FLOW_SEAM_VIEW` were unset, and mention once, in passing, that the seam-view
-   preference is set but the `review-tools` plugin isn't available here. Otherwise, generate an
+   preference is set but the `dev-skills` plugin isn't available here. Otherwise, generate an
    explain view **in addition to** doing whichever branch below's labeling/comment step, and
    present its path/open line **as** that branch's render instead of the inline text dump (the
    branch's own comment-posting and STOP still apply unchanged either way). Always include
@@ -498,7 +498,7 @@ qualify), and confirm the choice with the owner.
      --title "issue-<N>" --subtitle "<issue title>" --out <path>`. The two `--doc` flags are
      deliberate, not redundant with `--change` — `ac-coverage.md`/`overrides.md` are spec-flow-
      specific artifacts (see step 5), not among the generic OpenSpec files `--change` auto-includes
-     (`proposal.md`/`design.md`/`tasks.md`/`specs/**`), and `review-tools` stays unaware of
+     (`proposal.md`/`design.md`/`tasks.md`/`specs/**`), and `dev-skills` stays unaware of
      spec-flow's own file conventions.
    - A spec exists, **re-review** (the marker SHA differs from current HEAD) → same command, but
      add `--diff --base <the recorded SHA> --path openspec/changes/issue-<N>` — this scopes the
@@ -515,7 +515,7 @@ qualify), and confirm the choice with the owner.
      --subtitle "<issue title>" --out <path>`.
    Neither branch passes `--diff` — there's no code change to show at this seam, only the spec/scope
    and the issue itself. Either way: never pass `--open` (this is a background session — see the
-   display constraint in `review-tools`'s own `skills/explain/SKILL.md`); tell the owner the view's
+   display constraint in `dev-skills`'s own `skills/explain/SKILL.md`); tell the owner the view's
    absolute path plus
    the printed `open <path>` line, and still state plainly that nothing will be implemented until
    they approve — the explain view satisfies "render the spec at the seam," it doesn't relax the
@@ -538,7 +538,7 @@ qualify), and confirm the choice with the owner.
    instead: the issue's `## Direction` (as confirmed or corrected by step 3's architect brief), the
    `## Adjacent specified behavior (must be preserved)` section step 5 appended, and architect's
    risks/blast-radius from its brief. This is genuinely quick — the owner already confirmed this
-   exact Direction, item by item, in `/spec-flow:tech-debt`; this stop exists to catch staleness and
+   exact Direction, item by item, in `/tech-debt` (dev-skills); this stop exists to catch staleness and
    let them see the adjacent-behavior list before implementation starts, not to re-litigate the
    fix:
    ```bash
@@ -649,7 +649,7 @@ qualify), and confirm the choice with the owner.
   acceptance criteria, or Direction + adjacent-behavior list) matches what was actually produced —
   neither exception ever removes Seam 1 itself.
 - **`type:docs` and `type:tech-debt` never combine.** If an issue somehow carries both (hand-edited
-  in GitHub — `/spec-flow:tech-debt` and `groom` each only ever apply one), don't silently pick
+  in GitHub — `/tech-debt` (dev-skills) and `groom` each only ever apply one), don't silently pick
   either fast path: say so to the owner and fall back to the full pipeline (design stop + real
   spec) — the safer default when the labeling itself is ambiguous about what kind of change this
   actually is.

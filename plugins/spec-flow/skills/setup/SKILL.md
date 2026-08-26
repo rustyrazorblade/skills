@@ -29,8 +29,12 @@ later question moot.
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
    - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and
-     whether the standalone `review-tools` plugin is installed/enabled:
-     `claude plugin list --json | jq -e '[.[] | select(.id | startswith("review-tools@")) | select(.enabled)] | length > 0'`.
+     whether the standalone `dev-skills` plugin is installed/enabled:
+     `claude plugin list --json | jq -e '[.[] | select(.id | startswith("dev-skills@")) | select(.enabled)] | length > 0'`.
+   - **Developer agent**: read `.claude/settings.json` for `env.SPEC_FLOW_DEVELOPER_AGENT`, and
+     detect the project's language (a `Cargo.toml` for Rust; a `build.gradle.kts`/`.kt` sources for
+     Kotlin; a `pom.xml`/`.java` sources for Java). Reuse the same `dev-skills` availability check
+     as **Seam visualization** above; do not run it twice.
    - **Refactor circuit breaker**: read `.claude/settings.json` for
      `env.SPEC_FLOW_REFACTOR_BREAKER`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
@@ -72,11 +76,11 @@ later question moot.
      { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
      ```
      merging into whatever's already there rather than overwriting the file.
-   - **Seam visualization preference unset, AND the `review-tools` plugin is installed/enabled**
-     (skip this item entirely if `review-tools` isn't installed — don't offer a preference for a
+   - **Seam visualization preference unset, AND the `dev-skills` plugin is installed/enabled**
+     (skip this item entirely if `dev-skills` isn't installed — don't offer a preference for a
      plugin the owner doesn't have; they can install it and re-run `setup` any time) → explain the
      choice in one line: at both owner seams (design approval, in-review), `activate`/`implement`
-     can either generate an interactive HTML view via `review-tools`'s `explain` skill — file tree,
+     can either generate an interactive HTML view via `dev-skills`'s `explain` skill — file tree,
      diff view, docs, all in one place — or render the same content as plain text in the terminal,
      same as before that plugin existed. Recommend the HTML view, default yes, but genuinely
      optional — like agent teams, a real preference, not a mechanical default. If yes:
@@ -88,8 +92,21 @@ later question moot.
      { "env": { "SPEC_FLOW_SEAM_VIEW": "terminal" } }
      ```
      merging into whatever's already there. `activate`/`implement` read this fresh at each seam,
-     and re-check `review-tools`'s availability every time rather than trusting this one-time
+     and re-check `dev-skills`'s availability every time rather than trusting this one-time
      detection — see **Seam visualization** in `docs/workflow.md`.
+   - **Developer agent unset, AND the `dev-skills` plugin is installed/enabled, AND the project
+     is a language it covers** (Rust today) → explain the choice in one line: `implement` spawns
+     spec-flow's own `tdd-developer` by default, which is language-neutral; `dev-skills` ships
+     `rust-dev`, which reads the full Rust style guide, carries a token-frugal `nextest` recipe,
+     and hands build problems to its `cargo` agent. Recommend the language agent, default yes. If
+     yes:
+     ```json
+     { "env": { "SPEC_FLOW_DEVELOPER_AGENT": "rust-dev" } }
+     ```
+     merging into whatever's already there. If the owner declines, write nothing; unset already
+     means `tdd-developer`. Skip this item entirely if `dev-skills` isn't installed, or if the
+     project's language has no agent in it yet; don't offer a preference the owner can't use. See
+     **Developer agent** in `docs/workflow.md`.
    - **Refactor circuit breaker unset** → explain the choice in one line: on a `type:tech-debt`
      run (behavior-preserving work), `implement` stops a developer agent that has edited the same
      test file more than twice, because three edits to one test file means the classification was

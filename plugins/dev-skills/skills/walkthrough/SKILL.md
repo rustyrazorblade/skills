@@ -188,5 +188,5 @@ only for an interactive, same-machine, foreground invocation — e.g. the owner 
 
 ## Testing
 
-`plugins/review-tools/skills/walkthrough/scripts/test-generate-walkthrough.sh` is a structural
+`plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` is a structural
 self-test — see `scripts/README.md` for what it checks and how to run it.

@@ -14,6 +14,12 @@
       "category": "database"
     },
     {
+      "name": "dev-skills",
+      "source": "./plugins/dev-skills",
+      "description": "Language developer agents and generic development skills: `rust-dev` + `cargo` for Rust; `refactor` for behavior-preserving work in any language; `tech-debt` for a repo-wide structural audit; `explain` and `walkthrough` to render a change as a self-contained HTML page; `prose-review` for comments, commit messages, and PR descriptions",
+      "category": "development"
+    },
+    {
       "name": "easy-db-lab",
       "source": "./plugins/easy-db-lab",
       "description": "Provision and operate AWS lab environments with Cassandra, ClickHouse, and stress testing",
@@ -26,15 +32,9 @@
       "category": "workflow"
     },
     {
-      "name": "review-tools",
-      "source": "./plugins/review-tools",
-      "description": "Render a change or a subsystem as one self-contained HTML page — `explain` for an IDE-style view of a diff, a GitHub issue plus everything linked to it, or docs; `walkthrough` for a diagram-first, ordered-step presentation — standalone, no other plugin required",
-      "category": "workflow"
-    },
-    {
       "name": "ste-house-style",
       "source": "./plugins/ste-house-style",
-      "description": "STE House Style — ASD-STE100 Simplified Technical English plus the house writing style, as a selectable Claude Code output style",
+      "description": "STE House Style \u2014 ASD-STE100 Simplified Technical English plus the house writing style, as a selectable Claude Code output style",
       "category": "writing"
     }
   ]

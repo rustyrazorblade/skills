@@ -32,9 +32,9 @@ gh label create "type:docs" --color c5def5 --description "Documentation-only cha
 # this is metadata about how to handle the issue, so it lives in GitHub, not a worktree file.
 gh label create "merge-on-green" --color 0e8a16 --description "Merge this PR automatically once required CI checks pass — no review wait" --force || true
 
-# Backlog item filed by /spec-flow:tech-debt, and the closed marker issue each of its runs logs
+# Backlog item filed by /tech-debt (dev-skills), and the closed marker issue each of its runs logs
 # (the durable timestamp project-manager reads to compute the once-a-week/20-merges cadence).
-gh label create "type:tech-debt"    --color fef2c0 --description "Structural improvement filed by /spec-flow:tech-debt — SOLID, duplication, or layering" --force || true
-gh label create "tech-debt-review"  --color ededed --description "Marks a closed log issue for a completed /spec-flow:tech-debt run — audit trail, not a work item" --force || true
+gh label create "type:tech-debt"    --color fef2c0 --description "Structural improvement filed by /tech-debt (dev-skills) — SOLID, duplication, or layering" --force || true
+gh label create "tech-debt-review"  --color ededed --description "Marks a closed log issue for a completed /tech-debt (dev-skills) run — audit trail, not a work item" --force || true
 
 echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, needs-attention, type:docs, merge-on-green, type:tech-debt, tech-debt-review) are present."

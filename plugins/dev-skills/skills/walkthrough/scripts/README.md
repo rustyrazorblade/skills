@@ -14,7 +14,7 @@
 ## Running the test
 
 ```bash
-plugins/review-tools/skills/walkthrough/scripts/test-generate-walkthrough.sh
+plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh
 ```
 
 No arguments, no network, no GitHub credentials, no `git` — it runs the generator against the

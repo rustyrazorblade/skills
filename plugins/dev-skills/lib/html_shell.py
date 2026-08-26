@@ -1,4 +1,4 @@
-"""Helpers shared by review-tools' HTML generators (`generate-explain.py`,
+"""Helpers shared by dev-skills' HTML generators (`generate-explain.py`,
 `generate-walkthrough.py`): loud failure, manifest injection into a static viewer shell, and the
 default temp output path. Stdlib only — same constraint as the generators themselves (macOS system
 python3 and CI Linux, no pip dependencies).

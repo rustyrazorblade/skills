@@ -218,41 +218,6 @@ current user in a multi-user repo — lead with the board's own recommendation r
 re-deriving the ranking yourself; see its **Steps** (step 5) for the full ladder. **Always keep
 something moving.**
 
-## Startup checks (once per repo, you only — never `issue-pm`)
-
-Before the board (below), silently check whether either of these two standing preferences is
-still unset in this repo's `.claude/settings.json` `env` block. Each is a one-time ask, cheap and
-read-only to check, that only ever happens in **your** session — never repeated by an `issue-pm`,
-and never repeated by you either once a value (even a declined one) is recorded. Skip a check
-entirely, no ask at all, if its tool isn't even in use — don't offer a preference for something the
-owner doesn't have.
-
-- **Unified MemSearch memory.** If `env.SPEC_FLOW_UNIFIED_MEMORY` is unset AND MemSearch is
-  actually enabled (`claude plugin list | grep -A3 'memsearch@' | grep -q 'Status: ✔ enabled'`):
-  MemSearch keys its memory store off the current directory's git toplevel by default, so each
-  issue's worktree — a distinct directory from the primary checkout and from every other worktree
-  — gets its own isolated memory unless told otherwise. Ask once, recommended default yes: "Want
-  unified MemSearch memory across all your issue worktrees for this repo, instead of one
-  per-worktree island?" Persist whichever answer to `.claude/settings.json`:
-  `{ "env": { "SPEC_FLOW_UNIFIED_MEMORY": "1" } }` (or `"0"` if declined) — merge into whatever's
-  already there. Don't compute or write `MEMSEARCH_DIR` yourself; `scripts/spawn-issue-pm.sh`
-  derives and exports the actual shared path fresh at every spawn (a fixed absolute path in
-  checked-in settings would be wrong on every other machine this repo is cloned to — see that
-  script's own comment).
-- **Automatic claude-context indexing.** If `env.SPEC_FLOW_AUTO_INDEX` is unset AND claude-context
-  is actually connected (`claude mcp list | grep -q '^claude-context:.*Connected'`): ask once,
-  recommended default yes: "Want each new issue worktree automatically indexed with claude-context
-  as soon as it's created?" Persist the answer the same way:
-  `{ "env": { "SPEC_FLOW_AUTO_INDEX": "1" } }` (or `"0"`). You never index anything yourself —
-  `activate` step 2 is what actually calls `mcp__claude-context__index_codebase`, once, right after
-  each `issue-pm` isolates into its own worktree (see `skills/activate/SKILL.md` step 2). Your part
-  ends at recording the preference.
-
-See **Seam visualization** in `docs/workflow.md` for a third, related repo-level preference
-(`SPEC_FLOW_SEAM_VIEW`) — that one's asked by `/spec-flow:setup`, not here, since it's part of the
-same onboarding pass as the label vocabulary and gitignore entries, not something worth gating on
-a specific tool being detected first.
-
 ## How you operate
 
 - **Always start from the board.** Before recommending or doing anything, know the current state.

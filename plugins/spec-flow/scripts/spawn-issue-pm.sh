@@ -139,19 +139,6 @@ if ! REPO_ROOT=$(git rev-parse --show-toplevel 2>"$git_root_err"); then
 fi
 rm -f "$git_root_err"
 
-# Unified MemSearch memory across worktrees, once the owner opted in via project-manager's own
-# startup check (see "Startup checks" in agents/project-manager.md — never asked here, never
-# asked again per-issue). MEMSEARCH_DIR can't be a fixed value in .claude/settings.json — it's an
-# absolute path, and the same repo clones to a different absolute path on every machine/user — so
-# it's computed fresh here, every spawn, and exported into the child so the spawned issue-pm's own
-# environment picks it up (standard process env inheritance, not a claude CLI flag: none exists).
-# --git-common-dir resolves to the PRIMARY checkout's .git dir from any worktree, so every issue's
-# worktree ends up pointing at the exact same shared .memsearch/, regardless of which one asks.
-if [[ "${SPEC_FLOW_UNIFIED_MEMORY:-}" == "1" ]]; then
-  MEMSEARCH_DIR="$(cd "$(git -C "$REPO_ROOT" rev-parse --git-common-dir)/.." && pwd)/.memsearch"
-  export MEMSEARCH_DIR
-fi
-
 # A slug from the issue title makes the session identifiable at a glance in `claude agents` (the
 # owner's own complaint: several "issue-pm-N" tabs open at once, no way to tell which is which
 # without attaching to each). The slug is NOT the lookup key, though — the issue title can change

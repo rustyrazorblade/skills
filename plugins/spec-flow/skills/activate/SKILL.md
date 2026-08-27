@@ -212,17 +212,6 @@ qualify), and confirm the choice with the owner.
    The `issue: <N>` header is required. A later respawn reads this file and must be able to prove
    which issue it describes before trusting it.
 
-   **If `SPEC_FLOW_AUTO_INDEX=1`, index this worktree now.** claude-context indexes by absolute
-   path, and this worktree is a distinct path from every other worktree of this repo (including the
-   primary checkout) — it never inherits another worktree's index. Call the `mcp__claude-context__
-   index_codebase` tool with `path` set to this worktree's absolute root (from
-   `git rev-parse --show-toplevel`, just confirmed above). Fire-and-forget — don't block this step
-   on indexing finishing; if it fails (e.g. `claude-context` not actually reachable despite the flag
-   being set), note it in passing and move on, never treat it as a blocker. This is `issue-pm`'s own
-   responsibility, once, right after isolating — never repeated later in the run, and never done by
-   `project-manager` itself (see **Startup checks** in `agents/project-manager.md`, which only asks
-   about and records the preference — the indexing action itself always happens here).
-
 3. **Design first — delegate to the `architect` agent, concurrently with a domain expert.** **Skip
    this step and step 4 entirely if the issue carries `type:docs`** — a docs-only change has no
    architecture to decide, structural or not. Go straight to step 5, which further decides whether

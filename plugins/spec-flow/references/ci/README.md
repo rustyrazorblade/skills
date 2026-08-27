@@ -1,7 +1,7 @@
 # CI contract for spec-flow test tiering
 
 `/spec-flow:sync-ci` pulls CI test failures into a branch's local **flagged set** (see
-`docs/workflow.md`, "Test tiering (unit / integration)"). For that to work, the consuming repo's CI
+`docs/workflow.md`, "Test policy"). For that to work, the consuming repo's CI
 must honor one contract:
 
 **On test failure, upload the failing test ids as an artifact named `spec-flow-failures`** — a single

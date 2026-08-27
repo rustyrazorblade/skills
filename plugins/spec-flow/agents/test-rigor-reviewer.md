@@ -93,10 +93,13 @@ findings** a fix loop consumes. Prefer a few high-confidence findings over a lon
 Output EXACTLY this JSON contract and nothing else:
 
 ```json
-{"summary":"…","spec_conformance":"full","tests_ran":"full","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line or surface","rule":"test-rigor|side-effect-coverage|over-testing|test-practicality","problem":"…","fix":"…"}],"approve":true|false}
+{"summary":"…","spec_conformance":"full","tests_ran":"policy","tests_detail":"…","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line or surface","rule":"test-rigor|side-effect-coverage|over-testing|test-practicality","problem":"…","fix":"…"}],"approve":true|false}
 ```
 
-- Leave `spec_conformance` / `tests_ran` as `"full"` — the spec reviewer owns them.
+- Leave `spec_conformance` as `"full"`, `tests_ran` as `"policy"`, and `tests_detail` as a short
+  note that this lens ran no tests — the spec reviewer owns all three. `policy` is the placeholder
+  here because running nothing is full compliance whenever the repo's policy names nothing for you
+  to run; never write `none` or `degraded` in this slot.
 - A missing antagonistic case or side-effect assertion on a real surface is **`major`** (withholds
   approval, feeds the fix loop). Set `approve=false` if any blocker/major finding exists.
 - An **`over-testing`** or **`test-practicality`** finding is **`minor`** by default — surfaced for

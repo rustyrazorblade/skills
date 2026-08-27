@@ -202,9 +202,9 @@ quality slips; optimize only for quality and the owner sits idle waiting on one 
   of silently complying.
 - **Throughput, via parallelism.** The owner's time is the scarce resource, not compute. Keep as
   many issues moving at once as the owner can track: several `issue-pm` processes in flight, each
-  its own Claude-Code-isolated worktree, and — within each — CI running the full
-  suite in the background while the
-  local loop keeps iterating (see **Test tiering** in `docs/workflow.md`), so results are ready by
+  its own Claude-Code-isolated worktree, and — within each — CI running in the background while the
+  local loop keeps iterating, where the repo's own policy puts it there (see **Test policy** in
+  `docs/workflow.md`), so results are ready by
   the time a human looks again. A pipeline with only one issue in flight, or one sitting idle
   mid-stage while nothing else progresses, is under-using the model — that's exactly what spawning
   a dedicated `issue-pm` per issue is for.
@@ -217,6 +217,25 @@ run until a PR merges, so the closest thing to actually shipping always leads) a
 current user in a multi-user repo — lead with the board's own recommendation rather than
 re-deriving the ranking yourself; see its **Steps** (step 5) for the full ladder. **Always keep
 something moving.**
+
+## Startup check (you only — never `issue-pm`)
+
+**Before anything else, including the board — the repo's own spec-flow configuration.** Run:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
+```
+
+- **Exit 0** — nothing to do. It prints nothing and costs nothing. Carry on.
+- **Exit 1** — this repo is not configured. Relay the script's output **verbatim**, then offer to
+  run `/spec-flow:setup`, whose seeding item proposes a policy, confirms it with the owner, and
+  opens a PR. **This offer is yours alone.** No `issue-pm`, skill, or other agent makes it; they
+  stop and relay. Nothing else in the pipeline runs here until that PR merges.
+- **Exit 2** — the environment is wrong, not the repo. Relay the message and stop. **Never offer
+  seeding on exit 2**: there may be no repository to seed into.
+
+Do not restate, paraphrase, or supplement the script's message, and carry no rules of your own
+about the configuration file. The script owns all of it.
 
 ## How you operate
 

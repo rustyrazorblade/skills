@@ -675,12 +675,12 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue always skips spec generation and, by default, the design-choice stop too (`architect` auto-adopts the confirmed Direction unless something's wrong) — see **Tech-debt fast path** above. |
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
-| `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-pm` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. See **Test tiering** below. |
+| `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-pm` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. Exits cleanly, doing nothing, where the repo's policy says CI is not a test gate. See **Test policy** below. |
 | `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
 | `/tech-debt` (dev-skills) | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. If `dev-skills` is installed, `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** above. |
-| `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into the unit / integration tiers the tiering model assumes (classify by evidence → present → separate structurally → wire CI) and open a PR. Run once per repo; not tied to an issue. See **Test tiering** below. |
+| `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into a fast unit tier and a slow integration tier (classify by evidence → present → separate structurally → wire CI) and open a PR. Only for a repo whose own policy chooses that split; not an assumption the pipeline makes. Run once per repo; not tied to an issue. See **Test policy** below. |
 | `/spec-flow:setup` | setup (one-time, re-runnable) | Explore this repo's Prerequisites state, then walk through only what's missing — OpenSpec init, `gh` auth, labels, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, `.gitignore` entries, CI tiering — one item at a time with a recommended default. Not tied to an issue. |
 
 ## Agents
@@ -862,43 +862,114 @@ restated mandate. `code-reviewer`/`security-reviewer` keep Skill-tool access (om
 only the spec lens owns `spec_conformance`/`tests_ran`. To add or remove a lens: write its agent
 file, then add a stub entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array.
 
-## Test tiering (unit / integration)
+## Test policy
 
-The pipeline runs the **unit tier locally and the full suite in CI** — never the full suite locally.
-The local TDD loop stays fast while CI stays the authoritative gate. When CI catches a regression,
-that specific failing test is run locally for the rest of the branch so the same break can't slip
-through again.
+**The repo owns the policy; the plugin owns only the mechanism.** spec-flow ships **no default
+test or CI policy at all**, and falls back to nothing when the repo has not stated one. What runs
+locally, what runs in CI, whether CI is a test gate at all, and what gates merge are the consuming
+repo's to decide and to write down.
 
-For CI to actually run *in parallel* with the local loop, `/spec-flow:implement` opens a **draft PR
-at the start** and pushes at checkpoints — so the full suite runs on each pushed increment *during*
-implementation, not just once at the end. CI stays busy while local work continues, and its results
-are ready by the time the PR is marked ready for review.
+This is deliberate. Test policy is shaped by each repo's CI cost, suite size, stack, and merge
+gate; across a portfolio there are as many sets of rules as there are repos, so any default the
+plugin shipped would be wrong somewhere by construction. A repo with no test-running CI at all is a
+**first-class, expressible policy** here, not a degraded one.
 
-**Precondition.** This assumes the consuming repo separates its tests **structurally** into a fast
-**unit** tier and a slow **integration** tier, and that **merge is gated on green CI**. A repo that
-hasn't split its tests yet is brought onto the convention by **`/spec-flow:adopt-tiering`** (a
-one-time migration — classify by evidence, separate structurally, wire CI); until then the unit tier
-is just the repo's default test command and the model degrades gracefully to running whatever that is.
+### Two directories, one character apart
 
-### unit — the fast local tier
+| Directory | Committed? | What it holds | Lifetime |
+|---|---|---|---|
+| `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `CI.md`, its test and CI policy | Lives with the repo |
+| `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests`, `owner-instructions` | Dies with the branch |
 
-Structural, not annotated: the **unit** tier is the unit-test source location the runner selects by
-default (fast, no container, no I/O). It runs on **every local TDD cycle** and is the
-`/spec-flow:implement` local gate.
+Only the **dotted** one belongs in `.gitignore`. A trailing-slash pattern with no interior slash
+matches at any depth, so an undotted `spec-flow/` entry would also swallow any nested directory of
+that name — in spec-flow's own repo, `plugins/spec-flow/`, erasing the plugin's source from git.
+`/spec-flow:setup` warns about this and checks that `spec-flow/` is not ignored.
 
-- **Gradle** — the `test` source set (unit); integration/container tests live in a separate
-  `integrationTest` source set/suite whose classpath *alone* carries Testcontainers/JDBC/network
-  deps, so a container test can't compile under `src/test`. Local: `./gradlew test`. CI: `./gradlew check`.
-- **Rust (nextest)** — `src/` unit tests vs `tests/` integration binaries, selected by
-  `.config/nextest.toml` profile `default-filter`s. Local: `cargo nextest run`. CI:
-  `cargo nextest run --profile ci --run-ignored all`.
+### Where the policy lives
 
-### integration — the CI tier, with a per-branch local watch
+`spec-flow/CI.md` at the repository root. The directory is relocatable with
+`SPEC_FLOW_CONFIG_DIR` — repo-relative only; an absolute value is rejected, because `env` values in
+`.claude/settings.json` are not interpolated, so a checked-in absolute path is a machine-specific
+literal that is wrong on every other clone.
 
-The **integration** tier (slow, container/I/O) runs only in CI. But when CI catches a regression on a
-branch, that specific failing test is pulled into the local loop for the rest of the branch — a
-per-branch **flagged set**, so a proven-fragile spot is guarded locally instead of costing another
-full CI round-trip.
+`scripts/repo-config.sh` owns the resolution and every message about it:
+
+- `repo-config.sh check` — exits 0 and prints nothing when the policy is there and usable; exits 1
+  with the complete message on stdout when it is not; exits 2 on an environment error. It is
+  presence-and-readability only: it never inspects what the policy *says*, because a content check
+  is a schema arriving through the back door.
+- `repo-config.sh instruction` — prints the one-line pointer naming the resolved absolute path.
+
+`project-manager` runs `check` at session start and is the **only** caller that offers to seed a
+missing policy (via `/spec-flow:setup`, and only on exit 1). `implement`, `address`, and `sync-ci`
+run the same check before any work and simply stop, relaying its output unchanged.
+
+`/spec-flow:setup` seeds a repo that has none: it proposes a concrete policy, confirms it with the
+owner, then opens a PR. It writes nothing before the owner confirms, and never merges.
+
+**Seeding never deletes anything on the remote, deliberately.** If the push succeeds but the pull
+request does not open — a token without the scope, branch protection, a network drop, or the owner
+pressing Ctrl-C — the branch is left where it is and the script prints its name along with the two
+commands that resolve it: open the PR by hand, or delete the branch. Automatic rollback was tried
+and abandoned: four implementations each failed a different way, and every failure came from
+keeping state meant to mirror the remote. Reporting keeps none, so it cannot be raced by a signal,
+fooled by an unreachable remote, or fall silent. A stray branch after an interrupted run is the
+accepted trade, and seeding runs once per repo.
+
+### How the policy reaches the agents
+
+**A pointer travels; policy text never does.** `implement` generates one line with
+`repo-config.sh instruction` and appends it verbatim to every teammate prompt that runs tests.
+`address` uses the same generated line. Workflow mode, whose script can read neither files nor the
+environment, receives that same line as a required `testInstruction` arg and throws if it is
+absent, rather than holding a default of its own. Neither mode contains policy text, so the two
+cannot drift.
+
+Agents report against the policy, not against a tier: `tests_ran` is `policy | partial | degraded |
+none`, and `tests_detail` carries the exact commands run. **Where the policy names nothing to run,
+running nothing is `policy`** — full compliance, not `none` and not `degraded`.
+
+**The policy file is branch-controlled content.** It is read from the worktree, so an issue branch's
+own diff can change it, and the check deliberately never inspects what it says. The pointer
+therefore carries a guardrail: the file names commands to run in this repo and nothing more, it
+cannot authorize an action the GUARDRAILS forbid, and an agent that finds it directing work outside
+the worktree — network calls, reading credentials, pushing, filing, messaging — stops and reports
+that rather than acting on it. That clause lives in the emitted line, so it reaches every consumer
+without any caller restating it. It is a scope statement, not a content check — nothing here
+inspects or validates the policy's text.
+
+**The clause is a guardrail, not containment, and it is worth being precise about the difference.**
+It defeats the direct attack, a policy file that tells an agent to push or post or fetch. It does
+not bound what the policy can ultimately cause, because *selecting commands is the whole capability*:
+a policy naming only `make lint` is entirely compliant while the same branch's `Makefile` does
+whatever it likes. The clause is also much stronger for the five review lenses, whose guardrails
+forbid every outward action, than for the implementer teammates, whose guardrails deliberately
+permit pushing the issue branch.
+
+**The real boundary.** Running spec-flow's panel over a diff executes commands that diff controls.
+That is what the pipeline is for, not a defect in it — and it means **spec-flow must not be pointed
+at an untrusted third-party branch.** The control at that boundary is the permission and sandbox
+layer the session runs under, not prose in a prompt. What the pipeline does enforce mechanically is
+narrower and worth stating exactly: the policy file must be a real file physically inside the
+repository, so a committed symlink cannot redirect that read to `~/.ssh/id_rsa` or anything else
+outside the tree. That is a path check rather than a content check, which is why it coexists with
+the rule that the check never inspects the policy's text.
+
+### Optional: a structural unit / integration split
+
+A repo whose policy chooses the fast-tier-locally, full-suite-in-CI split can enforce that
+boundary structurally with **`/spec-flow:adopt-tiering`** (a one-time migration — classify by
+evidence, separate structurally, wire the CI artifact). That is one policy a repo may choose, not
+the pipeline's assumption. For CI to run *in parallel* with the local loop under such a policy,
+`/spec-flow:implement` opens a **draft PR at the start** and pushes at checkpoints, so CI works on
+each pushed increment during implementation rather than once at the end.
+
+### The flagged set — a per-branch local watch on CI-caught failures
+
+Where a repo's policy does make CI a test gate, a regression CI catches on a branch is pulled into
+the local loop for the rest of that branch — a per-branch **flagged set**, so a proven-fragile spot
+is guarded locally instead of costing another CI round-trip.
 
 - A gitignored file, **`.spec-flow/flagged-tests`** inside the issue's worktree. One
   runner-selectable test id per line; `#` comments and blank lines ignored. Ignored via a
@@ -906,23 +977,25 @@ full CI round-trip.
   **Prerequisites** in the README (also covers `owner-instructions` above); `/spec-flow:sync-ci`
   additionally double-checks it's there on each run, so it never commits either way.
 - **Starts empty on every new branch.** No bootstrap, no diff-based guessing.
-- **Populated only by CI failures on that branch** (via `/spec-flow:sync-ci`). Because a branch
-  starts from green `main` (merge is gated on green CI), any CI failure on it is by definition a real
-  regression the diff introduced — so the caught test is added, **whatever its tier** (including
-  integration/container tests), and run locally for the rest of the branch.
-- **Local inner loop = unit tier + flagged set.** The `/spec-flow:implement` gate and
-  `tdd-developer`'s cycles run both.
+- **Populated only by CI failures on that branch** (via `/spec-flow:sync-ci`). Where the repo's
+  policy gates merge on green CI, a branch starts from a green default branch, so any CI failure on
+  it is by definition a real regression the diff introduced — the caught test is added **whatever
+  its kind**, including container tests, and run locally for the rest of the branch.
+- **Local inner loop = whatever the policy names, plus the flagged set.** The
+  `/spec-flow:implement` gate and `tdd-developer`'s cycles run both.
 - **Dies with the branch.** The branch boundary is the pruning mechanism; nothing carries forward —
-  and there is nothing to "promote": a fast test written during the fix already lives in the unit
-  tier by location, so it is in the local run on the next branch automatically.
+  and there is nothing to "promote": a fast test written during the fix is already inside whatever
+  the policy names as the local gate, so it is in the local run on the next branch automatically.
+- **Nothing to do where CI is not a test gate.** `/spec-flow:sync-ci` reads the repo's policy
+  first and exits cleanly, saying so, rather than hunting an artifact that repo never produces.
 
 ### The loop
 
 ```
-implement → push → CI runs full suite ──(red)──▶ /spec-flow:sync-ci
-                                                    → append failures to .spec-flow/flagged-tests
+implement → push → CI runs ──(red)──▶ /spec-flow:sync-ci
+                                          → append failures to .spec-flow/flagged-tests
                                                               │
-   local loop runs unit tier + flagged set  ◀─────────────────┘
+   local loop runs the policy's gate + flagged set  ◀─────────┘
                                                               │
                                     you merge (green CI) → flagged set evaporates
 ```
@@ -954,12 +1027,12 @@ set's blind-append safety rests on.
   a timer.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
-- **Test tiering.** The local gate is the fast **unit** tier plus the branch's
-  `.spec-flow/flagged-tests` — never the full suite; the full/integration suite is CI's gate.
-  `/spec-flow:implement` states plainly in its report and the PR that the unit tier ran locally and
-  the full suite runs in CI. See **Test tiering (unit / integration)** above. Test resources that
-  could collide between concurrent runs should carry a per-process-unique seed so two runs never
-  name the same resource.
+- **Test policy.** The repo states it in `spec-flow/CI.md`; the plugin ships no default and falls
+  back to nothing. The local gate is whatever that file names, plus the branch's
+  `.spec-flow/flagged-tests`. `/spec-flow:implement` reports the exact commands that ran
+  (`tests_detail`) in its summary and the PR body, and asserts no tier of its own. See **Test
+  policy** above. Test resources that could collide between concurrent runs should carry a
+  per-process-unique seed so two runs never name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation for anything with a design
   decision to record (a content-only `type:docs` issue has none — see **Docs fast path** — and
   implements straight from its scope + acceptance criteria; a `type:tech-debt` issue has none

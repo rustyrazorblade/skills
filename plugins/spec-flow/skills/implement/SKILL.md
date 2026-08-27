@@ -28,7 +28,16 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
 ## Steps
 
-1. **Confirm the precondition.** The issue must be `status:spec-review` AND the owner must have
+1. **Check the repo's configuration first, before any work.** Run:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
+   ```
+   Non-zero: **stop here**, having done nothing, and relay the script's output **verbatim**. Add no
+   rules, no explanation, and no fallback of your own — the script's message is complete, and this
+   plugin ships no default policy to fall back to. Do not offer to create the file; that offer is
+   `project-manager`'s alone.
+
+   **Confirm the precondition.** The issue must be `status:spec-review` AND the owner must have
    approved — either in the conversation, or, if `.spec-flow/owner-instructions` (read fresh here)
    explicitly auto-approved the spec/plan for this run, that counts too (the normal case when
    `activate` launched you directly per its own auto-approve path). If you can't confirm either,
@@ -52,9 +61,10 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    "nothing to push yet," so don't skip this step for that case.) **Otherwise** push the branch (it already
    carries the committed spec) and open a **draft** PR *now*, before
    implementation runs. CI triggers on `pull_request` and runs on draft PRs, so from here every
-   checkpoint push during implementation exercises the full suite in parallel with local work — CI
-   is the slow backstop the tiering model relies on, and this keeps it busy instead of idle until
-   the end. **Re-running this skill is normal** (resuming after a crash, after residual findings, or
+   checkpoint push during implementation exercises whatever this repo's CI does, in parallel with
+   local work, instead of leaving it idle until the end. (In a repo whose policy says CI is not a
+   test gate, this costs nothing and still gets the PR open early, which is the other half of why
+   it is here.) **Re-running this skill is normal** (resuming after a crash, after residual findings, or
    after the owner sends you back) — check for an existing PR first and reuse it rather than
    erroring on a duplicate:
    ```bash
@@ -67,7 +77,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        --title "<issue title>" \
        --body "Closes #<N>
 
-   Draft — implementation in progress. The unit tier runs locally; the full suite runs in CI on each push."
+   Draft — implementation in progress. Tests run per this repo's own policy; see spec-flow/CI.md."
      PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
      gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi
@@ -79,24 +89,24 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    isn't shell-interpolated. Resolve `$DEFAULT_BR` from the repo, never assume `main`: it must
    match what `EnterWorktree` branched this worktree from.
 
-3. **Test tiering — the local gate is the unit tier, not the full suite.** The team runs the fast
-   **unit** tier locally (plus the branch's `.spec-flow/flagged-tests`, if any); the full/integration
-   suite is CI's gate and is never run locally. See **Test tiering (unit / integration)** in
-   `docs/workflow.md`. No stack probe, no full-vs-degraded decision — every teammate below just
-   follows the instruction verbatim. If the repo hasn't split its tests into unit/integration tiers
-   yet, the team runs the repo's default test command and says so; the tiering degrades gracefully.
+3. **Generate the TEST INSTRUCTION — a pointer, never a policy.** This plugin holds no test or CI
+   policy of its own. The repo states its own, and the teammates read it. Generate the line once,
+   here, and never write a second copy of it anywhere:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh instruction
+   ```
+   That stdout — one line — is the **TEST INSTRUCTION**. Append it **verbatim** to the prompt of
+   every teammate you spawn below that runs tests: the implementer, every fix round, the five
+   review lenses, and step 5's `fix-ci`. (`build-engineer` gets the same line too, for its format
+   and lint gate rather than for tests — step 4e says why. That is the only teammate outside this
+   list, so do not read this list as forbidding it.) Do not paraphrase it, summarize it, or wrap it
+   in a tier name, a test command, a stack probe, or a fallback of your own. Step 1's check has
+   already guaranteed the policy file is there, so the line carries no missing-file clause and you
+   must not add one.
 
-   Every teammate you spawn below gets this **TEST INSTRUCTION** appended to its prompt whenever
-   it runs tests:
-   > Run the UNIT tier locally as your gate — the repo's fast, no-container / no-I/O unit tests,
-   > i.e. the runner's default fast selection (e.g. `cargo nextest run`, `./gradlew test`,
-   > `npm test`, `go test -short ./...`, `pytest -m 'not integration'`). ALSO run any tests listed
-   > in `.spec-flow/flagged-tests` at the worktree root if that file exists (one runner-selectable
-   > test id per line; `#` and blank lines ignored) — these are tests CI flagged on this branch,
-   > guarded locally. Do NOT run the full/integration suite locally — that is CI's gate. State
-   > plainly in your summary that the unit tier (plus any flagged tests) ran locally and the full
-   > suite runs in CI. If the repo has not split its tests into unit/integration tiers yet, run its
-   > default test command and say so.
+   You do not need to read the policy yourself. Whatever it says — the fast tier locally, the whole
+   suite locally, or nothing at all because the repo has no test suite — is what the team follows,
+   and none of it is this skill's to restate. See **Test policy** in `docs/workflow.md`.
 
 4. **Resolve the implement mode, then drive Implement → Review → Fix (bounded) → Build → Polish.**
 
@@ -215,14 +225,14 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    GitHub action; that's yours alone. `base` = `origin/<DEFAULT_BR>` — the literal branch name
    printed in step 2, not a shell variable (don't assume `main`); the review lenses diff
    `base...HEAD` in the worktree, so a wrong base reviews
-   the wrong range. Track `tests_ran`, `spec_conformance`, `approve`, `review_rounds`,
-   `residual_findings`, `non_blocking_findings`, and `review_summary` as you go — step 5's PR body
-   needs them; there's no script returning them for you now.
+   the wrong range. Track `tests_ran`, `tests_detail`, `spec_conformance`, `approve`,
+   `review_rounds`, `residual_findings`, `non_blocking_findings`, and `review_summary` as you go —
+   step 5's PR body needs them; there's no script returning them for you now.
 
    **GUARDRAILS (implementer teammates — tdd-developer, build-engineer):**
    > GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY `git
-   > push` the issue branch to its own remote at checkpoints — usually so CI runs the full suite on
-   > an already-open draft PR (push somewhat frequently — after a completed task or a few green
+   > push` the issue branch to its own remote at checkpoints — usually so CI runs on an
+   > already-open draft PR (push somewhat frequently — after a completed task or a few green
    > cycles — not on every commit); on your very first push there may be no PR yet (the lead opens
    > it right after), which is expected, not an error. Do NOT create or edit GitHub issues, do NOT
    > create/modify/mark-ready any PR yourself even if none exists yet — that's the lead's job, not
@@ -240,8 +250,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    **REVIEW GUARDRAILS (review-lens teammates — everyone else in step b):**
    > GUARDRAILS (strict): You are reviewing, not implementing. Operate ONLY inside the worktree.
    > Running the repo's own format/lint/build/test commands to verify your findings is fine — the
-   > `spec` lens needs that to honestly report `tests_ran`/`spec_conformance` (the other four
-   > lenses leave those two fields as their own agent file directs) — but you may not change the
+   > `spec` lens needs that to honestly report `tests_ran`/`tests_detail`/`spec_conformance` (the
+   > other four lenses leave those fields as their own agent file directs) — but you may not change the
    > tree: do NOT commit, do NOT `git push`, do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR,
    > do NOT post GitHub comments, and do NOT take any other outward or destructive action — your
    > output is the JSON review contract, nothing else. If you discover follow-up work, related
@@ -286,12 +296,29 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       you with **exactly** this JSON contract in its final message before marking its task
       complete — and nothing else:
       ```
-      {"summary":"…","spec_conformance":"full|partial|failing","tests_ran":"full|unit|degraded|none",
+      {"summary":"…","spec_conformance":"full|partial|failing","tests_ran":"policy|partial|degraded|none",
+       "tests_detail":"the exact commands you ran",
        "findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"…","rule":"…","problem":"…","fix":"…"}],
        "approve":true|false}
       ```
-      Append the REVIEW GUARDRAILS to every one of these. The five, named `spec`, `code-review`,
-      `security-review`, `test-rigor`, `observability`:
+      `tests_ran` is relative to **the repo's policy**, never to a tier: `policy` = ran exactly what
+      the policy names, plus the flagged set; `partial` = ran some of it; `degraded` = the policy's
+      command exists but could not run, so something weaker ran instead; `none` = ran nothing while
+      the policy named something. **Where the policy names nothing to run, running nothing is
+      `policy`** — not `none` and not `degraded`. `tests_detail` names the exact commands, and is
+      what step 5's PR body quotes.
+
+      A sixth value, `unknown`, is **yours, not a lens's**: use it in step 5 when no panel result
+      exists at all — a tech-debt breaker stop skipped the panel, or a lens went idle without
+      reporting. Never assert compliance nobody checked; `none` is a claim about a run that
+      happened, not a non-answer. Pair it with a `tests_detail` saying why nothing was assessed,
+      the way `implement.workflow.js` does on the same three paths.
+
+      Append **both the REVIEW GUARDRAILS and the TEST INSTRUCTION** (step 3) to every one of
+      these. The spec lens is told by its agent file to run exactly what the TEST INSTRUCTION
+      directs and nothing else, so a lens spawned without that line has no pointer to the policy
+      and must guess a test command — the hardcoded-policy behavior this whole change removes. The
+      five, named `spec`, `code-review`, `security-review`, `test-rigor`, `observability`:
 
       All five are backed by this plugin's own agent definitions (`agents/reviewer.md`,
       `code-reviewer.md`, `security-reviewer.md`, `test-rigor-reviewer.md`,
@@ -304,7 +331,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
       Spawn each with the identical prompt — *"Panel mode. worktree: `<worktree>`. base: `<base>`.
       change: `<CHANGE_PARAM>`. issue: #N. Follow your agent definition's process and output
-      contract exactly (JSON only)."* — `<CHANGE_PARAM>` is exactly the value resolved at the top of
+      contract exactly (JSON only).\n`<TEST INSTRUCTION — step 3's stdout, verbatim>`"* — then the
+      REVIEW GUARDRAILS after it. `<CHANGE_PARAM>` is exactly the value resolved at the top of
       this step (`"issue-<N>"`, or the tech-debt sentinel), never hardcoded as `issue-<N>` — that
       sentinel is what switches `reviewer` into its behavior-preservation mode (see
       `agents/reviewer.md`'s "Tech-debt fast path mode"); the other four lenses just treat it as
@@ -354,10 +382,19 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       clean in `<worktree>` — *"Discover and run the repo's format, lint, and build steps
       (examples: Rust `cargo fmt` → `cargo clippy --all-targets -- -D warnings` → `cargo build`;
       Node the repo's lint+build scripts; Gradle `./gradlew spotlessApply build`; Go `gofmt -l .` →
-      `go vet ./...` → `go build ./...` — use whatever the repo actually configures). Resolve
-      formatting/lint/build issues WITHOUT changing behavior, commit, push. Return the final
-      format/lint/build status."* Append the implementer GUARDRAILS. When it reports, comment:
+      `go vet ./...` → `go build ./...` — those are illustrations, not a list to work through, and a
+      repo may configure none of them). Read the repo's own policy named in the line below before
+      you start: in some repos the local gate it states IS the format and lint gate, and may be the
+      only thing there is to run here. Follow it where it speaks to your work, and never invent a
+      build step it does not name. Resolve formatting/lint/build issues WITHOUT changing behavior,
+      commit, push. Return the final format/lint/build status."* Append the **TEST INSTRUCTION**
+      (step 3) and then the implementer GUARDRAILS. When it reports, comment:
       `gh issue comment <N> --body "🔧 Build clean."`.
+
+      Step 3's list covers the teammates that run **tests**; `build-engineer` is listed separately
+      here because it gets the same pointer for a different reason — its format and lint gate is
+      whatever the repo's policy names, and in a repo whose policy defines the local gate as lint
+      alone, an agent that cannot read that policy cannot run the gate at all.
 
    f. **Polish.** Spawn a `tdd-developer`-type teammate, named `polish`: *"Final documentation
       polish for OpenSpec change `issue-<N>` in `<worktree>`. Ensure new modules/behaviors are
@@ -387,15 +424,23 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        "issue":    <N>,
        "base":     "origin/<DEFAULT_BR>",
        "buildSystem": "auto",
-       "breaker":  "<BREAKER_PARAM — \"ask\" (default) or \"revert\" on the tech-debt path; \"off\" on the normal path>"
+       "breaker":  "<BREAKER_PARAM — \"ask\" (default) or \"revert\" on the tech-debt path; \"off\" on the normal path>",
+       "testInstruction": "<the TEST INSTRUCTION — step 3's stdout, pasted verbatim, on one line>"
      }
    }
    ```
+   `testInstruction` is **required**. The script cannot read files or the environment, so this is
+   the only way the repo's policy reaches Workflow mode, and the script throws rather than
+   substituting a default of its own. Paste step 3's stdout exactly as printed: it is one line, and
+   `repo-config.sh` refuses to emit the line at all unless the resolved path is free of control
+   characters and of the metacharacters that terminate or interpolate into a JS template literal, a
+   JSON string, or a shell command — so pasting it as-is into the JSON value below is safe. A space
+   in the path is fine and does not need quoting here.
    The script runs the identical sequence as Team mode above — tdd-developer implements test-first
    → the same five-lens panel reviews the diff in parallel, each lens the same prompt and JSON
    contract as Team mode's step b → the same bounded (3-round) fix loop → build-engineer gets the
    build clean → docs polish — as a scripted `agent()`/`parallel()` loop instead of you reasoning
-   through it as a team lead. It returns a summary object (`tests_ran`, `spec_conformance`,
+   through it as a team lead. It returns a summary object (`tests_ran`, `tests_detail`, `spec_conformance`,
    `approved`, `review_rounds`, `residual_findings`, `non_blocking_findings`, `review_summary`,
    `polish`) — use those fields directly for step 5, instead of the ones you tracked yourself in
    Team mode. `base`/`buildSystem` have the same meaning as Team mode's `base` and the Build
@@ -419,8 +464,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    ```
    **Before marking ready, check once whether CI already resolved this exact push** — the panel
    review in step 4 often takes long enough that CI has already finished on this SHA, and pushing a
-   guess-fix and waiting another 20-30 minutes for CI to confirm it is exactly the round-trip Test
-   tiering exists to avoid. This is a single check, not a wait or a poll loop — if CI hasn't
+   guess-fix and waiting another 20-30 minutes for CI to confirm it is exactly the round-trip the
+   flagged-test mechanism exists to avoid. This is a single check, not a wait or a poll loop — if CI hasn't
    finished yet, move on:
    ```bash
    HEAD_SHA=$(git -C <worktree> rev-parse HEAD)
@@ -430,7 +475,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    **Not found, or `status` isn't `completed`** → CI hasn't reported on this SHA yet; proceed to
    `gh pr ready` below as normal — the existing owner-notices-red path still covers it later.
    **`conclusion` is `failure`** → run `/spec-flow:sync-ci <N>`'s own mechanics right here (its
-   SKILL.md steps 2-4: download the `spec-flow-failures` artifact, append the ids to
+   SKILL.md steps 3-5: download the `spec-flow-failures` artifact, append the ids to
    `.spec-flow/flagged-tests`). If it produced no artifact (a build/lint break, not a test
    failure), skip the fix round below and surface it as a residual finding instead — don't guess
    at a fix for something that isn't a flagged test. Otherwise, run **one bounded fix round**:
@@ -445,7 +490,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>
 
-   <the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in Workflow mode), INCLUDING the note that the unit tier ran locally and the full suite runs in CI>
+   <the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in Workflow mode), INCLUDING one line quoting tests_detail — the exact commands that ran — and nothing about tiers, CI, or what was deliberately not run>
 
    <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
@@ -542,8 +587,11 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
   only after the review panel approves. If the panel can't reach `approve` within the bounded fix
   loop, leave the PR a draft and surface the residual findings to the owner — never mark a
   red/unapproved PR ready.
-- The PR body must state plainly that the unit tier ran locally and the full suite runs in CI — the
-  reviewer relies on CI (gate is green CI) for full-suite results. Never imply the full suite ran locally.
+- **The PR body states what actually ran, quoting `tests_detail` — never a tier, and never a policy
+  of its own.** Copy the commands the panel reported. Never claim a run that did not happen, and
+  never add a line about what was deliberately not run: the repo's policy already settles that, and
+  in a repo whose policy names nothing to run locally, "nothing ran locally" is the honest and
+  complete answer.
 - All code work happens in the worktree; this session only orchestrates, pushes, and manages the PR.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
   prefix — never a bare number, and never several run together inline in a sentence.

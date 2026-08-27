@@ -237,16 +237,18 @@ if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
   exit 1
 fi
 # Scoped to REPO_ROOT (see its own comment above) — otherwise a same-numbered issue-pm session
-# from a different repo on this machine would match by name alone. `.cwd // ""` guards a
-# registry entry with a missing/null cwd: bare `startswith()` on null aborts jq (confirmed by
-# test) rather than just not matching, which would kill this script under `set -e`.
+# from a different repo on this machine would match by name alone. `.cwd // ""` and `.name // ""`
+# guard a registry entry with a missing/null field: bare `startswith()` on null aborts jq
+# (confirmed by test) rather than just not matching, which would kill this script under `set -e`.
+# Both fields need the guard — a null `.name` was observed in the live registry (2026-08-27),
+# aborting this query with exit 5 and blocking every spawn on that machine.
 # Match on $name_prefix, not the freshly-computed $name: a session spawned under an earlier issue
 # title carries that title's OLD slug in its registered .name forever (respawn never renames it),
 # so an exact match against today's slug would miss it. Boundary-safe prefix match (exact
 # "issue-pm-<N>", or "issue-pm-<N>-" followed by anything) so issue #4 can never match a
 # registered "issue-pm-42-..." — a bare startswith("issue-pm-4") would.
 existing_json=$(jq -c --arg p "$name_prefix" --arg root "$REPO_ROOT" \
-  '[.[] | select(.name == $p or (.name | startswith($p + "-"))) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
+  '[.[] | select(.name == $p or ((.name // "") | startswith($p + "-"))) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
   "$claude_agents_out")
 rm -f "$claude_agents_out"
 existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)

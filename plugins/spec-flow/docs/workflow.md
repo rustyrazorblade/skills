@@ -1007,13 +1007,15 @@ implement → push → CI runs ──(red)──▶ /spec-flow:sync-ci
   fix that follows confirms the newly flagged test(s) pass **locally** before pushing again — a
   guess-and-wait-for-CI round trip costs 20-30 minutes for feedback a local run gives in about one.
 
-### CI contract
+### CI contract — only where the policy makes CI a test gate
 
-On test failure, the consuming repo's CI must upload the failing test id(s) as an artifact named
-**`spec-flow-failures`** — one id per line, the same runner-selectable form the flagged set uses.
-spec-flow ships reference CI templates under `references/ci/` for the supported runners;
-`/spec-flow:sync-ci` reads that artifact. **Merge is gated on green CI** — the invariant the flagged
-set's blind-append safety rests on.
+A repo whose policy puts no test gate in CI has nothing to wire here, and `/spec-flow:sync-ci`
+exits cleanly saying so. Where the policy does put one, that repo's CI must upload the failing test
+id(s) on a red run as an artifact named **`spec-flow-failures`** — one id per line, the same
+runner-selectable form the flagged set uses. spec-flow ships reference CI templates under
+`references/ci/` for the supported runners; `/spec-flow:sync-ci` reads that artifact. Such a policy
+also gates merge on green CI — the invariant the flagged set's blind-append safety rests on, and
+the repo's own to state rather than the plugin's to assume.
 
 ## Substrate and constraints
 

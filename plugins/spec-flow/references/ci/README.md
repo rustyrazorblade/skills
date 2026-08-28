@@ -1,8 +1,9 @@
 # CI contract for spec-flow test tiering
 
 `/spec-flow:sync-ci` pulls CI test failures into a branch's local **flagged set** (see
-`docs/workflow.md`, "Test policy"). For that to work, the consuming repo's CI
-must honor one contract:
+`docs/workflow.md`, "Test policy"). This page applies only to a repo whose own policy makes CI a
+test gate; where the policy does not, there is nothing here to wire. Under such a policy, the
+repo's CI must honor one contract:
 
 **On test failure, upload the failing test ids as an artifact named `spec-flow-failures`** — a single
 text file, one runner-selectable test id per line.
@@ -12,7 +13,7 @@ text file, one runner-selectable test id per line.
 | Gradle | `com.example.FooTest.methodName` | `./gradlew integrationTest --tests 'com.example.FooTest.methodName'` |
 | cargo nextest | the test's full path (e.g. `mod::sub::test_name`) | `cargo nextest run --ignore-default-filter --run-ignored all -E 'test(=mod::sub::test_name)'` |
 
-Also required: **merge is gated on green CI** (branch protection — the tests check must pass before
+Such a policy also gates merge on green CI (branch protection — the tests check must pass before
 merge). This is the invariant that makes the flagged set's blind-append safe: on a branch cut from a
 green `main`, any CI failure is a real regression the diff introduced, never a pre-existing one.
 

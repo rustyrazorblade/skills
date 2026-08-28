@@ -111,3 +111,53 @@ place, with other mentions pointing at it rather than restating it.
 - **WHEN** a contributor browses the plugin's references directory
 - **THEN** an index names each file and the consumer that reads it
 - **AND** the template's entry states that it is read only during seeding, never at runtime
+
+### Requirement: The policy file is named for what it governs, and the template is named for what it becomes
+
+The repo-owned policy file SHALL be named `TESTING.md`. A shipped template SHALL be named for its
+destination filename with a `.template` suffix, so a reader can identify the pair without opening
+either file. The plugin SHALL resolve exactly one policy filename, with no alias and no acceptance
+of a previous name.
+
+#### Scenario: One filename resolves, and only one
+
+- **WHEN** any part of the pipeline resolves the repo's policy file
+- **THEN** it resolves `TESTING.md` under the repo's configuration directory
+- **AND** no previous filename is tried, accepted, or read as a substitute
+
+#### Scenario: A repo carrying only the previous filename is unconfigured
+
+- **WHEN** the check runs in a repo that holds the previous `CI.md` but no `TESTING.md`
+- **THEN** the check reports the policy file is missing and exits non-zero
+- **AND** the pipeline stops, exactly as it does for a repo that never had a policy at all
+
+#### Scenario: The template's name names its destination
+
+- **WHEN** a contributor lists the plugin's references directory
+- **THEN** the seeding template's filename is its destination filename followed by `.template`
+- **AND** the pair it belongs to is identifiable without opening the file
+
+### Requirement: This repository's own policy states what it actually runs
+
+The policy file in this repository SHALL describe the test tooling this repository actually has.
+Where an executable test harness exists, the local gate SHALL name it and SHALL state when it must
+run. The policy SHALL NOT instruct an agent that no test runner exists while one does.
+
+#### Scenario: The harnesses are named in the local gate
+
+- **WHEN** an agent reads this repository's policy before changing a script under the plugin's
+  scripts directory
+- **THEN** the local gate names the harness covering that script
+- **AND** states that it must exit zero
+
+#### Scenario: Compliance still means running only what applies
+
+- **WHEN** a change triggers none of the local gate's clauses
+- **THEN** running nothing is full compliance with the policy
+- **AND** the policy says so plainly
+
+#### Scenario: CI remains outside the test gate
+
+- **WHEN** a reader asks what CI enforces in this repository
+- **THEN** the policy states CI is not a test gate here
+- **AND** states that nothing produces a test-failure artifact to sync back

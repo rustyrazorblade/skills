@@ -2,7 +2,7 @@
 
 ### Requirement: The consuming repo owns its configuration, and the plugin never supplies a default
 
-spec-flow SHALL read its per-repo configuration from a file in the consuming repo. The plugin MAY ship a template for seeding that file, but the template SHALL NOT be read at runtime, quoted into any prompt, or substituted when the repo's file is absent. There SHALL be no fallback.
+spec-flow SHALL read its per-repo configuration from a file in the consuming repo. The plugin SHALL ship a template for seeding that file, and the template SHALL NOT be read at runtime, quoted into any prompt, or substituted when the repo's file is absent. There SHALL be no fallback.
 
 #### Scenario: The repo's file is the only runtime source
 

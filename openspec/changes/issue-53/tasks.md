@@ -58,28 +58,31 @@
 
 ## 5. Correct issue 50's pending change
 
-- [ ] 5.1 `openspec/changes/issue-50/specs/repo-config/spec.md:5` — `MAY ship a template` becomes
+- [x] 5.1 `openspec/changes/issue-50/specs/repo-config/spec.md:5` — `MAY ship a template` becomes
       `SHALL ship a template`, and the connective changes from "but" to "and". The concessive "but"
       only made sense alongside `MAY`.
-- [ ] 5.2 `openspec/changes/issue-50/ac-coverage.md:18` — replace the false `✅ Covered` with an
+- [x] 5.2 `openspec/changes/issue-50/ac-coverage.md:18` — replace the false `✅ Covered` with an
       entry naming both the defect and its resolution, pointing at this change and the template's
       path. Not `❌`: the scenario does cover the criterion once the artifact exists.
-- [ ] 5.3 Add a row to `openspec/changes/issue-50/ac-coverage.md` in the style of its existing
+- [x] 5.3 Add a row to `openspec/changes/issue-50/ac-coverage.md` in the style of its existing
       `Amendment (owner-approved, mid-implementation)` row, recording that the change's artifacts
       asserted a file that was never created.
-- [ ] 5.4 Confirm no other edit to issue 50's change. `proposal.md:12`, `proposal.md:37`,
+- [x] 5.4 Confirm no other edit to issue 50's change. `proposal.md:12`, `proposal.md:37`,
       `specs/test-policy/spec.md:120`, `specs/repo-config/spec.md:111`, and `tasks.md` all stand
       as written.
-- [ ] 5.5 Run `openspec validate issue-50 --type change --strict` and
+- [x] 5.5 Run `openspec validate issue-50 --type change --strict` and
       `openspec validate issue-53 --type change --strict`. Both must pass.
 
 ## 6. Version
 
-- [ ] 6.1 Bump `version` to `0.37.0` in `plugins/spec-flow/.claude-plugin/plugin.json` and
+- [x] 6.1 Bump `version` to `0.37.0` in `plugins/spec-flow/.claude-plugin/plugin.json` and
       `plugins/spec-flow/.codex-plugin/plugin.json`. Both files move together.
+      **Deviation:** `plugins/spec-flow/.codex-plugin/plugin.json` does not exist — no plugin in
+      this repo has a `.codex-plugin/` directory. Only the `.claude-plugin` manifest was bumped;
+      no new manifest was invented.
 
 ## 7. Local gate
 
-- [ ] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm both `plugin.json`
+- [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm both `plugin.json`
       files still parse as JSON. No shell scripts and no Python are touched by this change, so
       `shellcheck` and `py_compile` do not apply.

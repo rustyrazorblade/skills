@@ -14,10 +14,16 @@ shape of repo. It is not a default, and nothing in the pipeline reads it.
 actually does. A repo with no test suite, or with CI that runs no tests, has a first-class policy
 of its own; it is not a repo waiting to be brought onto this one.
 
-Condition 1 asks for a structural split, and some runners select the fast tier by a tag or a flag
-rather than by where the test lives. Where the repo does that, write into the seeded file the
-mechanism that keeps a slow test out of the fast tier; a convention alone does not enforce the
-boundary the body below states.
+Condition 1 asks that a slow test cannot be selected into the fast tier. Two mechanisms do that:
+where the test lives, or a marker the fast command excludes. Both satisfy it, and both still rely
+on the repo classifying each test correctly — a layout does not stop anyone writing an I/O test
+inside the unit directory either. Name the mechanism this repo uses in the body's boundary
+sentence, below.
+
+A flag the test itself has to honour is **not** one of them. `go test -short` sets a flag that each
+slow test must check and skip on; a test that forgets still runs in the fast tier, and nothing
+excludes it. A repo whose only separation is that flag fails condition 1 — close this file and
+write its policy from what it does.
 
 This is the policy spec-flow used to hardcode in five places. Hardcoding it was the defect that
 issue 50 fixed: test policy is shaped by each repo's CI cost, suite size, stack, and merge gate, so
@@ -39,23 +45,23 @@ Keep it short. Every implementation and review agent reads it on every run.
 
 ## What this repo is
 
-This repo separates its tests into two tiers, structurally:
+This repo separates its tests into two tiers:
 
-- **unit** — fast, no container, no I/O. The runner selects it by default.
+- **unit** — fast, no container, no I/O. This is the tier the local gate runs.
 - **integration** — slow, needs a live dependency: a container, a database, a socket, the
   filesystem, another process.
 
-The boundary is enforced by the build, not by convention. An integration test cannot compile or
-run inside the unit tier.
+The boundary is mechanical, not a convention. An integration test cannot be selected into the unit
+tier.
 
 ## The local gate
 
 Run the **unit** tier, and only the unit tier. It runs on **every** TDD cycle, so keep it fast.
-The command is the runner's default fast selection. Examples, per runner:
+The command selects the unit tier and nothing else. Examples, per runner:
 
 - **Gradle** — `./gradlew test`.
 - **cargo nextest** — `cargo nextest run`.
-- **Go** — `go test -short ./...`.
+- **Go** — `go test ./...`, with the integration tests behind a `//go:build integration` tag.
 - **pytest** — `pytest -m 'not integration'`.
 - **npm** — `npm test`.
 
@@ -72,6 +78,7 @@ Examples, per runner:
 
 - **Gradle** — `./gradlew check`, with `integrationTest` wired into `check`.
 - **cargo nextest** — `cargo nextest run --profile ci --run-ignored all`.
+- **Go** — `go test -tags=integration ./...`.
 
 On a red run, CI uploads the failing test ids as an artifact named `spec-flow-failures`, one
 runner-selectable id per line. `/spec-flow:sync-ci` pulls that artifact into the branch's

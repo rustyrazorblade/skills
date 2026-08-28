@@ -89,8 +89,8 @@ continue to propose a concrete policy and SHALL continue to write nothing until 
 
 The plugin's own documentation SHALL state that a seeding template ships and SHALL state that
 nothing reads it at runtime. Neither statement SHALL be written in a way that implies the template
-is a runtime default. The documentation SHALL state the test and CI policy in one authoritative
-place, with other mentions pointing at it rather than restating it.
+is a runtime default. The workflow document SHALL state the test and CI policy in one authoritative
+place, with its other mentions pointing at that place rather than restating it.
 
 #### Scenario: A reader learns both facts together
 
@@ -102,9 +102,9 @@ place, with other mentions pointing at it rather than restating it.
 
 #### Scenario: The policy is stated once, not three times
 
-- **WHEN** a reader follows any mention of the test and CI policy in the plugin's documentation
-- **THEN** one section states the policy authoritatively
-- **AND** every other mention points at that section rather than restating it
+- **WHEN** a reader follows any mention of the test and CI policy in the plugin's workflow document
+- **THEN** one section of that document states the policy authoritatively
+- **AND** every other mention in it points at that section rather than restating it
 
 #### Scenario: The references directory says who reads each file
 

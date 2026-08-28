@@ -93,7 +93,7 @@ Three mechanisms hold the line, and none is sufficient alone:
    section, so reading order is: read the repo → a no-suite repo is first-class → header
    requirements → the `skills` worked example → and only then the template.
 2. **Adjacency.** The paragraph sits beside the sentence naming this repo's own
-   `spec-flow/TESTING.md`, a policy with two shell harnesses, no framework, and no CI test gate.
+   `spec-flow/TESTING.md`, a policy with four shell harnesses, no framework, and no CI test gate.
    Two examples, one tiered and one not, cannot both be the default.
 3. **A disqualifying test in the header.** See D4.
 
@@ -260,7 +260,7 @@ the plugin's template. A template-specific guard duplicates a rule the script is
 singular.
 
 **A test asserting the template is never read at runtime.** Rejected, but not for the reason an
-earlier draft gave. That draft said this repo has no test suite; it has two shell harnesses, and
+earlier draft gave. That draft said this repo has no test suite; it has four shell harnesses, and
 correcting `spec-flow/TESTING.md` to say so is part of this change. The real reason is that the
 assertion has no executable surface. A runtime read of the template would be an agent following a
 prose instruction, not a script opening a path, so no harness can observe it; that is why D3 rests

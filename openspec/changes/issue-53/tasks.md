@@ -316,3 +316,67 @@ library those scripts import.
       `test-repo-config.sh`.
 - [x] 10.7 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x` on
       the two edited scripts, all four harnesses, and both `openspec validate --strict` runs.
+
+**Found by a Fable review, after the five-lens panel.** Three more, folded into the same round.
+
+- [x] 10.8 Fix two sentences in `plugins/spec-flow/references/TESTING.md.template` that its own
+      examples contradict. The body asserted "The boundary is enforced by the build" and "An
+      integration test cannot compile or run inside the unit tier", then "The command is the
+      runner's default fast selection" — all true for the Gradle and nextest layouts, all false for
+      `go test -short ./...` and `pytest -m 'not integration'`, which the same body lists. Those are
+      explicit narrowing flags, not a default selection, and neither stops an integration test
+      running in the fast tier. The header's tag-or-flag paragraph told the seeder to write the
+      enforcing mechanism into the seeded file but never to amend these sentences, so a seeder
+      following the instructions literally landed a policy in a Go or pytest repo asserting a
+      structural guarantee that repo does not have. **This file is copied verbatim into repos we
+      never see**, which is what makes it the round's highest-value fix at low-medium severity.
+
+      The body now states the **property** — the boundary is mechanical, an integration test cannot
+      be selected into the unit tier — and the header names the two mechanisms that deliver it,
+      where the test lives or a marker the fast command excludes, and tells the seeder which one to
+      write in. Stating the property rather than a mechanism keeps the body true for every runner
+      and keeps a seeding instruction out of the copyable text, which an earlier draft of this fix
+      got wrong: it put "keep the sentence that describes this repo and drop the other" below the
+      boundary marker, where the scenario "Seeding notes never reach the repo's file" forbids it and
+      nothing told the seeder to delete the instruction itself.
+
+      Two more instances of the same false claim sat in the same block and go with it: "separates
+      its tests into two tiers, **structurally**" and the unit bullet's "The runner selects it by
+      default". Fixing only the two sentences named would have fixed the symptom, not the claim.
+
+      `go test -short ./...` is replaced, not rephrased. It is a **cooperative** flag: each slow
+      test must call `testing.Short()` and skip itself, so one that forgets runs in the fast tier
+      and nothing excludes it. That is not a mechanism, it is a convention, and a repo whose only
+      separation is that flag genuinely **fails condition 1** — it should close the template at the
+      header, not seed from it. Listing it was wrong from the start rather than worded wrong, and no
+      rephrasing of the body could rescue it while it stayed. The Go example is now the build-tag
+      form, `go test ./...` with the integration tests behind `//go:build integration`, which the
+      compiler enforces and which does satisfy condition 1; the header states the exclusion
+      explicitly, naming the flag, so a Go seeder relying on it is turned away rather than left to
+      match against sentences none of which describe it. Its CI counterpart,
+      `go test -tags=integration ./...`, joins the CI list so the example is whole.
+
+      The per-runner examples stay, per task 1.1 — one is corrected, none removed. The three header
+      conditions and the boundary marker are untouched.
+- [x] 10.9 Correct `design.md:96` and `design.md:263`, which still said this repo has **two** shell
+      harnesses. Both are present-tense factual claims and both are now false. Round four corrected
+      the count everywhere else — 9.1 in the shipped policy, 9.4 in `ac-coverage.md`, 9.6 in
+      `proposal.md`, and 9.3 by removing the scenario's count rather than fixing it — while
+      `68c41c9` touched `design.md` for the D3 citations without catching these. Unlike `tasks.md`,
+      whose stale mentions sit in a chronological log that later sections supersede, `design.md` is
+      the standing design record that archives, and D2's adjacency argument rested on a false
+      description of its own worked example. Sections 8 and earlier still say "two"; they are left
+      as written, being the record of what was believed then.
+- [x] 10.10 Narrow the scenario "The policy is stated once, not three times" to the workflow
+      document, rather than trimming `plugins/spec-flow/README.md:66-76`. The requirement reached
+      all plugin documentation while the proposal scoped the consolidation to `workflow.md`'s three
+      internal sites, and the README restates the model at length before pointing. **The scenario is
+      the side that moves, because trimming the README would break its own sibling scenario**: "A
+      reader learns both facts together" names the README explicitly and requires the template's
+      existence and its non-fallback status to be stated *there*. A bare pointer satisfies neither.
+      The README is also the front door — a reader who never opens `workflow.md` still needs the
+      no-default, no-fallback fact, which is the whole point of the design. The narrowing is honest
+      rather than convenient: the triplication the scenario was written for was `workflow.md`'s
+      three sites, and the README states the *mechanism*, naming which dimensions a repo must
+      decide, without stating a policy for any of them. `workflow.md:678`, `:683`, and `:1047` all
+      point at **Test policy** rather than restating it, so the narrowed scenario still holds.

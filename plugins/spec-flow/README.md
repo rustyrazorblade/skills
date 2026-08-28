@@ -63,6 +63,13 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
   bundled `Workflow`-tool script automatically — same five lenses, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
+- **`spec-flow/CI.md` — this repo's own test and CI policy.** spec-flow ships **no default policy
+  and no fallback**: the repo states what runs locally, what runs in CI, whether CI is a test gate
+  at all, and what gates merge, or nothing runs. `/spec-flow:setup` seeds it — it proposes a
+  concrete policy, confirms it with you before writing anything, then opens a PR. Every entry point
+  checks for it first and stops with a message naming the fix. A repo with no test suite and no
+  test-running CI is a perfectly valid policy here; write that plainly rather than inheriting a
+  template that does not apply. See **Test policy** in `docs/workflow.md`.
 - **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-pm` runs isolated in its
   own git worktree, named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool,
   called explicitly as `issue-pm`'s first action (confirmed by test: isolation is **not**
@@ -75,11 +82,19 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   worktrees](https://code.claude.com/docs/en/worktrees)); `.spec-flow/` keeps per-branch runtime
   state — the flagged-test set (`/spec-flow:sync-ci`) and, if you use it, an issue's
   `owner-instructions` autonomy override — from ever being committed.
-- **CI contract (for `/spec-flow:sync-ci`)** — the consuming repo's CI needs to run a fast **unit**
-  tier plus a full/integration tier, and upload failing test ids as a `spec-flow-failures` artifact
-  on a red run, so `sync-ci` has something to pull into the branch's local flagged set. Run
-  `/spec-flow:adopt-tiering` once per repo to split an existing suite and wire this; see
-  `references/ci/` for the CI templates and **Test tiering** in `docs/workflow.md` for the model.
+
+  **Add `.spec-flow/` with the leading dot. Never add `spec-flow/`.** They differ by one character
+  and mean opposite things: `.spec-flow/` is gitignored per-branch runtime state, while
+  `spec-flow/` is the repo's **committed** configuration, above. Worse, a trailing-slash pattern
+  with no interior slash matches at any depth, so an undotted entry would also swallow any nested
+  directory of that name.
+- **CI contract (for `/spec-flow:sync-ci`)** — only where your policy makes CI a test gate. Under
+  such a policy the repo's CI uploads failing test ids as a `spec-flow-failures` artifact on a red
+  run, so `sync-ci` has something to pull into the branch's local flagged set. Run
+  `/spec-flow:adopt-tiering` once per repo if your policy chooses a structural unit/integration
+  split and you want it enforced; see `references/ci/` for the CI templates and **Test policy** in
+  `docs/workflow.md` for the model. Where your policy says CI is not a test gate, there is nothing
+  to wire and `sync-ci` exits cleanly saying so.
 
 ## Install
 
@@ -118,7 +133,7 @@ All skills are namespaced under the plugin:
 | `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, then removes the worktree. Never opens a PR; never touches the OpenSpec archive — that's `project-manager`'s job, batched. |
 | `/spec-flow:archive` | Counts un-archived OpenSpec changes against a threshold (default 5, overridable) and, once you confirm the batch, spawns a dedicated background worker to sync+archive them all and land one PR. Not automatic — you (or project-manager noticing the buildup) trigger it. |
 | `/tech-debt` | Lives in `dev-skills`, not spec-flow. A parallel team of review agents audits the codebase for SOLID/composability, duplication, and unnecessary layering, ranks the 10 most impactful findings (skipping anything already an open issue), and walks you through them one at a time — you decide per finding whether to file it. If `dev-skills` is installed, `project-manager` recommends running it weekly or every 20 merged PRs, whichever comes first; never automatic. |
-| `/spec-flow:adopt-tiering` | One-time, repo-wide: split an existing test suite into the unit/integration tiers the pipeline assumes, and wire CI to the `spec-flow-failures` artifact contract. Run once per repo, before relying on `sync-ci`/the tiered gate. |
+| `/spec-flow:adopt-tiering` | One-time, repo-wide, and only where the repo's own policy chooses that split: separate an existing suite into a fast unit tier and a slow integration tier, and wire CI to the `spec-flow-failures` artifact contract. Not an assumption the pipeline makes — a repo whose policy points elsewhere never needs this. |
 | `/spec-flow:setup` | One-time, re-runnable: explore this repo's Prerequisites state and walk through only what's missing, one item at a time with a recommended default. The fastest way to onboard a new repo. |
 
 ## Bundled agents

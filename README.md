@@ -232,7 +232,7 @@ yourself.
 | `/spec-flow:sync-ci <N>` | When CI goes red: pull the failing tests into the branch's local flagged set so the fast local loop guards them until merge |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you |
 | `/spec-flow:finalize <N>` | After you squash-merge: sync + archive the OpenSpec change, remove the worktree, close the issue |
-| `/spec-flow:adopt-tiering` | One-time per repo: split an existing suite into the unit/integration tiers the tiering model needs, then open a PR |
+| `/spec-flow:adopt-tiering` | One-time per repo, only where the repo's own policy chooses that split: separate an existing suite into a fast unit tier and a slow integration tier, then open a PR |
 
 If the standalone [`dev-skills`](#dev-skills) plugin is also installed, set
 `SPEC_FLOW_SEAM_VIEW=explain` (via `/spec-flow:setup`) to have `activate`/`implement` render both
@@ -280,10 +280,16 @@ the merge/approval loop generalizes over N lenses.
 
 #### Setup
 
-The consuming repo must provide the two backbones:
+The consuming repo must provide the two backbones, and state its own test/CI policy:
 
 - **OpenSpec** — the `openspec` CLI installed and initialized in the repo
 - **GitHub** — `gh` authenticated, repo hosted on GitHub
+- **`spec-flow/CI.md`** — this repo's own test and CI policy. The plugin ships no default and no
+  fallback, so nothing runs until the file exists. `/spec-flow:setup` proposes one, confirms it
+  with you, and opens a PR. Add **`.spec-flow/`** to `.gitignore` (per-branch runtime state) and
+  **never `spec-flow/`** — one character apart, opposite meanings, and a trailing-slash pattern
+  with no interior slash matches at any depth, so the undotted form would swallow nested
+  directories of that name too.
 - **Labels** — bootstrap the `P0–P3` and `status:*` vocabulary once per repo (idempotent, safe to
   re-run). Run it with your cwd inside the target repo, pointing at the script in the plugin:
   ```bash
@@ -333,10 +339,12 @@ status:  ready ──▶ spec-review ──▶ in-progress ──▶ in-review �
 - **Session-driven, not cron.** `implement` runs as a background `Workflow` that notifies on
   completion, but it's in-session — closing the session pauses the work. `address` is invoked by you
   when you return; nothing polls.
-- **Test tiering — fast locally, full suite in CI.** `implement` runs the fast **unit** tier locally
-  (plus any tests CI flagged on the branch, pulled in by `sync-ci`); the full/integration suite is
-  CI's gate. It says so plainly in its report and the PR body rather than implying the full suite ran
-  locally. Merge is gated on green CI.
+- **Test policy — the repo's, never the plugin's.** spec-flow ships no default and falls back to
+  nothing. The consuming repo states what runs locally, what runs in CI, whether CI is a test gate
+  at all, and what gates merge, in its own `spec-flow/CI.md`; `implement` hands every agent a
+  pointer at that file and reports the exact commands that ran. A repo with no test suite and no
+  test-running CI is a valid policy, not a degraded one. `/spec-flow:setup` seeds the file, and
+  every entry point stops with a message naming the fix until it exists.
 - **Issue and PR numbers always carry a description** — `#85 (field identity)`, never a bare `#85`.
 
 #### Overriding a bundled agent

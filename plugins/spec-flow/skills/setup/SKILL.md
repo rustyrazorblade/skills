@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
+description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, the repo's own spec-flow/CI.md test and CI policy (proposed, confirmed with the owner, then landed on a branch as a PR — the one outward action this skill takes), and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
 argument-hint: [optional notes; run from inside the target repo]
 ---
 
@@ -38,7 +38,17 @@ later question moot.
    - **Refactor circuit breaker**: read `.claude/settings.json` for
      `env.SPEC_FLOW_REFACTOR_BREAKER`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
-     entries.
+     entries. Also run `git check-ignore -v spec-flow/CI.md` — it must find **no** match. A match
+     means the repo is ignoring its own committed configuration directory, which is a bug, not a
+     preference.
+   - **Repo policy**: run the check that every other entry point runs —
+     ```bash
+     bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
+     ```
+     Exit 0 means this repo already owns its policy and the seeding item below is skipped. Exit 1
+     means it does not. Exit 2 means the environment is wrong (not a git repo, or a bad
+     `SPEC_FLOW_CONFIG_DIR`); relay the script's message and fix that first — never offer seeding
+     on exit 2.
    - **CI tiering**: the same detection `adopt-tiering` step 1 uses — Gradle
      (`src/integrationTest` source set / JVM Test Suite present?), Rust (`.config/nextest.toml`
      tier `default-filter`s present?), or neither pattern recognized (unknown stack — don't guess,
@@ -67,6 +77,53 @@ later question moot.
      .claude/worktrees/
      .spec-flow/
      ```
+     **Add `.spec-flow/` with the leading dot. Never add `spec-flow/`.** They differ by one
+     character and mean opposite things: `.spec-flow/` is gitignored per-branch runtime state,
+     while `spec-flow/` is the repo's **committed** configuration. Worse, a trailing-slash pattern
+     with no interior slash matches at any depth, so `spec-flow/` in this plugin's own repo would
+     match `plugins/spec-flow/` and erase the plugin's entire source from git.
+   - **`spec-flow/` is matched by a gitignore rule** (step 1's `git check-ignore -v` found one) →
+     say so plainly, name the rule and the file it lives in, and recommend removing it, default
+     yes. The repo cannot commit its own configuration while that rule stands, so the check will
+     keep failing no matter how many times seeding runs.
+   - **No repo policy** (step 1's `repo-config.sh check` exited 1) → this is the one item that acts
+     outward: it opens a PR. See the carve-out in **Rules** below. Work it in three moves.
+
+     **First, propose.** Read the repo and write a concrete policy for it — not a template with
+     blanks. Say what runs locally on every TDD cycle, what CI runs, whether CI is a test gate at
+     all, and what gates merge. Reuse step 1's tiering detection, and read the repo's own
+     `.github/workflows/` (or equivalent) rather than assuming. **Propose for any stack**, however
+     little you recognized: a proposal the owner confirms is not a guess, and detection only makes
+     the proposal better or worse, never mandatory. **State plainly what you could not determine**
+     and what you inferred instead, so the owner knows which lines to check hardest.
+
+     A repo with no test suite and no test-running CI is a **first-class policy**, not a gap. Write
+     that plainly when it is true. Never invent a test command the repo does not run.
+
+     Open the proposed file with a header that says, in the repo's own voice:
+     - This repo owns this file.
+     - spec-flow reads it and ships no default; if it goes away, the pipeline stops rather than
+       falling back to anything.
+     - Every line is the owner's to change, including the local/CI split itself.
+     - Keep it short: every implementation and review agent reads it on every run.
+
+     Then state the local gate, what CI does, what gates merge, and the push cadence. Say plainly
+     that the local gate runs on **every** TDD cycle, so the owner sees the cost of what they are
+     choosing. `spec-flow/CI.md` in this plugin's own repo is a worked example of a policy nothing
+     like the old shipped default.
+
+     **Second, confirm.** Show the owner the full proposed file and wait. **Write nothing until
+     they confirm or amend it** — not a draft file, not a branch, nothing. If they amend it, show
+     the amended version and confirm again.
+
+     **Third, land it.** Write the confirmed content to a temporary file, then:
+     ```bash
+     bash ${CLAUDE_PLUGIN_ROOT}/scripts/seed-config.sh <content-file>
+     ```
+     The script discovers the default branch, checks it for an existing policy, and on a clean repo
+     creates a branch, commits, pushes, and opens a PR. It never commits or pushes to the default
+     branch, never merges, and never touches the owner's working tree. Relay its output. Tell the
+     owner the check keeps failing until that PR merges and their branch carries it.
    - **Agent teams env var unset** → explain the tradeoff in one line (richer team-led `implement`
      vs. the automatic `workflow`-mode fallback, which works fine without it) and recommend
      enabling it, default yes **but genuinely optional** — unlike the label/gitignore items, this
@@ -159,5 +216,11 @@ later question moot.
 - **Never run `/spec-flow:adopt-tiering` or `openspec init` on the owner's behalf** — point at
   them, let the owner (or a follow-up invocation) actually run them. This skill's own scope is the
   README's Prerequisites list, not those skills' work.
+- **Local edits only, with exactly one carve-out.** Everything else this skill does — labels
+  aside — edits files in the owner's checkout and stops there. Seeding the repo policy is the one
+  deliberate exception: it opens a PR, mirroring `adopt-tiering`. It still never commits or pushes
+  to the default branch and never merges, and it writes nothing at all until the owner has
+  confirmed the proposed policy. That is the whole of the exception; do not read it as licence for
+  any other outward action.
 - Safe to re-run any time — step 1's exploration is what makes every subsequent run only ever ask
   about what's still actually missing.

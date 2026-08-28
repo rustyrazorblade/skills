@@ -19,7 +19,15 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
 
 ## Steps
 
-1. **Find the PR and fetch review comments.**
+1. **Check the repo's configuration first, before any work.** Run:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
+   ```
+   Non-zero: **stop here**, having done nothing, and relay the script's output **verbatim**. Add no
+   rules, no explanation, and no fallback of your own. Do not offer to create the file; that offer
+   is `project-manager`'s alone.
+
+   **Find the PR and fetch review comments.**
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
    gh pr list --head "$BR" --json number,url
@@ -41,12 +49,16 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    - behavior/test/structure changes → `tdd-developer` (test-first);
    - review-rule/spec-conformance concerns → `reviewer` to re-check after fixes, or
      `build-engineer` for build/lint/format.
-   Instruct it to make focused commits, keep the **unit tier** (plus the branch's
-   `.spec-flow/flagged-tests`, if any) green locally as its gate — never the full/integration
-   suite, which is CI's gate — and **never push or touch main**. See **Test tiering (unit /
-   integration)** in `docs/workflow.md`. **If any comment references a CI failure rather than a
+   Instruct it to make focused commits and to **never push or touch main**. For its test gate,
+   append this verbatim to its prompt — the same generated line `implement` uses, never a second
+   copy of it, and never a tier, command, or policy restated here:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh instruction
+   ```
+   Step 1's check has already confirmed the policy is there, so add no missing-file
+   clause. **If any comment references a CI failure rather than a
    human review note**, run `/spec-flow:sync-ci <N>`'s own mechanics first (its SKILL.md steps
-   2-4) so the failing test lands in `.spec-flow/flagged-tests` before the fix agent starts —
+   3-5) so the failing test lands in `.spec-flow/flagged-tests` before the fix agent starts —
    otherwise its local gate has nothing to catch the actual failure against, and it ends up
    fixing blind and pushing on a guess.
 

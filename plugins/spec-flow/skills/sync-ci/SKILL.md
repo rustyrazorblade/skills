@@ -1,15 +1,16 @@
 ---
 name: sync-ci
-description: Pull the branch's latest CI test failures into the issue's local flagged set — download the spec-flow-failures artifact from the most recent CI run and append the failing test ids to .spec-flow/flagged-tests in the worktree, so the local loop runs them for the rest of the branch. Part of the flow delivery workflow (see docs/workflow.md, "Test tiering"). Invoked by the owner when they notice CI go red, or by issue-pm itself the moment its own push's CI run reports red (see implement/address) — a single check tied to a specific run, never a standing poll loop.
+description: Pull the branch's latest CI test failures into the issue's local flagged set — download the spec-flow-failures artifact from the most recent CI run and append the failing test ids to .spec-flow/flagged-tests in the worktree, so the local loop runs them for the rest of the branch. Exits cleanly, doing nothing, in a repo whose own policy says CI is not a test gate. Part of the flow delivery workflow (see docs/workflow.md, "Test policy"). Invoked by the owner when they notice CI go red, or by issue-pm itself the moment its own push's CI run reports red (see implement/address) — a single check tied to a specific run, never a standing poll loop.
 argument-hint: [issue number, or its PR number]
 ---
 
 # sync-ci — pull CI failures into the local flagged set
 
-You are this issue's `issue-pm`, running as your own dedicated background session. CI ran the full
-suite on issue `#N`'s branch and something failed. Pull those failures into the branch's
-**flagged set** so the fast local loop (`/spec-flow:implement`'s gate and your own runs) guards
-them for the rest of the branch. Run this the moment CI-red on this branch is known — whether the
+You are this issue's `issue-pm`, running as your own dedicated background session. CI ran tests on
+issue `#N`'s branch and something failed. Pull those failures into the branch's
+**flagged set** so the local loop (`/spec-flow:implement`'s gate and your own runs) guards
+them for the rest of the branch. This skill only applies where the repo's own policy makes CI a
+test gate; step 1 checks that first. Run this the moment CI-red on this branch is known — whether the
 owner points it out, or you noticed it yourself checking the run tied to a push you just made (see
 `implement` step 5 and `address` step 4). Either way this is a single check against a specific run,
 never a standing watch loop — **no polling**. Never let a fix for a known CI failure go out on a
@@ -20,13 +21,28 @@ Input: an issue number `#N` (or its PR number). You're already running inside th
 worktree — Claude Code's own background-session isolation put you there, on whatever branch it
 assigned; resolve it with `git rev-parse --abbrev-ref HEAD` rather than assuming a name. If you
 need to recover the PR from scratch, search by issue instead of by branch name:
-`gh pr list --search "Closes #<N> in:body" --json number,headRefName`. See **Test tiering (unit /
-integration)** in `docs/workflow.md` for the model: the unit tier runs locally every cycle; a
-CI-caught test is added here and run locally until the branch merges, then evaporates.
+`gh pr list --search "Closes #<N> in:body" --json number,headRefName`. See **Test policy** in
+`docs/workflow.md` for the model: the repo's own policy names the local gate; a CI-caught test is
+added here and run locally alongside it until the branch merges, then evaporates.
 
 ## Steps
 
-1. **Resolve the branch and its latest CI run.**
+1. **Check the repo's configuration, then read its policy — before any work.** Run:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
+   ```
+   Non-zero: **stop here**, having done nothing, and relay the script's output **verbatim**. Add no
+   rules, no explanation, and no fallback of your own. Do not offer to create the file; that offer
+   is `project-manager`'s alone.
+
+   Then read the policy file itself — the path is in the pointer that
+   `${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh instruction` prints. **If the repo's policy states
+   that CI is not a test gate**, this whole skill has nothing to do: say so plainly, naming the
+   policy as the reason, and exit cleanly. Do not go looking for a `spec-flow-failures` artifact a
+   repo that runs no tests in CI will never produce, and do not report its absence as a failure.
+   Where the policy does put a test gate in CI, carry on unchanged.
+
+2. **Resolve the branch and its latest CI run.**
    ```bash
    BR=$(git rev-parse --abbrev-ref HEAD)
    # Most recent completed run for this branch:
@@ -37,7 +53,7 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    still in progress, say so and stop — don't act on a half-finished run. If the latest completed
    run is green, there's nothing to sync: say so and stop.
 
-2. **Download the failures artifact.** The consuming repo's CI uploads failing test ids as an
+3. **Download the failures artifact.** The consuming repo's CI uploads failing test ids as an
    artifact named `spec-flow-failures` (the CI contract — see `references/ci/`). Fetch it:
    ```bash
    TMP=$(mktemp -d)
@@ -50,13 +66,13 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    ```
    The explicit `exit 1` matters: a run that failed but produced no `spec-flow-failures` artifact
    means the failure wasn't a test failure, so there is nothing to add to the flagged set — stop
-   here and report that plainly to the owner rather than continuing into step 4 with an empty
+   here and report that plainly to the owner rather than continuing into step 5 with an empty
    `$TMP` and no ids to flag. Do not invent entries. **Note the printed `$TMP` path** — like
-   `finalize`'s `$TMPWT`, it's from `mktemp` and can't be recomputed; step 4 below uses `<TMP>` as a
+   `finalize`'s `$TMPWT`, it's from `mktemp` and can't be recomputed; step 5 below uses `<TMP>` as a
    stand-in for the literal path you just saw, not the unset variable, in case it runs as a separate
    Bash call.
 
-3. **Ensure `.spec-flow/` is gitignored** (idempotent, one-time; the flagged set must never commit):
+4. **Ensure `.spec-flow/` is gitignored** (idempotent, one-time; the flagged set must never commit):
    ```bash
    cd <worktree>
    grep -qxF '.spec-flow/' .gitignore 2>/dev/null \
@@ -64,9 +80,9 @@ CI-caught test is added here and run locally until the branch merges, then evapo
           git add .gitignore && git commit -m "chore: gitignore .spec-flow/ (flagged tests)"; }
    ```
 
-4. **Append the failing ids to the flagged set** (dedup; keep what's already there — the set
+5. **Append the failing ids to the flagged set** (dedup; keep what's already there — the set
    accumulates across the branch's life). Diff the incoming ids against what's already flagged
-   *before* merging, so step 5 can tell the owner which are new vs. repeat failures — an id
+   *before* merging, so step 6 can tell the owner which are new vs. repeat failures — an id
    failing again after a fix round is either still broken or flaky, worth calling out rather than
    folding silently into the merge:
    ```bash
@@ -83,15 +99,16 @@ CI-caught test is added here and run locally until the branch merges, then evapo
    echo "REPEAT=$REPEAT"
    ```
    Each line is a runner-selectable test id in the same form CI emitted (a JUnit `Class.method`, a
-   nextest `test(=path)` / test path). The local gate expands these alongside the unit-tier command.
-   Note the printed `$NEW`/`$REPEAT` — step 5 references them as `<NEW>`/`<REPEAT>`, the literal
+   nextest `test(=path)` / test path). The local gate runs these alongside whatever the repo's
+   policy names.
+   Note the printed `$NEW`/`$REPEAT` — step 6 references them as `<NEW>`/`<REPEAT>`, the literal
    lists you just saw, not shell variables that may not survive to a separate Bash call.
 
-5. **Report.** Tell the owner which test ids are newly flagged (`<NEW>`) and which are repeat
+6. **Report.** Tell the owner which test ids are newly flagged (`<NEW>`) and which are repeat
    failures already in the set (`<REPEAT>` — still broken or flaky, call it out explicitly), plus
    the total now in the flagged set, and that the next local run — `/spec-flow:implement`'s gate
    or a manual run — will include them. Then the loop is: fix on the branch (tests stay green
-   locally including the flagged ones), push, CI re-runs the full suite; when it's green and the
+   locally including the flagged ones), push, CI re-runs; when it's green and the
    owner merges, the flagged set evaporates with the worktree at `/spec-flow:finalize`.
    ```bash
    gh issue comment <N> --body "🚨 CI failed — <count of NEW> new test(s) flagged, <count of REPEAT> repeat."

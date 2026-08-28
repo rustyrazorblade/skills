@@ -33,8 +33,11 @@ when the change actually touches security-relevant surface; you **self-gate** ot
 Return JSON only (no prose around it):
 
 ```json
-{"summary":"…","spec_conformance":"full","tests_ran":"full","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line","rule":"security","problem":"…","fix":"…"}],"approve":true|false}
+{"summary":"…","spec_conformance":"full","tests_ran":"policy","tests_detail":"…","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line","rule":"security","problem":"…","fix":"…"}],"approve":true|false}
 ```
 
-- Leave `spec_conformance` / `tests_ran` as `"full"` — the spec reviewer owns them.
+- Leave `spec_conformance` as `"full"`, `tests_ran` as `"policy"`, and `tests_detail` as a short
+  note that this lens ran no tests — the spec reviewer owns all three. `policy` is the placeholder
+  here because running nothing is full compliance whenever the repo's policy names nothing for you
+  to run; never write `none` or `degraded` in this slot.
 - A `blocker`/`major` finding MUST set `approve=false`.

@@ -86,13 +86,17 @@ change. Editing that change in place is correct rather than historical revisioni
 never synced. `openspec/specs/` holds only `explain/`, so `repo-config` and `test-policy` remain
 pending requirements that enter the baseline when issue 50 is archived.
 
-**The plugin version moves 0.36.0 → 0.37.0** in `.claude-plugin/plugin.json` (spec-flow ships no
-`.codex-plugin/` manifest, unlike `cassandra-expert` and `easy-db-lab`, so only the one file moves).
+**The plugin version reaches 0.37.0 in both of the plugin's manifests.**
+`.claude-plugin/plugin.json` moves 0.36.0 → 0.37.0. The `spec-flow` entry in
+`.claude-plugin/marketplace.json` moves 0.10.0 → 0.37.0, having drifted well behind. spec-flow
+ships no `.codex-plugin/` manifest, unlike `cassandra-expert` and `easy-db-lab`, so those two files
+are the whole of the bump.
 
 ## Scope
 
 **In:** the template file; the `setup`, `adopt-tiering`, `workflow.md`, `README.md`, and
-`references/README.md` prose; the two in-place corrections to issue 50's change; the version bump.
+`references/README.md` prose; the two in-place corrections to issue 50's change; the version bump
+across both of the plugin's manifests.
 
 **Out:** any runtime fallback — the template is never read at runtime, quoted into a prompt, or
 substituted when the repo's file is absent, and `repo-config.sh check` still exits non-zero and
@@ -104,7 +108,7 @@ hard-blocked on this one.
 ## Impact
 
 One new file, one new README, prose edits in four files, two edits to a pending OpenSpec change,
-and a version bump. No script changes and no runtime path changes.
+and a version bump in the plugin's two manifests. No script changes and no runtime path changes.
 
 A configured repo sees nothing. A repo being seeded may get a different proposal, which its owner
 still confirms before anything is written. Unlike issue 50, no version of this change can stop a

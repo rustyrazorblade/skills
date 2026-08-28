@@ -93,13 +93,19 @@
 - [x] 6.1 Bump `version` to `0.37.0` in `plugins/spec-flow/.claude-plugin/plugin.json` and
       `plugins/spec-flow/.codex-plugin/plugin.json`. Both files move together.
       **Deviation:** `plugins/spec-flow/.codex-plugin/plugin.json` does not exist. `spec-flow` has
-      no `.codex-plugin/` directory, unlike `cassandra-expert` and `easy-db-lab`, which do. Only
-      the `.claude-plugin` manifest was bumped; no new manifest was invented.
+      no `.codex-plugin/` directory, unlike `cassandra-expert` and `easy-db-lab`, which do. No new
+      manifest was invented.
+      **Added during the docs polish pass, at the owner's direction:** the `spec-flow` entry in
+      `plugins/spec-flow/.claude-plugin/marketplace.json` carries a `version` too, and it had
+      drifted to `0.10.0`. It moves to `0.37.0` here, so both of the plugin's manifests agree.
+      `CLAUDE.md`'s version-bump procedure names only the two `plugin.json` files, which is why the
+      drift went uncaught; correcting that procedure governs every plugin in the repo and is not
+      done here. The repo-root `.claude-plugin/marketplace.json` lists `spec-flow` by path and pins
+      no version, so it needs nothing.
 
 ## 7. Local gate
 
-- [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm
-      `plugins/spec-flow/.claude-plugin/plugin.json` still parses as JSON — the only manifest
-      this change edits, since `spec-flow` ships no `.codex-plugin/plugin.json`, per 6.1's deviation
-      note. `marketplace.json` is untouched, so it needs no check. No shell scripts and no Python
-      are touched by this change, so `shellcheck` and `py_compile` do not apply.
+- [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm both manifests this
+      change edits still parse as JSON — `plugins/spec-flow/.claude-plugin/plugin.json` and
+      `plugins/spec-flow/.claude-plugin/marketplace.json`. No shell scripts and no Python are
+      touched by this change, so `shellcheck` and `py_compile` do not apply.

@@ -284,7 +284,7 @@ The consuming repo must provide the two backbones, and state its own test/CI pol
 
 - **OpenSpec** — the `openspec` CLI installed and initialized in the repo
 - **GitHub** — `gh` authenticated, repo hosted on GitHub
-- **`spec-flow/CI.md`** — this repo's own test and CI policy. The plugin ships no default and no
+- **`spec-flow/TESTING.md`** — this repo's own test and CI policy. The plugin ships no default and no
   fallback, so nothing runs until the file exists. `/spec-flow:setup` proposes one, confirms it
   with you, and opens a PR. Add **`.spec-flow/`** to `.gitignore` (per-branch runtime state) and
   **never `spec-flow/`** — one character apart, opposite meanings, and a trailing-slash pattern
@@ -341,7 +341,7 @@ status:  ready ──▶ spec-review ──▶ in-progress ──▶ in-review �
   when you return; nothing polls.
 - **Test policy — the repo's, never the plugin's.** spec-flow ships no default and falls back to
   nothing. The consuming repo states what runs locally, what runs in CI, whether CI is a test gate
-  at all, and what gates merge, in its own `spec-flow/CI.md`; `implement` hands every agent a
+  at all, and what gates merge, in its own `spec-flow/TESTING.md`; `implement` hands every agent a
   pointer at that file and reports the exact commands that ran. A repo with no test suite and no
   test-running CI is a valid policy, not a degraded one. `/spec-flow:setup` seeds the file, and
   every entry point stops with a message naming the fix until it exists.

@@ -882,7 +882,7 @@ plugin shipped would be wrong somewhere by construction. A repo with no test-run
 
 | Directory | Committed? | What it holds | Lifetime |
 |---|---|---|---|
-| `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `CI.md`, its test and CI policy | Lives with the repo |
+| `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `TESTING.md`, its test and CI policy | Lives with the repo |
 | `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests`, `owner-instructions` | Dies with the branch |
 
 Only the **dotted** one belongs in `.gitignore`. A trailing-slash pattern with no interior slash
@@ -892,7 +892,7 @@ that name — in spec-flow's own repo, `plugins/spec-flow/`, erasing the plugin'
 
 ### Where the policy lives
 
-`spec-flow/CI.md` at the repository root. The directory is relocatable with
+`spec-flow/TESTING.md` at the repository root. The directory is relocatable with
 `SPEC_FLOW_CONFIG_DIR` — repo-relative only; an absolute value is rejected, because `env` values in
 `.claude/settings.json` are not interpolated, so a checked-in absolute path is a machine-specific
 literal that is wrong on every other clone.
@@ -912,14 +912,15 @@ run the same check before any work and simply stop, relaying its output unchange
 `/spec-flow:setup` seeds a repo that has none: it proposes a concrete policy, confirms it with the
 owner, then opens a PR. It writes nothing before the owner confirms, and never merges.
 
-**One seeding template ships, at `references/CI.md`.** It carries the name it takes in the
-consuming repo. It states the tiered policy spec-flow used to hardcode — a fast tier locally, the
-full suite in CI, merge gated on green CI — for the one repo shape that policy fits. `setup` opens
-it only where it has already read the repo and found that shape, and never for any other shape; the
-seeded file carries the policy text alone, not the template's seeding notes. **Nothing reads it at
-runtime.** `repo-config.sh` anchors every policy path at the consuming repo's root and never knows
-the plugin's root, so the plugin's copy lies outside the tree any resolution searches, whatever it
-is called; a missing `spec-flow/CI.md` stops the pipeline rather than falling back here.
+**One seeding template ships, at `references/TESTING.md.template`.** Its name is the destination
+filename plus a `.template` suffix, the convention every template this plugin ships follows. It
+states the tiered policy spec-flow used to hardcode — a fast tier locally, the full suite in CI,
+merge gated on green CI — for the one repo shape that policy fits. `setup` opens it only where it
+has already read the repo and found that shape, and never for any other shape; the seeded file
+carries the policy text alone, not the template's seeding notes. **Nothing reads it at runtime.**
+`repo-config.sh` anchors every policy path at the consuming repo's root and never knows the
+plugin's root, so the plugin's copy lies outside the tree any resolution searches, whatever it is
+called; a missing `spec-flow/TESTING.md` stops the pipeline rather than falling back here.
 
 **Seeding never deletes anything on the remote, deliberately.** If the push succeeds but the pull
 request does not open — a token without the scope, branch protection, a network drop, or the owner

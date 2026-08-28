@@ -77,7 +77,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        --title "<issue title>" \
        --body "Closes #<N>
 
-   Draft — implementation in progress. Tests run per this repo's own policy; see spec-flow/CI.md."
+   Draft — implementation in progress. Tests run per this repo's own policy; see spec-flow/TESTING.md."
      PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
      gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
    fi

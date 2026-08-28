@@ -473,3 +473,58 @@ already touched, which is the signal that those sentences needed fixing rather t
 - [x] 11.8 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x` on
       the two edited scripts, all four harnesses, both `openspec validate --strict` runs, and both
       manifests.
+
+## 12. Round-seven corrections
+
+**Both verification lenses approved; these two were the remainder.** Both are consequences of task
+11.1's split rather than new ground: making the routing conditional created a comment that no longer
+matched it, and left the two conditions able to overlap.
+
+- [x] 12.1 Rewrite the stale opening of the remedy block's comment in
+      `plugins/spec-flow/scripts/repo-config.sh`. **Found by `code-review` (V-1).** It still said
+      "neither fits a repo that already had a policy under a filename an older version of the plugin
+      expected", while the paragraph task 11.1 appended six lines below says the opposite for the
+      population the fix exists for: a branch cut before its default branch was renamed **did** have
+      a policy under the older filename, and the rebase remedy **does** fit it. Round six rewrote
+      the assertion block's comment and the output, and appended to this one without deleting what
+      it contradicted, so the stale half read first. The opening now states the same dependency the
+      output states. **A stale reasoning record is what the next reviewer trusts**, which is why a
+      comment-only contradiction is worth a task. No behavior change.
+- [x] 12.2 Make the rename condition exclusive. **Found by `observability` (OBS-6).** A default
+      branch mid-rename carries both filenames, so it satisfied "carries that same older filename"
+      **and** "already carries the path named above", took two opposite verdicts, and could follow
+      the rename one — producing the add/add conflict task 11.1's split exists to prevent. The first
+      condition now excludes the new path. That resolves all four states uniquely from what the
+      reader can see without inspecting anything: old only renames, new only rebases, both rebases
+      (safe), and neither falls through to the unconditional setup paragraph, which is already the
+      right remedy for it and correctly takes no condition.
+- [x] 12.3 Re-pin the three assertions in `test-repo-config.sh`, and remove the brittleness class
+      underneath them. Checked first, as asked: the round-six needles would **not** have passed
+      without the negative clause, because adding it re-wraps the lines they spanned — but they
+      would not have pinned it either, so a future rewording could drop the exclusion and keep the
+      wrap. The first needle now carries "and not the path named above" explicitly.
+
+      The deeper problem is that those needles were coupled to **where the line happened to end**.
+      Two false failures this round came from pure re-flows that changed no meaning, and tuning the
+      wrap to fit the needles would have inverted the dependency — formatting the operator's message
+      around the test. The three prose assertions now match a whitespace-collapsed copy of the
+      output, so they pin what the operator reads rather than how it is wrapped. The absence checks
+      keep reading the raw text deliberately: collapsing must never be what makes a forbidden string
+      disappear. The count stays at 114.
+- [x] 12.4 Correct the output's opening sentence. It said "Which remedy below fits depends on…",
+      which presupposes one of the two later remedies fits — but the first branch's verdict is the
+      rename, which is neither of them. The rewritten comment in 12.1 had already stated this
+      correctly, so the comment was more precise than the operator-facing sentence it described. Now
+      "What to do next depends on…". Found by the pre-commit review pass.
+- [x] 12.5 Re-run the full local gate, per `spec-flow/TESTING.md`.
+
+**Deliberately not fixed — for the owner's backlog, not this branch.** `observability` found
+`test-repo-config.sh` is flaky, and the flake is **pre-existing on `origin/main`**, not introduced
+here. `test-repo-config.sh:475-481` invokes `seed-config.sh` twice in fail mode; each push creates a
+branch named `$(date +%Y%m%d%H%M%S)-$$`, so the remote holds two, and the assertion picks with
+`for-each-ref | head -n 1`, which is lexicographic, while `fail_out` came from the first invocation.
+Within the same second, PIDs straddling a digit-width boundary — `1001` sorting before `999` — select
+the wrong branch and fail three `expect_reports_recovery` assertions. It was seen once at 111/3 and
+twice at 114/0. Left alone: `origin/main` carries the identical line, it is outside this change's
+scope, and fixing it here widens a branch already seven rounds deep. **A red gate run on exactly
+those three assertions is this flake, not a regression — re-run before treating it as one.**

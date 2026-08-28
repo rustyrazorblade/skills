@@ -302,6 +302,12 @@ printf 'a policy under the previous name\n' > "$d/spec-flow/CI.md"
 expect_eq "a repo holding only the previous CI.md is unconfigured" 1 \
   "$(run_code "$d" "$repo_config" check)"
 previous_name_out="$(run_stdout "$d" "$repo_config" check)"
+# The remedy paragraph's assertions below match sentences, not lines. The message is echoed one
+# wrapped line at a time, so a needle spanning a wrap breaks whenever the prose re-flows — twice
+# already, on edits that changed no meaning. Matching against a whitespace-collapsed copy pins what
+# the operator reads instead of where the line happens to end. The absence checks keep using the
+# raw text: collapsing must never be what makes a forbidden string disappear.
+previous_name_flat="$(printf '%s' "$previous_name_out" | tr '\n' ' ' | tr -s ' ')"
 expect_contains "the previous filename is reported missing, not accepted as a substitute" \
   "$previous_name_out" "TESTING.md"
 # No did-you-mean either, which is the owner's ruling and not implied by the exit code: a check
@@ -326,19 +332,18 @@ expect_contains "an existing consumer is warned the remedy depends on their defa
 # second policy and buys an add/add conflict. An unconditional "rebasing does not help" would send
 # that reader past its own fix, so the condition is the assertion, not decoration on it.
 # Both needles carry the consequent, not just the condition: a regression that kept the conditions
-# and swapped which remedy each one routes to would satisfy a condition-only check. Both span a
-# wrapped line, which the glob match crosses.
+# and swapped which remedy each one routes to would satisfy a condition-only check. The first also
+# carries the negative clause, because without it the two conditions overlap — a default branch
+# mid-rename carries both filenames, matches both, and would take the rename verdict, which is the
+# add/add conflict this split exists to prevent.
 expect_contains "the rename remedy is conditional on the reader's own default branch" \
-  "$previous_name_out" \
-  "$(printf 'carries that same older\nfilename, rebasing does not help; rename')"
+  "$previous_name_flat" "and not the path named above, rebasing does not help; rename"
 expect_contains "and the already-renamed default branch is sent to the rebase remedy instead" \
-  "$previous_name_out" \
-  "$(printf 'already carries the path\nnamed above, the rebase remedy below is yours')"
+  "$previous_name_flat" "already carries the path named above, the rebase remedy below is yours"
 # The remedy points at the expected path, which the "Missing or unusable" block already printed,
 # so the operator never has to leave the terminal to act on it.
 expect_contains "and is pointed at the path already printed rather than to a second policy file" \
-  "$previous_name_out" \
-  "$(printf 'policy file to the path named\nabove rather than seeding a second one')"
+  "$previous_name_flat" "policy file to the path named above rather than seeding a second one"
 # And nothing sends them out of the terminal instead. This repo publishes no release notes: no
 # CHANGELOG, no releases file, no tags. Asserted for the same reason as the no-did-you-mean checks
 # above — re-adding a dead-end pointer beside the working one breaks nothing else.

@@ -54,6 +54,10 @@ The command is the runner's default fast selection. Examples, per runner:
 - **pytest** — `pytest -m 'not integration'`.
 - **npm** — `npm test`.
 
+Some of those runners select the fast tier by a tag or a flag rather than by where the test lives.
+Where that is true here, name the mechanism that keeps a slow test out of the fast tier: a
+convention alone does not enforce the boundary stated above.
+
 Also run any test id listed in `.spec-flow/flagged-tests` at the worktree root, when that file
 exists. Those are tests CI caught on this branch, guarded locally for the rest of it.
 

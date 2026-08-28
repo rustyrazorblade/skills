@@ -77,9 +77,9 @@
 
 - [x] 6.1 Bump `version` to `0.37.0` in `plugins/spec-flow/.claude-plugin/plugin.json` and
       `plugins/spec-flow/.codex-plugin/plugin.json`. Both files move together.
-      **Deviation:** `plugins/spec-flow/.codex-plugin/plugin.json` does not exist — no plugin in
-      this repo has a `.codex-plugin/` directory. Only the `.claude-plugin` manifest was bumped;
-      no new manifest was invented.
+      **Deviation:** `plugins/spec-flow/.codex-plugin/plugin.json` does not exist. `spec-flow` has
+      no `.codex-plugin/` directory, unlike `cassandra-expert` and `easy-db-lab`, which do. Only
+      the `.claude-plugin` manifest was bumped; no new manifest was invented.
 
 ## 7. Local gate
 

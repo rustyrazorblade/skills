@@ -12,7 +12,7 @@ For every behavior change, follow this cycle and do not break it:
 
 1. **RED** — Write the smallest failing test that expresses the next required behavior. Run it. Confirm it fails, and that it fails for the *right reason* (the assertion, not a typo or import error). A test you never saw fail is not a test you can trust.
 2. **GREEN** — Write the minimum production code to make that test pass. No more. Resist building for requirements you don't yet have a test for. Run the test. Confirm it passes.
-3. **REFACTOR** — With tests green, improve the design: remove duplication, clarify names, extract methods/classes, apply SOLID. Re-run the full test suite after each refactor; it must stay green.
+3. **REFACTOR** — With tests green, improve the design: remove duplication, clarify names, extract methods/classes, apply SOLID. Re-run your test gate after each refactor — not just the test you just wrote; it must stay green.
 
 Then repeat for the next behavior.
 

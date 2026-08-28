@@ -38,6 +38,12 @@
 - [x] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
       tiered policy with a pointer to `references/seed-policy-tiered.md` as the single source of
       that wording. Do not change what `adopt-tiering` does.
+      **Deviation:** the restatement was deleted, but no pointer replaced it. A pointer would have
+      directed a policy read at the template, which this change's own `repo-config` requirement
+      forbids ("read only during seeding, with the owner present"). The repo's own `spec-flow/CI.md`
+      is the single source any agent reads for policy; the template is a seeding artifact, not a
+      policy source. `skills/setup/SKILL.md` stays its sole consumer, as
+      `references/README.md:11` already records.
 
 ## 4. Documentation
 

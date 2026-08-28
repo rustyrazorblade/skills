@@ -939,8 +939,9 @@ absent, rather than holding a default of its own. Neither mode contains policy t
 cannot drift.
 
 Agents report against the policy, not against a tier: `tests_ran` is `policy | partial | degraded |
-none`, and `tests_detail` carries the exact commands run. **Where the policy names nothing to run,
-running nothing is `policy`** — full compliance, not `none` and not `degraded`.
+none`, and `tests_detail` carries the exact commands run; `implement` quotes that value verbatim in
+its run summary and in the PR body, and asserts no tier of its own. **Where the policy names
+nothing to run, running nothing is `policy`** — full compliance, not `none` and not `degraded`.
 
 **The policy file is branch-controlled content.** It is read from the worktree, so an issue branch's
 own diff can change it, and the check deliberately never inspects what it says. The pointer

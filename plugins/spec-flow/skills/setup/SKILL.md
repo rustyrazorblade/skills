@@ -120,9 +120,12 @@ later question moot.
      the repo first and let it decide the shape; never let the template decide it. It is one
      policy, not the policy, and nothing in the pipeline reads it at runtime.
 
-     **Second, confirm.** Show the owner the full proposed file and wait. **Write nothing until
-     they confirm or amend it** — not a draft file, not a branch, nothing. If they amend it, show
-     the amended version and confirm again.
+     **Second, confirm.** Show the owner the full proposed file and wait. If the proposal uses the
+     template's wording, say so alongside the file and name the evidence for each of the three
+     conditions — where the structural split is enforced, which workflow runs the tests, and what
+     makes merge gated on green CI — so the owner can check the shape came from the repo. **Write
+     nothing until they confirm or amend it** — not a draft file, not a branch, nothing. If they
+     amend it, show the amended version and confirm again.
 
      **Third, land it.** What you write carries neither the seeding notes above the template's
      boundary marker nor any reference to the template — the file reads as the repo's own policy.

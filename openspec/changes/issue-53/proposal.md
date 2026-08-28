@@ -79,8 +79,8 @@ change. Editing that change in place is correct rather than historical revisioni
 never synced. `openspec/specs/` holds only `explain/`, so `repo-config` and `test-policy` remain
 pending requirements that enter the baseline when issue 50 is archived.
 
-**The plugin version moves 0.36.0 → 0.37.0** in both `.claude-plugin/plugin.json` and
-`.codex-plugin/plugin.json`.
+**The plugin version moves 0.36.0 → 0.37.0** in `.claude-plugin/plugin.json` (spec-flow ships no
+`.codex-plugin/` manifest, unlike `cassandra-expert` and `easy-db-lab`, so only the one file moves).
 
 ## Scope
 

@@ -27,7 +27,7 @@ one policy shipped for every repo is wrong somewhere by construction.
 nothing else. If that file is absent, the check exits non-zero and the pipeline stops. It does not
 fall back here.
 
-<!-- Everything above this line is for the seeding agent. The repo's file starts below. Copy from the next line down, adjust it to the repo, and never carry this notice or the notes above it into the repo's file. -->
+<!-- Everything above this line is for the seeding agent. The repo's file starts below. Copy from the next line down, adjust it to the repo, and never carry this notice or the notes above it into the repo's file. The seeded file names only this repo's own commands, so the per-runner example lists below collapse to the one runner the repo actually uses. -->
 
 # Test and CI policy
 

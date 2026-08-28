@@ -14,6 +14,11 @@ shape of repo. It is not a default, and nothing in the pipeline reads it.
 actually does. A repo with no test suite, or with CI that runs no tests, has a first-class policy
 of its own; it is not a repo waiting to be brought onto this one.
 
+Condition 1 asks for a structural split, and some runners select the fast tier by a tag or a flag
+rather than by where the test lives. Where the repo does that, write into the seeded file the
+mechanism that keeps a slow test out of the fast tier; a convention alone does not enforce the
+boundary the body below states.
+
 This is the policy spec-flow used to hardcode in five places. Hardcoding it was the defect that
 issue 50 fixed: test policy is shaped by each repo's CI cost, suite size, stack, and merge gate, so
 one policy shipped for every repo is wrong somewhere by construction.
@@ -53,10 +58,6 @@ The command is the runner's default fast selection. Examples, per runner:
 - **Go** — `go test -short ./...`.
 - **pytest** — `pytest -m 'not integration'`.
 - **npm** — `npm test`.
-
-Some of those runners select the fast tier by a tag or a flag rather than by where the test lives.
-Where that is true here, name the mechanism that keeps a slow test out of the fast tier: a
-convention alone does not enforce the boundary stated above.
 
 Also run any test id listed in `.spec-flow/flagged-tests` at the worktree root, when that file
 exists. Those are tests CI caught on this branch, guarded locally for the rest of it.

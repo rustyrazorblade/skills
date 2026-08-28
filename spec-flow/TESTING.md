@@ -8,8 +8,10 @@ Keep it short. Every implementation and review agent reads it on every run.
 
 ## What this repo is
 
-`skills` is a plugin repo: markdown, shell, and a little Python. It has **no automated test suite**
-and **no test-running CI**. That is the policy, not a gap to fill.
+`skills` is a plugin repo: markdown, shell, and a little Python. It has two hand-rolled test
+harnesses, both plain shell scripts that run offline and deterministically. It has **no
+test-running CI**, and no framework: there is no `cargo`, no Gradle, no `pytest`, and no
+`npm test` here. Run a harness by invoking it with `bash`.
 
 ## The local gate
 
@@ -22,8 +24,15 @@ Run these on a change, and only where the change touches them:
   JSON.
 - **Python scripts** — when you edit one, run it, or run `python3 -m py_compile <script>` if it
   cannot be run standalone.
+- **`plugins/spec-flow/scripts/`** — when a change touches a script there, run the harness that
+  covers it, from the repo root. It must exit 0.
+  - `bash plugins/spec-flow/scripts/test-repo-config.sh` covers `repo-config.sh` and
+    `seed-config.sh`.
+  - `bash plugins/spec-flow/scripts/test-board.sh` covers `board.py`.
 
-Do not look for a test runner. There is no `cargo`, no Gradle, no `pytest`, and no `npm test` here.
+  A script under that directory with no harness of its own still gets the `shellcheck -x` or
+  `py_compile` bullet above; there is nothing further to run for it.
+
 An agent that runs nothing because nothing above applies to its change has complied with this
 policy in full.
 

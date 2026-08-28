@@ -3,7 +3,8 @@
 ## Context
 
 `spec-flow` 0.36.0 (issue 50, merged as `bee37bb`) removed a hardcoded test/CI policy from five
-runtime locations and made the consuming repo own it at `spec-flow/CI.md`. The plugin falls back to
+runtime locations and made the consuming repo own it, at `spec-flow/CI.md` then and
+`spec-flow/TESTING.md` after this change renames it. The plugin falls back to
 nothing when that file is absent — deliberately, since a warning that does not stop the run is the
 silent default being removed.
 
@@ -28,7 +29,7 @@ split itself, `SPEC_FLOW_CONFIG_DIR` resolution, or the exit-code contract.
 
 ## Decisions
 
-### D1 — The template ships at `references/CI.md`, flat
+### D1 — The template ships at `references/TESTING.md.template`, flat
 
 `references/` is already this plugin's home for shipped files a skill or agent reads by
 `${CLAUDE_PLUGIN_ROOT}`-relative path. The nearest precedent does exactly this job:
@@ -37,20 +38,29 @@ as a starting point it copies into the consuming repo. `agents/tdd-developer.md:
 `references/refactoring-discipline.md` the same way. That directory reasoning is unchanged by
 anything below.
 
-**The basename is `CI.md` because that is the name the file takes in the consuming repo.** The
-owner directed this after the first review pass, and the first draft's name — `seed-policy-tiered.md`
-— was wrong. It shipped, and the owner went looking for "the CI.md template", found nothing by that
-name, and reasonably concluded the file had never landed. A name that hides what the file is costs
-more than the property the old name was chosen to protect.
+**The basename is the destination filename plus a `.template` suffix.** The owner directed this
+after the second review pass, and it settles two earlier attempts. The first draft named the file
+`seed-policy-tiered.md`, on a grep argument since rewritten in D3; it shipped, the owner went
+looking for the policy template, found nothing whose name resembled the file it seeds, and
+reasonably concluded it had never landed. The second attempt gave the template the destination's
+bare basename, which cured that but made the pair indistinguishable by name alone. The suffix keeps
+what the bare basename bought — a reader pairs `TESTING.md.template` with `spec-flow/TESTING.md`
+without opening either — and restores the distinction it cost.
 
-That property was overstated. It was framed as a naming rule — see D3, rewritten — when the guard
-is actually containment, and containment survives the rename untouched. What the rename genuinely
-costs is grep legibility: `grep -rn "CI.md" plugins/spec-flow` no longer separates references to the
-runtime file from references to the template. That is a review convenience, not a safety property,
-and it is the accepted price of a name that says what the file is.
+The policy file it seeds is renamed in the same pass, from `CI.md` to `TESTING.md`. A file that
+states what runs locally, what runs in CI, and what gates merge is a testing policy of which CI is
+one part; `CI.md` named the smaller half. The rename is a **clean break**: `repo-config.sh` resolves
+one filename, with no alias, no fallback, and no did-you-mean. A repo carrying only `CI.md` is
+unconfigured, reports as missing, and stops the pipeline, exactly as one that never had a policy
+does. That is asserted by `scripts/test-repo-config.sh`, because "we added no fallback" is otherwise
+invisible: nothing else fails if someone adds one later.
 
-`setup/SKILL.md` addresses the path plainly as `${CLAUDE_PLUGIN_ROOT}/references/CI.md`, with **no
-fallback clause**. The plugin's two precedents differ for a reason: `agents/tdd-developer.md:57` carries a fallback because an
+The naming property the first draft was protecting was overstated. It was framed as a naming rule —
+see D3, rewritten — when the guard is actually containment, and containment survives every one of
+these renames untouched.
+
+`setup/SKILL.md` addresses the path plainly as
+`${CLAUDE_PLUGIN_ROOT}/references/TESTING.md.template`, with **no fallback clause**. The plugin's two precedents differ for a reason: `agents/tdd-developer.md:57` carries a fallback because an
 agent file is not expanded by the skill-invocation context and must resolve the variable at
 runtime, whereas a `SKILL.md` is expanded before the agent sees it. `setup` is a skill, so it takes
 the `adopt-tiering` form. A fallback clause there would add a branch that can never be taken.
@@ -78,9 +88,9 @@ Three mechanisms hold the line, and none is sufficient alone:
 1. **Sequencing.** The new paragraph is placed after every existing anti-bias instruction in the
    section, so reading order is: read the repo → a no-suite repo is first-class → header
    requirements → the `skills` worked example → and only then the template.
-2. **Adjacency.** The paragraph sits beside the sentence naming this repo's own `spec-flow/CI.md`,
-   a policy with no test suite at all. Two examples, one tiered and one not, cannot both be the
-   default.
+2. **Adjacency.** The paragraph sits beside the sentence naming this repo's own
+   `spec-flow/TESTING.md`, a policy with two shell harnesses, no framework, and no CI test gate.
+   Two examples, one tiered and one not, cannot both be the default.
 3. **A disqualifying test in the header.** See D4.
 
 The risk is contained, not eliminated. Nothing mechanically prevents an agent from opening the
@@ -96,14 +106,19 @@ naming rule, and that description was wrong; the guard itself was never lost, on
 **consuming repo's** worktree root. The plugin's root takes no part in it. `:43-45` records that
 `CLAUDE_PLUGIN_ROOT` is deliberately never read in that script, so it has no mechanism by which to
 name the plugin's directory at all. A template inside the plugin therefore lies outside the tree the
-resolution searches, and is unreachable because of its **directory**, whatever its basename. Calling
-it `CI.md` costs nothing here. An accidental runtime read would still need a hand-written literal
-path naming the plugin's `references/` directory, which is visible in review.
+resolution searches, and is unreachable because of its **directory**, whatever its basename. Naming
+it after its destination costs nothing here. An accidental runtime read would still need a
+hand-written literal path naming the plugin's `references/` directory, which is visible in review.
 
-What the rename does cost is a search. `grep -rn "CI.md" plugins/spec-flow` used to name the runtime
-file throughout the plugin and nothing else — `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`,
-`scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. It now also matches the template
-and its documentation, so it no longer discriminates. Nobody should read a clean result from it as
+What the naming does cost is a search. A single grep for the policy filename used to name the
+runtime file throughout the plugin and nothing else — `README.md:66`, `docs/workflow.md:885`,
+`:895`, `:920`, `scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. Because
+`TESTING.md.template` contains `TESTING.md`, `grep -rn "TESTING\.md" plugins/spec-flow` now matches
+the template and its documentation too. `grep -rn "TESTING\.md\.template"` isolates the template
+cleanly; isolating the runtime file takes a subtraction,
+`grep -rn "TESTING\.md" plugins/spec-flow | grep -v "TESTING\.md\.template"`, because a
+character-class exclusion drops every mention that ends a line or precedes a sentence-final period.
+The one-word search no longer discriminates, and nobody should read a clean result from it as
 evidence of anything. That search was a review convenience; the resolution anchor is what carries
 the property.
 
@@ -154,14 +169,15 @@ it consolidates to one authoritative section with pointers.
 `skills/adopt-tiering/SKILL.md` restates the tiered split, which the template now also encodes. The
 restatement is deleted, and no pointer to the template replaces it. A pointer would aim a policy
 read at the template, which the `repo-config` requirement added here confines to seeding, with the
-owner present. The repo's own `spec-flow/CI.md` is the single source any agent reads for policy, so
+owner present. The repo's own `spec-flow/TESTING.md` is the single source any agent reads for
+policy, so
 `adopt-tiering` defers to that file as the whole of the policy. This is scoped narrowly to removing
 the duplicate wording; it does not re-open whether tiering is the right policy, which the issue puts
 out of scope.
 
 A third item arrived in review round 2, from the `code-review` lens, and the owner directed fixing
 it here as well. `skills/adopt-tiering/SKILL.md:11-13` gates the skill on the repo's own
-`spec-flow/CI.md` having already chosen the tiered policy, but step 7's manual owner follow-up
+`spec-flow/TESTING.md` having already chosen the tiered policy, but step 7's manual owner follow-up
 named branch protection alone. A migration could therefore land while the one file the pipeline
 reads still described the layout the migration replaced. Step 7 now names both follow-ups. The
 owner declined the larger option of softening the entry gate into a check-and-reconcile step, so
@@ -175,7 +191,7 @@ five agree with `spec.md:5`'s `MAY`. Smaller. Rejected by the owner at activatio
 seeding with no canonical baseline and gives issue 52, which is hard-blocked on this one, no
 pattern to copy. The owner's words were that the spec should have said MUST.
 
-**Point at this repo's own `spec-flow/CI.md` as the worked example, shipping nothing new.**
+**Point at this repo's own `spec-flow/TESTING.md` as the worked example, shipping nothing new.**
 `skills/setup/SKILL.md:112` already half-does this. Rejected: a repo with no test suite and no
 test-running CI is a poor baseline for the tiered split that `specs/test-policy/spec.md:120` is
 about.
@@ -190,9 +206,26 @@ compatible with `setup/SKILL.md:92`'s "not a template with blanks" — which is 
 Rejected: it would not satisfy the acceptance criterion, and `spec.md:120` would still have no
 referent, so that requirement would need rewording too.
 
-**Name it something other than `CI.md`.** The first draft did, as `seed-policy-tiered.md`, on the
-grep argument now rewritten in D3. Rejected by the owner after the first review pass: the argument
-was overstated, and a name that hides what the file becomes is what actually cost time. See D1.
+**Give the template a name unrelated to its destination.** The first draft did, as
+`seed-policy-tiered.md`, on the grep argument now rewritten in D3. Rejected by the owner after the
+first review pass: the argument was overstated, and a name that hides what the file becomes is what
+actually cost time. See D1.
+
+**Give the template the destination's bare basename, with no suffix.** The second attempt did, as
+`references/CI.md`. It cured the first draft's defect but introduced the opposite one: two files
+with the same name, one shipped and one written per repo, indistinguishable in a file listing or a
+review diff header. Rejected by the owner after the second review pass, in favour of the
+`<destination-filename>.template` convention now recorded in `CLAUDE.md`.
+
+**Keep the policy file called `CI.md`.** Rejected by the owner: the file states what runs locally,
+what runs in CI, and what gates merge, so CI is one clause of it rather than its subject. The name
+misdescribed the file to every agent that opened it.
+
+**Accept `CI.md` as an alias during a deprecation window.** Rejected by the owner. An alias means
+two filenames resolve, which is the ambiguity the single-source design exists to prevent, and a
+window has to be closed by someone remembering to close it. The clean break gives an unmigrated
+repo the same clear, actionable stop a never-configured repo gets, on its next run rather than
+silently later.
 
 **Put it in `references/ci/`.** Rejected: `references/ci/README.md:1` titles that page "CI contract
 for spec-flow test tiering", and its "Templates" section means workflow YAML copied into
@@ -212,28 +245,42 @@ name that happens to push the right way is still misleading.
 
 **`setup` opens the template as every run's starting draft.** The literal reading of what was
 decided at activation, and the simplest instruction to write. Rejected in favour of D2. This repo
-is the proof: seeded that way, its own `spec-flow/CI.md` would have been a near-total rewrite of
+is the proof: seeded that way, its own `spec-flow/TESTING.md` would have been a near-total rewrite of
 the template, so the template would have contributed nothing but bias.
 
 **A guard in `repo-config.sh` refusing a policy path inside the plugin.** Rejected: the script does
 not know the plugin root by design (`:43-45`), and
 `openspec/changes/issue-50/specs/repo-config/spec.md:63-68` already refuses a symlink resolving
-outside the repository, which is the only realistic route by which a repo's `CI.md` could become
+outside the repository, which is the only realistic route by which a repo's `TESTING.md` could become
 the plugin's template. A template-specific guard duplicates a rule the script is written to keep
 singular.
 
-**A test asserting the template is never read at runtime.** Rejected: this repo has no test suite
-and no CI test gate (`spec-flow/CI.md:11-12`, `:32`). Inventing a gate for one assertion
-contradicts the repo's own policy.
+**A test asserting the template is never read at runtime.** Rejected, but not for the reason an
+earlier draft gave. That draft said this repo has no test suite; it has two shell harnesses, and
+correcting `spec-flow/TESTING.md` to say so is part of this change. The real reason is that the
+assertion has no executable surface. A runtime read of the template would be an agent following a
+prose instruction, not a script opening a path, so no harness can observe it; that is why D3 rests
+on containment plus prose. What *is* mechanically checkable is the resolution anchor, and
+`scripts/test-repo-config.sh` now asserts it from the outside: a repo holding only the previous
+`CI.md` reports as missing, so a fallback added later fails a test.
+
+**Leaving issue 50's "no automated test suite" scenario as written.** Its
+`specs/repo-config/spec.md:209` required this repository's policy to state that it has no automated
+test suite. Rejected: this change makes that false, and the two deltas enter the same `repo-config`
+baseline at archive, so leaving it would publish a requirement contradicting the one this change
+adds. Corrected in place, like task 5.1's `MAY`→`SHALL`, because issue 50's deltas were never
+synced. See task 8.15.
 
 **Adding a task 2.6 to `openspec/changes/issue-50/tasks.md`.** Tempting, since the issue correctly
 identifies section 2 as where the gap entered. Rejected: the work is this change's, and an
 unchecked task on a merged change misrepresents it permanently. `skills/archive/SKILL.md` does not
 gate on unchecked tasks, so this is a representation argument, not a blocking one.
 
-**Correcting `openspec/changes/issue-50/proposal.md:37`'s "New (3)" list.** Rejected: it is
-accurate for what issue 50 actually shipped, and amending it would claim issue 50 shipped a file it
-did not. The new `ac-coverage.md` row is where a reader learns the file arrived later.
+**Adding the template to `openspec/changes/issue-50/proposal.md:37`'s "New (3)" list.** Rejected:
+the count is accurate for what issue 50 actually shipped, and adding the template would claim issue
+50 shipped a file it did not. The new `ac-coverage.md` row is where a reader learns the file
+arrived later. The policy file already in that list is renamed with every other reference, per task
+8.9; renaming a file issue 50 did ship is not the same as adding one it did not.
 
 ## Domain Facts
 

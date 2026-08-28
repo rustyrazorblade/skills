@@ -58,19 +58,19 @@
 
 ## 8. This repo's own policy
 
-- [x] 8.1 Write `spec-flow/CI.md` at this repo's root, stating plainly that `skills` has no automated test suite and no test-running CI; that the local gate is plugin validation and shellcheck where applicable; and that merge is gated on the owner's review. Name no test command this repo does not run.
-- [x] 8.2 Confirm the file is committed and not gitignored (`git check-ignore -v spec-flow/CI.md` must find no match).
+- [x] 8.1 Write `spec-flow/TESTING.md` at this repo's root, stating plainly that `skills` has no automated test suite and no test-running CI; that the local gate is plugin validation and shellcheck where applicable; and that merge is gated on the owner's review. Name no test command this repo does not run.
+- [x] 8.2 Confirm the file is committed and not gitignored (`git check-ignore -v spec-flow/TESTING.md` must find no match).
 
 ## 9. Verification
 
-- [x] 9.1 Verify the check exits 0 and prints nothing in this repo once `spec-flow/CI.md` exists.
+- [x] 9.1 Verify the check exits 0 and prints nothing in this repo once `spec-flow/TESTING.md` exists.
 - [x] 9.2 Verify the check exits 1 with the full message when the file is absent, and exits 2 outside a git repo and on each rejected `SPEC_FLOW_CONFIG_DIR` form.
 - [x] 9.3 Verify `repo-config.sh instruction` emits a single line containing no backtick, `$`, or brace, so it embeds safely in a JS template literal.
 - [x] 9.4 Verify `SPEC_FLOW_CONFIG_DIR` relocation reads the policy from the new location.
 - [x] 9.5 Grep the tree to confirm the plugin's five former default commands (`cargo nextest run`, `./gradlew test`, `npm test`, `go test -short ./...`, `pytest -m 'not integration'`) survive only in documentation as examples, never in a runtime prompt path.
 - [x] 9.6 Confirm both `implement` modes derive the instruction from the same generated line, with no second copy anywhere.
 
-- [x] 9.7 Run this repo's own local gate against every script this change adds or edits, using the exact invocation `spec-flow/CI.md` prescribes and from the repo root — not a variant that happens to pass. `shellcheck -x plugins/spec-flow/scripts/repo-config.sh plugins/spec-flow/scripts/seed-config.sh plugins/spec-flow/scripts/test-repo-config.sh` must exit 0 with zero findings. The gate the change defines has to be run against the change; its absence here is why a failing script shipped in round 1.
+- [x] 9.7 Run this repo's own local gate against every script this change adds or edits, using the exact invocation `spec-flow/TESTING.md` prescribes and from the repo root — not a variant that happens to pass. `shellcheck -x plugins/spec-flow/scripts/repo-config.sh plugins/spec-flow/scripts/seed-config.sh plugins/spec-flow/scripts/test-repo-config.sh` must exit 0 with zero findings. The gate the change defines has to be run against the change; its absence here is why a failing script shipped in round 1.
 - [x] 9.8 Run `bash plugins/spec-flow/scripts/test-repo-config.sh`; it must exit 0. The harness builds throwaway git repos and fakes `gh` on PATH, so it needs no network, no GitHub account, and opens no pull request — which is what makes seeding's git/gh path testable at all. It covers what a live run never reaches: every unusable-config state, hostile repo roots refused by both subcommands, and the seeding rollback that stops a failed PR creation stranding a branch. It cleans up its temp directory on EXIT, INT, and TERM.
 ## 10. Release
 

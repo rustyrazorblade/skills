@@ -23,12 +23,12 @@ The configuration directory SHALL default to `spec-flow/` at the repository root
 #### Scenario: Default location
 
 - **WHEN** `SPEC_FLOW_CONFIG_DIR` is unset
-- **THEN** the policy is read from `spec-flow/CI.md` at the repository root
+- **THEN** the policy is read from `spec-flow/TESTING.md` at the repository root
 
 #### Scenario: Relocated by environment
 
 - **WHEN** `SPEC_FLOW_CONFIG_DIR` is set to a repo-relative path in the consuming repo's `.claude/settings.json`
-- **THEN** the policy is read from `<that dir>/CI.md`, resolved against the repository root
+- **THEN** the policy is read from `<that dir>/TESTING.md`, resolved against the repository root
 
 #### Scenario: An absolute override is rejected
 
@@ -200,12 +200,12 @@ The configuration file SHALL be self-describing: it SHALL state that the repo ow
 #### Scenario: The repo is configured on merge
 
 - **WHEN** this change merges
-- **THEN** `spec-flow/CI.md` already exists in this repository
+- **THEN** `spec-flow/TESTING.md` already exists in this repository
 - **AND** the check passes here immediately, with no window in which this repo's own pipeline refuses
 
 #### Scenario: The policy states what is actually true here
 
 - **WHEN** an agent reads this repository's policy file
-- **THEN** it states that this repo has no test-running CI and no automated test suite
+- **THEN** it states this repository's actual test tooling and that it has no test-running CI
 - **AND** names what does gate merge here
 - **AND** does not name a test command this repo does not run

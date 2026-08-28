@@ -330,16 +330,17 @@ cmd_check() {
   # that the repo already owns its policy.
   if [[ -n "$any_absent" ]]; then
     # Read both remedies below before acting: neither fits a repo that already had a policy under a
-    # filename an older version of the plugin expected. Rebasing does not help it, because its
-    # default branch carries the same file, and seeding writes a new policy beside the old one. This
-    # states the possibility rather than testing for it: the resolver knows exactly one filename, by
-    # the owner's clean-break ruling, and looking for another here would reintroduce the fallback
-    # that ruling removed.
+    # filename an older version of the plugin expected. The message states that possibility rather
+    # than testing for it: the resolver knows exactly one filename, by the owner's clean-break
+    # ruling, and looking for another here would reintroduce the fallback that ruling removed. It
+    # points back at the expected path the "Missing or unusable" block above already printed, so it
+    # sends nobody outside the terminal, and it names no filename of its own.
     echo
     echo "First, if this repo used spec-flow successfully before: the policy filename this version"
     echo "expects may differ from the one your repo carries, in which case neither remedy below"
-    echo "applies as written. Check the plugin's release notes and rename your file rather than"
-    echo "seeding a second one."
+    echo "applies as written. Rebasing does not help in that case, because your default branch"
+    echo "carries the same file. Rename your existing policy file to the path named above rather"
+    echo "than seeding a second one."
     echo
     echo "To create it: run /spec-flow:setup. Its seeding item proposes a policy for this repo,"
     echo "confirms it with you before writing anything, then opens a PR. Nothing is written until"

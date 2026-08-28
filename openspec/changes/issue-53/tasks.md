@@ -252,3 +252,67 @@ stated the template-naming convention without the qualifier its own scenario alr
 - [x] 9.9 Swap tasks 8.14 and 8.15 into numerical order.
 - [x] 9.10 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x`
       on the two edited scripts, all four harnesses, and both `openspec validate --strict` runs.
+
+## 10. Round-five corrections
+
+**Found by the fifth review pass.** Four lenses approved and `spec` rejected. Two items were each
+found independently by two lenses; a third came from one lens that declined to gate on it. Section
+9 fixed the covers-mapping one level up, at the scripts a harness runs; this round reaches the
+library those scripts import.
+
+- [x] 10.1 Add `plugins/dev-skills/lib/html_shell.py` to **both** dev-skills harness entries in
+      `spec-flow/TESTING.md`, and state that it is shared, so a change to it means running both
+      harnesses rather than one. **Found by `spec` (F1, major) and `test-rigor` (TR-6, minor).**
+      Both generators import `default_out_path`, `inject_manifest`, and `fail` from it
+      (`generate-walkthrough.py:21-22`, `generate-explain.py:23-24`), both harnesses drive those
+      generators end to end, and `test-generate-explain.sh:1186-1210` carries a regression written
+      for its `inject_manifest` escaping, naming the file in its comment. No covers-mapping named
+      it, so an agent editing it matched no bullet, then read the no-harness sentence — which tells
+      it to stop — and ran `py_compile` while 239 assertions covering its change went unrun. This
+      is task 9.1's failure mode one dependency level down, and `plugins/dev-skills/lib/` sits in
+      neither harness's directory: exactly the shape task 9.3 broadened the scenario to reach. Each
+      mapping verified against the harness's own source rather than asserted.
+- [x] 10.2 Name `preview-fixture/` in the ide-explain entry. **Found by `spec`, in the same
+      finding.** `test-generate-explain.sh:1087-1121` exercises the shipped `preview-fixture/` tree
+      through `--change`, but the entry's negative clause named only `init-explain.sh` and
+      `preview.sh`, which reads as though nothing else in that directory is covered. The entry is
+      scoped to the fixture's OpenSpec content, which is what the harness reaches; `preview.sh`'s
+      own invocation stays uncovered, as that harness's comment already records. Name the
+      walkthrough harness's own `fixtures/` tree in its entry for the same reason: 26 checked-in
+      manifests drive it, and a JSON fixture triggers neither the `shellcheck -x` nor the
+      `py_compile` fallback, so an unlisted fixture is the 10.1 gap with no backstop at all. Found
+      by the pre-commit review pass, which flagged the asymmetry of naming one harness's fixture
+      tree and not the other's.
+- [x] 10.3 Replace the release-notes pointer in `cmd_check`'s remedy block in
+      `plugins/spec-flow/scripts/repo-config.sh`. **Found by `observability` (OBS-4) and
+      `code-review` (R5-1), independently.** The repo has no `CHANGELOG`, no releases file, and no
+      git tags, so "Check the plugin's release notes" sent an operator out of the terminal to
+      nothing, while the answer sat four paragraphs above it: the "Missing or unusable" block
+      prints the absolute expected path. The remedy now says to rename the existing policy file to
+      the path named above. That names only the new filename, which the message already emits, so
+      the clean-break ruling is untouched — nothing is inspected and the previous name is still
+      never mentioned. The wording replaced was introduced by task 9.5.
+- [x] 10.4 Give the rebase remedy its own why-clause. **Found by `observability`, which declined to
+      gate on it.** The seeding remedy was defused specifically — "rather than seeding a second
+      one" names and rejects its exact outcome — while the rebase remedy was defused only by the
+      blanket "neither remedy below applies as written". The reason it actually fails, that the
+      reader's default branch carries the same file, lived in a code comment and never reached the
+      operator. That asymmetry matters because the rebase remedy describes a spec-flow issue
+      worktree almost exactly. The output now states the reason and the comment drops the sentence
+      the output took over. No previous filename is named. The why-clause is anchored — "Rebasing
+      does not help **in that case**" — and the anchor is inside the asserted needle: the rebase
+      remedy two paragraphs later is the correct fix for the reader most likely to reach this
+      output, a worktree branched before the policy landed, and an unanchored sentence would tell
+      that reader to skip their own remedy. Anchor found missing by the pre-commit review pass.
+- [x] 10.5 Update `test-repo-config.sh` for 10.3 and 10.4. The assertion named "and is sent to the
+      release notes rather than to a second policy file" pinned the dead-end string, so both its
+      name and its expectation change with the message; two more land, one on 10.4's why-clause and
+      one `expect_not_contains "release notes"` closing the gap the pre-commit review pass found —
+      nothing pinned the *removal*, so the dead-end sentence could be re-added beside the working
+      one and the suite would still pass. That is the reasoning the paired no-did-you-mean
+      assertions already use. The harness goes 111 → 113. Both `expect_not_contains "CI.md"`
+      assertions still pass: neither new string contains it.
+- [x] 10.6 Add this round's rows to `ac-coverage.md`, and correct the assertion count it gives for
+      `test-repo-config.sh`.
+- [x] 10.7 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x` on
+      the two edited scripts, all four harnesses, and both `openspec validate --strict` runs.

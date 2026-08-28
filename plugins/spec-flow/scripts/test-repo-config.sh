@@ -317,11 +317,24 @@ expect_not_contains "no did-you-mean reaches stderr either" \
 # Naming nothing is not the same as helping nobody. A repo that used spec-flow under the previous
 # filename lands here, and both remedies mislead it: its default branch carries the same file, so
 # rebasing changes nothing, and seeding writes a second policy beside the one it already has. The
-# message says so without naming a filename or inspecting the tree.
+# message says both, and why, without naming a filename or inspecting the tree.
 expect_contains "an existing consumer is warned that both remedies may not apply" \
   "$previous_name_out" "the policy filename this version"
-expect_contains "and is sent to the release notes rather than to a second policy file" \
-  "$previous_name_out" "rename your file rather than"
+expect_contains "and is told why rebasing does not help it either" \
+  "$previous_name_out" "Rebasing does not help in that case, because your default branch"
+# "in that case" is load-bearing and asserted above as part of the needle: the rebase remedy two
+# paragraphs later is the correct fix for the reader this check is really aimed at, a worktree
+# branched before the policy landed. An unanchored "rebasing does not help" would tell that reader
+# to skip their own remedy.
+# The remedy points at the expected path, which the "Missing or unusable" block already printed,
+# so the operator never has to leave the terminal to act on it.
+expect_contains "and is pointed at the path already printed rather than to a second policy file" \
+  "$previous_name_out" "Rename your existing policy file to the path named above"
+# And nothing sends them out of the terminal instead. This repo publishes no release notes: no
+# CHANGELOG, no releases file, no tags. Asserted for the same reason as the no-did-you-mean checks
+# above — re-adding a dead-end pointer beside the working one breaks nothing else.
+expect_not_contains "and is not sent anywhere outside the terminal" \
+  "$previous_name_out" "release notes"
 
 echo ""
 echo "=== seed-config.sh: argument and content handling ==="

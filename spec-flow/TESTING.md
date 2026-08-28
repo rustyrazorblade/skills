@@ -30,12 +30,17 @@ Run these on a change, and only where the change touches them:
     `plugins/spec-flow/scripts/repo-config.sh` and `plugins/spec-flow/scripts/seed-config.sh`.
   - `bash plugins/spec-flow/scripts/test-board.sh` covers `plugins/spec-flow/scripts/board.py`.
   - `bash plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` covers
-    `plugins/dev-skills/skills/walkthrough/scripts/generate-walkthrough.py` and
-    `plugins/dev-skills/skills/walkthrough/assets/viewer.html`.
+    `plugins/dev-skills/skills/walkthrough/scripts/generate-walkthrough.py`,
+    `plugins/dev-skills/skills/walkthrough/assets/viewer.html`, the manifest fixtures under that
+    directory's `fixtures/`, and the shared `plugins/dev-skills/lib/html_shell.py`.
   - `bash plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` covers
-    `plugins/dev-skills/skills/ide-explain/scripts/generate-explain.py` and
-    `plugins/dev-skills/skills/ide-explain/assets/viewer.html`. It does not cover that directory's
-    `init-explain.sh` or `preview.sh`.
+    `plugins/dev-skills/skills/ide-explain/scripts/generate-explain.py`,
+    `plugins/dev-skills/skills/ide-explain/assets/viewer.html`, the shared
+    `plugins/dev-skills/lib/html_shell.py`, and the OpenSpec content under that directory's
+    `preview-fixture/`. It does not cover that directory's `init-explain.sh` or `preview.sh`.
+
+  `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it
+  means running **both** dev-skills harnesses, not one.
 
   A script with no harness of its own still gets the `shellcheck -x` or `py_compile` bullet above;
   there is nothing further to run for it.

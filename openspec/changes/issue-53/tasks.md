@@ -2,35 +2,35 @@
 
 ## 1. The template
 
-- [ ] 1.1 Write `plugins/spec-flow/references/seed-policy-tiered.md`. Body states the pre-issue-50
+- [x] 1.1 Write `plugins/spec-flow/references/seed-policy-tiered.md`. Body states the pre-issue-50
       policy in full — fast tier locally, full suite in CI, merge gated on green CI — in the same
       owner-voice register `spec-flow/CI.md` uses. Frame the commands as per-runner examples, the
       way the pre-issue-50 text in `skills/implement/SKILL.md` did, rather than naming one stack's
       commands as though they were universal.
-- [ ] 1.2 Write its header: the three conditions a repo must meet (suite already split into a fast
+- [x] 1.2 Write its header: the three conditions a repo must meet (suite already split into a fast
       and a slow tier; CI runs tests; merge gated on green CI); the instruction to close the file
       and write from what the repo does if any condition fails; that this is the policy spec-flow
       used to hardcode and that hardcoding it was the defect issue 50 fixed; that nothing reads
       this file at runtime and a missing `spec-flow/CI.md` stops the pipeline rather than falling
       back here.
-- [ ] 1.3 Close the header with a visible boundary marker (an HTML comment on its own line, not a
+- [x] 1.3 Close the header with a visible boundary marker (an HTML comment on its own line, not a
       wrapper around the header) stating that everything above it is for the seeding agent and the
       repo's file starts below.
-- [ ] 1.4 Confirm the basename is not `CI.md` and that `grep -rn "CI.md" plugins/spec-flow` still
+- [x] 1.4 Confirm the basename is not `CI.md` and that `grep -rn "CI.md" plugins/spec-flow` still
       returns only references to the runtime file.
 
 ## 2. Seeding
 
-- [ ] 2.1 In `plugins/spec-flow/skills/setup/SKILL.md`, insert one paragraph after the sentence
+- [x] 2.1 In `plugins/spec-flow/skills/setup/SKILL.md`, insert one paragraph after the sentence
       naming this repo's own `spec-flow/CI.md` as a worked example (currently ending line 113),
       making the template conditional on `setup` having already determined the repo's shape is the
       tiered split, and directing it not to open the file for any other shape.
-- [ ] 2.2 Address the template as `${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`, with no
+- [x] 2.2 Address the template as `${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`, with no
       fallback clause — matching `skills/adopt-tiering/SKILL.md:82`, not
       `agents/tdd-developer.md:57`.
-- [ ] 2.3 Leave `setup/SKILL.md:92`'s "not a template with blanks" and the `skills` worked-example
+- [x] 2.3 Leave `setup/SKILL.md:92`'s "not a template with blanks" and the `skills` worked-example
       sentence verbatim. Confirm by diff that neither moved or changed.
-- [ ] 2.4 Add one sentence to the "Third, land it" block: the seeded file carries neither the
+- [x] 2.4 Add one sentence to the "Third, land it" block: the seeded file carries neither the
       template's seeding notes nor any reference to the template.
 
 ## 3. De-duplicate the tiered wording

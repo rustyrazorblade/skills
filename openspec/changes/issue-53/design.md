@@ -28,19 +28,29 @@ split itself, `SPEC_FLOW_CONFIG_DIR` resolution, or the exit-code contract.
 
 ## Decisions
 
-### D1 — The template ships at `references/seed-policy-tiered.md`, flat
+### D1 — The template ships at `references/CI.md`, flat
 
 `references/` is already this plugin's home for shipped files a skill or agent reads by
 `${CLAUDE_PLUGIN_ROOT}`-relative path. The nearest precedent does exactly this job:
 `skills/adopt-tiering/SKILL.md:82` reads `${CLAUDE_PLUGIN_ROOT}/references/ci/github-actions-gradle.yml`
 as a starting point it copies into the consuming repo. `agents/tdd-developer.md:56` reads
-`references/refactoring-discipline.md` the same way.
+`references/refactoring-discipline.md` the same way. That directory reasoning is unchanged by
+anything below.
 
-The basename carries load. It must differ from `CI.md` — see D3.
+**The basename is `CI.md` because that is the name the file takes in the consuming repo.** The
+owner directed this after the first review pass, and the first draft's name — `seed-policy-tiered.md`
+— was wrong. It shipped, and the owner went looking for "the CI.md template", found nothing by that
+name, and reasonably concluded the file had never landed. A name that hides what the file is costs
+more than the property the old name was chosen to protect.
 
-`setup/SKILL.md` addresses the path plainly as
-`${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`, with **no fallback clause**. The plugin's
-two precedents differ for a reason: `agents/tdd-developer.md:57` carries a fallback because an
+That property was overstated. It was framed as a naming rule — see D3, rewritten — when the guard
+is actually containment, and containment survives the rename untouched. What the rename genuinely
+costs is grep legibility: `grep -rn "CI.md" plugins/spec-flow` no longer separates references to the
+runtime file from references to the template. That is a review convenience, not a safety property,
+and it is the accepted price of a name that says what the file is.
+
+`setup/SKILL.md` addresses the path plainly as `${CLAUDE_PLUGIN_ROOT}/references/CI.md`, with **no
+fallback clause**. The plugin's two precedents differ for a reason: `agents/tdd-developer.md:57` carries a fallback because an
 agent file is not expanded by the skill-invocation context and must resolve the variable at
 runtime, whereas a `SKILL.md` is expanded before the agent sees it. `setup` is a skill, so it takes
 the `adopt-tiering` form. A fallback clause there would add a branch that can never be taken.
@@ -78,19 +88,24 @@ template before reading the repo.
 
 ### D3 — Enforcement of the no-runtime-read rule is prose, plus one free structural guard
 
-`scripts/repo-config.sh:39` pins `POLICY_FILE='CI.md'`. Because the template's basename differs, no
-configuration resolution can reach it; an accidental runtime read would need a hand-written literal
-containing `references/seed-policy-tiered.md`, which is one greppable string and visible in review.
+The guard is **containment**, not the basename. An earlier draft of this section described it as a
+naming rule, and that description was wrong; the guard itself was never lost, only misdescribed.
 
-That property is why the template is not named `CI.md`. `grep -rn "CI.md" plugins/spec-flow` names
-the runtime file throughout the plugin — `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`,
-`scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. A second `CI.md` inside the
-plugin makes every one of those hits ambiguous and disables the one search that would catch a
-future runtime read.
+`scripts/repo-config.sh` composes every policy path as `${repo_root}/${config_dir}/${POLICY_FILE}`
+(`:290`, `:370`), and `repo_root` comes from `git rev-parse --show-toplevel` (`:114`) — the
+**consuming repo's** worktree root. The plugin's root takes no part in it. `:43-45` records that
+`CLAUDE_PLUGIN_ROOT` is deliberately never read in that script, so it has no mechanism by which to
+name the plugin's directory at all. A template inside the plugin therefore lies outside the tree the
+resolution searches, and is unreachable because of its **directory**, whatever its basename. Calling
+it `CI.md` costs nothing here. An accidental runtime read would still need a hand-written literal
+path naming the plugin's `references/` directory, which is visible in review.
 
-Already true and worth recording rather than building: `scripts/repo-config.sh:43-45` documents
-that `CLAUDE_PLUGIN_ROOT` is deliberately never read there, so the check has no mechanism by which
-it could reach the template.
+What the rename does cost is a search. `grep -rn "CI.md" plugins/spec-flow` used to name the runtime
+file throughout the plugin and nothing else — `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`,
+`scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. It now also matches the template
+and its documentation, so it no longer discriminates. Nobody should read a clean result from it as
+evidence of anything. That search was a review convenience; the resolution anchor is what carries
+the property.
 
 The rule is stated in three places rather than one — the spec (already, at
 `openspec/changes/issue-50/specs/repo-config/spec.md:111`), the template's own header, and
@@ -175,8 +190,9 @@ compatible with `setup/SKILL.md:92`'s "not a template with blanks" — which is 
 Rejected: it would not satisfy the acceptance criterion, and `spec.md:120` would still have no
 referent, so that requirement would need rewording too.
 
-**Name it `references/CI.md`.** Mirrors the target filename. Rejected on D3's grep argument. The
-strongest thing the path can say is that this file is *not* the one the pipeline reads.
+**Name it something other than `CI.md`.** The first draft did, as `seed-policy-tiered.md`, on the
+grep argument now rewritten in D3. Rejected by the owner after the first review pass: the argument
+was overstated, and a name that hides what the file becomes is what actually cost time. See D1.
 
 **Put it in `references/ci/`.** Rejected: `references/ci/README.md:1` titles that page "CI contract
 for spec-flow test tiering", and its "Templates" section means workflow YAML copied into
@@ -187,8 +203,8 @@ sends readers to that directory for exactly that narrow purpose.
 not the policy" true at the path level, which is a genuine advantage. Rejected: it is scaffolding
 for one file, `references/refactoring-discipline.md` sets the precedent that a single-purpose
 document sits flat, and a directory named "templates" invites a future `default.md` — D2's bias
-arriving by a route nobody decides on. A flat filename carrying a qualifier has nowhere to grow
-into without someone naming the new policy explicitly.
+arriving by a route nobody decides on. A second policy has to be named, and placed, by someone who
+decides to add it.
 
 **Name it `example-policy-tiered.md`.** "Example" is the strongest framing against the bias risk,
 but inaccurate: this is the wording seeding copies, not an illustration beside it. A misleading

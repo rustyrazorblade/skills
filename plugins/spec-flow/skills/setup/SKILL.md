@@ -114,7 +114,7 @@ later question moot.
 
      Only where you have **already** determined that the repo has the tiered shape — a suite split
      structurally into a fast tier and a slow tier, CI that runs the tests, and merge gated on
-     green CI — open `${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md` and use its wording.
+     green CI — open `${CLAUDE_PLUGIN_ROOT}/references/CI.md` and use its wording.
      That is the policy spec-flow used to hardcode, so a repo adopting it gets one canonical
      baseline instead of a fresh paraphrase. **For any other shape, do not open that file.** Read
      the repo first and let it decide the shape; never let the template decide it. It is one

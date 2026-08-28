@@ -33,18 +33,19 @@ document continued to assert it.
 
 ## What Changes
 
-**A new template file ships**, at `plugins/spec-flow/references/seed-policy-tiered.md`. It states
-the pre-issue-50 policy in full — a fast tier locally, the full suite in CI, merge gated on green
-CI — in the same owner-voice register `spec-flow/CI.md` uses. Its header opens with three
+**A new template file ships**, at `plugins/spec-flow/references/CI.md`. It states the pre-issue-50
+policy in full — a fast tier locally, the full suite in CI, merge gated on green CI — in the same
+owner-voice register `spec-flow/CI.md` uses. Its header opens with three
 disqualifying conditions a repo must meet, and closes with an explicit boundary marker so the
 seeding notes are stripped rather than copied into the repo's file.
 
-The basename is deliberately not `CI.md`. `scripts/repo-config.sh:39` pins `POLICY_FILE='CI.md'`,
-so a differently-named template cannot be reached by any configuration resolution, and any
-accidental runtime read would require a hand-written literal path that `grep` finds. A second
-`CI.md` inside the plugin would make `grep -rn "CI.md"` — which names the runtime file throughout
-the plugin, at `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`, `scripts/repo-config.sh`,
-and `scripts/seed-config.sh` among others — stop distinguishing the runtime file from the template.
+The basename is `CI.md` because that is the name the file takes in the consuming repo. It stays
+unreachable at runtime by containment, not by its name: `scripts/repo-config.sh` composes every
+policy path from the consuming repo's root, which it gets from `git rev-parse --show-toplevel`, and
+never knows the plugin's root at all. The plugin's copy is outside the tree that resolution
+searches, so no resolved path can name it whatever it is called. The cost is that
+`grep -rn "CI.md" plugins/spec-flow` no longer separates the runtime file from the template; that
+search was a review convenience, and the resolution anchor is what carries the guarantee.
 
 **`skills/setup/SKILL.md` gains one paragraph and one sentence.** The new paragraph goes after the
 existing anti-bias guidance (currently ending at line 113), not before it, and makes the template

@@ -912,13 +912,14 @@ run the same check before any work and simply stop, relaying its output unchange
 `/spec-flow:setup` seeds a repo that has none: it proposes a concrete policy, confirms it with the
 owner, then opens a PR. It writes nothing before the owner confirms, and never merges.
 
-**One seeding template ships, at `references/seed-policy-tiered.md`.** It states the tiered policy
-spec-flow used to hardcode — a fast tier locally, the full suite in CI, merge gated on green CI —
-for the one repo shape that policy fits. `setup` opens it only where it has already read the repo
-and found that shape, and never for any other shape; the seeded file carries the policy text alone,
-not the template's seeding notes. **Nothing reads it at runtime.** Its basename is deliberately not
-`CI.md`, so no configuration resolution can reach it, and a missing `spec-flow/CI.md` stops the
-pipeline rather than falling back here.
+**One seeding template ships, at `references/CI.md`.** It carries the name it takes in the
+consuming repo. It states the tiered policy spec-flow used to hardcode — a fast tier locally, the
+full suite in CI, merge gated on green CI — for the one repo shape that policy fits. `setup` opens
+it only where it has already read the repo and found that shape, and never for any other shape; the
+seeded file carries the policy text alone, not the template's seeding notes. **Nothing reads it at
+runtime.** `repo-config.sh` anchors every policy path at the consuming repo's root and never knows
+the plugin's root, so the plugin's copy lies outside the tree any resolution searches, whatever it
+is called; a missing `spec-flow/CI.md` stops the pipeline rather than falling back here.
 
 **Seeding never deletes anything on the remote, deliberately.** If the push succeeds but the pull
 request does not open — a token without the scope, branch protection, a network drop, or the owner

@@ -2,9 +2,9 @@
 
 ## 1. The template
 
-- [x] 1.1 Write `plugins/spec-flow/references/seed-policy-tiered.md`. Body states the pre-issue-50
-      policy in full — fast tier locally, full suite in CI, merge gated on green CI — in the same
-      owner-voice register `spec-flow/CI.md` uses. Frame the commands as per-runner examples, the
+- [x] 1.1 Write `plugins/spec-flow/references/CI.md`. Body states the pre-issue-50 policy in full —
+      fast tier locally, full suite in CI, merge gated on green CI — in the same owner-voice
+      register `spec-flow/CI.md` uses. Frame the commands as per-runner examples, the
       way the pre-issue-50 text in `skills/implement/SKILL.md` did, rather than naming one stack's
       commands as though they were universal.
 - [x] 1.2 Write its header: the three conditions a repo must meet (suite already split into a fast
@@ -16,8 +16,20 @@
 - [x] 1.3 Close the header with a visible boundary marker (an HTML comment on its own line, not a
       wrapper around the header) stating that everything above it is for the seeding agent and the
       repo's file starts below.
-- [x] 1.4 Confirm the basename is not `CI.md` and that `grep -rn "CI.md" plugins/spec-flow` still
-      returns only references to the runtime file.
+- [x] 1.4 Confirm the template is unreachable by configuration resolution. Read
+      `plugins/spec-flow/scripts/repo-config.sh` and check that every policy path is composed from
+      the consuming repo's root (`git rev-parse --show-toplevel`, `:114`; composed at `:290` and
+      `:370`) and that `CLAUDE_PLUGIN_ROOT` is never read there (`:43-45`). The plugin's copy is
+      outside that tree, so no resolved path can name it.
+- [x] 1.5 Rename the template to `plugins/spec-flow/references/CI.md` with `git mv`, so history
+      follows the file, and update every reference to its former path.
+      **Owner-directed after the first review pass.** The file is copied into a consuming repo as
+      `spec-flow/CI.md`, so it should carry that name. The first draft's name hid what the file was,
+      and the owner, finding nothing called `CI.md`, concluded the template had never shipped. The
+      naming argument that ruled `CI.md` out was overstated: the no-runtime-read guard is
+      containment, not the basename, and it survives the rename intact. The real cost is that
+      `grep -rn "CI.md" plugins/spec-flow` no longer separates the runtime file from the template.
+      See D1 and D3.
 
 ## 2. Seeding
 
@@ -25,7 +37,7 @@
       naming this repo's own `spec-flow/CI.md` as a worked example (currently ending line 113),
       making the template conditional on `setup` having already determined the repo's shape is the
       tiered split, and directing it not to open the file for any other shape.
-- [x] 2.2 Address the template as `${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`, with no
+- [x] 2.2 Address the template as `${CLAUDE_PLUGIN_ROOT}/references/CI.md`, with no
       fallback clause — matching `skills/adopt-tiering/SKILL.md:82`, not
       `agents/tdd-developer.md:57`.
 - [x] 2.3 Leave `setup/SKILL.md:92`'s "not a template with blanks" and the `skills` worked-example
@@ -36,7 +48,7 @@
 ## 3. `adopt-tiering`
 
 - [x] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
-      tiered policy with a pointer to `references/seed-policy-tiered.md` as the single source of
+      tiered policy with a pointer to `references/CI.md` as the single source of
       that wording. Do not change what `adopt-tiering` does.
       **Deviation:** the restatement was deleted, but no pointer replaced it. A pointer would have
       directed a policy read at the template, which this change's own `repo-config` requirement
@@ -68,8 +80,8 @@
       apply" caution verbatim, immediately after. Leave `:95` alone — it points at
       `references/ci/`, which is a different thing.
 - [x] 4.4 Add `plugins/spec-flow/references/README.md`: three entries naming `ci/`,
-      `refactoring-discipline.md`, and `seed-policy-tiered.md`, each with the consumer that reads
-      it. The template's entry states it is read only during seeding, never at runtime.
+      `refactoring-discipline.md`, and the template, each with the consumer that reads it. The
+      template's entry states it is read only during seeding, never at runtime.
 
 ## 5. Correct issue 50's pending change
 

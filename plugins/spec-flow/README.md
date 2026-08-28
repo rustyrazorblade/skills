@@ -68,9 +68,10 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   at all, and what gates merge, or nothing runs. `/spec-flow:setup` seeds it — it proposes a
   concrete policy, confirms it with you before writing anything, then opens a PR. Every entry point
   checks for it first and stops with a message naming the fix. Seeding reads your repo first; the
-  one seeding template the plugin ships, `references/seed-policy-tiered.md`, states the tiered
-  policy and is opened only where your repo already has that shape. Nothing reads it at runtime,
-  and a missing `spec-flow/CI.md` stops the pipeline rather than falling back to it. A repo with
+  one seeding template the plugin ships, `references/CI.md`, states the tiered policy and is opened
+  only where your repo already has that shape. Nothing reads it at runtime — policy resolution is
+  anchored at your repo's root, so the plugin's copy is outside the tree it searches — and a
+  missing `spec-flow/CI.md` stops the pipeline rather than falling back to it. A repo with
   no test suite and no test-running CI is a perfectly valid policy here; write that plainly rather
   than inheriting a template that does not apply. See **Test policy** in `docs/workflow.md`.
 - **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-pm` runs isolated in its

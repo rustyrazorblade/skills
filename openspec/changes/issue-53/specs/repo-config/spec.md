@@ -2,10 +2,11 @@
 
 ### Requirement: The plugin ships exactly one seeding template, and nothing reads it at runtime
 
-The plugin SHALL ship a seeding template at a single documented path inside the plugin. Its
-filename SHALL differ from the name of the repo's policy file, so that no configuration resolution
-can reach it. The template SHALL be read only during seeding, with the owner present, and SHALL NOT
-be read at runtime, quoted into any prompt, or substituted when the repo's file is absent.
+The plugin SHALL ship a seeding template at a single documented path inside the plugin. Policy
+resolution SHALL be anchored at the consuming repo's root, so that a template contained in the
+plugin lies outside the tree any resolution searches and no configuration resolution can reach it.
+The template SHALL be read only during seeding, with the owner present, and SHALL NOT be read at
+runtime, quoted into any prompt, or substituted when the repo's file is absent.
 
 #### Scenario: The template ships and is discoverable at one path
 
@@ -16,8 +17,10 @@ be read at runtime, quoted into any prompt, or substituted when the repo's file 
 #### Scenario: The template cannot be reached by configuration resolution
 
 - **WHEN** any part of the pipeline resolves the repo's policy file
-- **THEN** the resolved name is the repo's policy filename, which the template's filename does not
-  match
+- **THEN** the resolved path is anchored at the consuming repo's root, and the plugin's own root
+  takes no part in it
+- **AND** the template is contained in the plugin, outside the tree that resolution searches, so no
+  resolved path can name it whatever it is called
 - **AND** reaching the template would require a literal path written by hand rather than any
   resolution the pipeline performs
 

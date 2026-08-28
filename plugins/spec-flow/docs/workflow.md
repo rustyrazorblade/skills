@@ -865,9 +865,13 @@ file, then add a stub entry in both SKILL.md and `implement.workflow.js`'s `revi
 ## Test policy
 
 **The repo owns the policy; the plugin owns only the mechanism.** spec-flow ships **no default
-test or CI policy at all**, and falls back to nothing when the repo has not stated one. What runs
-locally, what runs in CI, whether CI is a test gate at all, and what gates merge are the consuming
-repo's to decide and to write down.
+test or CI policy at all**, and falls back to nothing when the repo has not stated one. It does
+ship one seeding template, read only while a repo is being seeded and never by the pipeline — see
+**Where the policy lives** below. What runs locally, what runs in CI, whether CI is a test gate at
+all, and what gates merge are the consuming repo's to decide and to write down.
+
+This section is the authoritative statement of that model. Every other mention of the test policy
+in this document points here rather than restating it.
 
 This is deliberate. Test policy is shaped by each repo's CI cost, suite size, stack, and merge
 gate; across a portfolio there are as many sets of rules as there are repos, so any default the
@@ -878,7 +882,7 @@ plugin shipped would be wrong somewhere by construction. A repo with no test-run
 
 | Directory | Committed? | What it holds | Lifetime |
 |---|---|---|---|
-| `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `CI.md`, its test and CI policy | Lives with the repo |
+| `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `TESTING.md`, its test and CI policy | Lives with the repo |
 | `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests`, `owner-instructions` | Dies with the branch |
 
 Only the **dotted** one belongs in `.gitignore`. A trailing-slash pattern with no interior slash
@@ -888,7 +892,7 @@ that name — in spec-flow's own repo, `plugins/spec-flow/`, erasing the plugin'
 
 ### Where the policy lives
 
-`spec-flow/CI.md` at the repository root. The directory is relocatable with
+`spec-flow/TESTING.md` at the repository root. The directory is relocatable with
 `SPEC_FLOW_CONFIG_DIR` — repo-relative only; an absolute value is rejected, because `env` values in
 `.claude/settings.json` are not interpolated, so a checked-in absolute path is a machine-specific
 literal that is wrong on every other clone.
@@ -907,6 +911,16 @@ run the same check before any work and simply stop, relaying its output unchange
 
 `/spec-flow:setup` seeds a repo that has none: it proposes a concrete policy, confirms it with the
 owner, then opens a PR. It writes nothing before the owner confirms, and never merges.
+
+**One seeding template ships, at `references/TESTING.md.template`.** Its name is the destination
+filename plus a `.template` suffix, as this plugin names every template bound for one named file. It
+states the tiered policy spec-flow used to hardcode — a fast tier locally, the full suite in CI,
+merge gated on green CI — for the one repo shape that policy fits. `setup` opens it only where it
+has already read the repo and found that shape, and never for any other shape; the seeded file
+carries the policy text alone, not the template's seeding notes. **Nothing reads it at runtime.**
+`repo-config.sh` anchors every policy path at the consuming repo's root and never knows the
+plugin's root, so the plugin's copy lies outside the tree any resolution searches, whatever it is
+called; a missing `spec-flow/TESTING.md` stops the pipeline rather than falling back here.
 
 **Seeding never deletes anything on the remote, deliberately.** If the push succeeds but the pull
 request does not open — a token without the scope, branch protection, a network drop, or the owner
@@ -927,8 +941,9 @@ absent, rather than holding a default of its own. Neither mode contains policy t
 cannot drift.
 
 Agents report against the policy, not against a tier: `tests_ran` is `policy | partial | degraded |
-none`, and `tests_detail` carries the exact commands run. **Where the policy names nothing to run,
-running nothing is `policy`** — full compliance, not `none` and not `degraded`.
+none`, and `tests_detail` carries the exact commands run; `implement` quotes that value verbatim in
+its run summary and in the PR body, and asserts no tier of its own. **Where the policy names
+nothing to run, running nothing is `policy`** — full compliance, not `none` and not `degraded`.
 
 **The policy file is branch-controlled content.** It is read from the worktree, so an issue branch's
 own diff can change it, and the check deliberately never inspects what it says. The pointer
@@ -1029,12 +1044,9 @@ the repo's own to state rather than the plugin's to assume.
   a timer.
 - **Concurrency.** Several issues can be in flight at once, each isolated in its own worktree.
   `/spec-flow:board` reports across them.
-- **Test policy.** The repo states it in `spec-flow/CI.md`; the plugin ships no default and falls
-  back to nothing. The local gate is whatever that file names, plus the branch's
-  `.spec-flow/flagged-tests`. `/spec-flow:implement` reports the exact commands that ran
-  (`tests_detail`) in its summary and the PR body, and asserts no tier of its own. See **Test
-  policy** above. Test resources that could collide between concurrent runs should carry a
-  per-process-unique seed so two runs never name the same resource.
+- **Test policy.** The repo owns it, and **Test policy** above states it in full — this bullet does
+  not restate it. One concurrency point belongs here: test resources that could collide between
+  concurrent runs should carry a per-process-unique seed, so two runs never name the same resource.
 - **Owner rules, structurally enforced.** OpenSpec before implementation for anything with a design
   decision to record (a content-only `type:docs` issue has none — see **Docs fast path** — and
   implements straight from its scope + acceptance criteria; a `type:tech-debt` issue has none

@@ -1,0 +1,73 @@
+# Test and CI policy
+
+**This repo owns this file.** spec-flow reads it and ships no default of its own; if this file
+goes away, the pipeline stops rather than falling back to anything. Every line below is yours to
+change, including the local/CI split itself.
+
+Keep it short. Every implementation and review agent reads it on every run.
+
+## What this repo is
+
+`skills` is a plugin repo: markdown, shell, and a little Python. Its tests are hand-rolled
+harnesses, each a plain shell script that runs offline and deterministically. The local gate below
+lists every one of them. It has **no test-running CI**, and no framework: there is no `cargo`, no
+Gradle, no `pytest`, and no `npm test` here. Run a harness by invoking it with `bash`.
+
+## The local gate
+
+Run these on a change, and only where the change touches them:
+
+- **Shell scripts** — `shellcheck -x <script>` on each script you added or edited. It must be
+  clean: zero findings, exit 0. Run it from the repo root, and use `-x` so it follows any
+  `source`d file rather than reporting SC1091 for one it declined to read.
+- **Plugin manifests** — when you edit a `plugin.json` or `marketplace.json`, confirm it parses as
+  JSON.
+- **Python scripts** — when you edit one, run it, or run `python3 -m py_compile <script>` if it
+  cannot be run standalone.
+- **Test harnesses** — when a change touches a file a harness covers, run that harness from the
+  repo root. It must exit 0. Every harness in the repo is listed here; paths are repo-relative.
+  - `bash plugins/spec-flow/scripts/test-repo-config.sh` covers
+    `plugins/spec-flow/scripts/repo-config.sh` and `plugins/spec-flow/scripts/seed-config.sh`.
+  - `bash plugins/spec-flow/scripts/test-board.sh` covers `plugins/spec-flow/scripts/board.py`.
+  - `bash plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` covers
+    `plugins/dev-skills/skills/walkthrough/scripts/generate-walkthrough.py`,
+    `plugins/dev-skills/skills/walkthrough/assets/viewer.html`, the manifest fixtures in
+    `plugins/dev-skills/skills/walkthrough/scripts/fixtures/`, and the shared
+    `plugins/dev-skills/lib/html_shell.py`.
+  - `bash plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` covers
+    `plugins/dev-skills/skills/ide-explain/scripts/generate-explain.py`,
+    `plugins/dev-skills/skills/ide-explain/assets/viewer.html`, the shared
+    `plugins/dev-skills/lib/html_shell.py`, and the OpenSpec content under
+    `plugins/dev-skills/skills/ide-explain/scripts/preview-fixture/`. It covers nothing else in
+    that scripts directory: not `init-explain.sh`, not `preview.sh`, and not the fixture's `src/`,
+    `baseline-src/`, `docs/`, `fake-gh/`, or `explain-map.json`, which are `preview.sh`'s own
+    inputs. Editing one of those and getting a green run proves nothing about the edit.
+
+  `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it
+  means running **both** dev-skills harnesses, not one.
+
+  `plugins/cassandra-expert/skills/training/scripts/` holds verification scripts rather than
+  harnesses in the sense above: they check training claims against a live Cassandra 5.0+ cluster,
+  so they cannot run in this offline gate and are not part of it. `CLAUDE.md` governs when to write
+  and run them.
+
+  A script with no harness of its own still gets the `shellcheck -x` or `py_compile` bullet above;
+  there is nothing further to run for it.
+
+An agent that runs nothing because nothing above applies to its change has complied with this
+policy in full.
+
+## CI
+
+CI is **not a test gate** in this repo. `.github/workflows/` holds Claude review workflows only.
+Nothing here produces a `spec-flow-failures` artifact, so there are no CI failures to sync back
+into a branch.
+
+## What gates merge
+
+The owner's review. A PR merges when the owner squash-merges it, and not before.
+
+## Push cadence
+
+Push the issue branch at checkpoints — after a completed task group, or a few working commits.
+Not on every commit.

@@ -65,7 +65,7 @@ done
 #
 # source-path=SCRIPTDIR, not a relative path: shellcheck resolves a relative `source=` against its
 # own working directory, so `shellcheck -x` on this file passed only when run from inside this
-# directory. SCRIPTDIR resolves against the script's location, so the gate spec-flow/CI.md
+# directory. SCRIPTDIR resolves against the script's location, so the gate spec-flow/TESTING.md
 # prescribes is clean from any working directory.
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=repo-config.sh

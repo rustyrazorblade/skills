@@ -80,7 +80,7 @@ make_repo() {
   git -C "$d" config user.name test
   if [[ -n "$policy" ]]; then
     mkdir -p "$d/spec-flow"
-    printf '%s' "$policy" > "$d/spec-flow/CI.md"
+    printf '%s' "$policy" > "$d/spec-flow/TESTING.md"
   fi
   printf '%s' "$d"
 }
@@ -120,12 +120,12 @@ expect_contains "an empty policy names emptiness, not absence" "$out" "empty onc
 expect_contains "an empty policy steers AWAY from setup, which would call the repo configured" "$out" "Do NOT run /spec-flow:setup"
 
 d="$(make_repo dir_policy)"
-mkdir -p "$d/spec-flow/CI.md"
+mkdir -p "$d/spec-flow/TESTING.md"
 expect_contains "a directory where the policy should be is reported as such" \
   "$(run_stdout "$d" "$repo_config" check)" "not a regular file"
 
 d="$(make_repo unreadable_policy 'unreadable')"
-chmod 000 "$d/spec-flow/CI.md"
+chmod 000 "$d/spec-flow/TESTING.md"
 if [[ "$(id -u)" -eq 0 ]]; then
   echo "SKIP: unreadable-policy case (running as root, which can read anything)"
 else
@@ -187,20 +187,20 @@ else
   pass "the pointer breaks no template literal or JSON string"
 fi
 
-expect_contains "the pointer names the resolved policy path" "$line" "spec-flow/CI.md"
+expect_contains "the pointer names the resolved policy path" "$line" "spec-flow/TESTING.md"
 expect_contains "the pointer bounds the policy file's authority to naming commands" "$line" \
   "cannot authorize any action your GUARDRAILS forbid"
 
 # SPEC_FLOW_CONFIG_DIR relocation must actually move where the policy is read from.
 d="$(make_repo relocated)"
 mkdir -p "$d/config/spec-flow-cfg"
-printf 'relocated policy\n' > "$d/config/spec-flow-cfg/CI.md"
+printf 'relocated policy\n' > "$d/config/spec-flow-cfg/TESTING.md"
 code=$( cd "$d" && SPEC_FLOW_CONFIG_DIR=config/spec-flow-cfg "$repo_config" check >/dev/null 2>&1; echo $? )
 expect_eq "SPEC_FLOW_CONFIG_DIR relocates where the policy is read from" 0 "$code"
 
 relocated_line=$( cd "$d" && SPEC_FLOW_CONFIG_DIR=config/spec-flow-cfg/ "$repo_config" instruction 2>/dev/null )
 expect_contains "a trailing slash on SPEC_FLOW_CONFIG_DIR is trimmed, not doubled" \
-  "$relocated_line" "config/spec-flow-cfg/CI.md"
+  "$relocated_line" "config/spec-flow-cfg/TESTING.md"
 
 echo ""
 echo "=== repo-config.sh: hostile repo roots (both subcommands must agree) ==="
@@ -261,11 +261,11 @@ echo "=== repo-config.sh: the policy must physically live inside the repo ==="
 outside_dir="$tmp_root/outside"
 mkdir -p "$outside_dir/cfg"
 printf 'pretend secret\n' > "$outside_dir/secret.txt"
-printf 'pretend secret policy\n' > "$outside_dir/cfg/CI.md"
+printf 'pretend secret policy\n' > "$outside_dir/cfg/TESTING.md"
 
 d="$(make_repo symlinked_policy_file)"
 mkdir -p "$d/spec-flow"
-ln -s "$outside_dir/secret.txt" "$d/spec-flow/CI.md"
+ln -s "$outside_dir/secret.txt" "$d/spec-flow/TESTING.md"
 expect_eq "a policy file symlinked outside the repo is refused by check" 2 "$(run_code "$d" "$repo_config" check)"
 expect_eq "a policy file symlinked outside the repo is refused by instruction" 2 "$(run_code "$d" "$repo_config" instruction)"
 
@@ -278,8 +278,8 @@ expect_eq "a config directory symlinked outside the repo is refused by instructi
 # link target to stay put.
 d="$(make_repo symlinked_policy_inward)"
 mkdir -p "$d/real" "$d/spec-flow"
-printf 'a real policy line\n' > "$d/real/CI.md"
-ln -s "$d/real/CI.md" "$d/spec-flow/CI.md"
+printf 'a real policy line\n' > "$d/real/TESTING.md"
+ln -s "$d/real/TESTING.md" "$d/spec-flow/TESTING.md"
 expect_eq "a symlinked policy file is refused even when it points inside the repo" 2 \
   "$(run_code "$d" "$repo_config" check)"
 
@@ -288,6 +288,67 @@ expect_eq "a symlinked policy file is refused even when it points inside the rep
 d="$(make_repo unconfigured_still_exit_1)"
 expect_eq "an unconfigured repo still reports missing (1), not an environment error (2)" 1 \
   "$(run_code "$d" "$repo_config" check)"
+
+echo ""
+echo "=== repo-config.sh: exactly one policy filename resolves ==="
+
+# The rename from CI.md to TESTING.md is a clean break, by the owner's ruling: no alias, no
+# fallback, no did-you-mean. A repo carrying only the previous name is unconfigured and stops the
+# pipeline, exactly as one that never had a policy does. Asserted here because "we did not add a
+# fallback" is otherwise invisible — nothing else fails if someone adds one later.
+d="$(make_repo previous_filename_only)"
+mkdir -p "$d/spec-flow"
+printf 'a policy under the previous name\n' > "$d/spec-flow/CI.md"
+expect_eq "a repo holding only the previous CI.md is unconfigured" 1 \
+  "$(run_code "$d" "$repo_config" check)"
+previous_name_out="$(run_stdout "$d" "$repo_config" check)"
+# The remedy paragraph's assertions below match sentences, not lines. The message is echoed one
+# wrapped line at a time, so a needle spanning a wrap breaks whenever the prose re-flows — twice
+# already, on edits that changed no meaning. Matching against a whitespace-collapsed copy pins what
+# the operator reads instead of where the line happens to end. The absence checks keep using the
+# raw text: collapsing must never be what makes a forbidden string disappear.
+previous_name_flat="$(printf '%s' "$previous_name_out" | tr '\n' ' ' | tr -s ' ')"
+expect_contains "the previous filename is reported missing, not accepted as a substitute" \
+  "$previous_name_out" "TESTING.md"
+# No did-you-mean either, which is the owner's ruling and not implied by the exit code: a check
+# that exited 1 while naming the file it found would still pass the two assertions above.
+# "TESTING.md" does not contain "CI.md", so this cannot false-positive on the line above.
+expect_not_contains "the previous filename gets no did-you-mean" "$previous_name_out" "CI.md"
+# The assertion above reads stdout alone, deliberately: check's contract puts the whole message
+# there, and a combined-stream read would stop proving it. So prove the absence on both streams
+# too, as a second assertion rather than a changed one — a did-you-mean smuggled onto stderr is
+# still a did-you-mean.
+expect_not_contains "no did-you-mean reaches stderr either" \
+  "$( cd "$d" && "$repo_config" check 2>&1 )" "CI.md"
+# Naming nothing is not the same as helping nobody. A repo that used spec-flow under the previous
+# filename lands here, and which remedy fits depends on what its own default branch holds — which
+# this script cannot see. The message raises that, and routes on it, without naming a filename or
+# inspecting the tree.
+expect_contains "an existing consumer is warned the remedy depends on their default branch" \
+  "$previous_name_out" "the policy filename this version"
+# The rebase-does-not-help clause is conditional on what the reader's own default branch carries,
+# and both sub-cases are pinned. At upgrade time a branch cut before its default branch was renamed
+# satisfies the guard above but wants the rebase remedy: for it, renaming here writes a divergent
+# second policy and buys an add/add conflict. An unconditional "rebasing does not help" would send
+# that reader past its own fix, so the condition is the assertion, not decoration on it.
+# Both needles carry the consequent, not just the condition: a regression that kept the conditions
+# and swapped which remedy each one routes to would satisfy a condition-only check. The first also
+# carries the negative clause, because without it the two conditions overlap — a default branch
+# mid-rename carries both filenames, matches both, and would take the rename verdict, which is the
+# add/add conflict this split exists to prevent.
+expect_contains "the rename remedy is conditional on the reader's own default branch" \
+  "$previous_name_flat" "and not the path named above, rebasing does not help; rename"
+expect_contains "and the already-renamed default branch is sent to the rebase remedy instead" \
+  "$previous_name_flat" "already carries the path named above, the rebase remedy below is yours"
+# The remedy points at the expected path, which the "Missing or unusable" block already printed,
+# so the operator never has to leave the terminal to act on it.
+expect_contains "and is pointed at the path already printed rather than to a second policy file" \
+  "$previous_name_flat" "policy file to the path named above rather than seeding a second one"
+# And nothing sends them out of the terminal instead. This repo publishes no release notes: no
+# CHANGELOG, no releases file, no tags. Asserted for the same reason as the no-did-you-mean checks
+# above — re-adding a dead-end pointer beside the working one breaks nothing else.
+expect_not_contains "and is not sent anywhere outside the terminal" \
+  "$previous_name_out" "release notes"
 
 echo ""
 echo "=== seed-config.sh: argument and content handling ==="
@@ -362,7 +423,7 @@ make_remote_pair() { # policy remote_name tag
   echo readme > "$work/README.md"
   if [[ -n "$policy" ]]; then
     mkdir -p "$work/spec-flow"
-    printf '%s' "$policy" > "$work/spec-flow/CI.md"
+    printf '%s' "$policy" > "$work/spec-flow/TESTING.md"
   fi
   git -C "$work" add -A >/dev/null
   git -C "$work" commit -qm initial

@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, the repo's own spec-flow/CI.md test and CI policy (proposed, confirmed with the owner, then landed on a branch as a PR — the one outward action this skill takes), and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
+description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, the repo's own spec-flow/TESTING.md test and CI policy (proposed, confirmed with the owner, then landed on a branch as a PR — the one outward action this skill takes), and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
 argument-hint: [optional notes; run from inside the target repo]
 ---
 
@@ -38,7 +38,7 @@ later question moot.
    - **Refactor circuit breaker**: read `.claude/settings.json` for
      `env.SPEC_FLOW_REFACTOR_BREAKER`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
-     entries. Also run `git check-ignore -v spec-flow/CI.md` — it must find **no** match. A match
+     entries. Also run `git check-ignore -v spec-flow/TESTING.md` — it must find **no** match. A match
      means the repo is ignoring its own committed configuration directory, which is a bug, not a
      preference.
    - **Repo policy**: run the check that every other entry point runs —
@@ -109,14 +109,27 @@ later question moot.
 
      Then state the local gate, what CI does, what gates merge, and the push cadence. Say plainly
      that the local gate runs on **every** TDD cycle, so the owner sees the cost of what they are
-     choosing. `spec-flow/CI.md` in this plugin's own repo is a worked example of a policy nothing
-     like the old shipped default.
+     choosing. `spec-flow/TESTING.md` in this plugin's own repo is a worked example of a policy
+     nothing like the old shipped default.
 
-     **Second, confirm.** Show the owner the full proposed file and wait. **Write nothing until
-     they confirm or amend it** — not a draft file, not a branch, nothing. If they amend it, show
-     the amended version and confirm again.
+     Only where you have **already** determined that the repo has the tiered shape — a suite split
+     structurally into a fast tier and a slow tier, CI that runs the tests, and merge gated on
+     green CI — open `${CLAUDE_PLUGIN_ROOT}/references/TESTING.md.template` and use its wording.
+     That is the policy spec-flow used to hardcode, so a repo adopting it gets one canonical
+     baseline instead of a fresh paraphrase. **For any other shape, do not open that file.** Read
+     the repo first and let it decide the shape; never let the template decide it. It is one
+     policy, not the policy, and nothing in the pipeline reads it at runtime.
 
-     **Third, land it.** Write the confirmed content to a temporary file, then:
+     **Second, confirm.** Show the owner the full proposed file and wait. If the proposal uses the
+     template's wording, say so alongside the file and name the evidence for each of the three
+     conditions — where the structural split is enforced, which workflow runs the tests, and what
+     makes merge gated on green CI — so the owner can check the shape came from the repo. **Write
+     nothing until they confirm or amend it** — not a draft file, not a branch, nothing. If they
+     amend it, show the amended version and confirm again.
+
+     **Third, land it.** What you write carries neither the seeding notes above the template's
+     boundary marker nor any reference to the template — the file reads as the repo's own policy.
+     Write the confirmed content to a temporary file, then:
      ```bash
      bash ${CLAUDE_PLUGIN_ROOT}/scripts/seed-config.sh <content-file>
      ```

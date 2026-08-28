@@ -31,7 +31,7 @@ Owner-facing prose adds `README.md:66-83` and `skills/implement/SKILL.md:70`, `:
 
 - The `spec-flow-failures` artifact name and `.spec-flow/flagged-tests` path literals stay hardcoded.
 - No merge, precedence, or section-override semantics. The repo's file fully replaces the plugin's default.
-- No validation that `CI.md` answers any particular question — that is a schema arriving through the back door, and the owner ruled it out explicitly.
+- No validation that `TESTING.md` answers any particular question — that is a schema arriving through the back door, and the owner ruled it out explicitly.
 - Issue 38's remaining scope (default branch, review-lens mapping, model overrides) is not designed here. It is rewritten as a child issue **after** this merges, against what actually landed.
 - The wider `SKILL.md` / `implement.workflow.js` prompt duplication is not fixed here.
 
@@ -43,7 +43,7 @@ Owner-facing prose adds `README.md:66-83` and `skills/implement/SKILL.md:70`, `:
 
 This follows the plugin's own precedent: `agents/tdd-developer.md:57` already tells the developer to `cat "$CLAUDE_PLUGIN_ROOT/references/refactoring-discipline.md"`.
 
-**Alternative rejected — thread the file's contents through `args`.** The `implement.workflow.js` script cannot read files (see Domain Facts), so its policy text would have to arrive as a string in its `args` payload and be interpolated into a JS template literal. `CI.md` is markdown containing fenced code blocks and shell commands; any backtick or `${...}` in it would break or inject into that literal. A concrete defect with a plausible trigger.
+**Alternative rejected — thread the file's contents through `args`.** The `implement.workflow.js` script cannot read files (see Domain Facts), so its policy text would have to arrive as a string in its `args` payload and be interpolated into a JS template literal. `TESTING.md` is markdown containing fenced code blocks and shell commands; any backtick or `${...}` in it would break or inject into that literal. A concrete defect with a plausible trigger.
 
 Read-the-file is also the stronger fit for two acceptance criteria: if neither path contains policy text, divergence is structurally impossible rather than merely unlikely; and a plugin holding no commands has none to leak.
 
@@ -73,7 +73,7 @@ This does not contradict "Everything present costs nothing": that scenario gover
 
 ### D3b — Containment is enforced on the resolved path, not merely claimed
 
-**Added during implementation; reverses an earlier decision, on review.** An earlier round softened the "must stay inside the repository" wording rather than enforcing it, reasoning that the threat was a repo owner pointing at their own symlink. That was wrong on two counts. Symlinks are **committable**, so the party in control is the branch under review, not the owner; and every test that decides usability (`-f`, `-r`, and the read itself) follows links, so a committed `spec-flow/CI.md` pointing at `~/.ssh/id_rsa` passed the check while `instruction` emitted an innocent in-repo path that every panel agent then opened.
+**Added during implementation; reverses an earlier decision, on review.** An earlier round softened the "must stay inside the repository" wording rather than enforcing it, reasoning that the threat was a repo owner pointing at their own symlink. That was wrong on two counts. Symlinks are **committable**, so the party in control is the branch under review, not the owner; and every test that decides usability (`-f`, `-r`, and the read itself) follows links, so a committed `spec-flow/TESTING.md` pointing at `~/.ssh/id_rsa` passed the check while `instruction` emitted an innocent in-repo path that every panel agent then opened.
 
 That is a strict escalation over the branch-controlled-**content** risk this design already accepts: content control lets an attacker assert what they already know; this lets them extract what they do not. The bounding clause in the emitted line does not reach it, because the read happens before anything in the clause is evaluated — the clause governs what the file may direct, never which file is opened.
 
@@ -81,7 +81,7 @@ That is a strict escalation over the branch-controlled-**content** risk this des
 
 ### D4 — One script, two subcommands: `repo-config.sh check` and `repo-config.sh instruction`
 
-**Chosen: `plugins/spec-flow/scripts/repo-config.sh`.** The name describes the class of repo config it owns, not the one file it checks today; `CI.md` never appears in it. Adding a later config file is one line in a registry.
+**Chosen: `plugins/spec-flow/scripts/repo-config.sh`.** The name describes the class of repo config it owns, not the one file it checks today; `TESTING.md` never appears in it. Adding a later config file is one line in a registry.
 
 Both subcommands need identical repo-root and config-dir resolution; one script keeps that in exactly one place. Two scripts would duplicate it — the failure mode this change exists to remove.
 
@@ -103,7 +103,7 @@ Stdout for exit 1 because the message is the product and the relaying agent prin
 
 ### D7 — Seeding lives in `/spec-flow:setup`, and proposes rather than guesses
 
-**Chosen by the owner: a new item in `/spec-flow:setup`,** with git and `gh` mechanics in `scripts/seed-config.sh`. A repo missing `CI.md` is by definition not set up, and `setup` already is the once-per-repo interview that edits `.gitignore` and `.claude/settings.json`. It will host the later config files too.
+**Chosen by the owner: a new item in `/spec-flow:setup`,** with git and `gh` mechanics in `scripts/seed-config.sh`. A repo missing `TESTING.md` is by definition not set up, and `setup` already is the once-per-repo interview that edits `.gitignore` and `.claude/settings.json`. It will host the later config files too.
 
 **Accepted departure:** `setup`'s own rules (`SKILL.md:159-161`) say it makes only local edits and never acts outward. Opening a PR is its first outward action. The owner accepted this on condition it is **written into `setup`'s rules deliberately**, not quietly broken.
 
@@ -151,7 +151,7 @@ Not in the issue's original acceptance criteria; folded in because the owner's d
 
 **Verified by running the checks, not inferred:**
 
-- `git check-ignore -v spec-flow/CI.md` → exit 1, no match. **Not ignored today.**
+- `git check-ignore -v spec-flow/TESTING.md` → exit 1, no match. **Not ignored today.**
 - `git check-ignore -v .spec-flow/flagged-tests` → matches `.gitignore:7`.
 
 Gitignore treats `.` as a literal, so `.spec-flow/` matches only the dotted directory. **There is no risk from the entry that exists today** — the issue's concern was backwards.
@@ -172,7 +172,7 @@ Transcribed from the architect's proposal (`.spec-flow/architect-proposal.md` in
 
 | # | Option | Disposition |
 |---|---|---|
-| D1 | Thread `CI.md` contents through `args` into the JS template literal | **Rejected** — fenced code and `${...}` in the repo's markdown would break or inject into the literal. Owner overrode the lead's initial preference for this. |
+| D1 | Thread `TESTING.md` contents through `args` into the JS template literal | **Rejected** — fenced code and `${...}` in the repo's markdown would break or inject into the literal. Owner overrode the lead's initial preference for this. |
 | D1 | Accept two one-line copies rather than one generated line | **Rejected** — defensible, and one sentence drifts far less than a nine-line block, but the criterion asks for structural impossibility over improbability, and one `args` field closes it. |
 | D2 | Per-agent missing-file handling in every teammate prompt | **Rejected by the owner** as unnecessary defensiveness; the check already guarantees presence. |
 | D4 | `check-ci-policy.sh` / `spec-flow-config.sh` as the script name | **Rejected** — the first renames on the first new config file; the second is redundant inside the plugin. |
@@ -182,7 +182,7 @@ Transcribed from the architect's proposal (`.spec-flow/architect-proposal.md` in
 | D7 | Setup writes the file locally only, no PR | **Rejected** — drops the branch+PR shape the acceptance criteria specify. |
 | D7 | `<!-- spec-flow:FILL-IN -->` marker plus a check treating it as unusable | **Collapsed by the owner's ruling** that seeding confirms with the owner anyway — nothing lands unconfirmed, so the marker has nothing to catch. |
 | D8 | Keep the `full \| unit \| degraded \| none` enum, add only `tests_detail` | **Rejected** — the artifact the owner reads would still say `"unit"` in a repo whose policy is the opposite, which the criteria forbid. |
-| D8 | Reserve a `## Local gate` first line in `CI.md` for a terse restatement | **Rejected by the architect** as a schema arriving by the back door. |
+| D8 | Reserve a `## Local gate` first line in `TESTING.md` for a terse restatement | **Rejected by the architect** as a schema arriving by the back door. |
 | D10 | Anchor the existing gitignore entry to `/.spec-flow/` | **Rejected** — correct but changes a working line in every consuming repo for no gain. |
 | — | File the three flagged debt items as issues now | **Deferred by the owner** — recorded here; filed after this merges, alongside the 38 rewrite. |
 
@@ -190,7 +190,7 @@ Transcribed from the architect's proposal (`.spec-flow/architect-proposal.md` in
 
 From the `claude-code-guide` consult, with two items independently re-verified by the lead in this worktree. These constrained the design rather than merely informing it.
 
-- **Workflow-tool JS scripts have no filesystem access.** No `require`, no `fs`, no `child_process`, no shell. Everything the script knows arrives through its `args` object — `implement.workflow.js` already destructures exactly that way. *This is what forced D1's option set: the script cannot read `CI.md` itself under any design.*
+- **Workflow-tool JS scripts have no filesystem access.** No `require`, no `fs`, no `child_process`, no shell. Everything the script knows arrives through its `args` object — `implement.workflow.js` already destructures exactly that way. *This is what forced D1's option set: the script cannot read `TESTING.md` itself under any design.*
 - **`CLAUDE_PLUGIN_ROOT` is not reliably exported to a Bash subprocess.** *Independently verified by the lead:* `printenv CLAUDE_PLUGIN_ROOT` exits 1 here. It is expanded by the skill-invocation context when a `SKILL.md` writes `${CLAUDE_PLUGIN_ROOT}/scripts/foo.sh`, so the script is invoked by absolute path — but a script cannot assume the variable is set in its own environment. `agents/tdd-developer.md:57` already hedges for exactly this. Hence the script self-locates from `BASH_SOURCE` in the manner of `board.py:20-23`.
 - **`CLAUDE_PROJECT_DIR` does not exist.** *Independently verified by the lead:* `printenv CLAUDE_PROJECT_DIR` exits 1. No published env var names the consuming repo's root, so `git rev-parse --show-toplevel` is the only route — already the precedent in `scripts/spawn-issue-pm.sh`.
 - **`env` values in `.claude/settings.json` are not interpolated.** `"${HOME}/config"` stays a literal string. *This is what settles D3:* an absolute `SPEC_FLOW_CONFIG_DIR` in checked-in settings is a machine-specific literal, wrong on every other clone.
@@ -199,13 +199,13 @@ From the `claude-code-guide` consult, with two items independently re-verified b
 
 ## Risks / Trade-offs
 
-**Stale worktrees — the highest risk.** Every issue worktree branched before this merges lacks `spec-flow/CI.md`, so `implement` and `sync-ci` refuse inside it even though the default branch has the file. This will happen on merge day to every in-flight issue. The script's message names the rebase. There is no way to avoid it without a fallback, and the fallback is the thing being removed.
+**Stale worktrees — the highest risk.** Every issue worktree branched before this merges lacks `spec-flow/TESTING.md`, so `implement` and `sync-ci` refuse inside it even though the default branch has the file. This will happen on merge day to every in-flight issue. The script's message names the rebase. There is no way to avoid it without a fallback, and the fallback is the thing being removed.
 
 **A skipped read is silent.** Read-the-file means an agent that never opens the policy has no gate and says nothing. Contained, not eliminated, by requiring the exact commands in `tests_detail`: an agent that did not read the policy cannot name the policy's commands, so the omission surfaces in the review contract rather than vanishing.
 
 **Contract change mid-flight.** A run starting before the merge and finishing after could mix old and new enum values, and the JS `enum` validation would reject the review. Runs are short, so this is minor, but it argues for merging when nothing is in flight.
 
-**A slow policy is now expressible.** A repo whose `CI.md` says "run the 40-minute suite locally" makes every TDD cycle slow. That is the point of the change and it is the repo's choice, but the seeded file should state plainly that the local gate runs on every cycle.
+**A slow policy is now expressible.** A repo whose `TESTING.md` says "run the 40-minute suite locally" makes every TDD cycle slow. That is the point of the change and it is the repo's choice, but the seeded file should state plainly that the local gate runs on every cycle.
 
 **Workflow mode is structurally weaker.** *(Inferred, from the absence of `require`/`fs` and the script's own comment that it cannot read the environment.)* A script that can read neither files nor the environment can only be handed things. Every future repo-owned config file needs a new `args` field and a new `SKILL.md` line to populate it — another chance for the two modes to drift. This design makes the marginal cost one path-bearing string per file, the cheapest version of that tax, but it is still a tax.
 

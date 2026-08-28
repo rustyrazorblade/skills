@@ -63,13 +63,17 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
   bundled `Workflow`-tool script automatically — same five lenses, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
-- **`spec-flow/CI.md` — this repo's own test and CI policy.** spec-flow ships **no default policy
-  and no fallback**: the repo states what runs locally, what runs in CI, whether CI is a test gate
-  at all, and what gates merge, or nothing runs. `/spec-flow:setup` seeds it — it proposes a
+- **`spec-flow/TESTING.md` — this repo's own test and CI policy.** spec-flow ships **no default
+  policy and no fallback**: the repo states what runs locally, what runs in CI, whether CI is a test
+  gate at all, and what gates merge, or nothing runs. `/spec-flow:setup` seeds it — it proposes a
   concrete policy, confirms it with you before writing anything, then opens a PR. Every entry point
-  checks for it first and stops with a message naming the fix. A repo with no test suite and no
-  test-running CI is a perfectly valid policy here; write that plainly rather than inheriting a
-  template that does not apply. See **Test policy** in `docs/workflow.md`.
+  checks for it first and stops with a message naming the fix. Seeding reads your repo first; the
+  one seeding template the plugin ships, `references/TESTING.md.template`, states the tiered policy
+  and is opened only where your repo already has that shape. Nothing reads it at runtime — policy
+  resolution is anchored at your repo's root, so the plugin's copy is outside the tree it searches
+  — and a missing `spec-flow/TESTING.md` stops the pipeline rather than falling back to it. A repo
+  with no test suite and no test-running CI is a perfectly valid policy here; write that plainly
+  rather than inheriting a template that does not apply. See **Test policy** in `docs/workflow.md`.
 - **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-pm` runs isolated in its
   own git worktree, named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool,
   called explicitly as `issue-pm`'s first action (confirmed by test: isolation is **not**

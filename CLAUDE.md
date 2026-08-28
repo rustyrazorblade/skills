@@ -8,6 +8,14 @@ To test plugin skills locally as slash commands, install the local directory as 
 
 Do not create a settings.json file at a plugin root, such as plugins/<plugin>/settings.json, with an "agent" field.  This field makes Claude Code run the main thread as that agent at startup, in every project, whenever the plugin is enabled.  Keep agents available for explicit invocation; do not let one hijack the main thread.  If you find such a file, remove it.
 
+## Template naming: `<destination-filename>.template`
+
+A template a plugin ships for seeding a file in a consuming repo, whose destination is a single named file, is named for the file it becomes: the destination filename, plus a `.template` suffix.  A reader then pairs the two without opening either.
+
+Worked example: `plugins/spec-flow/references/TESTING.md.template` is copied into a consuming repo as `spec-flow/TESTING.md`.
+
+The rule does not reach a template with no single destination.  `plugins/spec-flow/references/ci/github-actions-gradle.yml` and its nextest sibling are named for the runner they wire, because the owner picks one of several and names the copied workflow file themselves.
+
 ## Version bumping
 
 When you work on a branch or PR, ask if the user wants to bump the plugin version.  Show the current version.  Ask for the new version before you make any changes.

@@ -8,7 +8,7 @@ The pipeline should carry the *mechanism* for test tiering and flagged tests. Th
 
 ## What Changes
 
-- **NEW** `spec-flow/CI.md`, a repo-owned policy file at the consuming repo's root, holding the local/CI test split, that repo's test command, the push cadence, and what gates merge. The directory is relocatable via `SPEC_FLOW_CONFIG_DIR`.
+- **NEW** `spec-flow/TESTING.md`, a repo-owned policy file at the consuming repo's root, holding the local/CI test split, that repo's test command, the push cadence, and what gates merge. The directory is relocatable via `SPEC_FLOW_CONFIG_DIR`.
 - **BREAKING** The repo's file becomes the **only** runtime source of that policy. The plugin ships a seeding template and **no runtime fallback**. Every repo already using spec-flow stops at its next `implement` until the file exists; the check's message names the fix.
 - **NEW** `scripts/repo-config.sh`, a single startup-check script owning this logic and all of its messaging, with two subcommands: `check` (the gate) and `instruction` (emit the pointer line). Named for the class of repo config it will host, not for the one file it checks today.
 - **CHANGED** `project-manager` runs `check` at session start and offers seeding on failure. `implement` and `sync-ci` run the same script before doing work and stop on failure. No caller restates the script's message or carries prose rules of its own.
@@ -16,7 +16,7 @@ The pipeline should carry the *mechanism* for test tiering and flagged tests. Th
 - **BREAKING** The review contract's `tests_ran` enum becomes policy-relative — `policy | partial | degraded | none` — with a new `tests_detail` naming the exact commands run. `"unit"` is a word the repo may not use, and is simply false where the policy says otherwise.
 - **CHANGED** `sync-ci` reads the policy and exits cleanly when it says CI is not a test gate, rather than failing to find an artifact that repo will never produce.
 - **NEW** A seeding action in `/spec-flow:setup` that proposes this repo's policy, confirms it with the owner, then writes the file on a branch and opens a PR — never committing or pushing to the default branch. This is `setup`'s first outward action, a deliberate departure written into its own rules.
-- **NEW** This repo's own `spec-flow/CI.md`, hand-written in this change, stating plainly that `skills` has no test suite: the gate is plugin validation and review, and there is no CI test artifact.
+- **NEW** This repo's own `spec-flow/TESTING.md`, hand-written in this change, stating plainly that `skills` has no test suite: the gate is plugin validation and review, and there is no CI test artifact.
 - **CHANGED** `docs/workflow.md` and `README.md` convert from mandate to mechanism-plus-pointer — both copies in each, since converting one would leave the other as the new hardcoded source — and document the `.spec-flow/` versus `spec-flow/` distinction explicitly.
 
 ## Capabilities
@@ -34,7 +34,7 @@ The pipeline should carry the *mechanism* for test tiering and flagged tests. Th
 
 **Fourteen files.**
 
-New (3): `plugins/spec-flow/scripts/repo-config.sh`, `plugins/spec-flow/scripts/seed-config.sh`, and this repo's `spec-flow/CI.md`.
+New (3): `plugins/spec-flow/scripts/repo-config.sh`, `plugins/spec-flow/scripts/seed-config.sh`, and this repo's `spec-flow/TESTING.md`.
 
 Modified (11): `skills/implement/SKILL.md`, `skills/implement/implement.workflow.js`, `skills/sync-ci/SKILL.md`, `skills/address/SKILL.md`, `skills/setup/SKILL.md`, `agents/project-manager.md`, the five review agents (`reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer`, `observability-reviewer`), `docs/workflow.md`, `README.md`.
 
@@ -42,4 +42,4 @@ Modified (11): `skills/implement/SKILL.md`, `skills/implement/implement.workflow
 
 **Version.** `plugins/spec-flow/.claude-plugin/plugin.json` is at `0.34.0`; both it and `.codex-plugin/plugin.json` move together. The number is the owner's to choose.
 
-**Not in scope, deliberately:** the `spec-flow-failures` artifact name and `.spec-flow/flagged-tests` path literals stay hardcoded; no merge/precedence/override semantics; no validation that `CI.md` answers any particular question — that is a schema arriving through the back door.
+**Not in scope, deliberately:** the `spec-flow-failures` artifact name and `.spec-flow/flagged-tests` path literals stay hardcoded; no merge/precedence/override semantics; no validation that `TESTING.md` answers any particular question — that is a schema arriving through the back door.

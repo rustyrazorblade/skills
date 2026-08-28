@@ -161,7 +161,7 @@ ISSUE: #${issue} — read its body for the plan: \`gh issue view ${issue} --json
 
 Implement exactly that Direction, test-first (RED→GREEN→REFACTOR) wherever you touch anything non-trivial, honoring the repo's documented conventions (CLAUDE.md / CONTRIBUTING / style guide). This is BEHAVIOR-PRESERVING: if achieving the Direction cleanly would require changing any observable behavior (a public signature, an error contract, CLI/config/serialized output, or an existing test's asserted behavior), STOP and report the specific behavior delta instead of implementing it — do not silently make the change. Commit with focused messages.
 
-After your first commit, push the branch (\`git push -u origin <branch>\`) and open a DRAFT PR — title "<issue title>", body "Closes #${issue}\\n\\nDraft — tech-debt fix in progress. Behavior-preserving — see issue body for Direction. Tests run per this repo's own policy; see spec-flow/CI.md.", base = the repo's actual default branch (resolve via \`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name\`, never assume main).
+After your first commit, push the branch (\`git push -u origin <branch>\`) and open a DRAFT PR — title "<issue title>", body "Closes #${issue}\\n\\nDraft — tech-debt fix in progress. Behavior-preserving — see issue body for Direction. Tests run per this repo's own policy; see spec-flow/TESTING.md.", base = the repo's actual default branch (resolve via \`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name\`, never assume main).
 ${testInstruction}
 Return a short summary of what you implemented (or the behavior-delta question, if you stopped for one) and the test outcome.
 

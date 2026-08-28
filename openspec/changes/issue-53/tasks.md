@@ -1,0 +1,85 @@
+# Tasks
+
+## 1. The template
+
+- [ ] 1.1 Write `plugins/spec-flow/references/seed-policy-tiered.md`. Body states the pre-issue-50
+      policy in full — fast tier locally, full suite in CI, merge gated on green CI — in the same
+      owner-voice register `spec-flow/CI.md` uses. Frame the commands as per-runner examples, the
+      way the pre-issue-50 text in `skills/implement/SKILL.md` did, rather than naming one stack's
+      commands as though they were universal.
+- [ ] 1.2 Write its header: the three conditions a repo must meet (suite already split into a fast
+      and a slow tier; CI runs tests; merge gated on green CI); the instruction to close the file
+      and write from what the repo does if any condition fails; that this is the policy spec-flow
+      used to hardcode and that hardcoding it was the defect issue 50 fixed; that nothing reads
+      this file at runtime and a missing `spec-flow/CI.md` stops the pipeline rather than falling
+      back here.
+- [ ] 1.3 Close the header with a visible boundary marker (an HTML comment on its own line, not a
+      wrapper around the header) stating that everything above it is for the seeding agent and the
+      repo's file starts below.
+- [ ] 1.4 Confirm the basename is not `CI.md` and that `grep -rn "CI.md" plugins/spec-flow` still
+      returns only references to the runtime file.
+
+## 2. Seeding
+
+- [ ] 2.1 In `plugins/spec-flow/skills/setup/SKILL.md`, insert one paragraph after the sentence
+      naming this repo's own `spec-flow/CI.md` as a worked example (currently ending line 113),
+      making the template conditional on `setup` having already determined the repo's shape is the
+      tiered split, and directing it not to open the file for any other shape.
+- [ ] 2.2 Address the template as `${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`, with no
+      fallback clause — matching `skills/adopt-tiering/SKILL.md:82`, not
+      `agents/tdd-developer.md:57`.
+- [ ] 2.3 Leave `setup/SKILL.md:92`'s "not a template with blanks" and the `skills` worked-example
+      sentence verbatim. Confirm by diff that neither moved or changed.
+- [ ] 2.4 Add one sentence to the "Third, land it" block: the seeded file carries neither the
+      template's seeding notes nor any reference to the template.
+
+## 3. De-duplicate the tiered wording
+
+- [ ] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
+      tiered policy with a pointer to `references/seed-policy-tiered.md` as the single source of
+      that wording. Do not change what `adopt-tiering` does.
+
+## 4. Documentation
+
+- [ ] 4.1 Consolidate `plugins/spec-flow/docs/workflow.md`'s test-policy statement. It currently
+      appears at `:867`, `:889-935`, and `:1032`. Make the "Test policy" section authoritative and
+      turn the other two into pointers.
+- [ ] 4.2 In that authoritative section, state that one seeding template ships, where it lives, and
+      that nothing reads it at runtime — without implying it is a default. Amend `:867`'s thesis
+      sentence so a reader who stops there does not hold a belief the plugin contradicts.
+- [ ] 4.3 In `plugins/spec-flow/README.md`, amend the `/spec-flow:setup` sentence in the
+      `spec-flow/CI.md` prerequisite bullet (`:66-72`) to name the template and its non-fallback
+      status. Keep the existing "write that plainly rather than inheriting a template that does not
+      apply" caution verbatim, immediately after. Leave `:95` alone — it points at
+      `references/ci/`, which is a different thing.
+- [ ] 4.4 Add `plugins/spec-flow/references/README.md`: three entries naming `ci/`,
+      `refactoring-discipline.md`, and `seed-policy-tiered.md`, each with the consumer that reads
+      it. The template's entry states it is read only during seeding, never at runtime.
+
+## 5. Correct issue 50's pending change
+
+- [ ] 5.1 `openspec/changes/issue-50/specs/repo-config/spec.md:5` — `MAY ship a template` becomes
+      `SHALL ship a template`, and the connective changes from "but" to "and". The concessive "but"
+      only made sense alongside `MAY`.
+- [ ] 5.2 `openspec/changes/issue-50/ac-coverage.md:18` — replace the false `✅ Covered` with an
+      entry naming both the defect and its resolution, pointing at this change and the template's
+      path. Not `❌`: the scenario does cover the criterion once the artifact exists.
+- [ ] 5.3 Add a row to `openspec/changes/issue-50/ac-coverage.md` in the style of its existing
+      `Amendment (owner-approved, mid-implementation)` row, recording that the change's artifacts
+      asserted a file that was never created.
+- [ ] 5.4 Confirm no other edit to issue 50's change. `proposal.md:12`, `proposal.md:37`,
+      `specs/test-policy/spec.md:120`, `specs/repo-config/spec.md:111`, and `tasks.md` all stand
+      as written.
+- [ ] 5.5 Run `openspec validate issue-50 --type change --strict` and
+      `openspec validate issue-53 --type change --strict`. Both must pass.
+
+## 6. Version
+
+- [ ] 6.1 Bump `version` to `0.37.0` in `plugins/spec-flow/.claude-plugin/plugin.json` and
+      `plugins/spec-flow/.codex-plugin/plugin.json`. Both files move together.
+
+## 7. Local gate
+
+- [ ] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm both `plugin.json`
+      files still parse as JSON. No shell scripts and no Python are touched by this change, so
+      `shellcheck` and `py_compile` do not apply.

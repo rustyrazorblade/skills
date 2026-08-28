@@ -9,9 +9,12 @@ argument-hint: [optional notes; run from inside the target repo]
 You are the PM/lead in the main session. Bring a repo that does **not** yet separate fast unit tests
 from slow integration tests onto that split (see **Test policy** in `docs/workflow.md`). This is a
 **one-time migration per repo**, and it applies only where the repo's own `spec-flow/CI.md` chooses
-a fast-local / full-in-CI policy: spec-flow itself assumes no split and ships no default. Check that
-policy first, and say so plainly if it points somewhere else. The migration produces one
-review-ready PR and **never merges**.
+the tiered policy. That policy has one source of wording — the seeding template at
+`${CLAUDE_PLUGIN_ROOT}/references/seed-policy-tiered.md`. Read it there rather than restating it,
+and note what it is: spec-flow assumes no split and ships no runtime default, so the template is
+read only when a repo is seeded and never by the pipeline. Check the repo's own policy first, and
+say so plainly if it points somewhere else. The migration produces one review-ready PR and **never
+merges**.
 
 This is repo **infrastructure**, not a feature — so it is **not** tied to a GitHub issue and does
 **not** go through `groom → activate → implement`. Move into a dedicated worktree using Claude

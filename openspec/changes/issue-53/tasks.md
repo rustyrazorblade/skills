@@ -35,24 +35,24 @@
 
 ## 3. De-duplicate the tiered wording
 
-- [ ] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
+- [x] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
       tiered policy with a pointer to `references/seed-policy-tiered.md` as the single source of
       that wording. Do not change what `adopt-tiering` does.
 
 ## 4. Documentation
 
-- [ ] 4.1 Consolidate `plugins/spec-flow/docs/workflow.md`'s test-policy statement. It currently
+- [x] 4.1 Consolidate `plugins/spec-flow/docs/workflow.md`'s test-policy statement. It currently
       appears at `:867`, `:889-935`, and `:1032`. Make the "Test policy" section authoritative and
       turn the other two into pointers.
-- [ ] 4.2 In that authoritative section, state that one seeding template ships, where it lives, and
+- [x] 4.2 In that authoritative section, state that one seeding template ships, where it lives, and
       that nothing reads it at runtime — without implying it is a default. Amend `:867`'s thesis
       sentence so a reader who stops there does not hold a belief the plugin contradicts.
-- [ ] 4.3 In `plugins/spec-flow/README.md`, amend the `/spec-flow:setup` sentence in the
+- [x] 4.3 In `plugins/spec-flow/README.md`, amend the `/spec-flow:setup` sentence in the
       `spec-flow/CI.md` prerequisite bullet (`:66-72`) to name the template and its non-fallback
       status. Keep the existing "write that plainly rather than inheriting a template that does not
       apply" caution verbatim, immediately after. Leave `:95` alone — it points at
       `references/ci/`, which is a different thing.
-- [ ] 4.4 Add `plugins/spec-flow/references/README.md`: three entries naming `ci/`,
+- [x] 4.4 Add `plugins/spec-flow/references/README.md`: three entries naming `ci/`,
       `refactoring-discipline.md`, and `seed-policy-tiered.md`, each with the consumer that reads
       it. The template's entry states it is read only during seeding, never at runtime.
 

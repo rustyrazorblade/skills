@@ -42,9 +42,9 @@ seeding notes are stripped rather than copied into the repo's file.
 The basename is deliberately not `CI.md`. `scripts/repo-config.sh:39` pins `POLICY_FILE='CI.md'`,
 so a differently-named template cannot be reached by any configuration resolution, and any
 accidental runtime read would require a hand-written literal path that `grep` finds. A second
-`CI.md` inside the plugin would make `grep -rn "CI.md"` — which today hits `README.md:66`,
-`docs/workflow.md:881`, `:891`, `:1032`, and `scripts/seed-config.sh` — stop distinguishing the
-runtime file from the template.
+`CI.md` inside the plugin would make `grep -rn "CI.md"` — which names the runtime file throughout
+the plugin, at `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`, `scripts/repo-config.sh`,
+and `scripts/seed-config.sh` among others — stop distinguishing the runtime file from the template.
 
 **`skills/setup/SKILL.md` gains one paragraph and one sentence.** The new paragraph goes after the
 existing anti-bias guidance (currently ending at line 113), not before it, and makes the template
@@ -56,8 +56,12 @@ sitting together, one tiered and one with no test suite at all, cannot both read
 The added sentence in the "land it" block requires the seeded file to carry neither the template's
 seeding notes nor a reference to the template.
 
-**`skills/adopt-tiering/SKILL.md` stops restating the tiered policy** and points at the template as
-its single source. This de-duplicates wording that would otherwise live in two unlinked places. It
+**`skills/adopt-tiering/SKILL.md` stops restating the tiered policy**, and nothing replaces the
+restatement. No pointer to the template goes in its place. The consuming repo's own
+`spec-flow/CI.md` is the single source any agent reads for policy, and the template is a seeding
+artifact that this change's own `repo-config` requirement confines to seeding, with the owner
+present. A pointer would aim a policy read at it and contradict that requirement, so
+`adopt-tiering` defers to the repo's `spec-flow/CI.md` as the whole of the policy instead. This
 does not change what `adopt-tiering` does or re-open whether tiering is right.
 
 **`docs/workflow.md`'s test-policy statement consolidates.** It currently states the policy in

@@ -53,7 +53,7 @@ The template is never read by the pipeline. It **is** read at seeding time, by a
 proposes a policy. An agent handed a complete, well-written tiered policy and told to start from it
 anchors on it. The failure mode is not one badly-seeded repo; it is a portfolio of near-identical
 tiered policies, which is precisely the state `openspec/changes/issue-50/proposal.md:5` diagnoses
-as "wrong by construction" — now laundered through a confirmation step.
+as "wrong somewhere by construction" — now laundered through a confirmation step.
 
 So: `setup` determines the repo's actual shape first, unaided, exactly as
 `skills/setup/SKILL.md:92-98` already directs. If and only if that shape is the tiered split does
@@ -82,10 +82,11 @@ template before reading the repo.
 configuration resolution can reach it; an accidental runtime read would need a hand-written literal
 containing `references/seed-policy-tiered.md`, which is one greppable string and visible in review.
 
-That property is why the template is not named `CI.md`. `grep -rn "CI.md"` today matches the
-runtime file at `README.md:66`, `docs/workflow.md:881`, `:891`, `:1032`, `scripts/seed-config.sh`,
-and this repo's own `spec-flow/CI.md`. A second `CI.md` inside the plugin makes every one of those
-hits ambiguous and disables the one search that would catch a future runtime read.
+That property is why the template is not named `CI.md`. `grep -rn "CI.md" plugins/spec-flow` names
+the runtime file throughout the plugin — `README.md:66`, `docs/workflow.md:885`, `:895`, `:920`,
+`scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. A second `CI.md` inside the
+plugin makes every one of those hits ambiguous and disables the one search that would catch a
+future runtime read.
 
 Already true and worth recording rather than building: `scripts/repo-config.sh:43-45` documents
 that `CLAUDE_PLUGIN_ROOT` is deliberately never read there, so the check has no mechanism by which
@@ -135,9 +136,13 @@ The architect recommended deferring both. The owner directed fixing them here.
 7.1/7.2 handled a two-copy version; this change touches all three sites anyway, so it consolidates
 to one authoritative section with pointers.
 
-`skills/adopt-tiering/SKILL.md` restates the tiered split, which the template now also encodes. It
-points at the template instead. This is scoped narrowly to de-duplicating the wording; it does not
-re-open whether tiering is the right policy, which the issue puts out of scope.
+`skills/adopt-tiering/SKILL.md` restates the tiered split, which the template now also encodes. The
+restatement is deleted, and no pointer to the template replaces it. A pointer would aim a policy
+read at the template, which the `repo-config` requirement added here confines to seeding, with the
+owner present. The repo's own `spec-flow/CI.md` is the single source any agent reads for policy, so
+`adopt-tiering` defers to that file as the whole of the policy. This is scoped narrowly to removing
+the duplicate wording; it does not re-open whether tiering is the right policy, which the issue puts
+out of scope.
 
 ## Alternatives Considered
 
@@ -167,7 +172,7 @@ strongest thing the path can say is that this file is *not* the one the pipeline
 
 **Put it in `references/ci/`.** Rejected: `references/ci/README.md:1` titles that page "CI contract
 for spec-flow test tiering", and its "Templates" section means workflow YAML copied into
-`.github/workflows/`. A policy document there reads as a third workflow file, and `README.md:95`
+`.github/workflows/`. A policy document there reads as a third workflow file, and `README.md:98`
 sends readers to that directory for exactly that narrow purpose.
 
 **A `references/policy-templates/` subdirectory.** A plural directory name would make "one policy,

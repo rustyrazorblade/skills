@@ -89,6 +89,7 @@
 
 ## 7. Local gate
 
-- [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm both `plugin.json`
-      files still parse as JSON. No shell scripts and no Python are touched by this change, so
-      `shellcheck` and `py_compile` do not apply.
+- [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm
+      `plugins/spec-flow/.claude-plugin/plugin.json` still parses as JSON — the only manifest
+      `spec-flow` ships, per 6.1's deviation note. No shell scripts and no Python are touched by
+      this change, so `shellcheck` and `py_compile` do not apply.

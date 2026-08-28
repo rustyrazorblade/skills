@@ -7,6 +7,8 @@ Cassandra runs directly on the EC2 instances — not in Kubernetes. Do not use `
 Hard-won discoveries from real planning/run sessions that aren't obvious from the command reference alone. When a future session discovers something similar — a flag that silently does more than it looks like, a default that undermines a stated objective, a command whose scope is narrower than its name suggests — add it here so it doesn't have to be rediscovered.
 
 - **`cassandra use <version>` silently switches JDK.** `cassandra_versions.yaml` maps each Cassandra version to a specific JDK, and running `easy-db-lab cassandra use <version>` changes the JDK on every targeted node as a side effect, even when that's not the intent. If a test needs to hold the JDK constant (e.g. comparing a stock release against a personal fork), pin it explicitly with `--java <version>` on every `cassandra use` invocation rather than trusting the version's default.
+- **`cassandra use` silently re-applies `cassandra.patch.yaml` to every host it targets.** Its last step is an internal `update-config` against the default patch file, scoped to the same `--hosts`. Any per-host configuration applied earlier is discarded with no warning. In an A/B or any run with divergent per-node config, `use` must come first — and must not be run again without re-applying the per-host files. See **Configuration** below.
+- **`update-config` replaces the whole config, it never accumulates.** Each apply rebuilds `cassandra.yaml` from `conf.orig`, so a patch file containing only the key you want to change silently drops seeds, cluster name and data directories, and the node fails to start. Every patch file must be a complete config. See **Configuration** below.
 - **`cleanup --kit <name>` only resets K8s-kit data, not Cassandra data.** It targets the kit's LPV (local persistent volume) data at `$DB_MOUNT_PATH/<kit>`. There is no dedicated command to reset Cassandra's own data directories between runs. To wipe Cassandra data, use `easy-db-lab exec run -t cassandra -- sudo rm -rf <path>` instead.
 - **cassandra-easy-stress's `--populate` phase runs to completion before the `-d` duration timer starts.** Metrics reset when the timed portion of the run begins. Don't count populate time against the stated test duration when budgeting how long a run will take.
 - **cassandra-easy-stress's `--rate` is per-thread, not a global target.** Total throughput is `--rate` × `--threads` — it scales linearly, it isn't a concurrency pool the tool uses to saturate a fixed ceiling. Doubling `--threads` doubles total throughput, full stop. It defaults to `--threads 1`, so `--rate 50000` with default threads gives exactly 50k total (not less, and not more). To hit a specific total throughput target, compute `--rate` and `--threads` so their product equals it (e.g. `--rate 5000 --threads 10` for 50k total) — don't put the full target in `--rate` and assume the tool will use threads to get there.
@@ -29,30 +31,110 @@ easy-db-lab cassandra list
 
 ## Configuration
 
-**Never change the snitch.** easy-db-lab configures `Ec2Snitch` automatically. Do not set `endpoint_snitch` in `cassandra.patch.yaml` or override it in any config command.
+### How a patch is applied — read this before writing any config
 
-**Never overwrite an existing `cassandra.patch.yaml`.** `easy-db-lab cassandra use <version>` generates this file with correct settings (snitch, data directory paths, etc.). Always read the existing file and merge new keys into it. Replacing it with a minimal stub destroys those settings and will break the cluster.
+A patch file is **the complete override set for a host, not a delta.** On every apply,
+`patch-config` rebuilds `cassandra.yaml` from the pristine shipped config:
 
 ```bash
-# Download current JVM and YAML config files locally
-easy-db-lab cassandra download-config
-easy-db-lab cassandra download-config --hosts db0
-
-# Write a new cassandra.yaml patch file
-easy-db-lab cassandra write-config my-patch.yaml
-easy-db-lab cassandra write-config my-patch.yaml --tokens 4
-
-# Push patch to all nodes
-easy-db-lab cassandra update-config my-patch.yaml
-
-# Push and restart in one step
-easy-db-lab cassandra update-config my-patch.yaml --restart
-
-# Target specific nodes
-easy-db-lab cassandra update-config my-patch.yaml --hosts db0,db1
+yq '. *= load(env(PATCH))' /usr/local/cassandra/$VERSION/conf.orig/cassandra.yaml > .../conf/cassandra.yaml
 ```
 
-Config workflow: `download-config` → edit the YAML fragment → `update-config <file> [--restart]`
+The merge base is always `conf.orig` — never the live `conf/cassandra.yaml`. So **`update-config`
+replaces, it never accumulates.** Two calls with different files do not stack: the second discards
+everything the first set. A file containing only the one key you want to change strips
+`seed_provider`, `cluster_name` and the data directories, and the node dies at startup with:
+
+```
+IllegalArgumentException: Found no candidates during initialization. Check if the seeds are up: [/127.0.0.1:7000]
+```
+
+That error looks like a seeds problem. It is almost always an incomplete patch file.
+
+**`cassandra use` re-applies `cassandra.patch.yaml` to every host it targets.** Its last act is an
+internal `update-config` against the default file, scoped to the same `--hosts`. Consequences:
+
+- `use` **does not create** `cassandra.patch.yaml` — it consumes it. `write-config` creates it.
+- Any per-host config applied earlier is silently discarded by a later `use`.
+- Always `use` first, then apply per-host files. Never `use` again mid-experiment without
+  re-applying them.
+
+**Never set these keys in a patch file** — they are managed for you and yours will be overwritten:
+
+- `endpoint_snitch` — easy-db-lab configures `Ec2Snitch` automatically.
+- `listen_address`, `rpc_address`, `broadcast_rpc_address` — stamped in per host from the node's
+  private IP at upload time.
+
+**Never overwrite an existing `cassandra.patch.yaml`.** `write-config` generates it with the
+settings the cluster needs (cluster name, seeds, data directory paths, snitch, tokens). Read the
+existing file and add keys to it. Replacing it with a minimal stub will break the cluster.
+
+```bash
+# Download current JVM config files locally (cassandra*.yaml is deliberately excluded)
+easy-db-lab cassandra download-config
+
+# Write a new cassandra.yaml patch file
+easy-db-lab cassandra write-config
+easy-db-lab cassandra write-config --tokens 4
+
+# Push patch to all nodes
+easy-db-lab cassandra update-config cassandra.patch.yaml
+
+# Push and restart in one step
+easy-db-lab cassandra update-config cassandra.patch.yaml --restart
+
+# Target specific nodes
+easy-db-lab cassandra update-config cassandra.patch.yaml --hosts db0,db1
+```
+
+Config workflow: `write-config` → add keys to the YAML → `update-config <file> [--restart]`
+
+> **Two commands accept arguments they silently ignore.** Verified in the source; work around them
+> rather than trusting the flag.
+>
+> - `download-config --hosts <h>` — the flag parses but is never read. It always downloads from the
+>   first Cassandra host. To inspect a specific node's live config, use
+>   `ssh -F "$(dirname "$EDB")/sshConfig" <host> "cat /usr/local/cassandra/current/conf/cassandra.yaml"`.
+> - `write-config <filename>` — the filename is ignored; output always goes to
+>   `cassandra.patch.yaml`. To get a differently-named file, run `write-config` and copy the result.
+
+### Per-host configuration (A/B tests)
+
+`--hosts` scopes an apply to a subset, which is how you run different configs on different nodes.
+Because a patch file is a complete config, **each arm needs its own complete file** — there is no
+base-plus-overlay layer. Derive the variant from the baseline so the two can't drift:
+
+```bash
+# 1. use FIRST — it resets every targeted host to cassandra.patch.yaml
+$EDB cassandra use 6.0-rustyrazorblade
+
+# 2. build the variant arm as a full copy of the baseline plus the key under test
+derive-host-patch.sh cassandra.patch.yaml arm-b.yaml cursor_compaction_enabled=false
+
+# 3. apply per arm. The control arm keeps the baseline `use` already applied.
+$EDB cassandra update-config arm-b.yaml --hosts db1,db2
+```
+
+`derive-host-patch.sh` is on PATH via the plugin's `bin/`. It copies the baseline and sets each
+`key=value` with `yq`, so the arms differ only in what you named.
+
+### Verify config before starting — always
+
+A node that starts with a stripped config takes the cluster down with it, and the resulting error
+points at seeds rather than at the config. Checking first is cheaper than diagnosing after:
+
+```bash
+CLUSTER_DIR=$(dirname "$EDB")
+for h in db0 db1 db2; do
+  echo "== $h"
+  ssh -F "$CLUSTER_DIR/sshConfig" $h \
+    "grep -E 'seeds:|cluster_name:' /usr/local/cassandra/current/conf/cassandra.yaml"
+done
+```
+
+Every node must show `seeds:` and `cluster_name:`. If any node is missing them, do not start —
+re-apply a complete patch file to that node. Add a grep for whatever key the test varies, and
+confirm it is present on the treatment arm and absent (or default) on the control arm.
 
 ## Multi-DC Setup
 
@@ -83,7 +165,7 @@ Run `configure-multi-dc-seeds.sh` (available on PATH via the plugin's `bin/`). I
 configure-multi-dc-seeds.sh <cluster-dir> --name <cluster-name> --dc dc1 --dc dc2
 ```
 
-Requires `easy-db-lab cassandra use <version>` to have been run in each DC first (creates `cassandra.patch.yaml`).
+Requires `easy-db-lab cassandra use <version>` to have been run in each DC first, and `cassandra.patch.yaml` to exist in each DC's workspace (`write-config` creates it; `use` reads it and fails without it).
 
 **If this cluster will use bulk SSTable import (e.g. IAM Bulk Writer, Spark), also add manually:**
 

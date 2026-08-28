@@ -68,7 +68,7 @@ The `easy-db-lab` CLI itself is auto-instrumented via the OpenTelemetry Java Age
 
 Cassandra runs directly on the EC2 instances, not in k3s. It is managed via `easy-db-lab cassandra` commands over SSH.
 
-Configuration overrides are stored in **`cassandra.patch.yaml`** in the workspace directory. This file contains only the settings that differ from the base config — it is merged server-side with the base `cassandra.yaml`. Edit this file and push it with:
+Configuration overrides are stored in **`cassandra.patch.yaml`** in the workspace directory. This file is the **complete** override set for a node, not a delta: each apply rebuilds `conf/cassandra.yaml` by merging the file into the pristine `conf.orig/cassandra.yaml`, so nothing accumulates across applies and anything omitted is lost. Edit this file and push it with:
 
 ```bash
 easy-db-lab cassandra update-config cassandra.patch.yaml [--restart]
@@ -134,7 +134,7 @@ sudo ln -vfns /usr/local/cassandra/$1/conf /etc/cassandra
 ExecStart=/usr/local/cassandra/current/bin/cassandra -f
 ```
 
-Each version directory also contains `conf.orig/` and `cassandra.orig.yaml` — backups created at install time so you can always diff against the original config.
+Each version directory also contains `conf.orig/` and `cassandra.orig.yaml`, captured at install time. These are not just backups for diffing: **`conf.orig/cassandra.yaml` is the merge base every config apply builds from.** `update-config` regenerates `conf/cassandra.yaml` as `conf.orig/cassandra.yaml` merged with the patch file, every time. Do not modify or delete `conf.orig/`.
 
 `/etc/cassandra_versions.yaml` is the source of truth for all installed versions, their download sources, and optional custom build URLs.
 

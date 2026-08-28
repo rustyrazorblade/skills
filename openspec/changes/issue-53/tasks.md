@@ -386,3 +386,90 @@ library those scripts import.
       three sites, and the README states the *mechanism*, naming which dimensions a repo must
       decide, without stating a policy for any of them. `workflow.md:678`, `:683`, and `:1047` all
       point at **Test policy** rather than restating it, so the narrowed scenario still holds.
+
+## 11. Round-six corrections
+
+**Round six approved unanimously, `spec_conformance: full`.** These five were non-blocking findings
+the owner asked to land before the PR. Two of them are second visits to sentences earlier rounds
+already touched, which is the signal that those sentences needed fixing rather than qualifying.
+
+- [x] 11.1 Make the rename paragraph's rebase clause conditional in
+      `plugins/spec-flow/scripts/repo-config.sh`. **Found by `code-review` (R6-1, minor).** Task
+      10.4 wrote "Rebasing does not help in that case, because your default branch carries the same
+      file" — an assertion about a branch the script cannot observe, and false for a third
+      population **this change itself creates**. A consumer upgrading to 0.37.0 renames the policy
+      file on their default branch; every branch cut before that rename satisfies the guard exactly
+      (used spec-flow before, filename differs from what the tree carries) but its default branch
+      carries the *new* path, so rebasing is precisely its fix. Sending it to rename instead writes
+      a divergent second policy on a stale branch and buys an add/add conflict on the eventual
+      rebase. That population is the intersection of the two already handled, and at upgrade time it
+      is the more common of them, the rename being what the upgrade consists of. The message now
+      states the sub-case as a condition rather than asserting it: if the default branch carries the
+      older filename, rename; if it already carries the path named above, the rebase remedy below is
+      the right one. No tree inspection, no filename named, so the clean-break ruling stands.
+
+      The paragraph's opening goes with it. It had said "neither remedy below applies as written",
+      which the new second sub-case makes false in the same breath — for that reader the rebase
+      remedy applies exactly as written, and the message now says so. It opens by naming what the
+      answer depends on instead. Found by the pre-commit review pass, which also caught that the
+      assertion block's comment still carried the removed claim verbatim.
+- [x] 11.2 Fix condition 1 in `plugins/spec-flow/references/TESTING.md.template` rather than
+      reconciling it a third time. **Found by `spec` (F1, minor).** It said "the split is structural
+      — the build enforces it", which is literally true for only two of the five runners the body
+      lists: Gradle source sets and Go build tags. `pytest` selects by marker at collection time,
+      `cargo nextest` by a `.config/nextest.toml` `default-filter` — runner config, not the build,
+      and confirmed as what the plugin's own migration installs at
+      `plugins/spec-flow/skills/adopt-tiering/SKILL.md:70-79` — and npm is whatever the script does.
+      Task 10.8's paragraph fixed this by *restating* the condition as "cannot be selected", the
+      correct test, in different words four lines below it. **The ordering is what made that
+      insufficient**: "If the repo fails any one of them, close this file" sits above the
+      clarification, so a seeding agent in a pytest or nextest repo can disqualify itself and never
+      read the paragraph that would re-admit it, while the same file's local gate then blesses both
+      runners. Condition 1 now carries the test itself: "the split is enforced by the tooling, not
+      by convention — the fast command cannot select a slow test." The paragraph below drops its
+      restating opening and keeps the rest, opening "Two mechanisms satisfy condition 1" rather than
+      the "Two mechanisms do that" the finding proposed: with the test moved four lines up and the
+      close-this-file paragraph in between, "that" had no clear antecedent left.
+
+      **This reverses the earlier instruction not to touch the three header conditions**, at the
+      owner's explicit direction, and it was checked against the committed scenario `The header
+      disqualifies a repo that does not match` before being written. That scenario requires the
+      header to *name* the conditions, to route a repo failing any of them to writing its own
+      policy, and to state that nothing reads the file at runtime. All three still hold. What
+      condition 1 requires is unchanged — task 10.8's paragraph had already made "cannot be
+      selected" the operative test — so this moves the test into the condition rather than altering
+      it.
+- [x] 11.3 Extend the ide-explain exclusion in `spec-flow/TESTING.md` to the fixture subtrees.
+      **Found by `observability` (OBS-5, minor).** The entry made a partial-directory claim for
+      `preview-fixture/` and then listed an exclusion covering only two scripts, and an explicit
+      exclusion list invites the inference that everything absent from it is covered. The fixture
+      also holds `src/`, `baseline-src/`, `docs/`, `fake-gh/`, and `explain-map.json`, none of which
+      the harness reaches — its own comment at `test-generate-explain.sh:1089-1094` says so. An
+      agent editing `preview-fixture/explain-map.json`, exactly the checked-in-JSON population task
+      10.2's `fixtures/` line was added to route, would run the harness, get a green, and believe
+      the edit verified. **That fails toward false confidence rather than toward running nothing**,
+      which is the worse direction for a gate whose job is making a change verifiable, so the entry
+      now names the subtrees and says a green run proves nothing about them.
+- [x] 11.4 Qualify "Every harness in the repo is listed here". **Found by `spec` (F2, minor).**
+      `plugins/cassandra-expert/skills/training/scripts/verify-sai-capabilities.py` runs PASS/FAIL
+      cases and exits non-zero unless every one matches, so on the plain reading it qualifies and
+      the claim was absolute. The omission is right — its `README.md` requires a reachable Cassandra
+      5.0+ cluster, so it cannot be an offline local-gate item — but that carve-out was two
+      paragraphs away, and `CLAUDE.md` tells an agent to verify mechanically what it can. A sentence
+      after the list now names the directory, says why those scripts are not part of this gate, and
+      points at `CLAUDE.md` for when to run them.
+- [x] 11.5 Spell out two paths in `spec-flow/TESTING.md`. **Found by `code-review` (R6-2, nit).**
+      "that directory's `fixtures/`" and "that directory's `preview-fixture/`" left the antecedent
+      to the reader, and the nearest preceding directory in each bullet is `assets/`, where neither
+      exists. Every other entry gives a full repo-relative path; these two now do too.
+- [x] 11.6 Extend `test-repo-config.sh` for 11.1. The assertion pinning "in that case" is replaced
+      by two, one per sub-case, so neither branch of the new condition can be dropped silently. Both
+      needles carry the **consequent**, not the condition alone: a regression keeping both
+      conditions and swapping the remedy each routes to would pass a condition-only check. Both
+      therefore span a wrapped output line, which the glob match crosses. The harness goes
+      113 → 114.
+- [x] 11.7 Add this round's rows to `ac-coverage.md`, and correct the assertion count it gives for
+      `test-repo-config.sh`.
+- [x] 11.8 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x` on
+      the two edited scripts, all four harnesses, both `openspec validate --strict` runs, and both
+      manifests.

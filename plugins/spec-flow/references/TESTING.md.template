@@ -5,8 +5,8 @@ shape of repo. It is not a default, and nothing in the pipeline reads it.
 
 **This policy fits a repo that meets all three of these conditions:**
 
-1. The test suite is already split into a fast tier and a slow tier, and the split is structural —
-   the build enforces it, so a slow test cannot run in the fast tier.
+1. The test suite is already split into a fast tier and a slow tier, and the split is enforced by
+   the tooling, not by convention — the fast command cannot select a slow test.
 2. CI runs the tests.
 3. Merge is gated on green CI.
 
@@ -14,11 +14,10 @@ shape of repo. It is not a default, and nothing in the pipeline reads it.
 actually does. A repo with no test suite, or with CI that runs no tests, has a first-class policy
 of its own; it is not a repo waiting to be brought onto this one.
 
-Condition 1 asks that a slow test cannot be selected into the fast tier. Two mechanisms do that:
-where the test lives, or a marker the fast command excludes. Both satisfy it, and both still rely
-on the repo classifying each test correctly — a layout does not stop anyone writing an I/O test
-inside the unit directory either. Name the mechanism this repo uses in the body's boundary
-sentence, below.
+Two mechanisms satisfy condition 1: where the test lives, or a marker the fast command excludes.
+Both still rely on the repo classifying each test correctly — a layout does not stop anyone writing
+an I/O test inside the unit directory either. Name the mechanism this repo uses in the body's
+boundary sentence, below.
 
 A flag the test itself has to honour is **not** one of them. `go test -short` sets a flag that each
 slow test must check and skip on; a test that forgets still runs in the fast tier, and nothing

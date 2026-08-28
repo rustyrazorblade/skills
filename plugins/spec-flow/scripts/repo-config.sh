@@ -335,12 +335,20 @@ cmd_check() {
     # ruling, and looking for another here would reintroduce the fallback that ruling removed. It
     # points back at the expected path the "Missing or unusable" block above already printed, so it
     # sends nobody outside the terminal, and it names no filename of its own.
+    #
+    # It splits on what the reader's own default branch carries, and says so as a condition rather
+    # than an assertion, because this script cannot see that branch. Both sub-cases are real at
+    # upgrade time: a repo not yet renamed anywhere wants the rename, while a branch cut before its
+    # default branch was renamed wants the rebase remedy below and would get an add/add conflict
+    # from renaming here. That second one is the more common of the two during an upgrade, the
+    # rename being what the upgrade consists of.
     echo
     echo "First, if this repo used spec-flow successfully before: the policy filename this version"
-    echo "expects may differ from the one your repo carries, in which case neither remedy below"
-    echo "applies as written. Rebasing does not help in that case, because your default branch"
-    echo "carries the same file. Rename your existing policy file to the path named above rather"
-    echo "than seeding a second one."
+    echo "expects may differ from the one your repo carries. Which remedy below fits depends on"
+    echo "what your own default branch holds. If your default branch carries that same older"
+    echo "filename, rebasing does not help; rename your existing policy file to the path named"
+    echo "above rather than seeding a second one. If your default branch already carries the path"
+    echo "named above, the rebase remedy below is yours — do not rename here."
     echo
     echo "To create it: run /spec-flow:setup. Its seeding item proposes a policy for this repo,"
     echo "confirms it with you before writing anything, then opens a PR. Nothing is written until"

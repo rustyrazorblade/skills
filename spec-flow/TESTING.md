@@ -31,16 +31,25 @@ Run these on a change, and only where the change touches them:
   - `bash plugins/spec-flow/scripts/test-board.sh` covers `plugins/spec-flow/scripts/board.py`.
   - `bash plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` covers
     `plugins/dev-skills/skills/walkthrough/scripts/generate-walkthrough.py`,
-    `plugins/dev-skills/skills/walkthrough/assets/viewer.html`, the manifest fixtures under that
-    directory's `fixtures/`, and the shared `plugins/dev-skills/lib/html_shell.py`.
+    `plugins/dev-skills/skills/walkthrough/assets/viewer.html`, the manifest fixtures in
+    `plugins/dev-skills/skills/walkthrough/scripts/fixtures/`, and the shared
+    `plugins/dev-skills/lib/html_shell.py`.
   - `bash plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` covers
     `plugins/dev-skills/skills/ide-explain/scripts/generate-explain.py`,
     `plugins/dev-skills/skills/ide-explain/assets/viewer.html`, the shared
-    `plugins/dev-skills/lib/html_shell.py`, and the OpenSpec content under that directory's
-    `preview-fixture/`. It does not cover that directory's `init-explain.sh` or `preview.sh`.
+    `plugins/dev-skills/lib/html_shell.py`, and the OpenSpec content under
+    `plugins/dev-skills/skills/ide-explain/scripts/preview-fixture/`. It covers nothing else in
+    that scripts directory: not `init-explain.sh`, not `preview.sh`, and not the fixture's `src/`,
+    `baseline-src/`, `docs/`, `fake-gh/`, or `explain-map.json`, which are `preview.sh`'s own
+    inputs. Editing one of those and getting a green run proves nothing about the edit.
 
   `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it
   means running **both** dev-skills harnesses, not one.
+
+  `plugins/cassandra-expert/skills/training/scripts/` holds verification scripts rather than
+  harnesses in the sense above: they check training claims against a live Cassandra 5.0+ cluster,
+  so they cannot run in this offline gate and are not part of it. `CLAUDE.md` governs when to write
+  and run them.
 
   A script with no harness of its own still gets the `shellcheck -x` or `py_compile` bullet above;
   there is nothing further to run for it.

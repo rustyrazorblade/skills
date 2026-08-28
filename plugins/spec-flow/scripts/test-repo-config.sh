@@ -315,21 +315,30 @@ expect_not_contains "the previous filename gets no did-you-mean" "$previous_name
 expect_not_contains "no did-you-mean reaches stderr either" \
   "$( cd "$d" && "$repo_config" check 2>&1 )" "CI.md"
 # Naming nothing is not the same as helping nobody. A repo that used spec-flow under the previous
-# filename lands here, and both remedies mislead it: its default branch carries the same file, so
-# rebasing changes nothing, and seeding writes a second policy beside the one it already has. The
-# message says both, and why, without naming a filename or inspecting the tree.
-expect_contains "an existing consumer is warned that both remedies may not apply" \
+# filename lands here, and which remedy fits depends on what its own default branch holds — which
+# this script cannot see. The message raises that, and routes on it, without naming a filename or
+# inspecting the tree.
+expect_contains "an existing consumer is warned the remedy depends on their default branch" \
   "$previous_name_out" "the policy filename this version"
-expect_contains "and is told why rebasing does not help it either" \
-  "$previous_name_out" "Rebasing does not help in that case, because your default branch"
-# "in that case" is load-bearing and asserted above as part of the needle: the rebase remedy two
-# paragraphs later is the correct fix for the reader this check is really aimed at, a worktree
-# branched before the policy landed. An unanchored "rebasing does not help" would tell that reader
-# to skip their own remedy.
+# The rebase-does-not-help clause is conditional on what the reader's own default branch carries,
+# and both sub-cases are pinned. At upgrade time a branch cut before its default branch was renamed
+# satisfies the guard above but wants the rebase remedy: for it, renaming here writes a divergent
+# second policy and buys an add/add conflict. An unconditional "rebasing does not help" would send
+# that reader past its own fix, so the condition is the assertion, not decoration on it.
+# Both needles carry the consequent, not just the condition: a regression that kept the conditions
+# and swapped which remedy each one routes to would satisfy a condition-only check. Both span a
+# wrapped line, which the glob match crosses.
+expect_contains "the rename remedy is conditional on the reader's own default branch" \
+  "$previous_name_out" \
+  "$(printf 'carries that same older\nfilename, rebasing does not help; rename')"
+expect_contains "and the already-renamed default branch is sent to the rebase remedy instead" \
+  "$previous_name_out" \
+  "$(printf 'already carries the path\nnamed above, the rebase remedy below is yours')"
 # The remedy points at the expected path, which the "Missing or unusable" block already printed,
 # so the operator never has to leave the terminal to act on it.
 expect_contains "and is pointed at the path already printed rather than to a second policy file" \
-  "$previous_name_out" "Rename your existing policy file to the path named above"
+  "$previous_name_out" \
+  "$(printf 'policy file to the path named\nabove rather than seeding a second one')"
 # And nothing sends them out of the terminal instead. This repo publishes no release notes: no
 # CHANGELOG, no releases file, no tags. Asserted for the same reason as the no-did-you-mean checks
 # above — re-adding a dead-end pointer beside the working one breaks nothing else.

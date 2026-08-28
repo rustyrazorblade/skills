@@ -201,6 +201,18 @@ Immediately append a new entry: timestamp + step name + "starting". See `../../r
 
 **3. Execute**
 
+> **Before running any command that came from the plan file, verify its form against the
+> references.** A plan is prose written earlier, possibly by a different session — its commands are
+> not validated by anything. Load `../../references/commands.md` and the relevant database
+> reference (see **Database Workflows** below) *before* the first step that touches that database,
+> not after a command fails. Check the subcommand name and the flag spelling against the reference;
+> if the plan and the reference disagree, the reference wins and the plan gets corrected.
+>
+> This is a blocking precondition, not advice. Two failure modes it prevents, both observed:
+> invoking a subcommand by a name it does not have (`cassandra nodetool` — the command is `nt`),
+> and omitting the `--` separator before passthrough args (`stress start -- <workload> -d 4h ...`).
+> Both produce parser errors that read like bad flags rather than a wrong command.
+
 Run the required `$EDB` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
 
 Wait for each command to finish before you continue — see "Run Commands to Completion" above.
@@ -311,7 +323,23 @@ Load the relevant reference file when a step involves a specific database:
 - **Spark** → `../../references/spark.md`
 - **OpenSearch** → `../../references/opensearch.md`
 
+## Unattended and parallel runs
+
+The execution loop above assumes a human is present to confirm each step. Two situations break that assumption, and both are common for A/B benchmarking.
+
+**Unattended.** When this skill runs inside a subagent, or any session that cannot prompt the user, proceed without confirmation — launching it that way *is* the user granting that. Everything else in the loop still applies without exception, above all the journal rule: with nobody watching, `docs/journal.md` is the only record of what happened. Report to whoever launched you at the points that would otherwise have been confirmation stops — a failed precondition, a gate, the start of a long-running step, and completion.
+
+**Parallel arms.** An A/B comparison runs one cluster per arm, one agent per cluster, each with its own workspace and its own `docs/`. Rules that keep the comparison meaningful:
+
+- Each agent touches only its own cluster. Never read or write a sibling's workspace.
+- Generate every arm's plan from a single template so the arms cannot drift, then prove it: normalise the intended variables and diff the plans. They should come out byte-identical.
+- Cross-arm gates are coordination, not reporting. Each agent records its numbers in its own journal and reports them to the coordinator, which does the comparing. Do not invent shared state files.
+- The arms sit on different hardware, so run an identical short calibration workload before the measured run. It tells you whether the clusters are comparable at all, and its spread is the error bar on every delta you later report.
+- No agent decides teardown on its own. See Completion.
+
 ## Team Agents
+
+`cassandra-expert` ships as a **separate plugin** (`plugins/cassandra-expert`), not as part of this one. If it is not installed, the invocations below cannot run. Say so plainly and carry on — do not silently skip them, and do not improvise the analysis in its place. The user may want to install it before a Cassandra performance run.
 
 Invoke `cassandra-expert` proactively for any Cassandra work — don't wait until something is wrong:
 - On step failure or unexpected behavior, diagnose with it before proposing a fix (see Error Handling above).

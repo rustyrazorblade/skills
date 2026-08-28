@@ -61,6 +61,10 @@ This is not optional and it is not redundant with `commands`. A worked example o
 
 Read `--help` for **every** command the plan will invoke, including ones you are confident about. Confidence is exactly the state in which a `--name` gets written where a positional belongs.
 
+**`--help` only works one level deep, and fails silently below that.** `easy-db-lab init --help` works. `easy-db-lab cassandra use --help` prints the *root* help and exits 0 — it looks like it worked, and a session that does not notice will believe it complied with this section while learning nothing. `easy-db-lab cassandra help use` is not a fix either: picocli consumes `help` as the required `<version>` positional and prints the usage block as a parse *error*, which happens to be readable for commands with a required positional and unavailable for every other one.
+
+So for any subcommand below the first level — everything under `cassandra`, `cassandra stress`, `cassandra profile`, `kit`, `logs`, `metrics`, `spark` — `easy-db-lab commands` is the authoritative source, and `easy-db-lab <group> --help` gives the group's subcommand list. Capture `commands` once during discovery and read the entry rather than trusting a `--help` that answered a different question.
+
 ### What help cannot tell you
 
 `--help` documents the *command surface*: flags, positionals, defaults, and whatever prose the author wrote. It does not document the system's *behavior*, and that is where the costlier planning errors live. Help will not tell you:
@@ -186,7 +190,10 @@ Identify every database, tool, or app the test requires. For each one:
 - How long should the test run? How many threads?
 - Any custom tags for metrics?
 - **If the objective names a specific feature or change being evaluated** (a new compaction strategy, a config flag, a code path), confirm now — not later in review — that the workload's default schema/config actually activates that feature. Check `$EDB cassandra stress info <workload>` (or the equivalent for the tool in use) and don't assume the default schema exercises it; a workload can run to completion and produce clean numbers while never touching the thing under test. This is a required question, not something to catch opportunistically in Step 5.
-- **If the plan sets an explicit rate/throughput target**, check how the tool actually combines its rate and concurrency flags to produce total throughput — don't assume a rate flag is a global target on its own. For cassandra-easy-stress, `--rate` is per-thread: total throughput is `--rate` × `--threads`, and it defaults to `--threads 1`. Threads aren't a concurrency pool the tool uses to help saturate a fixed target — doubling threads doubles total throughput linearly. When the objective specifies a total throughput number, set `--rate` and `--threads` so their product equals it (e.g. `--rate 5000 --threads 10` for 50k total), rather than putting the full target in `--rate` and leaving `--threads` at its default.
+- **If the plan sets an explicit rate/throughput or data-volume target**, check in the tool's source how each flag actually scales — per-thread or global — rather than assuming. Do not assume the two scale the same way; in cassandra-easy-stress they scale in opposite directions, and getting either backwards is invisible in the output.
+  - **`--rate` is a global total.** One `RateLimiter` is shared by every thread, so `--rate 100k -t 4` is 100k ops/s total, not 400k. Put the whole target in `--rate` and pick `--threads` for client headroom.
+  - **`--populate` is per thread.** `-t 4 --populate 100m` writes 400m rows. Divide by the thread count to reach a row total.
+  - Whichever tool is in use, confirm this against its source before writing the numbers into a plan, and state the resulting totals in the plan so a later session can check them.
 
 **Observability:**
 - Will Grafana be used to monitor? (it's part of the default stack)
@@ -206,6 +213,12 @@ In **interactive mode**, show the step outline (step names and brief description
 6. Tear down (if applicable)
 
 **The run skill handles all workspace scaffolding** (cluster directory, wrapper, docs) before executing any plan step. The first step in the plan must be provisioning (`easy-db-lab init ... --up`). Never include wrapper creation, directory setup, or `EDB=` assignments — those are handled automatically and must not appear in the plan.
+
+**The run skill also owns the entire reporting apparatus. Never reinvent it in a plan.** It maintains `docs/journal.md` (every command and finding, written as it happens), `docs/issues.md` (friction, written immediately), `docs/results.md` (written at Completion, in a fixed structure: Goal, Results, Key Findings, Performance Results, Configuration Notes, Issues Encountered, Recommendations), `docs/images/` for Grafana screenshots embedded inline, and `make -C <cluster-dir>/docs`, which builds the browsable report at `docs/report/index.html`.
+
+A plan therefore must **not** contain steps that create a results file, define a report format, invent directories for screenshots or metrics exports, or set up cross-session coordination files. Plans say what to do to the cluster; the run skill records what happened.
+
+When the user asks for something the apparatus does not do by default — a fixed screenshot cadence, extra raw-metric exports, a particular statistic — express it in `## Notes` as a constraint layered onto the existing files (for example: "render dashboards to `docs/images/` every 15 minutes, named `<arm>-<dashboard>-<UTC>.png`; report p95/p99 distributions under Performance Results"). Never as a parallel mechanism beside them.
 
 **Validate every command before presenting the plan.** The "Discover Before You Plan" discipline of never guessing flags applies to every command in the draft, not just `kit install` lines — a flag can look plausible (borrowed from another CLI's conventions, like `--name` instead of a positional argument) and still be wrong. For each command:
 
@@ -237,6 +250,14 @@ For each of the following, state whether the plan covers it:
 - **The plan verifies environmental preconditions it depends on** rather than assuming them: kernel settings, capabilities, installed binaries, service state. Settings applied imperatively by a provisioning script may not survive a reboot.
 - **Multi-node claims are checked on more than one node.** If a command targets all nodes, verify more than the first one at least once.
 - **Counts and aggregates are computed over the right unit.** When parsing tool output, confirm what one line or one record actually represents before counting them; many formats are one line per *distinct* item with a weight field, so a line count answers a different question than the one being asked.
+- **Every command in the plan is verified against the references, not recalled.** Load
+  `../../references/commands.md` and the relevant database reference, and check each `$EDB` command
+  the plan emits: the subcommand name exists and is spelled as the reference spells it (some are
+  abbreviations with no long form — `cassandra nt`, not `cassandra nodetool`), the flags exist on
+  that subcommand, and any command passing arguments through to an external tool includes the `--`
+  separator (`cassandra stress start -- <workload> -d 4h --rate 100k`). A plan is executed verbatim
+  by a later session that may trust it over the reference, so an unverified command costs a cluster
+  step and a debugging detour. Commands invented from memory are the failure mode here.
 - The test produces a specific, measurable output.
 - There is a step that collects and records results, not just "look at the dashboard".
 - Teardown is included if cost matters.
@@ -258,6 +279,9 @@ Before finishing, review the written plan against the objective established in S
 - **Answers the question** — do the steps actually produce the data needed to answer the research question? If not, what's missing?
 - **Success criteria are measurable** — is there a step that captures the specific metric or observation defined as success?
 - **Every command is concrete** — no vague steps like "configure Cassandra"; each step has an exact command
+- **Every command was checked against the reference** — re-confirm the Step 4 gate held: subcommand
+  names, flag spellings, and `--` separators all match `references/commands.md` and the database
+  reference. This is cheap to re-check and expensive to get wrong.
 - **No gaps in the sequence** — could someone follow this plan start to finish without needing to improvise?
 - **Cassandra-specific:** if the plan involves Cassandra, ask the `cassandra-expert` agent to do a final pass: "Does this plan's configuration match the stated workload and Cassandra version? Are there any settings that will skew the results or make the test harder to interpret?" Incorporate its findings before presenting the review to the user.
 

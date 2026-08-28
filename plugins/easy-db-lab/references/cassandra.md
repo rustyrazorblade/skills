@@ -7,11 +7,45 @@ Cassandra runs directly on the EC2 instances — not in Kubernetes. Do not use `
 Hard-won discoveries from real planning/run sessions that aren't obvious from the command reference alone. When a future session discovers something similar — a flag that silently does more than it looks like, a default that undermines a stated objective, a command whose scope is narrower than its name suggests — add it here so it doesn't have to be rediscovered.
 
 - **`cassandra use <version>` silently switches JDK.** `cassandra_versions.yaml` maps each Cassandra version to a specific JDK, and running `easy-db-lab cassandra use <version>` changes the JDK on every targeted node as a side effect, even when that's not the intent. If a test needs to hold the JDK constant (e.g. comparing a stock release against a personal fork), pin it explicitly with `--java <version>` on every `cassandra use` invocation rather than trusting the version's default.
+- **`cassandra list` reports installed versions from ONE node.** It reads `/usr/local/cassandra`
+  from the first Cassandra host and presents the result as the whole cluster's state. Once versions
+  can diverge per node (`cassandra install --hosts`), it will confidently report a version as
+  present or absent cluster-wide on the strength of db0 alone. To check a specific node:
+  `ssh -F "$(dirname "$EDB")/sshConfig" <host> "ls /usr/local/cassandra"`.
+- **`cassandra stress start` needs `--` before the workload.** Without it the parser claims every
+  option-shaped token for itself and rejects them (`Unknown options: '-d', '--rate'`), which reads
+  like the flags are unsupported rather than misplaced. The command's own `--help` advertises the
+  broken form (`e.g., KeyValue -d 1h --threads 100`) — do not copy it from there. Correct form:
+  `easy-db-lab cassandra stress start -- RandomPartitionAccess -d 4h --rate 100k`.
 - **`cassandra use` silently re-applies `cassandra.patch.yaml` to every host it targets.** Its last step is an internal `update-config` against the default patch file, scoped to the same `--hosts`. Any per-host configuration applied earlier is discarded with no warning. In an A/B or any run with divergent per-node config, `use` must come first — and must not be run again without re-applying the per-host files. See **Configuration** below.
 - **`update-config` replaces the whole config, it never accumulates.** Each apply rebuilds `cassandra.yaml` from `conf.orig`, so a patch file containing only the key you want to change silently drops seeds, cluster name and data directories, and the node fails to start. Every patch file must be a complete config. See **Configuration** below.
 - **`cleanup --kit <name>` only resets K8s-kit data, not Cassandra data.** It targets the kit's LPV (local persistent volume) data at `$DB_MOUNT_PATH/<kit>`. There is no dedicated command to reset Cassandra's own data directories between runs. To wipe Cassandra data, use `easy-db-lab exec run -t cassandra -- sudo rm -rf <path>` instead.
 - **cassandra-easy-stress's `--populate` phase runs to completion before the `-d` duration timer starts.** Metrics reset when the timed portion of the run begins. Don't count populate time against the stated test duration when budgeting how long a run will take.
-- **cassandra-easy-stress's `--rate` is per-thread, not a global target.** Total throughput is `--rate` × `--threads` — it scales linearly, it isn't a concurrency pool the tool uses to saturate a fixed ceiling. Doubling `--threads` doubles total throughput, full stop. It defaults to `--threads 1`, so `--rate 50000` with default threads gives exactly 50k total (not less, and not more). To hit a specific total throughput target, compute `--rate` and `--threads` so their product equals it (e.g. `--rate 5000 --threads 10` for 50k total) — don't put the full target in `--rate` and assume the tool will use threads to get there.
+- **cassandra-easy-stress's `--rate` is a global total, NOT per-thread.** One `RateLimiter` is created
+  in `commands/Run.kt` and handed to a single shared `Context`; `Context.stress(thread)` passes that
+  same instance to every per-thread `StressContext`, and `RequestQueue` acquires from it. Every thread
+  shares one limiter, so `--rate 100k -t 4` is 100k ops/s total, not 400k. Set `--rate` to the total
+  you want and choose `--threads` for client-side headroom, never as a multiplier. This entry
+  previously claimed the opposite; a plan written to the old guidance overshoots its throughput target
+  by the thread count, which is invisible unless you check achieved op/s against the target.
+- **cassandra-easy-stress's `--populate` IS per-thread.** It is the mirror image of `--rate`, which is
+  exactly what makes the pair easy to get backwards. `Run.kt` prints "Prepopulating data with $max
+  records per thread ($threads)" and sizes the progress bar `max * threads`, so `-t 4 --populate 100m`
+  writes 400m rows, not 100m. Divide by the thread count to reach a row total: `-t 4 --populate 25m`
+  gives 100m.
+- **`cursor_compaction_enabled` (Cassandra 6.0+) falls back silently.** `AbstractCompactionPipeline.create`
+  checks the flag, then `CursorCompactor.isSupported`; if either is false it uses the ordinary iterator
+  pipeline with no error, no warning and no metric. The two pipeline counters exist but are reachable
+  only from test code, so a benchmark can run clean and measure the wrong code path. Disqualifiers:
+  collection or counter columns, any secondary index, BTI sstable format, an input sstable below the
+  latest version, a partial-range scanner, a `tombstoneOption` other than NONE, and an in-flight
+  `nodetool forcecompact` on the table. The only runtime proof is DEBUG on
+  `org.apache.cassandra.db.compaction.CursorCompactor`, enabled without a restart:
+  `easy-db-lab cassandra nt setlogginglevel org.apache.cassandra.db.compaction.CursorCompactor DEBUG`.
+  It then logs `... is supported.` or `... is not supported. REASON: <reason>` per compaction task.
+  With the flag off the class never logs at all, because `create` short-circuits before reaching it —
+  so zero lines is the expected baseline result, not a failed check. Turn the logger back to INFO
+  before any measured window; under unthrottled LCS it fires once per compaction task.
 
 ## Select Version
 

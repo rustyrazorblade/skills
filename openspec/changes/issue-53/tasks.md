@@ -359,10 +359,16 @@ library those scripts import.
       The per-runner examples stay, per task 1.1 — one is corrected, none removed. The three header
       conditions and the boundary marker are untouched.
 - [x] 10.9 Correct `design.md:96` and `design.md:263`, which still said this repo has **two** shell
-      harnesses. Both are present-tense factual claims and both are now false. Round four corrected
-      the count everywhere else — 9.1 in the shipped policy, 9.4 in `ac-coverage.md`, 9.6 in
-      `proposal.md`, and 9.3 by removing the scenario's count rather than fixing it — while
-      `68c41c9` touched `design.md` for the D3 citations without catching these. Unlike `tasks.md`,
+      harnesses. Both are present-tense factual claims and both were false. Neither carries a count
+      now — "hand-rolled harnesses", matching `spec-flow/TESTING.md:11`, which names no count and
+      defers to the list below it. That is the "wording that cannot go stale" task 9.1 called for,
+      applied here rather than "four", which is the same claim one harness away from being wrong
+      again. Nothing in D2's adjacency argument needed the number: the contrast it draws is
+      qualitative — tiered against not tiered, no framework, no CI test gate. Round four corrected
+      the count everywhere else — 9.1 in the shipped policy, 9.4 in `ac-coverage.md`, and 9.3 by
+      removing the scenario's count rather than fixing it. `proposal.md:102` was corrected in
+      `68c41c9` too, without a numbered task claiming it. That same commit touched `design.md` for
+      the D3 citations and did not catch these two. Unlike `tasks.md`,
       whose stale mentions sit in a chronological log that later sections supersede, `design.md` is
       the standing design record that archives, and D2's adjacency argument rested on a false
       description of its own worked example. Sections 8 and earlier still say "two"; they are left

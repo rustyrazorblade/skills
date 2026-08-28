@@ -33,7 +33,7 @@
 - [x] 2.4 Add one sentence to the "Third, land it" block: the seeded file carries neither the
       template's seeding notes nor any reference to the template.
 
-## 3. De-duplicate the tiered wording
+## 3. `adopt-tiering`
 
 - [x] 3.1 In `plugins/spec-flow/skills/adopt-tiering/SKILL.md`, replace its restatement of the
       tiered policy with a pointer to `references/seed-policy-tiered.md` as the single source of
@@ -44,6 +44,15 @@
       is the single source any agent reads for policy; the template is a seeding artifact, not a
       policy source. `skills/setup/SKILL.md` stays its sole consumer, as
       `references/README.md:11` already records.
+- [x] 3.2 In the same file, add one item to step 7's manual owner follow-up list, beside the
+      existing branch-protection item: once the migration lands, the repo's own `spec-flow/CI.md`
+      must restate the split, or the pipeline reads a policy the repo no longer matches. Update the
+      matching `Rules` bullet to name both manual steps. The skill states the follow-up and still
+      never writes the repo's policy file. Do not add a pointer to the template, and leave the
+      entry gate at `SKILL.md:11-13` unchanged.
+      **Added in review round 2, at the owner's direction:** the `code-review` lens found that
+      `adopt-tiering` gates on `spec-flow/CI.md` having chosen tiering but never asks the owner to
+      bring that file up to date once the tiers exist.
 
 ## 4. Documentation
 

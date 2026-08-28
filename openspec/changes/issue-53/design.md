@@ -128,7 +128,7 @@ carry a `repo-config` delta, but they touch different requirements, so bulk arch
 A delta-less change was considered and is not available: `openspec validate --strict` errors with
 "Change must have at least one delta."
 
-### D6 — Two adjacent debt items are folded in, by owner override
+### D6 — Adjacent debt items are folded in, by owner override
 
 The architect recommended deferring both. The owner directed fixing them here.
 
@@ -143,6 +143,14 @@ owner present. The repo's own `spec-flow/CI.md` is the single source any agent r
 `adopt-tiering` defers to that file as the whole of the policy. This is scoped narrowly to removing
 the duplicate wording; it does not re-open whether tiering is the right policy, which the issue puts
 out of scope.
+
+A third item arrived in review round 2, from the `code-review` lens, and the owner directed fixing
+it here as well. `skills/adopt-tiering/SKILL.md:11-13` gates the skill on the repo's own
+`spec-flow/CI.md` having already chosen the tiered policy, but step 7's manual owner follow-up
+named branch protection alone. A migration could therefore land while the one file the pipeline
+reads still described the layout the migration replaced. Step 7 now names both follow-ups. The
+owner declined the larger option of softening the entry gate into a check-and-reconcile step, so
+`:11-13` is untouched, and the skill still never writes the repo's policy file.
 
 ## Alternatives Considered
 

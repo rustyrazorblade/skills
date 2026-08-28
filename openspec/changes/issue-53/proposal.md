@@ -61,8 +61,11 @@ restatement. No pointer to the template goes in its place. The consuming repo's 
 `spec-flow/CI.md` is the single source any agent reads for policy, and the template is a seeding
 artifact that this change's own `repo-config` requirement confines to seeding, with the owner
 present. A pointer would aim a policy read at it and contradict that requirement, so
-`adopt-tiering` defers to the repo's `spec-flow/CI.md` as the whole of the policy instead. This
-does not change what `adopt-tiering` does or re-open whether tiering is right.
+`adopt-tiering` defers to the repo's `spec-flow/CI.md` as the whole of the policy instead. Step
+7's manual owner follow-up list gains a second item to match: once the migration lands, the repo's
+own `spec-flow/CI.md` must restate the split, or the pipeline reads a policy the repo no longer
+matches. The skill names that follow-up; it never writes the repo's policy file. None of this
+changes what `adopt-tiering` does or re-opens whether tiering is right.
 
 **`docs/workflow.md`'s test-policy statement consolidates.** It currently states the policy in
 three places — `:867`, `:889-935`, and `:1032`. One becomes authoritative; the others point at it.

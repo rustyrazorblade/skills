@@ -88,9 +88,15 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    must never commit.
 
 7. **Open the PR — never merge.** Push the branch and open a PR summarizing: unit vs integration
-   counts, the tells used, anything the owner overrode, and the CI wiring added. Call out the
-   **manual owner follow-up: enable branch protection so merge is gated on green CI** — the invariant
-   the whole tiering model relies on, and something this skill cannot reliably set itself.
+   counts, the tells used, anything the owner overrode, and the CI wiring added. Call out two
+   **manual owner follow-ups**. This skill performs neither:
+   - **Enable branch protection so merge is gated on green CI** — the invariant the whole tiering
+     model relies on, and something this skill cannot reliably set itself.
+   - **Restate the split in the repo's own `spec-flow/CI.md`.** That file is the whole of the
+     policy, and every implementation and review agent reads it on every run. Its choice of tiering
+     is what let this migration run, but the commands and layout it names were written before the
+     tiers existed. Where it still names the pre-split commands, the pipeline reads a policy the
+     repo no longer matches.
 
 8. **Exit the worktree.** Call `ExitWorktree` with `action: "keep"` once the PR is up — `"remove"`
    would delete the branch backing the still-open PR from step 7. You're the central coordinator's
@@ -109,5 +115,5 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
 - **Structural, not conventional.** For Gradle, scope deps so a container test can't *compile* under
   `src/test` — not merely move files.
 - **Classify → present → execute.** Show the owner the split before moving files.
-- **Never merge; open a PR.** Enabling the green-CI merge gate (branch protection) is the owner's
-  manual step — always call it out.
+- **Never merge; open a PR.** Enabling the green-CI merge gate (branch protection) and restating
+  the split in the repo's `spec-flow/CI.md` are the owner's manual steps — always call both out.

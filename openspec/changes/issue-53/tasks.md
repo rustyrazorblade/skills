@@ -155,6 +155,8 @@ tooling situation that was never true. See D1, D3, and the two requirements this
       did-you-mean the exit code alone would not exclude. "We added no fallback" is otherwise
       invisible: nothing else fails if someone adds one later. This raises the harness from 105 to
       108 assertions, the only intended count change.
+      **Amended by 9.5**, which adds three more for the same population's remedy message, taking
+      the harness to 111.
 - [x] 8.6 Rename every reference in the plugin's prose: `docs/workflow.md`, `README.md`,
       `references/README.md`, `skills/setup/SKILL.md`, `skills/adopt-tiering/SKILL.md`,
       `skills/implement/SKILL.md`, `skills/implement/implement.workflow.js`, and the repo-root
@@ -190,6 +192,7 @@ tooling situation that was never true. See D1, D3, and the two requirements this
       artifacts, the spec scenario naming the previous filename, and the clean-break case in
       `test-repo-config.sh`. `.memsearch/` and `.spec-flow/` are session and per-branch runtime
       state, neither committed nor ours to edit.
+- [x] 8.14 Do not bump the version. It is already 0.37.0 in both manifests and not yet shipped.
 - [x] 8.15 Correct `openspec/changes/issue-50/specs/repo-config/spec.md:209`. Its scenario "The
       policy states what is actually true here" required this repository's policy to state it has
       **no automated test suite**, which 8.8 makes false and which contradicts this change's own
@@ -199,4 +202,53 @@ tooling situation that was never true. See D1, D3, and the two requirements this
       5.1's `MAY`→`SHALL`: issue 50's deltas were never synced, so this amends a draft. Found by
       the pre-commit review pass, not by the owner's brief, which said references only — recorded
       here and in `overrides.md` as a deliberate exception rather than drift.
-- [x] 8.14 Do not bump the version. It is already 0.37.0 in both manifests and not yet shipped.
+
+## 9. Round-four corrections
+
+**Found by the fourth review pass.** Two majors and five smaller items. Section 8 landed the
+rename correctly but overreached in two places: it counted the repo's harnesses wrong, and it
+stated the template-naming convention without the qualifier its own scenario already carries.
+
+- [x] 9.1 Correct `spec-flow/TESTING.md`'s count and scope. The repo has **four** harnesses, not
+      two: `plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` (151
+      assertions) and `plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` (88)
+      sit outside `plugins/spec-flow/scripts/`, so 8.8's directory-scoped bullet let an agent
+      editing `generate-walkthrough.py` conclude it had complied in full while a suite covering
+      exactly its change went unrun. Replace the count with wording that cannot go stale, and
+      generalise the harness bullet to a repo-wide **Test harnesses** bullet listing all four with
+      what each covers. Verify each mapping against the harness's own source, not by guessing. The
+      no-harness sentence carries over.
+- [x] 9.2 Qualify the `.template` convention in three places: the requirement at
+      `specs/repo-config/spec.md`, `plugins/spec-flow/references/README.md`, and `CLAUDE.md`. Task
+      8.6 said "binding on any template the plugin ships", which the plugin's own
+      `references/ci/github-actions-gradle.yml` and `github-actions-nextest.yml` cannot follow: the
+      owner picks one by runner and names the destination file, so there is no single destination
+      filename to derive from. The rule now reaches a template whose destination is a single named
+      file. The requirement's scenario was already scoped right and is unchanged.
+- [x] 9.3 Broaden the scenario "The harnesses are named in the local gate" to match 9.1. It asked
+      only about a script under the plugin's scripts directory, which is the narrowing 9.1 removes.
+- [x] 9.4 Correct `ac-coverage.md`: the template-naming row overstated its coverage and now states
+      what the scenario does and does not verify; the harness rows say four, not two, and give both
+      spec-flow harnesses as full paths.
+- [x] 9.5 Add one warning to `cmd_check`'s `any_absent` remedy block in
+      `plugins/spec-flow/scripts/repo-config.sh`. Both remedies mislead a repo that already used
+      spec-flow: its default branch carries the same file, so rebasing changes nothing, and seeding
+      writes a second policy beside the one it has. The warning names no previous filename and
+      inspects nothing, keeping the owner's clean-break ruling. Add assertions in
+      `test-repo-config.sh` covering it; the existing no-did-you-mean assertion must still pass.
+      Three assertions land: two on the new warning, and one closing the gap the `spec` and
+      `code-review` lenses both judged defensible — the no-did-you-mean check reads stdout alone,
+      which proves `check`'s whole-message-on-stdout contract, so the combined-stream check is a
+      second assertion beside it rather than a change to it. The harness goes 108 → 111.
+- [x] 9.6 Fix `proposal.md`'s and `ac-coverage.md`'s `scripts/test-board.sh`, which does not
+      resolve from the repo root; both now write `plugins/spec-flow/scripts/test-board.sh`.
+- [x] 9.7 Fix two stale citations in `design.md` D3. The template paragraph this round inserted at
+      `docs/workflow.md:915-923` shifted a target: `:920` now reads as a statement about the
+      template, so it supported the opposite of D3's point. The nearest runtime-file mention is
+      `:923`. `README.md:98` is off by one; the `references/ci/` pointer is at `:99`.
+- [x] 9.8 State `design.md`'s citation base once, under Decisions: an unprefixed path is relative
+      to `plugins/spec-flow`. Two rounds running, the mixed base produced a stale or ambiguous
+      pointer, and this change edits both READMEs.
+- [x] 9.9 Swap tasks 8.14 and 8.15 into numerical order.
+- [x] 9.10 Re-run the local gate this round triggers, per `spec-flow/TESTING.md`: `shellcheck -x`
+      on the two edited scripts, all four harnesses, and both `openspec validate --strict` runs.

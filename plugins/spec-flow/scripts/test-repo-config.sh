@@ -308,6 +308,20 @@ expect_contains "the previous filename is reported missing, not accepted as a su
 # that exited 1 while naming the file it found would still pass the two assertions above.
 # "TESTING.md" does not contain "CI.md", so this cannot false-positive on the line above.
 expect_not_contains "the previous filename gets no did-you-mean" "$previous_name_out" "CI.md"
+# The assertion above reads stdout alone, deliberately: check's contract puts the whole message
+# there, and a combined-stream read would stop proving it. So prove the absence on both streams
+# too, as a second assertion rather than a changed one — a did-you-mean smuggled onto stderr is
+# still a did-you-mean.
+expect_not_contains "no did-you-mean reaches stderr either" \
+  "$( cd "$d" && "$repo_config" check 2>&1 )" "CI.md"
+# Naming nothing is not the same as helping nobody. A repo that used spec-flow under the previous
+# filename lands here, and both remedies mislead it: its default branch carries the same file, so
+# rebasing changes nothing, and seeding writes a second policy beside the one it already has. The
+# message says so without naming a filename or inspecting the tree.
+expect_contains "an existing consumer is warned that both remedies may not apply" \
+  "$previous_name_out" "the policy filename this version"
+expect_contains "and is sent to the release notes rather than to a second policy file" \
+  "$previous_name_out" "rename your file rather than"
 
 echo ""
 echo "=== seed-config.sh: argument and content handling ==="

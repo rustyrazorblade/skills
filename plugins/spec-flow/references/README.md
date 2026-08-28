@@ -10,9 +10,11 @@ below are unlike each other, so each names its own consumer.
 | `refactoring-discipline.md` | `agents/tdd-developer.md` | On behavior-preserving work: a refactor, a `type:tech-debt` fix, or the REFACTOR step of a TDD cycle. |
 | `TESTING.md.template` | `skills/setup/SKILL.md`, during seeding only | **Read only while a repo is being seeded, with the owner present. Never at runtime.** `setup` opens it only where it has already read the repo and found the tiered shape. |
 
-**A template is named for what it becomes.** Any template this plugin ships carries its destination
-filename plus a `.template` suffix, so a reader can pair it with the file it seeds without opening
-either one. `TESTING.md.template` becomes the consuming repo's `spec-flow/TESTING.md`.
+**A template is named for what it becomes.** A template this plugin ships whose destination is a
+single named file carries that filename plus a `.template` suffix, so a reader can pair it with the
+file it seeds without opening either one. `TESTING.md.template` becomes the consuming repo's
+`spec-flow/TESTING.md`. The workflow YAMLs in `ci/` are named for the runner they wire, not for a
+destination, because the owner picks one of several and names the copied file themselves.
 
 **The seeding template is not a fallback.** The pipeline reads the consuming repo's own
 `spec-flow/TESTING.md` and nothing else; when that file is absent the check exits non-zero and the

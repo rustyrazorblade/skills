@@ -114,10 +114,10 @@ place, with other mentions pointing at it rather than restating it.
 
 ### Requirement: The policy file is named for what it governs, and the template is named for what it becomes
 
-The repo-owned policy file SHALL be named `TESTING.md`. A shipped template SHALL be named for its
-destination filename with a `.template` suffix, so a reader can identify the pair without opening
-either file. The plugin SHALL resolve exactly one policy filename, with no alias and no acceptance
-of a previous name.
+The repo-owned policy file SHALL be named `TESTING.md`. A shipped template whose destination is a
+single named file SHALL be named for that filename with a `.template` suffix, so a reader can
+identify the pair without opening either file. The plugin SHALL resolve exactly one policy
+filename, with no alias and no acceptance of a previous name.
 
 #### Scenario: One filename resolves, and only one
 
@@ -145,10 +145,10 @@ run. The policy SHALL NOT instruct an agent that no test runner exists while one
 
 #### Scenario: The harnesses are named in the local gate
 
-- **WHEN** an agent reads this repository's policy before changing a script under the plugin's
-  scripts directory
-- **THEN** the local gate names the harness covering that script
-- **AND** states that it must exit zero
+- **WHEN** an agent reads this repository's policy before changing a file that a harness covers,
+  wherever in the repository that file sits
+- **THEN** the local gate names every harness in the repository and what each one covers
+- **AND** states that the covering harness must exit zero
 
 #### Scenario: Compliance still means running only what applies
 

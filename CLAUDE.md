@@ -10,9 +10,11 @@ Do not create a settings.json file at a plugin root, such as plugins/<plugin>/se
 
 ## Template naming: `<destination-filename>.template`
 
-A template a plugin ships for seeding a file in a consuming repo is named for the file it becomes: the destination filename, plus a `.template` suffix.  A reader then pairs the two without opening either.
+A template a plugin ships for seeding a file in a consuming repo, whose destination is a single named file, is named for the file it becomes: the destination filename, plus a `.template` suffix.  A reader then pairs the two without opening either.
 
 Worked example: `plugins/spec-flow/references/TESTING.md.template` is copied into a consuming repo as `spec-flow/TESTING.md`.
+
+The rule does not reach a template with no single destination.  `plugins/spec-flow/references/ci/github-actions-gradle.yml` and its nextest sibling are named for the runner they wire, because the owner picks one of several and names the copied workflow file themselves.
 
 ## Version bumping
 

@@ -913,7 +913,7 @@ run the same check before any work and simply stop, relaying its output unchange
 owner, then opens a PR. It writes nothing before the owner confirms, and never merges.
 
 **One seeding template ships, at `references/TESTING.md.template`.** Its name is the destination
-filename plus a `.template` suffix, the convention every template this plugin ships follows. It
+filename plus a `.template` suffix, as this plugin names every template bound for one named file. It
 states the tiered policy spec-flow used to hardcode — a fast tier locally, the full suite in CI,
 merge gated on green CI — for the one repo shape that policy fits. `setup` opens it only where it
 has already read the repo and found that shape, and never for any other shape; the seeded file

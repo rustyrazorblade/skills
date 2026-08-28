@@ -90,17 +90,22 @@ sharper once it names a real file.
 YAMLs the owner copies into `.github/`), `refactoring-discipline.md` (read by `tdd-developer`), and
 the template (read only during seeding) — so a contributor browsing the directory learns the
 no-runtime-read rule without opening the file. It also states the
-`<destination-filename>.template` naming convention as a convention, binding on any template the
-plugin ships rather than on this one file.
+`<destination-filename>.template` naming convention as a convention, binding on any template whose
+destination is a single named file rather than on this one file. The qualifier is load-bearing: the
+workflow YAMLs in `ci/` have no single destination, because the owner picks one by runner and names
+the copied file, so the convention cannot reach them and does not claim to.
 
 **`CLAUDE.md` records that convention** for the repository, with the worked example
 `plugins/spec-flow/references/TESTING.md.template` → `spec-flow/TESTING.md`.
 
 **This repository's own `spec-flow/TESTING.md` is corrected while it moves.** It claimed the repo
-has no automated test suite and told agents not to look for a test runner. Two shell harnesses
-exist — `plugins/spec-flow/scripts/test-repo-config.sh` and `scripts/test-board.sh` — and both pass.
-The claim is replaced with what is true, and the local gate gains a bullet requiring the harness
-covering a changed script to run and exit 0. What stays: CI is not a test gate here, nothing
+has no automated test suite and told agents not to look for a test runner. Four shell harnesses
+exist — `plugins/spec-flow/scripts/test-repo-config.sh`,
+`plugins/spec-flow/scripts/test-board.sh`,
+`plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh`, and
+`plugins/dev-skills/skills/ide-explain/scripts/test-generate-explain.sh` — and all four pass.
+The claim is replaced with what is true, and the local gate gains a repo-wide bullet requiring the
+harness covering a changed file to run and exit 0. What stays: CI is not a test gate here, nothing
 produces a `spec-flow-failures` artifact, and an agent whose change triggers no clause of the gate
 has complied in full.
 

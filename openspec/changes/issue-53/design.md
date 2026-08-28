@@ -29,6 +29,10 @@ split itself, `SPEC_FLOW_CONFIG_DIR` resolution, or the exit-code contract.
 
 ## Decisions
 
+Citations below give a path and a line. An unprefixed path is relative to `plugins/spec-flow`; a
+path beginning with a top-level directory, such as `openspec/`, is relative to the repository root.
+So `README.md:66` is the plugin's README, not the repository's.
+
 ### D1 — The template ships at `references/TESTING.md.template`, flat
 
 `references/` is already this plugin's home for shipped files a skill or agent reads by
@@ -112,7 +116,7 @@ hand-written literal path naming the plugin's `references/` directory, which is 
 
 What the naming does cost is a search. A single grep for the policy filename used to name the
 runtime file throughout the plugin and nothing else — `README.md:66`, `docs/workflow.md:885`,
-`:895`, `:920`, `scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. Because
+`:895`, `:923`, `scripts/repo-config.sh`, and `scripts/seed-config.sh` among them. Because
 `TESTING.md.template` contains `TESTING.md`, `grep -rn "TESTING\.md" plugins/spec-flow` now matches
 the template and its documentation too. `grep -rn "TESTING\.md\.template"` isolates the template
 cleanly; isolating the runtime file takes a subtraction,
@@ -229,7 +233,7 @@ silently later.
 
 **Put it in `references/ci/`.** Rejected: `references/ci/README.md:1` titles that page "CI contract
 for spec-flow test tiering", and its "Templates" section means workflow YAML copied into
-`.github/workflows/`. A policy document there reads as a third workflow file, and `README.md:98`
+`.github/workflows/`. A policy document there reads as a third workflow file, and `README.md:99`
 sends readers to that directory for exactly that narrow purpose.
 
 **A `references/policy-templates/` subdirectory.** A plural directory name would make "one policy,

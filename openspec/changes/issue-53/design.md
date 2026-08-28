@@ -132,9 +132,9 @@ A delta-less change was considered and is not available: `openspec validate --st
 
 The architect recommended deferring both. The owner directed fixing them here.
 
-`docs/workflow.md` states the test policy at `:867`, `:889-935`, and `:1032`. Issue 50's tasks
-7.1/7.2 handled a two-copy version; this change touches all three sites anyway, so it consolidates
-to one authoritative section with pointers.
+Before this change, `docs/workflow.md` stated the test policy at `:867`, `:889-935`, and `:1032`.
+Issue 50's tasks 7.1/7.2 handled a two-copy version; this change touches all three sites anyway, so
+it consolidates to one authoritative section with pointers.
 
 `skills/adopt-tiering/SKILL.md` restates the tiered split, which the template now also encodes. The
 restatement is deleted, and no pointer to the template replaces it. A pointer would aim a policy

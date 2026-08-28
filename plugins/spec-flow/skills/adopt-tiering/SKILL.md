@@ -94,9 +94,8 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
      model relies on, and something this skill cannot reliably set itself.
    - **Restate the split in the repo's own `spec-flow/CI.md`.** That file is the whole of the
      policy, and every implementation and review agent reads it on every run. Its choice of tiering
-     is what let this migration run, but the commands and layout it names were written before the
-     tiers existed. Where it still names the pre-split commands, the pipeline reads a policy the
-     repo no longer matches.
+     is what let this migration run, but it was written before the tiers existed. Where it still
+     names the pre-split commands, the pipeline reads a policy the repo no longer matches.
 
 8. **Exit the worktree.** Call `ExitWorktree` with `action: "keep"` once the PR is up — `"remove"`
    would delete the branch backing the still-open PR from step 7. You're the central coordinator's

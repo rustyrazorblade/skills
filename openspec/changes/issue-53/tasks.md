@@ -100,5 +100,6 @@
 
 - [x] 7.1 Per `spec-flow/CI.md`: no test runner exists in this repo. Confirm
       `plugins/spec-flow/.claude-plugin/plugin.json` still parses as JSON — the only manifest
-      `spec-flow` ships, per 6.1's deviation note. No shell scripts and no Python are touched by
-      this change, so `shellcheck` and `py_compile` do not apply.
+      this change edits, since `spec-flow` ships no `.codex-plugin/plugin.json`, per 6.1's deviation
+      note. `marketplace.json` is untouched, so it needs no check. No shell scripts and no Python
+      are touched by this change, so `shellcheck` and `py_compile` do not apply.

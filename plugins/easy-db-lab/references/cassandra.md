@@ -6,6 +6,32 @@ Cassandra runs directly on the EC2 instances — not in Kubernetes. Do not use `
 
 Hard-won discoveries from real planning/run sessions that aren't obvious from the command reference alone. When a future session discovers something similar — a flag that silently does more than it looks like, a default that undermines a stated objective, a command whose scope is narrower than its name suggests — add it here so it doesn't have to be rediscovered.
 
+- **`--azs` takes bare AZ *suffixes*, not zone names.** `PicoAZConverter` splits the value into
+  single characters and keeps every `[a-z]`, so `--azs us-west-2a` becomes seven zones
+  (`u, s, w, e, s, t, a`) and subnet creation dies on `us-west-2u` — an error naming a zone you
+  never typed. Valid spellings: `a`, `abc`, `a,b,c`. A mangled value fails only when it reaches a
+  letter that is not a real suffix, so it can instead provision a silent multi-AZ spread. Omitting
+  the flag defaults to `listOf("a", "b", "c")`, a three-AZ spread; pin single-AZ runs explicitly and
+  confirm with `easy-db-lab status`.
+- **Cassandra 4.1+ data-rate settings need a unit suffix; unthrottled is `0MiB/s`.**
+  `compaction_throughput` parses against `^(\d+)(MiB/s|KiB/s|B/s)$` (`DataRateSpec.java:42`), so a
+  bare `0` throws `IllegalArgumentException: Invalid data rate: 0` and the node refuses to start.
+  `cassandra update-config --restart` reports only `RemoteException: Remote command failed (1)`. On
+  any restart failure, read `/mnt/db1/cassandra/logs/system.log` first.
+- **`exec run` has no shell.** `ExecRun.execute` joins the command with `shellQuote` and hands it to
+  `systemd-run`, so `&&`, pipes, globs and redirection do not work. A quoted string also breaks
+  `deriveUnitName`, which surfaces as an invalid unit and exit 2 rather than the real cause. Wrap in
+  `bash -c "..."`. Note `rm -rf <dir>/*` deletes nothing this way; use
+  `bash -c "find <dirs> -mindepth 1 -delete"`.
+- **Verify a Cassandra data wipe BETWEEN the wipe and the restart.** Cassandra recreates the system
+  keyspaces and fresh commitlog segments at boot, so a post-restart listing of `data/` and
+  `commitlog/` is non-empty whether or not the wipe worked. Correct order: `cassandra stop`,
+  `du -sh <dirs>`, wipe, `find <dirs> -mindepth 1 | wc -l` expecting 0, then start. If that window
+  is missed, check that the workload keyspace directory is gone and that every surviving directory
+  has an mtime after the wipe.
+- **A non-zero exit inside `exec run` DISCARDS ALL OUTPUT.** The remote exit status becomes the
+  systemd unit's status, and a failed unit captures nothing. `grep -c` exits 1 on zero matches, so a
+  correct answer of "0" is thrown away. End such commands with `|| true; exit 0`.
 - **`cassandra use <version>` silently switches JDK.** `cassandra_versions.yaml` maps each Cassandra version to a specific JDK, and running `easy-db-lab cassandra use <version>` changes the JDK on every targeted node as a side effect, even when that's not the intent. If a test needs to hold the JDK constant (e.g. comparing a stock release against a personal fork), pin it explicitly with `--java <version>` on every `cassandra use` invocation rather than trusting the version's default.
 - **`cassandra list` reports installed versions from ONE node.** It reads `/usr/local/cassandra`
   from the first Cassandra host and presents the result as the whole cluster's state. Once versions

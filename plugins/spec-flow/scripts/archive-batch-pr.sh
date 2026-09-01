@@ -31,8 +31,21 @@ for bin in git gh; do
   }
 done
 
-main=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
-if ! default_br=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name); then
+# -C "$worktree": without it this describes whatever repo the CALLER happens to be standing in,
+# while $worktree is an explicit argument. The common path (invoked from MAIN) works either way;
+# from anywhere else the later `worktree remove` would target a different repo's worktree list.
+main=$(git -C "$worktree" worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+# Every gh call below must resolve the SAME repo git does. gh reads the repo from cwd, so without
+# this it would read the caller's repo while git -C targets the worktree's -- opening the PR in the
+# wrong place. Resolved once, then passed explicitly with --repo.
+if ! repo=$(git -C "$worktree" remote get-url origin 2>/dev/null); then
+  echo "archive-batch-pr: couldn't resolve the worktree's origin remote." >&2
+  exit 1
+fi
+repo=${repo%.git}
+repo=${repo##*[:/]github.com/}
+repo=${repo##*:}
+if ! default_br=$(gh repo view "$repo" --json defaultBranchRef --jq .defaultBranchRef.name); then
   echo "archive-batch-pr: couldn't resolve the repo's default branch ('gh repo view' failed)." >&2
   exit 1
 fi
@@ -47,15 +60,47 @@ fi
 git -C "$worktree" add -A
 git -C "$worktree" commit -m "$pr_title"
 
-git -C "$worktree" push origin "HEAD:refs/heads/${batch_br}"
-pr_url=$(gh pr create --head "$batch_br" --base "$default_br" --title "$pr_title" --body "$pr_body")
+if ! git -C "$worktree" push origin "HEAD:refs/heads/${batch_br}"; then
+  echo "archive-batch-pr: couldn't push '${batch_br}' to origin. The archive commit is made in" >&2
+  echo "'${worktree}' but nothing is on the remote; the worktree is left in place so you can" >&2
+  echo "retry the push from it." >&2
+  exit 1
+fi
+
+if ! pr_url=$(gh pr create --repo "$repo" --head "$batch_br" --base "$default_br" --title "$pr_title" --body "$pr_body"); then
+  # set -e would have exited here with gh's raw status and no mention of the branch it just
+  # pushed -- leaving a stranded remote branch nobody is told about, and no recovery command.
+  echo "archive-batch-pr: pushed '${batch_br}' to origin, but 'gh pr create' failed." >&2
+  echo "The branch is on the remote with the archive commit on it; nothing was lost. Open the PR" >&2
+  echo "yourself, or delete the branch to start over:" >&2
+  # Write the body to a file rather than inlining it: it is multi-line, and a title containing a
+  # double quote would otherwise produce an unpastable command. --body-file keeps the per-issue
+  # citation list the caller composed, which an inline retry silently dropped.
+  body_file=$(mktemp "${TMPDIR:-/tmp}/archive-batch-body.XXXXXX")
+  printf '%s\n' "$pr_body" > "$body_file"
+  echo "  gh pr create --head ${batch_br} --base ${default_br} \\" >&2
+  echo "    --title \"\$(cat <<'EOF'" >&2
+  echo "${pr_title}" >&2
+  echo "EOF" >&2
+  echo "    )\" --body-file ${body_file}" >&2
+  echo "or delete the branch to start over:" >&2
+  echo "  git push origin --delete ${batch_br}" >&2
+  exit 1
+fi
 
 # Worktree's job is done once its content is on origin — remove it now, BEFORE attempting the
 # merge: a blocked merge (pending checks, branch protection) exits non-zero below, and leaving the
 # worktree around after that would just be clutter (nothing re-runs against it — see the header).
-git -C "$main" worktree remove "$worktree"
+# --force twice: Claude Code locks a worktree while its session runs, and lock and dirtiness are
+# separate gates (see finalize-remove-worktree.sh, which documents this from testing). Failure here
+# must NOT abort: the PR already exists, and dying now would leave it open, unmerged and unreported.
+if ! git -C "$main" worktree remove --force --force "$worktree" 2>/dev/null; then
+  echo "archive-batch-pr: note — couldn't remove the temporary worktree '${worktree}'." >&2
+  echo "Harmless; nothing re-runs against it. Remove it later with:" >&2
+  echo "  git -C ${main} worktree remove --force --force ${worktree}" >&2
+fi
 
-if ! gh pr merge "$batch_br" --squash --delete-branch; then
+if ! gh pr merge --repo "$repo" "$batch_br" --squash --delete-branch; then
   echo "archive-batch-pr: batch PR is open (${pr_url}) but didn't merge automatically (required" >&2
   echo "checks still pending, or branch protection needs a review) — merge it yourself:" >&2
   echo "gh pr merge ${batch_br} --squash --delete-branch (or in GitHub)." >&2

@@ -93,18 +93,15 @@ remote='origin'
 default_br=''
 cleanup_done=''
 
-# Unwind BOTH sides of the operation. `pushed` is set the moment the branch reaches the remote and
-# cleared the moment a PR exists to hold it, so this deletes the ref on exactly one path: pushed,
-# but no PR. `-C "$root"`, not the worktree, because the worktree is already gone by the time this
-# runs. Errors are swallowed so a failed rollback cannot mask the failure that triggered it — but
-# never silently: both outcomes are reported.
+# REPORTS the branch it may have pushed; it does NOT delete the ref, and does not query the remote.
+# That is deliberate — see the header and the body below. (These lines previously described a
+# rollback that deletes the remote ref and clears `pushed` afterwards. No such code exists, and the
+# body says so outright at "REPORT; never delete". Left in place, that stale description invites
+# exactly the "fix" the header forbids.)
 #
 # RUNS AT MOST ONCE. Bash runs an INT or TERM handler and then RESUMES the script, so without the
-# sentinel an interrupt between the push and `pushed=''` would run this, delete the ref and report
-# success, then let the script carry on, fail, and run this AGAIN from the EXIT trap with `pushed`
-# still set — reporting that the branch is still on the remote when it is not, and handing the
-# owner two recovery commands that both fail. `pushed` is also cleared after a successful delete,
-# so the state and the message can never disagree.
+# sentinel an interrupt could run this from the signal handler and then again from the EXIT trap,
+# printing the same recovery instructions twice.
 cleanup() {
   [[ -z "$cleanup_done" ]] || return 0
   cleanup_done='yes'
@@ -250,8 +247,10 @@ step="pushing ${branch} to ${remote}"
 # Set BEFORE the push, not after. Bash defers a signal handler until the running foreground command
 # returns, so an interrupt delivered while the push is in flight runs cleanup at the point where the
 # ref is already on the remote — and if this line came after the push, `pushed` would still be empty
-# there, cleanup would skip the rollback, and the run would end silently leaving an orphan behind.
-# The flag therefore means "we may have pushed", and cleanup asks the remote what is actually true.
+# there, cleanup would report nothing, and the run would end silently leaving an orphan behind.
+# The flag therefore means "we may have pushed". cleanup neither deletes the ref nor queries the
+# remote; it reports the branch and both recovery commands, and says the delete is a harmless no-op
+# if the push never finished. See cleanup()'s own comment above.
 pushed='yes'
 git -C "$work_tree" push --quiet "$remote" "HEAD:refs/heads/${branch}"
 

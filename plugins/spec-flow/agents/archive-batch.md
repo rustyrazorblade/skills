@@ -89,9 +89,14 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
    directory that command just deleted is left in an undefined location for whatever runs next:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/archive-batch-pr.sh <TMPWT> \
-     "archive: batch of <N> issues (#A, #B, ...)" \
-     "Batched OpenSpec sync + archive for <N> finalized issues: #A, #B, .... No code changes — bookkeeping only."
+     "archive: batch of <N> finalized issues" \
+     "Batched OpenSpec sync + archive. No code changes — bookkeeping only.
+
+   - <number>: <title>
+   - <number>: <title>"
    ```
+   The body lists one issue per line as `<number>: <title>`, per the citation rule in **Rules**
+   below — never a comma-joined run of bare numbers, which is what this template used to show.
    The script stages and commits whatever's changed in `<TMPWT>` (you don't need to `git add`
    anything yourself), pushes a fresh throwaway branch, opens and merges one PR (squash), and
    removes `<TMPWT>`. If it exits non-zero for any reason — most likely the PR couldn't merge
@@ -102,8 +107,12 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
 5. **Comment on every archived issue** — durable, visible without attaching, matching `issue-pm`'s
    own progress-comment convention:
    ```bash
-   gh issue comment <N> --body "📦 Spec archived in batch PR #<PR>."
+   gh issue comment <N> --body "📦 Spec archived in the batch PR below.
+
+   - PR <PR>: <pr title>"
    ```
+   One line per citation, prefixed with `-`, per the rule in **Rules** below — not inline in a
+   sentence, even for a single PR.
 
 6. **Report and finish.** Tell the owner which issues were archived and the PR link. You have no
    further job after this — don't linger presenting yourself as still useful; suggest they attach

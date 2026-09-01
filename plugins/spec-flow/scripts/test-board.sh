@@ -246,6 +246,58 @@ assert board.ci_status([{"conclusion": "FAILURE"}]) == "failing"
 PYEOF
 check "'next up' unblock rung fires with no green in-review item, and CI states map correctly" $?
 
+# Separate block so a failure below reports under its own name, not the ladder/CI check's.
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# An unknown status: label must land in a visible bucket, not vanish from the board entirely.
+out2 = board.render_board([row(number=99, status="in-progres", mine=False, assignee="alice")], "me", 0)
+out2 = out2 if isinstance(out2, str) else "\n".join(out2)
+assert "99" in out2, "an unrecognized status: label vanished from the board:\n" + out2
+
+# gh can emit an explicit JSON null; .get(default) returns the null and the old code raised on it,
+# taking down the whole render.
+assert board.label_names({"labels": None}) == set()
+assert board.status_of({"labels": None}) is None
+
+# Set iteration is not ordered ACROSS PROCESSES -- string hashing is randomized per process, so
+# it is stable within one run and varies between them. Looping in-process proves nothing; the
+# answer has to be compared across several interpreters with different hash seeds.
+import os, subprocess
+# Probe EVERY adjacent lifecycle pair, not one: the first ordering shipped here got half the pairs
+# backwards and the single-pair probe happened to be one it got right.
+probe = (
+    "import importlib.util,pathlib,sys,itertools;"
+    "spec=importlib.util.spec_from_file_location('b',pathlib.Path(sys.argv[1])/'board.py');"
+    "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
+    "L=['ready','spec-review','in-progress','in-review','addressing'];"
+    "print(' '.join(m.status_of({'labels':[{'name':'status:'+a},{'name':'status:'+c}]})"
+    " for a,c in itertools.combinations(L,2)),"
+    "m.priority_of({'labels':[{'name':'P3'},{'name':'P0'}]}))"
+)
+# Each pair must resolve to the MORE advanced state -- a stale leftover label must never drag an
+# issue backwards on the board.
+expected = " ".join(
+    c for a, c in __import__("itertools").combinations(
+        ["ready", "spec-review", "in-progress", "in-review", "addressing"], 2)
+) + " P0"
+seen = set()
+for seed in ("0", "1", "7", "42", "1234", "99999"):
+    env = dict(os.environ, PYTHONHASHSEED=seed)
+    seen.add(subprocess.run([sys.executable, "-c", probe, sys.argv[1]],
+                            capture_output=True, text=True, env=env, check=True).stdout.strip())
+assert seen == {expected}, f"status_of/priority_of wrong or hash-seed dependent: {seen} != {{{expected!r}}}"
+PYEOF
+check "unknown status label is rendered, null labels don't crash, label resolution is deterministic and lifecycle-ordered" $?
+
 echo "$out" | grep -q "specs pending archive: 2 → /spec-flow:archive"
 check "archive-pending count excludes the 'archive' entry itself" $?
 

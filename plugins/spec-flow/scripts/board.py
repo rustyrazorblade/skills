@@ -5,8 +5,13 @@ Moves everything `board/SKILL.md` used to make the model do by hand — pulling 
 list`/`gh pr list` JSON into context, joining it against PR/CI state and local sessions, bucketing
 by lifecycle, computing "next up"/"blocked on you"/"stalled", and formatting the final board text —
 into one script. The model runs this and prints its stdout; it never sees the raw GitHub JSON and
-never hand-writes a join script. Stdlib only, shells out to `gh`/`git`/`claude`. See
-plugins/spec-flow/skills/board/SKILL.md for the render this reproduces and the rules behind it.
+never hand-writes a join script. Stdlib only, shells out to `gh`/`git`/`claude`.
+
+THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked on you",
+"stalled", "claimed", the "next up" ladder, epic exclusion and PR/CI correlation. Each rule is
+stated in a comment beside the code that implements it. skills/board/SKILL.md covers how to invoke
+this and what to do with the output; it deliberately does not restate the rules, so the two cannot
+drift apart.
 """
 
 import argparse
@@ -24,6 +29,11 @@ from pathlib import Path
 SPAWN_SCRIPT = str(Path(__file__).resolve().parent / "spawn-issue-pm.sh")
 
 STATUS_ORDER = ["spec-review", "in-review", "in-progress", "addressing", "ready"]
+# The actual pipeline order (docs/workflow.md's lifecycle diagram), LEAST advanced first.
+# STATUS_ORDER above is a membership set whose sequence is not the lifecycle -- using it as a
+# tie-break picked the LESS advanced of two labels for half the adjacent pairs, which is the
+# opposite of what a stale-leftover tie-break is for.
+LIFECYCLE_ORDER = ["ready", "spec-review", "in-progress", "in-review", "addressing"]
 PRIORITY_ORDER = ["P0", "P1", "P2", "P3"]
 
 
@@ -49,15 +59,33 @@ def gh_json(args, default=None):
         raise
 
 
+ISSUE_LIMIT = 400
+PR_LIMIT = 200
+
+
 def fetch_issues():
     return gh_json(["issue", "list", "--state", "open", "--json",
-                     "number,title,labels,url,assignees,subIssuesSummary,subIssues", "--limit", "100"], default=[])
+                     "number,title,labels,url,assignees,subIssuesSummary,subIssues",
+                     "--limit", str(ISSUE_LIMIT)], default=[])
 
 
 def fetch_prs():
     return gh_json(["pr", "list", "--state", "open", "--json",
                      "number,headRefName,title,reviewDecision,url,statusCheckRollup,closingIssuesReferences",
-                     "--limit", "100"], default=[])
+                     "--limit", str(PR_LIMIT)], default=[])
+
+
+def warn_if_truncated(issues, prs):
+    # A silently truncated list drops issues from every bucket, the summary counts, the stalled
+    # list and "next up" -- with nothing on screen to say the board is incomplete. Hitting the cap
+    # exactly is the only signal available, so report it rather than presenting a partial board as
+    # if it were the whole picture.
+    if len(issues) >= ISSUE_LIMIT:
+        print(f"board: warning: hit the {ISSUE_LIMIT}-issue fetch limit — the board may be "
+              f"incomplete, and 'next up' may miss higher-priority work.", file=sys.stderr)
+    if len(prs) >= PR_LIMIT:
+        print(f"board: warning: hit the {PR_LIMIT}-PR fetch limit — some issues may show no PR "
+              f"or CI state.", file=sys.stderr)
 
 
 def fetch_me():
@@ -125,19 +153,30 @@ def ci_status(status_check_rollup):
 
 
 def label_names(issue):
-    return {l["name"] for l in issue.get("labels", [])}
+    # `or []`, not a default: gh can emit an explicit JSON null, and .get() returns that null
+    # rather than the default -- which then raises and takes down the entire board render.
+    return {l["name"] for l in (issue.get("labels") or [])}
 
 
 def status_of(issue):
-    for name in label_names(issue):
-        if name.startswith("status:"):
-            return name[len("status:"):]
-    return None
+    # label_names returns a SET, and set iteration order over strings is not insertion order and
+    # varies between runs (string hashing is randomized per process). An issue carrying two
+    # status labels -- reachable after a crashed run, or a hand edit -- therefore classified into
+    # a different bucket on different runs. Resolve deterministically instead, and prefer the
+    # most-advanced state so a stale leftover label can't drag the issue backwards on the board.
+    found = [n[len("status:"):] for n in label_names(issue) if n.startswith("status:")]
+    if not found:
+        return None
+    known = [s for s in LIFECYCLE_ORDER if s in found]
+    if known:
+        return known[-1]        # last = furthest along the pipeline
+    return sorted(found)[0]
 
 
 def priority_of(issue):
-    for name in label_names(issue):
-        if name in PRIORITY_ORDER:
+    # Same set-ordering hazard as status_of: resolve in declared order, not iteration order.
+    for name in PRIORITY_ORDER:
+        if name in label_names(issue):
             return name
     return None
 
@@ -300,11 +339,25 @@ def render_board(rows, me, archive_pending):
     in_flight = [r for r in staged if r["status"] in PAST_READY_STATUSES
                  and r not in blocked_on_you]
 
+    # An issue whose status: label matches nothing this script knows (a typo like
+    # "status:in-progres", or a label added since) is counted in the summary but rendered by no
+    # bucket above -- it silently vanishes from the board. STATUS_ORDER exists to name the valid
+    # set; use it rather than letting an unknown value fall through every branch.
+    unrecognized = [r for r in staged
+                    if r["status"] not in STATUS_ORDER
+                    and r not in blocked_on_you]
+
     out = ["## Delivery board", ""]
 
     if blocked_on_you:
         out.append("⛳ BLOCKED ON YOU")
         for r in blocked_on_you:
+            out.append(render_row(r))
+        out.append("")
+
+    if unrecognized:
+        out.append("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)")
+        for r in unrecognized:
             out.append(render_row(r))
         out.append("")
 
@@ -427,6 +480,8 @@ def main():
         archive_f = pool.submit(fetch_archive_pending)
         me = args.user or fetch_me()
         issues, prs, sessions, archive_pending = issues_f.result(), prs_f.result(), sessions_f.result(), archive_f.result()
+
+    warn_if_truncated(issues, prs)
 
     if me is None:
         print("board: warning: couldn't resolve the authenticated user ('gh api user' failed) — "

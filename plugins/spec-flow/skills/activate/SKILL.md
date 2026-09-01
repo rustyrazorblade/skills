@@ -646,6 +646,11 @@ qualify), and confirm the choice with the owner.
 
    **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
    auto-approve the spec for this run — and step 5's `overrides.md` didn't find a hard conflict**
+   (an instruction naming "the spec" authorizes THIS stop whatever form its artifact takes on this
+   issue — a committed spec, or the scope + acceptance criteria, or the Direction. Seam 1 is
+   approval of the plan, not of one file type, and a content-only or tech-debt issue never produces
+   a spec to name. An instruction that names only the *design* stop does NOT reach here; and one
+   that is ambiguous about which stop it means counts as silent, so this stop waits.)
    (same exception as step 4's hard dependency: a genuine hard conflict always stops here for the
    owner regardless of what this run's instructions say). If auto-approving, still render in full
    as above — the spec for a

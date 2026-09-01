@@ -64,6 +64,14 @@ git -C "$main" worktree remove --force --force "$wt"
 git -C "$main" branch -D "$br"                          # local — -D, not -d: a squash-merge
                                                           # commit is never an ancestor of the
                                                           # branch tip, so -d always refuses here
-git -C "$main" push origin --delete "$br" 2>/dev/null || true   # remote — often already gone if
-                                                                  # the repo auto-deletes on merge
+# Resolve the remote rather than assuming "origin" — seed-config.sh deliberately does the same,
+# and on a clone whose default branch tracks a differently-named remote the hardcoded name silently
+# never deletes the branch, with `|| true` hiding it.
+default_br=$(git -C "$main" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
+remote=$(git -C "$main" config --get "branch.${default_br}.remote" 2>/dev/null || echo "")
+[[ -n "$remote" ]] || remote=$(git -C "$main" remote | head -n 1)
+if [[ -n "$remote" ]]; then
+  git -C "$main" push "$remote" --delete "$br" 2>/dev/null || true   # often already gone if the
+                                                                     # repo auto-deletes on merge
+fi
 echo "finalize-remove-worktree: removed worktree and branch ${br}"

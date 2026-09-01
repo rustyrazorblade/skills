@@ -50,8 +50,10 @@ anything.
 
 ## Extending the board
 
-The classification rules (what counts as "blocked on you", "stalled", the "next up" ladder,
-epic exclusion, PR/CI correlation) live in `scripts/board.py` itself, not here — read its
-docstring and the comments near each rule before changing behavior. If a rule needs to change,
+The classification rules (what counts as "blocked on you", "stalled", "claimed", the "next up"
+ladder, epic exclusion, PR/CI correlation) live in `scripts/board.py` itself, not here. That file
+is the single authority: each rule is stated in a comment beside the code implementing it. This
+page covers invocation and output only, and deliberately does not restate any rule — read the
+script before changing behavior. If a rule needs to change,
 change the script and re-run `scripts/test-board.sh` (fakes `gh`/`git`/`claude` on `PATH`, so it's
 deterministic and doesn't touch real GitHub state) before trusting the new output.

@@ -10,6 +10,14 @@ if [[ $# -ne 1 ]]; then
   exit 1
 fi
 n="$1"
+# Validate before anything reaches gh. Without this, `claim-issue.sh -5` is parsed as an OPTION by
+# three separate gh calls, producing three confusing errors instead of one usage message.
+# spawn-issue-pm.sh guards its own issue argument the same way.
+if [[ ! "$n" =~ ^[0-9]+$ ]]; then
+  echo "claim-issue: issue number must be numeric, got '$n'" >&2
+  echo "usage: claim-issue.sh <issue-number>" >&2
+  exit 1
+fi
 
 command -v gh >/dev/null 2>&1 || {
   echo "claim-issue: 'gh' is required but not on PATH." >&2

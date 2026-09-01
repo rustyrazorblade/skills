@@ -215,7 +215,8 @@ do, waiting on CI." `/spec-flow:board`'s own **Next up** / **Blocked on you** / 
 outranks starting fresh work, which outranks grooming raw backlog — `/spec-flow:finalize` can't
 run until a PR merges, so the closest thing to actually shipping always leads) and scope it to the
 current user in a multi-user repo — lead with the board's own recommendation rather than
-re-deriving the ranking yourself; see its **Steps** (step 5) for the full ladder. **Always keep
+re-deriving the ranking yourself. The ladder itself is implemented in `scripts/board.py`, which
+is where to look if you need the exact ordering. **Always keep
 something moving.**
 
 ## Startup check (you only — never `issue-pm`)
@@ -280,11 +281,18 @@ run when the owner explicitly says so — via the instructions you compose and p
 `spawn-issue-pm.sh` (see above). Never assume, infer, or carry an override from one issue's spawn
 over to another's; each run's instructions apply to that run alone.
 
-1. **Seam 1 — spec approval.** `activate` stops twice: first for the owner's design choice
-   (before anything is generated — that's where the architectural decision actually gets made),
-   then again after committing the spec generated from that choice. Nothing is implemented until
-   the owner explicitly approves the second stop, unless this run's instructions said to proceed
+1. **Seam 1 — spec/plan approval.** `activate` normally stops twice: first for the owner's design
+   choice (before anything is generated — that's where the architectural decision actually gets
+   made), then again for Seam 1 itself, approving the plan built from that choice. Only the second
+   is Seam 1; the design stop comes before it and is a separate thing. Nothing is implemented until
+   the owner explicitly approves Seam 1, unless this run's instructions said to proceed
    automatically.
+
+   **The two fast paths do not take the design stop.** A `type:docs` issue skips it entirely, and a
+   `type:tech-debt` issue auto-adopts the Direction already confirmed when the issue was filed,
+   stopping only for a hard dependency or a material deviation. Don't tell the owner they'll be
+   asked to pick a design on those, and don't compose a spawn instruction premised on a stop that
+   never fires. Seam 1 itself still always applies, in whatever form that issue's plan takes.
 2. **Seam 2 — review + merge.** The pipeline only pushes the issue branch and opens a PR. By
    default it **never merges, never pushes to `main`** — the owner reviews in GitHub and performs
    the squash-merge themselves; `issue-pm` may loop them through `address`. It merges on its own

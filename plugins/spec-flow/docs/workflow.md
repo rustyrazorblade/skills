@@ -13,9 +13,11 @@ This file is the canonical reference. The pipeline is implemented as the plugin'
 `project-manager` central coordinator you talk to directly for cross-issue state and grooming, an
 `issue-pm` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
 issue leads** below); `product-manager` and `architect` at the front of the pipeline (refine →
-design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a review
-panel of `reviewer`, `test-rigor-reviewer`, and `observability-reviewer` (plus the built-in
-`/code-review` and `/security-review` skills).
+design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a five-lens review
+panel of `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer` and
+`observability-reviewer` (the middle two wrap the built-in `/code-review` and `/security-review`
+skills, but are spawned as agents like the rest — see **the five lenses** below, and
+`implement.workflow.js`, which spawns all five by `agentType`).
 
 It rides on two backbones the consuming repo must provide: **OpenSpec** (the spec-approval seam,
 via the `openspec` CLI + the `/opsx:*` commands) and **GitHub** (`gh`-driven issues, labels, and
@@ -150,7 +152,10 @@ again on every parallel spawn. So:
 **domain-expert agent**, if one is available, consulted *concurrently* and adding deeper facts) —
 **you decide** among the options *before anything is generated*, so a chosen alternative can never
 leave stale traces of the rejected recommendation in the generated spec/tasks. The agents never
-make the call. (A `type:docs` issue skips this design stop entirely — see **Docs fast path** below.)
+make the call. (A `type:docs` issue skips this design stop entirely; a `type:tech-debt` issue auto-adopts the
+Direction confirmed when it was filed, stopping only for a hard dependency or a material
+deviation — see **Docs fast path** and **Tech-debt fast path** below. Seam 1 itself still applies
+on both.)
 
 **Seam 1 — spec approval.** Second, `/spec-flow:activate` stops again after generating the spec
 from your chosen design and committing it. Nothing is implemented until you explicitly approve.
@@ -557,8 +562,8 @@ primary checkout.
 per-issue, inline in each `issue-pm`, meant a git worktree and a set of `gh`/OpenSpec commands
 every single time, for zero review value each time. So `finalize` doesn't touch it at all anymore:
 once an issue's PR merges, its `openspec/changes/issue-<N>` change (when one exists — a
-content-only `type:docs` issue commits none, see **Docs fast path** above) just sits on the default
-branch, unarchived, until `project-manager` sweeps up a batch of them at once.
+content-only `type:docs` issue commits none, and neither does any `type:tech-debt` issue; see
+**Docs fast path** and **Tech-debt fast path** above) just sits on the default branch, unarchived, until `project-manager` sweeps up a batch of them at once.
 
 `project-manager` **watches for the buildup and checks in with you** — it never archives on its own
 initiative. `/spec-flow:archive` counts every `openspec/changes/*` directory (excluding `archive/`)

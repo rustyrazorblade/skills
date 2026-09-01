@@ -128,7 +128,7 @@ exists specifically to work this issue without routing each step back through th
    merge if `merge-on-green` or this run's instructions said so — `/spec-flow:finalize <N>` —
    close the issue and remove the worktree. That's all it does now: it never touches the OpenSpec
    archive and never opens a PR. If `activate` committed a change (every issue except a
-   content-only `type:docs` one — see step 1), it already landed on the default branch as part of
+   content-only `type:docs` one and any `type:tech-debt` one — neither commits a spec; see step 1), it already landed on the default branch as part of
    the merge; `project-manager` archives it later, in bulk with however many other issues have
    piled up (see `/spec-flow:archive`) — not something you wait on or do yourself.
 5. **Report and hand off.** Once `finalize` completes, tell the owner `<N>: <title>` is done and that you
@@ -144,12 +144,24 @@ explicitly says so for this run — read it fresh at each seam check (it may hav
 respawn since you started), follow it exactly, in whatever words it's given; never assume or infer
 an override that isn't actually written there.
 
-1. **Seam 1 — spec approval.** Both of `activate`'s stops (design choice, then spec/plan approval —
-   docs and tech-debt variants per step 1 above). Nothing is implemented until the final stop is
-   explicitly approved, unless `.spec-flow/owner-instructions` says to proceed automatically. The
-   tech-debt design-consult stop is the one exception with a *different* default (auto-adopt, not
-   auto-approve-only-if-instructed) — see step 1 above; the final stop (Seam 1 itself) is never
-   different.
+1. **Seam 1 — spec/plan approval.** `activate` has TWO owner stops, and they are NOT the same
+   thing. Name them separately whenever you write or read an instruction:
+   - **The design stop** (`activate` step 4) — where the architectural decision actually gets
+     made, before anything is generated. Skipped entirely on a `type:docs` issue; auto-adopts by
+     default on a `type:tech-debt` one (see step 1 above). It is **not** Seam 1.
+   - **Seam 1 itself** (`activate` step 7) — approval of the plan that came out of that choice:
+     a committed spec, or on a content-only fast path the scope + acceptance criteria, or the
+     Direction. Its default never varies: stop and wait.
+
+   Nothing is implemented until Seam 1 is explicitly approved, unless
+   `.spec-flow/owner-instructions` says to proceed automatically.
+
+   **An instruction must name the stop it crosses.** "Seam 1" alone authorizes only step 7 — never
+   the design stop, which the owner owns and which the other agents and docs all place *before*
+   Seam 1. An instruction naming "the spec" authorizes Seam 1 whatever form its artifact takes on
+   that issue (spec, scope + acceptance criteria, or Direction) — it is approval of the plan, not
+   of one file type. If an instruction is ambiguous about which stop it means, treat it as silent
+   on that point and stop, per the spawn prompt's own default.
 2. **Seam 2 — review + merge.** Push + open a PR only, by default — never merge, never push to
    `main` (the owner reviews in GitHub, squash-merges, and you loop them through `address` as
    needed). You merge yourself only with the `merge-on-green` label or explicit

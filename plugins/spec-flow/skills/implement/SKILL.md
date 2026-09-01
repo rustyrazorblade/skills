@@ -375,8 +375,9 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       to step b for a fresh review round. `mustFix` empty but a lens is simply missing → skip
       straight back to step b, nothing to fix yet. At round 3 with still no approval: stop,
       collect the outstanding `mustFix` findings (plus which lens(es) never reported) as
-      **residual**, and skip straight to step 5 — do not run Build/Polish on a tree that's going
-      through another round regardless.
+      **residual**, and skip straight to step 5's **gate** — do not run Build/Polish on a tree
+      that's going through another round regardless. The gate fails on this path, so step 5 stops
+      there; it does not mark the PR ready.
 
    e. **Build** (only once approved). Spawn `build-engineer`, named `build`: get format/lint/build
       clean in `<worktree>` — *"Discover and run the repo's format, lint, and build steps
@@ -453,9 +454,28 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    built — see PR for details."` (or, if `approved` is false, the residual findings instead). Say
    so plainly if the owner asks why this run's issue history is sparser than a Team-mode run's.
 
-5. **Mark the PR ready and report.** When step 4 approved (either mode) or the docs fast path
-   reported done (using its one-line summary from step 4c in place of
-   `review_summary`/`tests_ran`/`non_blocking_findings` below), finalize the already-open draft PR
+5. **Mark the PR ready and report.**
+
+   **Gate — check this first, before any command below.** Every path into this step must pass it,
+   including the "skip straight to step 5" route out of step 4d. Answer all three:
+
+   - Did the review panel approve? (Or, on the docs fast path, did step 4c report done?)
+   - Did the run reach here without a refactor circuit breaker trip, in Implement or in any fix
+     round?
+   - Did every agent this run depended on actually return a result, rather than dying or being
+     skipped?
+   (CI is not knowable here — the push it reports on happens below. The CI check further down
+   enforces the same rule at the point where the answer exists.)
+
+   **If any answer is no, do not run the commands below.** Instead: leave the PR a draft, write
+   the residual findings into its body, add `needs-attention` (`gh issue edit <N> --add-label
+   needs-attention`) with a comment naming what is unresolved — first line prefixed
+   `🆘 Needs attention:`, per `agents/issue-pm.md` — keep `agent:active` and
+   `status:in-progress` as they are, and stop. Never mark a red or unapproved PR ready, and never
+   merge one, whatever `merge-on-green` or `.spec-flow/owner-instructions` say. Those authorize
+   crossing Seam 2 on a *finished* run; they do not authorize skipping the panel.
+
+   When the gate passes, finalize the already-open draft PR
    (outward-facing — done here in this session, narrated). Re-resolve `$BR` fresh here — cheap, and
    this may be a separate Bash call from step 2's, which wouldn't have carried it over:
    ```bash
@@ -484,8 +504,12 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    implementer GUARDRAILS, and explicitly instruct it to **confirm the flagged test(s) pass
    locally before pushing** — never push a fix for a known failure without reproducing and
    clearing it locally first. Once it reports back and pushes, repeat this same single check
-   against the new HEAD sha once more, then proceed either way — this is one bounded pass, not a
-   loop back into step 4's panel.
+   against the new HEAD sha once more — this is one bounded pass, not a loop back into step 4's
+   panel. **If CI is still red after that pass, or the break was a build/lint break surfaced as a
+   residual finding above, stop here and take the gate's failure path** (leave the PR a draft,
+   residual findings in its body, `needs-attention`, keep `agent:active` and
+   `status:in-progress`). Do not run the commands below. "Proceed either way" would mark a red PR
+   ready, which the gate forbids.
    ```bash
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
    gh pr edit <PR> --body "Closes #<N>

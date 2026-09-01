@@ -58,7 +58,7 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    fi
    gh issue edit <N> --remove-label status:in-review --remove-label status:addressing \
      --remove-label status:in-progress --remove-label agent:active --remove-label blocked \
-     --remove-label merge-on-green \
+     --remove-label merge-on-green --remove-label needs-attention \
      2>/dev/null || true
    ```
 

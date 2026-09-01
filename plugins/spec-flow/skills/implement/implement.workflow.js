@@ -151,6 +151,33 @@ async function agentNS(prompt, opts = {}) {
 // path's lead does. This agent is the first (and only) actor with a commit to push.
 const GUARDRAILS_TECH_DEBT_IMPLEMENT = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints. Because no PR exists yet for this branch (no spec was committed for this type:tech-debt issue), you MAY also open ONE draft PR for it — after your first commit, check for an existing one first (\`gh pr list --head <branch> --json number\`); if none exists, open it (mechanics in the prompt above). This is the one exception to "don't touch PRs," specific to this no-spec case — do NOT mark it ready or edit it again after opening it. Do NOT create or edit GitHub issues, do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.${BREAKER}`
 
+// Non-blocking findings must accumulate across ROUNDS. `review` is reassigned wholesale each
+// round, so a minor/nit raised in round 1 vanishes the moment round 2 replaces it -- and it is
+// never fixed either, because only blocker/major enter mustFix. Declared here, above halt(), so
+// it is initialised before any halt() call site can read it.
+const nonBlocking = new Map()
+
+// One shape for every "stop the run and hand it back" exit. No panel ran, so nothing assessed
+// what the repo's policy asked for -- 'unknown' is the honest non-answer. Never assert compliance
+// nobody checked. Findings already collected still travel out: a halt mid-run must not throw away
+// what completed rounds legitimately found.
+function halt(what, detail, rounds) {
+  log(`${what} stopped the run — returning to the owner without a completed review.`)
+  return {
+    change,
+    issue,
+    tests_ran: 'unknown',
+    tests_detail: `not assessed — ${what} stopped the run before review completed`,
+    spec_conformance: 'unknown',
+    approved: false,
+    review_rounds: rounds,
+    residual_findings: [detail],
+    non_blocking_findings: [...nonBlocking.values()],
+    review_summary: `stopped by ${what} — see residual_findings`,
+    polish: 'n/a',
+  }
+}
+
 phase('Implement')
 let implementReturn = null
 if (isTechDebt) {
@@ -170,25 +197,14 @@ ${GUARDRAILS_TECH_DEBT_IMPLEMENT}`,
   )
   // Only the behavior-preserving path carries the breaker, so only it can trip one.
   if (typeof implementReturn === 'string' && implementReturn.trim().startsWith(BREAKER_STOP_TOKEN)) {
-    log('Refactor circuit breaker tripped during Implement — returning to the owner without running the panel.')
-    return {
-      change,
-      issue,
-      // No panel ran, so nothing assessed what the repo's policy asked for — 'unknown', the same
-      // honest non-answer spec_conformance gives here. Never assert compliance nobody checked.
-      tests_ran: 'unknown',
-      tests_detail: 'not assessed — the refactor circuit breaker stopped the run before review',
-      spec_conformance: 'unknown',
-      approved: false,
-      review_rounds: 0,
-      residual_findings: [`refactor circuit breaker (${breaker}) stopped the implement phase: ${implementReturn.trim()}`],
-      non_blocking_findings: [],
-      review_summary: 'stopped by the refactor circuit breaker before review — see residual_findings',
-      polish: 'n/a',
-    }
+    return halt(
+      'refactor circuit breaker',
+      `refactor circuit breaker (${breaker}) stopped the implement phase: ${implementReturn.trim()}`,
+      0,
+    )
   }
 } else {
-  await agentNS(
+  implementReturn = await agentNS(
     `You are implementing an approved OpenSpec change in an existing git worktree.
 WORKTREE (run everything here, cwd): ${worktree}
 CHANGE: ${change}  — tasks at openspec/changes/${change}/tasks.md, spec at openspec/changes/${change}/specs/**/spec.md
@@ -203,6 +219,19 @@ Return a short summary of what you implemented and the test outcome.
 
 ${GUARDRAILS}`,
     { agentType: 'tdd-developer', label: `implement:${change}`, phase: 'Implement' },
+  )
+}
+
+// A dead agent is not a successful one. `agent()` resolves to null when the subagent dies on a
+// terminal API error or the user skips it mid-run, so an unchecked return sends five review lenses
+// and two fix rounds at a tree nobody implemented — and reports the resulting findings as if the
+// work had been attempted. Guarded for missing args at the top of this file; guard it here too.
+// MUST sit after BOTH branches above: it applies to whichever one ran.
+if (implementReturn === null) {
+  return halt(
+    'the Implement agent',
+    'the Implement agent returned no result (died or was skipped) — nothing was implemented, so no review was run',
+    0,
   )
 }
 
@@ -299,6 +328,15 @@ while (round < MAX_ROUNDS) {
     }
   })
   const mustFix = findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
+  // Key WITHOUT severity: the same finding re-reported at a higher severity in a later round must
+  // land on the same key, so escalating it into mustFix can remove it here. Keying on severity too
+  // would leave the round-1 copy behind, and the PR body would list as "non-blocking" something
+  // that was actually fixed.
+  const key = f => `${f.location}|${f.rule}|${f.problem}`
+  findings
+    .filter(f => f.severity === 'minor' || f.severity === 'nit')
+    .forEach(f => nonBlocking.set(key(f), `[${f.severity}] ${f.location} (${f.rule}): ${f.problem}`))
+  mustFix.forEach(f => nonBlocking.delete(key(f)))
   const specLens = lensResults[0] // aligned with reviewLenses[0] (the spec reviewer)
   review = {
     summary: lensResults
@@ -328,7 +366,7 @@ while (round < MAX_ROUNDS) {
 
   phase('Fix')
   const fixList = mustFix.map(f => `- [${f.severity}] ${f.location} (${f.rule}): ${f.problem}\n  suggested: ${f.fix}`).join('\n')
-  await agentNS(
+  const fixReturn = await agentNS(
     `Resolve these review findings in the worktree, test-first where behavior changes.
 WORKTREE (cwd): ${worktree}
 CHANGE: ${change}
@@ -341,6 +379,23 @@ ${testInstruction}
 ${GUARDRAILS}${isTechDebt ? BREAKER : ''}`,
     { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
   )
+  // The fix prompt carries the breaker on the tech-debt path, so a fix round can trip one. Its
+  // return was discarded, so the trip was swallowed and the next round spawned a fresh developer
+  // whose "in this run" counter reset -- resuming edits on the very file the breaker stopped.
+  if (typeof fixReturn === 'string' && fixReturn.trim().startsWith(BREAKER_STOP_TOKEN)) {
+    return halt(
+      'refactor circuit breaker',
+      `refactor circuit breaker (${breaker}) stopped fix round ${round}: ${fixReturn.trim()}`,
+      round,
+    )
+  }
+  if (fixReturn === null) {
+    return halt(
+      'the Fix agent',
+      `the Fix agent returned no result (died or was skipped) in round ${round} — the findings it was given are unresolved`,
+      round,
+    )
+  }
 }
 
 // ── Phases: Build → Polish (skipped if the panel never approved) ─────────────
@@ -351,7 +406,7 @@ let polish = 'n/a'
 if (review && review.approve) {
   phase('Build')
   const buildHint = buildSystem && buildSystem !== 'auto' ? ` (build system: ${buildSystem})` : ''
-  await agentNS(
+  const buildReturn = await agentNS(
     `In the worktree at ${worktree}, get the build clean for review${buildHint}.
 Discover and run the repo's format, lint, and build steps — examples by ecosystem:
   - Rust:   \`cargo fmt\`, then \`cargo clippy --all-targets -- -D warnings\`, then \`cargo build\`
@@ -371,6 +426,16 @@ format/lint/build status.
 ${GUARDRAILS}`,
     { agentType: 'build-engineer', label: `build:${change}`, phase: 'Build' },
   )
+  // A dead build-engineer must not read as a clean build. Its return was discarded, so a run whose
+  // format/lint/build gate never ran still reported approved:true -- and step 5's gate asks whether
+  // every agent returned a result, which this script could not answer.
+  if (buildReturn === null) {
+    return halt(
+      'the Build agent',
+      'the Build agent returned no result (died or was skipped) — the repo\'s format/lint/build gate never ran',
+      round,
+    )
+  }
 
   phase('Polish')
   polish = await agentNS(
@@ -387,6 +452,9 @@ Return a one-line note on what you documented (including whether user docs chang
 ${GUARDRAILS}`,
     { agentType: 'tdd-developer', label: `polish:${change}`, phase: 'Polish' },
   )
+  // null here is a dead agent, not "nothing to document" -- distinguish it from the 'n/a' that
+  // means Build/Polish never ran, so step 5's gate question about agent results is answerable.
+  if (polish === null) polish = 'not assessed — the Polish agent returned no result (died or was skipped)'
 } else {
   log('Review panel did not approve within the bounded fix loop — skipping Build/Polish; residual findings are for the owner.')
 }
@@ -401,13 +469,9 @@ return {
   review_rounds: round,
   residual_findings: residual,
   // Deliberately non-blocking findings (e.g. test-rigor's over-testing/test-practicality flags)
-  // from an approving round — computed above in `findings` but otherwise never returned, so they
-  // silently vanished before reaching the owner at Seam 2.
-  non_blocking_findings: review
-    ? review.findings
-        .filter(f => f.severity === 'minor' || f.severity === 'nit')
-        .map(f => `[${f.severity}] ${f.location} (${f.rule}): ${f.problem}`)
-    : [],
+  // from EVERY round, not just the last — these reach the owner in the PR body at Seam 2, and
+  // reading only the final round silently dropped everything raised earlier in the run.
+  non_blocking_findings: [...nonBlocking.values()],
   review_summary: review ? review.summary : 'no review captured',
   polish: polish || 'n/a',
 }

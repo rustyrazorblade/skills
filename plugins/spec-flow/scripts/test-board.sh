@@ -37,7 +37,7 @@ trap 'rm -rf "$fake_bin_dir"' EXIT
 #   #13 status:ready, unclaimed, P0                -> READY, next-up candidate if #11 didn't win
 #   #14 status:ready, claimed by alice              -> READY, not "yours"
 #   #15 blocked label, mine                         -> BLOCKED (reason from last matching comment)
-#   #16 needs-attention label, mine                 -> BLOCKED ON YOU (reason from last comment)
+#   #16 needs-attention label, mine                 -> BLOCKED ON YOU (reason from 🆘-prefixed comment)
 #   #17 status:spec-review, alice's (not mine)       -> IN FLIGHT (visible, but not "blocked on
 #                                                        you" -- regression: used to vanish
 #                                                        entirely, since spec-review wasn't in
@@ -80,7 +80,7 @@ JSON
   "issue view")
     case "$3" in
       15) echo '{"comments":[{"body":"some earlier note"},{"body":"⛔ Blocked on #99 — waiting on infra work."}]}' ;;
-      16) echo '{"comments":[{"body":"first pass"},{"body":"Stuck: ambiguous requirement, need owner input."}]}' ;;
+      16) echo '{"comments":[{"body":"first pass"},{"body":"🆘 Needs attention: ambiguous requirement, need owner input."},{"body":"📚 Docs polished."}]}' ;;
       *) echo '{"comments":[]}' ;;
     esac
     ;;
@@ -154,8 +154,14 @@ check "epic sub-issues are never comma-joined inline" $?
 echo "$out" | sed -n '/🔒 Blocked:/,$p' | grep -q "^  - 15: Blocked item — ⛔ Blocked on #99 — waiting on infra work.$"
 check "blocked reason comes from the matching ⛔-prefixed comment, not just 'see issue comments'" $?
 
-echo "$out" | grep -q "NEEDS ATTENTION — Stuck: ambiguous requirement, need owner input."
-check "needs-attention note comes from the issue's last comment" $?
+echo "$out" | grep -q "NEEDS ATTENTION — 🆘 Needs attention: ambiguous requirement, need owner input."
+check "needs-attention note comes from the matching 🆘-prefixed comment, not a later unrelated one" $?
+
+# #16 carries agent:active but no live session matches it -- a crashed issue-pm, or one running on
+# another machine. The label alone must not read as alive, but absence of a LOCAL session is not
+# proof of death either, so this is its own state rather than 🟢 or 🔴.
+echo "$out" | grep -q "#16 .*🟡 claimed — agent:active set, no session on this machine"
+check "an agent:active label with no local session renders claimed, neither active nor stalled" $?
 
 echo "$out" | grep -q "specs pending archive: 2 → /spec-flow:archive"
 check "archive-pending count excludes the 'archive' entry itself" $?

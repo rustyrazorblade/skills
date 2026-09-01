@@ -68,12 +68,17 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    BR=$(git rev-parse --abbrev-ref HEAD)
    git -C <worktree> push origin "$BR"
    ```
-   **Single check, not a wait:** if step 3 synced a CI failure in, check once whether the flagged
-   test(s) still show red on the run tied to this new push —
+   **Single check, not a wait:** check once whether the CI run tied to this new push is red —
+   whether or not step 3 already synced a failure in, since the fix round itself is a likely
+   source of a fresh regression —
    `gh run list --branch "$BR" --json databaseId,status,conclusion,headSha --limit 10 --jq '.[] |
    select(.headSha == "'"$(git -C <worktree> rev-parse HEAD)"'")'`. `status` not yet `completed` →
-   move on, nothing more to do here. `conclusion` is `failure` again → don't loop silently; report
-   it plainly in step 6 as still broken (or flaky) rather than declaring the round done.
+   move on, nothing more to do here. `conclusion` is `failure` → run `/spec-flow:sync-ci`'s own
+   mechanics right here (its SKILL.md steps 3-5: download the `spec-flow-failures` artifact, append
+   the ids to `.spec-flow/flagged-tests`), the same way step 3 above and `implement` step 5 both do
+   it — not the whole skill. A regression this round introduced is otherwise never recorded, and the
+   next run has no memory of it. Then don't loop silently; report it plainly in step 6 as still broken (or flaky) rather than
+   declaring the round done.
 
 5. **Reply per thread.** For each review comment you addressed, post a reply noting the commit
    that resolved it. Reply to the thread's **root** comment id, not to a reply within it — the

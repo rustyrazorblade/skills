@@ -66,8 +66,9 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
 - **`spec-flow/TESTING.md` — this repo's own test and CI policy.** spec-flow ships **no default
   policy and no fallback**: the repo states what runs locally, what runs in CI, whether CI is a test
   gate at all, and what gates merge, or nothing runs. `/spec-flow:setup` seeds it — it proposes a
-  concrete policy, confirms it with you before writing anything, then opens a PR. Every entry point
-  checks for it first and stops with a message naming the fix. Seeding reads your repo first; the
+  concrete policy, confirms it with you before writing anything, then opens a PR. `project-manager`
+  checks it at session start; `implement`, `address` and `sync-ci` each check it before any work
+  and stop with a message naming the fix. Seeding reads your repo first; the
   one seeding template the plugin ships, `references/TESTING.md.template`, states the tiered policy
   and is opened only where your repo already has that shape. Nothing reads it at runtime — policy
   resolution is anchored at your repo's root, so the plugin's copy is outside the tree it searches

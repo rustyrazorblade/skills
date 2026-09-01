@@ -174,7 +174,7 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             "status": status_of(issue),
             "priority": priority_of(issue),
             "assignee": assignee,
-            "mine": assignee == me,
+            "mine": me is not None and assignee == me,
             "is_epic": is_epic,
             "sub_issues": issue.get("subIssues", {}).get("nodes", []) if is_epic else [],
             "sub_total": (issue.get("subIssuesSummary") or {}).get("total", 0),
@@ -223,7 +223,14 @@ def describe(row):
 def liveness_marker(row):
     if row["status"] not in PAST_READY_STATUSES:
         return ""
-    return " 🟢 active" if row["agent_active"] else " 🔴 STALLED — no agent:active label"
+    if not row["agent_active"]:
+        return " 🔴 STALLED — no agent:active label"
+    # The label is a claim, not proof: a crashed issue-pm leaves it set. But attach_id only ever
+    # sees THIS machine's sessions, so its absence does not prove death -- the session may be
+    # running on another machine, or the claude CLI may have failed. Three honest states, not two.
+    if not row["attach_id"]:
+        return " 🟡 claimed — agent:active set, no session on this machine"
+    return " 🟢 active"
 
 
 def render_row(row):
@@ -262,6 +269,10 @@ def render_board(rows, me, archive_pending):
         return False
 
     def is_stalled(r):
+        # Only a MISSING label proves nothing is driving this. A label with no local session is
+        # ambiguous (another machine, or a dead session) -- the 🟡 marker reports that honestly
+        # rather than asserting death here, where the suggested remedy is a spawn that
+        # spawn-issue-pm.sh would refuse anyway while the label is still set.
         return r["mine"] and r["status"] in PAST_READY_STATUSES and not r["agent_active"]
 
     blocked_on_you = [r for r in staged if is_blocked_on_you(r)]
@@ -396,7 +407,10 @@ def main():
         return m.group(1) if m else body.splitlines()[0]
 
     def needs_attention_note_fn(n):
-        body = last_comment_matching(n)
+        # Must filter by prefix. Without one this returns the last comment of ANY kind, and the
+        # pipeline posts several after an attention request, so the row shows an unrelated line.
+        # issue-pm posts the request with this prefix; see agents/issue-pm.md.
+        body = last_comment_matching(n, prefix="🆘 Needs attention")
         return body.splitlines()[0] if body else None
 
     rows = build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_note_fn)

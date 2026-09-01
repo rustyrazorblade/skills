@@ -450,7 +450,10 @@ reflects the local machine's session registry, and says nothing about another de
   ad hoc case — an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a conflict it
   can't reconcile on its own, a failure that repeats past the point retrying makes sense — where
   guessing would be worse than waiting. `issue-pm` stops and waits once it's set, the same as at
-  either seam. Removed, with a follow-up comment, once the owner resolves it and work resumes.
+  either seam. Its comment's first line is prefixed `🆘 Needs attention:` — the board finds the
+  reason by that prefix, exactly as it finds a `blocked` reason by `⛔ Blocked on #`. Removed, with
+  a follow-up comment, once the owner resolves it and work resumes; `finalize` also sweeps it, so a
+  problem the owner resolved out of band can't leave the marker on a closed issue.
 
 ## Naming
 

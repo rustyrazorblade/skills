@@ -31,7 +31,7 @@ waiting — see steps 4 and 7 below for exactly how.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
 unassigned or already assigned to you (`gh issue list --label status:ready --json
-number,title,labels,assignees,subIssuesSummary` and choose `P0` over `P1` …, skipping any issue
+number,title,labels,assignees,subIssuesSummary --limit 100` and choose `P0` over `P1` …, skipping any issue
 assigned to someone else — that's their claim, not yours to take — **and skipping any epic**
 (`subIssuesSummary.total > 0`; see step 1's epic guard below — pick its highest-priority
 `status:ready` sub-issue instead, or the next `status:ready` issue if none of its sub-issues
@@ -515,7 +515,11 @@ qualify), and confirm the choice with the owner.
      owner's last look (a resumed/crashed session re-entering this step with no regeneration in
      between) — the labels/comment below were already posted last time this step ran, so skip
      re-posting them too, not just the content render; say in one line that nothing's changed since
-     your last review and stop there.
+     your last review and stop there. **This applies only to the spec-producing branch.** On the
+     content-only `type:docs` and `type:tech-debt` branches, step 6 never commits, so HEAD cannot
+     move and this check would match every single time — including after a redirect that rewrote
+     the scope. Those branches always render in full and always post the comment, matching the
+     third bullet below; never take this early exit on them.
    - **Present and different from current HEAD** → the spec was regenerated since the owner last
      saw it (they redirected you, or this is a later re-activation). Render **only what changed
      since then**, not the whole spec again — the owner already reviewed the unchanged parts once;

@@ -45,6 +45,13 @@ or make the decisions the owner owns.
 here on"), write them to `.spec-flow/owner-instructions` yourself before continuing — otherwise
 they'd be silently overridden by the file at your next seam check, or lost to a future respawn.
 
+**If that instruction withholds auto-merge** ("actually, let me review this one before it
+merges"), remove the `merge-on-green` label in the same act
+(`gh issue edit <N> --remove-label merge-on-green`). The label and the file are read
+independently at `implement` step 5, and either one alone authorizes the merge — so leaving a
+stale label set would merge the PR against the instruction you just recorded. Only one signal
+may survive.
+
 **Never `/clear` this session, and warn the owner if they're about to.** `/clear` wipes your
 conversation — this task's entire context — and a later `claude respawn` restores your worktree
 and files but cannot restore what `/clear` already destroyed: it would bring back a session with
@@ -181,7 +188,10 @@ sense, anything where guessing would be worse than waiting. Don't guess and don'
 a loop:
 
 1. Post a comment on the issue naming **exactly** what you're stuck on and what you need from the
-   owner to proceed — specific enough that they can act on it without attaching first.
+   owner to proceed — specific enough that they can act on it without attaching first. Start its
+   first line with `🆘 Needs attention:` — the board finds this comment by that prefix, exactly as
+   it finds a `blocked` reason by `⛔ Blocked on #`, and without it the board shows whatever
+   unrelated comment the pipeline posted most recently.
 2. Add the `needs-attention` label (`gh issue edit <N> --add-label needs-attention`).
 3. Stop and wait, the same as at either seam — this is a real stop, not a heads-up you keep working
    past.
@@ -219,3 +229,12 @@ dependency on another issue is `blocked`'s job, not this one's.
   not just the number, in both the GitHub comment and anything you say directly.
 - When your job is done (step 5), say so plainly — don't linger presenting yourself as still
   useful for this issue once it's closed.
+- **Remove `agent:active` when you EXIT for good** (`gh issue edit <N> --remove-label
+  agent:active`) — the owner tells you to abandon the issue, you hand back to the coordinator, or
+  you are shutting this session down mid-pipeline. `finalize` sweeps it on the normal path, but
+  never runs on any of those. A label left set leaves the issue showing as claimed on the board with
+  nothing driving it, and makes `spawn-issue-pm.sh` refuse every later spawn on that issue — including from another machine,
+  where nobody can see this session is gone.
+  **Not at a wait.** Seam 1, Seam 2 and a `needs-attention` stop are all waits, not exits: you are
+  still alive and still own the issue, so the label stays set. Removing it there would drop the
+  duplicate-spawn guard while you are mid-pipeline.

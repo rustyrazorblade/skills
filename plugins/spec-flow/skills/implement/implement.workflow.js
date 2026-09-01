@@ -161,19 +161,26 @@ const nonBlocking = new Map()
 // what the repo's policy asked for -- 'unknown' is the honest non-answer. Never assert compliance
 // nobody checked. Findings already collected still travel out: a halt mid-run must not throw away
 // what completed rounds legitimately found.
-function halt(what, detail, rounds) {
+// `completed` carries a finished review when one exists (the Build/Polish call sites are only
+// reachable after the panel approved). Passed in rather than closed over: the earlier call sites
+// run before `review` is declared, so referencing it here would be a TDZ error.
+function halt(what, detail, rounds, completed) {
   log(`${what} stopped the run — returning to the owner without a completed review.`)
   return {
     change,
     issue,
-    tests_ran: 'unknown',
-    tests_detail: `not assessed — ${what} stopped the run before review completed`,
-    spec_conformance: 'unknown',
+    tests_ran: completed ? completed.tests_ran : 'unknown',
+    tests_detail: completed
+      ? completed.tests_detail
+      : `not assessed — ${what} stopped the run before review completed`,
+    spec_conformance: completed ? completed.spec_conformance : 'unknown',
     approved: false,
     review_rounds: rounds,
     residual_findings: [detail],
     non_blocking_findings: [...nonBlocking.values()],
-    review_summary: `stopped by ${what} — see residual_findings`,
+    review_summary: completed
+      ? `${completed.summary}\n\n(then stopped by ${what} — see residual_findings)`
+      : `stopped by ${what} — see residual_findings`,
     polish: 'n/a',
   }
 }
@@ -434,6 +441,7 @@ ${GUARDRAILS}`,
       'the Build agent',
       'the Build agent returned no result (died or was skipped) — the repo\'s format/lint/build gate never ran',
       round,
+      review,
     )
   }
 

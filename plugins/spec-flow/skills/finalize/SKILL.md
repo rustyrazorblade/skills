@@ -60,10 +60,26 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
      --remove-label status:in-progress --remove-label agent:active --remove-label blocked \
      --remove-label merge-on-green --remove-label needs-attention \
      2>/dev/null || true
+   # Removing a label the issue doesn't carry is a no-op returning 0 (verified), so naming all
+   # seven in one call is safe. A transient auth/network failure is not: the `|| true` swallows it
+   # and NONE of the seven come off. Read the result back before trusting it.
+   # The `blocked` label has a native GitHub blocked_by link behind it. Removing the label alone
+   # leaves the closed issue rendered as blocked in GitHub's own UI, indefinitely.
+   ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh sweep <N>
+   gh issue view <N> --json labels --jq '[.labels[].name] | map(select(
+     . == "agent:active" or . == "blocked" or . == "merge-on-green"
+     or . == "needs-attention" or startswith("status:"))) | join(", ")'
    ```
+   **That read-back must print an empty line.** If it names any label, the sweep did not take
+   effect. Retry the specific command that owns the surviving label — the `gh issue edit` above for
+   a `status:*`, `agent:active`, `merge-on-green` or `needs-attention` label, or
+   `blocked-dependency.sh sweep` for `blocked` — then read back again. If it still names a label,
+   STOP and tell the owner which labels survive on which issue. Do not continue to step 3: a closed issue still carrying `agent:active` makes every
+   future `spawn-issue-pm.sh` on that number refuse, and step 3 removes the working directory
+   `gh issue` needs to infer the repo, so you cannot come back and retry afterwards.
 
 3. **Remove your own worktree and branch — hand off to a script that only acts once verified
-   safe.** **Before running it, note whether this issue had an OpenSpec change** —
+   safe.** Only run this once step 2's read-back came back empty. **Before running it, note whether this issue had an OpenSpec change** —
    `[[ -d "openspec/changes/issue-<N>" ]]` — for step 4's report; the worktree (and anywhere you
    could still run that check) is gone once this script finishes:
    ```bash
@@ -76,7 +92,8 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    `git worktree remove --force --force`. **Safe to re-run**: if already removed, it detects the
    main checkout and exits cleanly.
 
-4. **Report.** Confirm: issue closed, worktree removed. If step 3's check found
+4. **Report.** Confirm: issue closed, labels verified clear, worktree removed. Report the label
+   sweep from step 2's read-back, not from the edit command's exit status. If step 3's check found
    `openspec/changes/issue-<N>`, note it's still sitting on the default branch, unarchived, until
    `project-manager` runs a bulk archive
    pass — this is expected, not something to wait on here. A content-only `type:docs` issue, or any

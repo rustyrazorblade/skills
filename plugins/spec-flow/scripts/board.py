@@ -104,12 +104,19 @@ def ci_status(status_check_rollup):
         conclusion = check.get("conclusion")
         status = check.get("status")
         legacy_state = check.get("state")
-        if legacy_state == "PENDING" or status in ("QUEUED", "IN_PROGRESS"):
+        if legacy_state in ("PENDING", "WAITING", "REQUESTED", "EXPECTED") \
+                or status in ("QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED", "PENDING"):
             running = True
         elif legacy_state == "SUCCESS" or conclusion in ("SUCCESS", "NEUTRAL", "SKIPPED"):
             continue
-        else:
+        elif conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE") \
+                or legacy_state in ("FAILURE", "ERROR"):
             failing = True
+        else:
+            # Unknown/absent conclusion on a check that is not yet reported. Treat as pending, never
+            # as failing: a red board entry drops the issue out of BLOCKED ON YOU and "next up",
+            # both of which require "green", so guessing wrong here hides real work.
+            running = True
     if running:
         return "running"
     if failing:
@@ -260,11 +267,21 @@ def render_board(rows, me, archive_pending):
     backlog.sort(key=lambda r: (priority_key(r["priority"]), r["number"]))
 
     def is_blocked_on_you(r):
-        if r["needs_attention"] and r["mine"]:
+        if not r["mine"]:
+            return False
+        if r["needs_attention"]:
             return True
-        if r["status"] == "spec-review" and r["mine"]:
+        if r["status"] == "spec-review":
             return True
-        if r["status"] == "in-review" and r["mine"] and r["ci"] == "green":
+        # green: ready for the owner. None: no PR resolved through closingIssuesReferences -- a
+        # missing correlation, not a running pipeline, so the owner is still the blocker. Failing
+        # and running both belong to the pipeline (address handles a red PR), not to the owner.
+        if r["status"] == "in-review" and r["ci"] in ("green", None):
+            return True
+        # activate's design-choice stop is a real wait on the owner, but it holds status:ready the
+        # whole time (the flip happens later, in step 7). A ready issue that is claimed -- assigned,
+        # with a live session -- is parked on an answer, not waiting to be picked up.
+        if r["status"] == "ready" and r["agent_active"]:
             return True
         return False
 
@@ -276,7 +293,7 @@ def render_board(rows, me, archive_pending):
         return r["mine"] and r["status"] in PAST_READY_STATUSES and not r["agent_active"]
 
     blocked_on_you = [r for r in staged if is_blocked_on_you(r)]
-    ready_rows = [r for r in staged if r["status"] == "ready"]
+    ready_rows = [r for r in staged if r["status"] == "ready" and r not in blocked_on_you]
     # Includes spec-review too -- someone ELSE's spec-review issue is neither "blocked on you"
     # (not yours) nor ready/backlog, so without this it would silently vanish from the board
     # entirely instead of showing "for visibility" as the spec requires.
@@ -328,11 +345,27 @@ def render_board(rows, me, archive_pending):
     # so the title is never wedged between two colons in a single sentence. See the convention in
     # docs/workflow.md.
     next_up = None
+    # Rung 0: anything already in the BLOCKED ON YOU bucket outranks starting or grooming work --
+    # it is the closest thing to landed, and the board contradicted itself by rendering an issue
+    # under "blocked on you" and then recommending the owner go groom something else.
     mine_in_review_green = [r for r in staged if r["mine"] and r["status"] == "in-review" and r["ci"] == "green"]
+    other_blocked_on_you = [r for r in blocked_on_you if r not in mine_in_review_green]
     if mine_in_review_green:
         mine_in_review_green.sort(key=lambda r: priority_key(r["priority"]))
         top = mine_in_review_green[0]
         next_up = ("finish", top, f"PR #{top['pr_number']} is green, merge it")
+    elif other_blocked_on_you:
+        other_blocked_on_you.sort(key=lambda r: priority_key(r["priority"]))
+        top = other_blocked_on_you[0]
+        if top["needs_attention"]:
+            action = "an agent is stopped waiting on you — see the issue comments"
+        elif top["status"] == "spec-review":
+            action = "approve or redirect the spec (Seam 1)"
+        elif top["status"] == "ready":
+            action = "a session is parked on your design choice — attach to it"
+        else:
+            action = f"review PR #{top['pr_number']}" if top["pr_number"] else "review it"
+        next_up = ("unblock", top, action)
     else:
         unclaimed_ready = [r for r in ready_rows if r["assignee"] is None]
         if unclaimed_ready:

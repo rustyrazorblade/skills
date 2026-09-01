@@ -442,7 +442,11 @@ reflects the local machine's session registry, and says nothing about another de
   the fixed vocabulary; the native link is what actually renders in GitHub's UI. Both removed, with
   a follow-up comment, once the dependency clears. A single fixed label, not one per blocking issue
   — the detail lives in the comment (and the native link itself), keeping the label vocabulary
-  fixed rather than growing per-issue.
+  fixed rather than growing per-issue. The label, the comment and the native link are applied and
+  cleared together by `scripts/blocked-dependency.sh` (`add` / `clear`), so any stage can mark a
+  dependency it discovers — not just `activate`, which used to be the only place the mechanics
+  existed. `finalize` runs its `sweep` on close, which removes the label and every native link
+  without needing to know the blocking issue.
 - **`needs-attention`** — added alongside a comment naming exactly what's needed, whenever
   `issue-pm` is genuinely stuck on something with no defined next step of its own: not one of **The
   two human seams** (those are scheduled stops, already surfaced their own way — spec approval,

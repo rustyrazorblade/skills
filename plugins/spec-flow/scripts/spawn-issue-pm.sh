@@ -162,9 +162,21 @@ lookup_session_id() {
     | jq -r --arg n "$1" --arg root "$2" \
         '[.[] | select(.name == $n) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last.id // empty'
 }
+# The registry read, isolated so callers can tell a FAILED QUERY from a NEGATIVE ANSWER. Every
+# caller below used to collapse both into an empty string, and then acted destructively on it.
+# Returns 0 and prints the JSON on success; returns 1 and prints nothing if the query itself failed.
+agents_json() {
+  local out
+  out=$(claude agents --json --all 2>/dev/null) || return 1
+  [[ -n "$out" ]] || return 1
+  printf '%s' "$out"
+}
+# 0 = answered (stdout may be empty, meaning genuinely absent). 2 = the query failed; the answer
+# is unknown and MUST NOT be read as "absent".
 lookup_session_cwd() {
-  claude agents --json --all 2>/dev/null \
-    | jq -r --arg id "$1" '.[] | select(.id == $id) | .cwd // empty'
+  local js
+  js=$(agents_json) || return 2
+  printf '%s' "$js" | jq -r --arg id "$1" '.[] | select(.id == $id) | .cwd // empty'
 }
 # `claude agents --json` registration can lag slightly behind `claude --bg`/`claude respawn`
 # returning — retry briefly instead of trusting a single immediate check either way, in either
@@ -191,15 +203,25 @@ retry_until_nonempty() {
 # $REPO_ROOT) still times out and the fail-safe still fires correctly for that real case. This
 # deliberately doesn't assert ".claude/worktrees/" as a literal substring — only Claude Code
 # decides where under the root a worktree actually lands, and this doesn't need to know.
+# 0 = confirmed in an isolated worktree (path on stdout). 1 = answered, but not a safe path.
+# 2 = never got a usable answer from the registry at all, so nothing is known either way.
 retry_until_worktree_cwd() {
-  local id="$1" root="$2" out="" attempts=0
+  local id="$1" root="$2" out="" attempts=0 rc=0 answered=1
   while [[ $attempts -lt 15 ]]; do
-    out=$(lookup_session_cwd "$id")
-    [[ -n "$out" && "$out" != "$root" && "$out" == "$root"/* ]] && { echo "$out"; return 0; }
+    rc=0
+    out=$(lookup_session_cwd "$id") || rc=$?
+    if [[ $rc -eq 0 ]]; then
+      answered=0
+      [[ -n "$out" && "$out" != "$root" && "$out" == "$root"/* ]] && { echo "$out"; return 0; }
+    else
+      out=""
+    fi
     attempts=$((attempts + 1))
     sleep 2
   done
   echo "$out"
+  [[ $answered -eq 0 ]] && return 1
+  return 2
 }
 
 # Local session lookup FIRST, and --all (not just live ones): a background session's worktree is
@@ -258,6 +280,11 @@ if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state"
   # `claude logs` positively says the process is gone.
   if claude logs "$existing_id" > /dev/null 2>&1; then
     echo "already running: ${existing_name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
+    # `claude logs` reads a log FILE, so a crash that leaves the log behind reports success for a
+    # dead session and this refusal repeats on every run. Name the escape, or the only way out is
+    # to already know it: attaching to a session that is not there tells you nothing.
+    echo "If attaching shows nothing is there, the record is stale from a crash — clear it with" >&2
+    echo "'claude rm ${existing_id}' and re-run this script." >&2
     exit 1
   fi
   echo "spawn-issue-pm: ${existing_name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
@@ -311,7 +338,18 @@ if [[ -n "$existing_id" ]]; then
   # inside the race window and false-positives on every healthy respawn, not just genuinely swept
   # ones. Empty/missing cwd data after the poll still counts as unsafe, same as a confirmed wrong
   # path — a transient `claude agents` failure here must never be read as "must be fine, then."
-  respawned_cwd=$(retry_until_worktree_cwd "$session_id" "$REPO_ROOT")
+  cwd_rc=0
+  respawned_cwd=$(retry_until_worktree_cwd "$session_id" "$REPO_ROOT") || cwd_rc=$?
+  if [[ $cwd_rc -eq 2 ]]; then
+    # The registry never answered -- 'claude agents' failed every attempt. That is NOT evidence the
+    # worktree is gone, and the destructive branch below would discard a healthy session's record,
+    # and with it the conversation this respawn existed to recover. Leave everything as it is.
+    echo "spawn-issue-pm: respawned ${existing_name} (${session_id}), but 'claude agents --json --all'" >&2
+    echo "failed on every attempt, so its working directory could not be confirmed. Nothing was" >&2
+    echo "changed: the session is left running and the label untouched. Check 'claude agents'" >&2
+    echo "yourself, then re-run this script once it responds." >&2
+    exit 1
+  fi
   if [[ -z "$respawned_cwd" || "$respawned_cwd" == "$REPO_ROOT" || "$respawned_cwd" != "$REPO_ROOT"/* ]]; then
     claude stop "$session_id" > /dev/null 2>&1 || true
     # Also remove the session record, not just stop it — otherwise this stuck record is what the
@@ -444,6 +482,8 @@ else
   # Setting it this early narrows that window from minutes to the time this script takes to run;
   # it isn't a true compare-and-swap (gh has no atomic label-if-absent), but it's the tightest this
   # gets without one. Roll it back below if the spawn itself doesn't pan out.
+  # Deliberately AFTER the temp-file build above: see that block's comment. Moving it earlier to
+  # shave the TOCTOU window trades microseconds of local file work for a real stranding bug.
   gh issue edit "$issue" --add-label agent:active
 
   # No --worktree here: --bg does not accept it. Claude Code isolates before an Edit/Write TOOL
@@ -510,8 +550,17 @@ else
   session_id=$(retry_until_nonempty lookup_session_id "$name" "$REPO_ROOT")
 
   if [[ -z "$session_id" ]]; then
-    gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-    echo "spawn-issue-pm: '${name}' did not appear in 'claude agents --json --all' after spawn" >&2
+    # 'claude --bg' returned 0 above, so a session WAS launched. Not finding it in the registry
+    # within the poll window means the registry is lagging or unreadable -- not that the launch
+    # failed. Stripping agent:active here would leave a live issue-pm working the issue with no
+    # label, invisible to the cross-machine duplicate guard, while telling the caller it failed.
+    # Leave the label set and say what is actually known.
+    echo "spawn-issue-pm: launched ${name}, but it did not appear in 'claude agents --json --all'" >&2
+    echo "within the poll window. The session may still be registering, or the registry may be" >&2
+    echo "unreadable — it was NOT stopped, and agent:active was left set, because a session that" >&2
+    echo "is running with no label is worse than one this script cannot see yet." >&2
+    echo "Check 'claude agents' directly. If nothing is there, clear the label by hand:" >&2
+    echo "  gh issue edit ${issue} --remove-label agent:active" >&2
     exit 1
   fi
   final_name="$name"
@@ -530,6 +579,11 @@ else
 fi
 rm -f "$state_out"
 if [[ "$state" == "failed" ]]; then
+  # A confirmed "failed" state IS a positive answer, so clearing the label here is correct --
+  # unlike the empty-session-id path above, which cannot tell a failure from a lagging registry.
+  # The session is confirmed dead, so nothing will ever copy the overlap temp file: clean it up.
+  # (The empty-session-id path above deliberately does NOT, since a live session may still read it.)
+  [[ -n "${overlap_tmp:-}" ]] && rm -f "$overlap_tmp"
   gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
   echo "spawn-issue-pm: ${final_name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
   exit 1

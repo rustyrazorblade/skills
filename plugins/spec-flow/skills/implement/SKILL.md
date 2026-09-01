@@ -46,7 +46,23 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    gh issue edit <N> --remove-label status:spec-review --add-label status:in-progress
    ```
 
-2. **Open a draft PR early — keep CI warm.** **Skip this step entirely if `openspec/changes/issue-<N>`
+2. **Open a draft PR early — keep CI warm.**
+
+   **2a. Resolve the values first — this half NEVER skips.** Steps 4 and 5 consume `<DEFAULT_BR>`
+   and `<PR>`, and this is the only place they are resolved, so skipping the whole step leaves them
+   undefined on exactly the paths that skip it:
+   ```bash
+   BR=$(git rev-parse --abbrev-ref HEAD)
+   DEFAULT_BR=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
+   echo "DEFAULT_BR=$DEFAULT_BR"
+   echo "PR=$PR"          # empty is expected on a fast path — 2b explains who opens it and when
+   ```
+   Resolve `$DEFAULT_BR` from the repo, never assume `main`: it must match what `EnterWorktree`
+   branched this worktree from. An empty `PR` here is not an error on a fast path; it means the PR
+   does not exist yet, and you re-resolve it with this same command once it does (see 2b).
+
+   **2b. Open the PR. Skip 2b — and only 2b — if `openspec/changes/issue-<N>`
    doesn't exist AND the issue carries `type:docs` or `type:tech-debt`** — neither fast path commits
    a spec, so the branch has no commits ahead of the default branch yet and `gh pr create` would
    fail outright (GitHub rejects a PR with no diff). For `type:docs`, step 4c opens the PR itself,
@@ -55,7 +71,10 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    same mechanics, right after it reports back and before moving to step 4b's review panel, in Team
    mode; in Workflow mode the script's Implement-phase agent opens it itself (the one narrow
    exception to its own GUARDRAILS — see `implement.workflow.js`), since nothing outside the script
-   regains control mid-run to do it the way the Team-mode lead can.
+   regains control mid-run to do it the way the Team-mode lead can. **In that Workflow-mode case
+   the script does not return the PR number, so re-run 2a's `gh pr list --head "$BR"` command once
+   the script returns, and use the number it prints as `<PR>` for step 5.** Without it step 5 has
+   no PR to mark ready, write a body on, or merge, and the run ends with the PR stuck as a draft.
    (A missing `openspec/changes/issue-<N>` on an issue carrying **neither** label means something
    else — most likely a legacy change predating this naming; see the Input note above — not
    "nothing to push yet," so don't skip this step for that case.) **Otherwise** push the branch (it already
@@ -147,9 +166,9 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       gate; most `type:docs` runs never trigger it.
    c. Once the docs pass reports done: **re-resolve `BR` fresh here** — `BR=$(git -C <worktree>
       rev-parse --abbrev-ref HEAD)` — variables from step 2's Bash call don't survive to this one,
-      and step 2 may not have run at all on this path. **First confirm the branch is pushed** — the
+      and step 2b may not have run at all on this path. **First confirm the branch is pushed** — the
       GUARDRAILS only say the teammate *may* push, not must, so `git -C <worktree> push -u origin
-      "$BR"` yourself if it hasn't happened. **If step 2 was skipped** (no spec existed when this
+      "$BR"` yourself if it hasn't happened. **If step 2b was skipped** (no spec existed when this
       run started), open the draft PR now using step 2's *full* mechanics — including its
       existing-PR reuse check (`gh pr list --head "$BR" --json number`; only `gh pr create --draft`
       if none found), since this may be a re-run where 4c already opened it once — there's a real
@@ -284,7 +303,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       NOT open the PR itself — you do, right below, since Team mode's lead can).
 
       Either way: wait for it to report and mark its task complete before moving on — nothing else
-      can start yet. **Then, only for the tech-debt case, if step 2 was skipped** (no PR yet — this
+      can start yet. **Then, only for the tech-debt case, if step 2b was skipped** (no PR yet — this
       is always true the first time through for a `type:tech-debt` issue): open the draft PR
       yourself now, using step 2's full mechanics (existing-PR reuse check included) — there's a
       real commit to open it against. Do this before moving to step b, so CI starts running while
@@ -397,8 +416,12 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       whatever the repo's policy names, and in a repo whose policy defines the local gate as lint
       alone, an agent that cannot read that policy cannot run the gate at all.
 
-   f. **Polish.** Spawn a `tdd-developer`-type teammate, named `polish`: *"Final documentation
-      polish for OpenSpec change `issue-<N>` in `<worktree>`. Ensure new modules/behaviors are
+   f. **Polish.** Spawn a `tdd-developer`-type teammate, named `polish`. Open the prompt by naming
+      the target: when `CHANGE_PARAM` is a real change, *"Final documentation polish for OpenSpec
+      change `issue-<N>` in `<worktree>`"*; on a `type:tech-debt` issue `CHANGE_PARAM` is the
+      sentinel, so name the issue instead — *"Final documentation polish for issue #<N> in
+      `<worktree>`"* — never the sentinel itself, which points at a change that does not exist.
+      Then continue, in the same prompt: *"Ensure new modules/behaviors are
       documented consistently with the repo's conventions (module/responsibility comments,
       architecture/index docs, doc comments on public items). If this change alters user-facing
       behavior (public API, CLI, config, how the service runs), update the repo's user-facing docs
@@ -457,21 +480,26 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 5. **Mark the PR ready and report.**
 
    **Gate — check this first, before any command below.** Every path into this step must pass it,
-   including the "skip straight to step 5" route out of step 4d. Answer all three:
+   including the "skip straight to step 5" route out of step 4d. Answer all four:
 
    - Did the review panel approve? (Or, on the docs fast path, did step 4c report done?)
    - Did the run reach here without a refactor circuit breaker trip, in Implement or in any fix
      round?
    - Did every agent this run depended on actually return a result, rather than dying or being
      skipped?
+   - Do you have a real `<PR>` number? On a fast path the PR is opened after step 2a ran, so
+     re-resolve it with 2a's `gh pr list --head "$BR"` command before answering. If it is still
+     empty, no PR exists — stop and say so rather than running the commands below against nothing.
    (CI is not knowable here — the push it reports on happens below. The CI check further down
    enforces the same rule at the point where the answer exists.)
 
-   **If any answer is no, do not run the commands below.** Instead: leave the PR a draft, write
-   the residual findings into its body, add `needs-attention` (`gh issue edit <N> --add-label
-   needs-attention`) with a comment naming what is unresolved — first line prefixed
-   `🆘 Needs attention:`, per `agents/issue-pm.md` — keep `agent:active` and
-   `status:in-progress` as they are, and stop. Never mark a red or unapproved PR ready, and never
+   **If any answer is no, do not run the commands below.** Instead: add `needs-attention`
+   (`gh issue edit <N> --add-label needs-attention`) with a comment naming exactly what is
+   unresolved — first line prefixed `🆘 Needs attention:`, per `agents/issue-pm.md` — keep
+   `agent:active` and `status:in-progress` as they are, and stop. **If a PR exists**, also leave it
+   a draft and write the residual findings into its body. **If none exists** — a fast-path run that
+   halted before its PR was ever opened, which is exactly what question 4 catches — put the
+   residual findings in that issue comment instead; it is the only place they can land. Never mark a red or unapproved PR ready, and never
    merge one, whatever `merge-on-green` or `.spec-flow/owner-instructions` say. Those authorize
    crossing Seam 2 on a *finished* run; they do not authorize skipping the panel.
 

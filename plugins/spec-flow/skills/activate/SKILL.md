@@ -307,24 +307,17 @@ qualify), and confirm the choice with the owner.
    `board` filters on) and GitHub's **native issue dependency** (renders directly in the GitHub UI,
    which the label alone doesn't — the two are additive, not a replacement for each other):
    ```bash
-   gh issue edit <N> --add-label blocked
-   gh issue comment <N> --body "⛔ Blocked on #<M> — <one-line reason>."
-   # Native blocked_by link (verified live). issue_id = the BLOCKING issue's database `.id`, NOT
-   # its `.number` — different values. -F, not -f: the API wants an integer, not a string.
-   BLOCKING_ID=$(gh api "repos/{owner}/{repo}/issues/<M>" --jq .id)
-   DEP_ERR=$(gh api "repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by" -F issue_id="$BLOCKING_ID" -X POST 2>&1) || \
-     echo "spec-flow: couldn't create the native blocked_by link — the blocked label + comment above still stand regardless, but don't assume this was transient: ${DEP_ERR}" >&2
+   # Label, comment and native blocked_by link, applied as one unit. Any stage can call this --
+   # a dependency found during implement or address uses the same command.
+   ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add <N> <M> "<one-line reason>"
    ```
    Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands) —
    `blocked` is informational, not a hard stop you enforce yourself. Once the dependency actually
    clears, remove the label, remove the native link, and post a follow-up comment:
    ```bash
-   gh api "repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by/$BLOCKING_ID" -X DELETE 2>/dev/null || true
-   gh issue edit <N> --remove-label blocked
-   gh issue comment <N> --body "✅ Unblocked — #<M> landed."
+   ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear <N> <M>
    ```
-   (`$BLOCKING_ID` won't survive a separate Bash call — re-resolve it with the same `gh api
-   .../issues/<M> --jq .id` command if this runs later than the block above.) **This is the one thing auto mode never
+   **This is the one thing auto mode never
    skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
    decision — label it, comment, and stop for the owner regardless of what
    `.spec-flow/owner-instructions` says for this run.

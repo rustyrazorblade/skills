@@ -71,8 +71,12 @@ the one thing standing in for it — replace the normal flow's steps this way:
 
 ## What you do
 
-*(Normal mode — a real `change` was given. Skip this section entirely in tech-debt fast path mode
-above.)*
+*(Normal mode — a real `change` was given. **In tech-debt fast path mode, skip only steps 1, 4 and
+6** — the contract read, the spec-conformance check, and scenario→test traceability, all of which
+need a spec that mode has none of. Steps 2, 3, 5 and 7 still apply exactly as written, as that
+mode's step 1 says; run them alongside it. Do NOT skip the whole section: without step 3 you never
+read the diff and without step 7 you have no output contract, on the one issue type where this
+panel is the only gate.)*
 
 1. **Read the contract.** Read the change's `proposal.md`, `design.md`, and every
    `specs/**/spec.md`. The spec's requirements and `#### Scenario:` blocks are the acceptance

@@ -178,6 +178,27 @@ Two places catch this, at different points, and each has a **written** next step
   Splitting off the behavior change (option c) here means it becomes its own **new**, separately
   groomed issue — never silently folded into this one's scope after the fact.
 
+## A hard dependency found outside `activate` — `blocked`
+
+`activate`'s design step is the usual place a hard dependency surfaces, but not the only one: a
+`tdd-developer` can hit one mid-`implement`, and a review round can surface one during `address`.
+The mechanics are the same wherever you are — label, comment and GitHub's native `blocked_by` link,
+applied as one unit:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add <N> <M> "<one-line reason>"
+```
+
+Then tell the owner and let them decide whether to proceed anyway; `blocked` is informational, not
+a hard stop you enforce yourself. Once `#<M>` actually lands, clear it as one unit too:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear <N> <M>
+```
+
+Never hand-roll the label or the link separately — they drift apart, and a native link left behind
+renders the issue blocked in GitHub's UI long after the label is gone.
+
 ## Stuck outside a defined seam — `needs-attention`
 
 The two owner seams above, and the hard-dependency case in **Escalation**, each already have a

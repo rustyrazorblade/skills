@@ -447,7 +447,7 @@ ${GUARDRAILS}`,
 
   phase('Polish')
   polish = await agentNS(
-    `Final documentation polish for OpenSpec change "${change}" in worktree ${worktree}.
+    `Final documentation polish for ${isTechDebt ? `issue #${issue}` : `OpenSpec change "${change}"`} in worktree ${worktree}.
 Ensure any new modules/behaviors are documented consistently with the repo's conventions
 (module/responsibility comments, any architecture/index docs the repo keeps, doc comments on
 public items). ALSO: if this change alters user-facing behavior (a public API, CLI, config, or

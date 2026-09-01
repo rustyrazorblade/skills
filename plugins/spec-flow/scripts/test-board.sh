@@ -42,6 +42,9 @@ trap 'rm -rf "$fake_bin_dir"' EXIT
 #                                                        you" -- regression: used to vanish
 #                                                        entirely, since spec-review wasn't in
 #                                                        the IN FLIGHT status set)
+#   #18 status:ready, mine, agent:active             -> BLOCKED ON YOU (activate's design stop --
+#                                                        holds status:ready the whole wait)
+#   #19 status:in-review, mine, NO linked PR (ci None) -> BLOCKED ON YOU, not "waiting on CI"
 #   #20 epic (subIssuesSummary.total=2)              -> EPICS, excluded from every other bucket
 #   #30 no status label                              -> BACKLOG
 # ---------------------------------------------------------------------------
@@ -59,6 +62,8 @@ case "$1 $2" in
   {"number":15,"title":"Blocked item","labels":[{"name":"status:in-progress"},{"name":"P1"},{"name":"blocked"},{"name":"agent:active"}],"url":"https://x/15","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
   {"number":16,"title":"Needs attention item","labels":[{"name":"status:in-progress"},{"name":"P1"},{"name":"needs-attention"},{"name":"agent:active"}],"url":"https://x/16","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
   {"number":17,"title":"Alice's spec review item","labels":[{"name":"status:spec-review"},{"name":"P1"},{"name":"agent:active"}],"url":"https://x/17","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":18,"title":"Parked on my design choice","labels":[{"name":"status:ready"},{"name":"P2"},{"name":"agent:active"}],"url":"https://x/18","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":19,"title":"In review, PR never linked","labels":[{"name":"status:in-review"},{"name":"P2"}],"url":"https://x/19","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
   {"number":20,"title":"An epic","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/20","assignees":[],"subIssuesSummary":{"completed":1,"percentCompleted":50,"total":2},"subIssues":{"nodes":[{"number":21,"title":"Sub one"},{"number":22,"title":"Sub two"}]}},
   {"number":30,"title":"Backlog item","labels":[],"url":"https://x/30","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}}
 ]
@@ -162,6 +167,84 @@ check "needs-attention note comes from the matching 🆘-prefixed comment, not a
 # proof of death either, so this is its own state rather than 🟢 or 🔴.
 echo "$out" | grep -q "#16 .*🟡 claimed — agent:active set, no session on this machine"
 check "an agent:active label with no local session renders claimed, neither active nor stalled" $?
+
+# --- issue 58: work blocked on the owner must be visible and must outrank starting new work ---
+
+# #18 is parked at activate's design-choice stop. It holds status:ready throughout that wait, so a
+# status-only rule renders it as an untouched backlog item and the owner never learns a session is
+# waiting on their answer.
+# Section ranges must END at the next section header. The board's headers are emoji lines, not
+# "##", so a /^##/ terminator ran to end-of-output and matched the issue in ANY later section --
+# which made these assertions pass even with the fix reverted.
+# awk, not sed: BSD sed (macOS default) has no `\|` alternation, so a `/^\(a\|b\)/` terminator
+# never matches, the range runs to end of output, and the assertion passes vacuously.
+# Section rows are indented two spaces; headers are not. Print rows until the next unindented line.
+section() {
+  echo "$out" | awk -v hdr="$1" '
+    !inside && index($0, hdr) { inside = 1; next }
+    inside && /^[[:space:]]*$/ { next }
+    inside && /^[^[:space:]]/  { exit }
+    inside                      { print }
+  '
+}
+blocked_section() { section "⛳ BLOCKED ON YOU"; }
+ready_section()   { section "📋 READY"; }
+
+blocked_section | grep -q "#18"
+check "activate's design-choice stop shows under BLOCKED ON YOU, not as a plain ready item" $?
+
+# Positive canary FIRST: a negative assertion against a section that no longer exists (renamed
+# header, changed emoji) passes vacuously. #13 is the fixture's unclaimed ready item and must
+# always be there, so this pins that ready_section actually resolves before the negative below.
+ready_section | grep -q "#13"
+check "ready_section resolves (canary — guards the negative assertion below from going vacuous)" $?
+
+! ready_section | grep -q "#18"
+check "an issue shown under BLOCKED ON YOU is not rendered again under READY" $?
+
+# #19 is in-review with no PR resolvable through closingIssuesReferences, so ci is None. That is a
+# missing correlation, not a running pipeline -- the owner is the blocker, not CI.
+blocked_section | grep -q "#19"
+check "status:in-review with no linked PR is blocked on you, not 'waiting on CI'" $?
+
+# "Next up" must draw from the board's own top bucket. Previously the ladder went straight from
+# mine+in-review+green to unclaimed-ready, so it told the owner to go groom while a spec sat
+# waiting for their approval.
+# Whatever it picks must come from the top bucket while that bucket is non-empty -- never a
+# "groom" or "activate" recommendation, which is what the old ladder produced by skipping it.
+echo "$out" | grep -qE "Next up — (finish|unblock):"
+check "'next up' draws from BLOCKED ON YOU while that bucket is non-empty, never groom/activate" $?
+
+# The fixture always has #11 (mine + in-review + green), so the "finish" rung always wins and the
+# new "unblock" rung never executes through the fixture. Exercise the ladder directly instead,
+# with no green in-review row present, so a regression that drops the rung is actually caught.
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# A spec awaiting approval, plus an unclaimed ready item. Nothing green and in-review.
+rows = [row(number=10, status="spec-review"), row(number=30, status="ready", assignee=None, mine=False)]
+rendered = board.render_board(rows, "me", 0)
+out = rendered if isinstance(rendered, str) else "\n".join(rendered)
+assert "Next up — unblock:" in out, "expected the unblock rung to win; got:\n" + out
+assert "#10" in out or "10:" in out, "expected issue 10 to be recommended; got:\n" + out
+
+# CI state mapping (issue 58 defect 4): queued/gated states are pending, never failing.
+for st in ("PENDING", "WAITING", "REQUESTED", "EXPECTED"):
+    got = board.ci_status([{"state": st}])
+    assert got == "running", f"{st} -> {got}, expected running"
+assert board.ci_status([{"status": "COMPLETED", "conclusion": None}]) == "running", "unknown conclusion must be pending"
+assert board.ci_status([{"state": "SUCCESS"}]) == "green"
+assert board.ci_status([{"conclusion": "FAILURE"}]) == "failing"
+PYEOF
+check "'next up' unblock rung fires with no green in-review item, and CI states map correctly" $?
 
 echo "$out" | grep -q "specs pending archive: 2 → /spec-flow:archive"
 check "archive-pending count excludes the 'archive' entry itself" $?

@@ -6,7 +6,7 @@ argument-hint: [issue number, or its PR number]
 
 # address — resolve the owner's PR review comments
 
-You are this issue's `issue-pm`, running as your own dedicated background session. The owner
+You are this issue's `issue-manager`, running as your own dedicated background session. The owner
 reviewed the PR for issue `#N` in GitHub and left comments. Pull them, fix them in the worktree,
 push, and reply to each thread. This is owner-invoked (run it when you're back) — there is no
 polling.

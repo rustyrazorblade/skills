@@ -1,6 +1,6 @@
 ---
 name: board
-description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, live issue-pm session, and PR state — and highlight what's next, what's blocked on the owner, and what's stalled. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
+description: Report status across all in-flight delivery pipelines — every issue by lifecycle label with its priority, stage, live issue-manager session, and PR state — and highlight what's next, what's blocked on the owner, and what's stalled. Use when the owner asks 'where do things stand' or 'what should I work on'. Part of the flow delivery workflow (see docs/workflow.md).
 ---
 
 # board — status across all in-flight pipelines

@@ -3,7 +3,7 @@
 # Claude Code process. Prints the session id and how to attach to it — nothing more.
 # Invoked by the project-manager agent, only after it's already confirmed a pending batch with the
 # owner (see skills/archive/SKILL.md) — this script itself does no threshold/confirmation logic.
-# Background-only, deliberately, same as spawn-issue-pm.sh: the owner manages running sessions
+# Background-only, deliberately, same as spawn-issue-manager.sh: the owner manages running sessions
 # themselves via `claude agents` (an interactive picker — select the session by name/id; there is
 # no direct "attach by id" command).
 set -euo pipefail
@@ -15,7 +15,7 @@ for bin in claude jq gh git; do
   }
 done
 
-# Scoped to THIS repo, same reasoning as spawn-issue-pm.sh's REPO_ROOT: the session name below is
+# Scoped to THIS repo, same reasoning as spawn-issue-manager.sh's REPO_ROOT: the session name below is
 # fixed ("archive-batch", not per-issue), so on a machine running spec-flow in more than one repo,
 # an unscoped name match would find a DIFFERENT repo's archive-batch session and wrongly report
 # "already running" here. Only one archive-batch session is ever expected per repo at a time (not
@@ -44,7 +44,7 @@ existing_state=$(jq -r --arg n "$name" --arg root "$REPO_ROOT" \
 rm -f "$claude_agents_out"
 
 if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
-  # Same staleness check as spawn-issue-pm.sh: the registry's own `state` can lag reality.
+  # Same staleness check as spawn-issue-manager.sh: the registry's own `state` can lag reality.
   if claude logs "$existing_id" > /dev/null 2>&1; then
     echo "already running: ${name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
     exit 1
@@ -69,11 +69,11 @@ if ! claude --bg \
 fi
 
 # Excludes $existing_id (empty if there was no prior record at all) — fresh spawn is the ONLY
-# path in this script, unlike spawn-issue-pm.sh where it's only reachable when no same-name
+# path in this script, unlike spawn-issue-manager.sh where it's only reachable when no same-name
 # record exists yet. Without this exclusion, a finished/failed/stale PAST archive-batch session
 # would satisfy "name matches, cwd matches" just as well as the brand-new one, and registration
 # for the new session can lag slightly behind `claude --bg` returning (same reason
-# spawn-issue-pm.sh retries) — so the very first iteration could return the OLD session's id and
+# spawn-issue-manager.sh retries) — so the very first iteration could return the OLD session's id and
 # report success while the real new worker runs unreported.
 session_id=""
 attempts=0

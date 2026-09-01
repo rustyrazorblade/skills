@@ -109,7 +109,7 @@ chmod +x "$fake_bin_dir/git"
 cat > "$fake_bin_dir/claude" <<'CLAUDEEOF'
 #!/usr/bin/env bash
 if [[ "$1" == "agents" ]]; then
-  echo '[{"name":"issue-pm-11","state":"working","id":"sess-abc123"},{"name":"issue-pm-15-blocked-item-fix","state":"working","id":"sess-slug456"},{"name":"issue-pm-999","state":"done","id":"sess-dead"}]'
+  echo '[{"name":"issue-manager-11","state":"working","id":"sess-abc123"},{"name":"issue-pm-15-blocked-item-fix","state":"working","id":"sess-slug456"},{"name":"issue-manager-999","state":"done","id":"sess-dead"}]'
   exit 0
 fi
 exit 1
@@ -136,7 +136,7 @@ echo "$out" | grep -q "attach: claude agents — select sess-abc123"
 check "live session (agent:active + matching claude agents name) offers an attach command" $?
 
 echo "$out" | grep -q "attach: claude agents — select sess-slug456"
-check "live session named with a title slug (issue-pm-15-blocked-item-fix) still matches issue #15 via boundary-safe prefix" $?
+check "a session under the PRE-RENAME issue-pm- prefix still matches its issue (rename migration)" $?
 
 echo "$out" | grep -q "#12 .*STALLED"
 check "in-progress issue with no agent:active is marked STALLED" $?
@@ -162,7 +162,7 @@ check "blocked reason comes from the matching ⛔-prefixed comment, not just 'se
 echo "$out" | grep -q "NEEDS ATTENTION — 🆘 Needs attention: ambiguous requirement, need owner input."
 check "needs-attention note comes from the matching 🆘-prefixed comment, not a later unrelated one" $?
 
-# #16 carries agent:active but no live session matches it -- a crashed issue-pm, or one running on
+# #16 carries agent:active but no live session matches it -- a crashed issue-manager, or one running on
 # another machine. The label alone must not read as alive, but absence of a LOCAL session is not
 # proof of death either, so this is its own state rather than 🟢 or 🔴.
 echo "$out" | grep -q "#16 .*🟡 claimed — agent:active set, no session on this machine"
@@ -316,7 +316,7 @@ check "the stalled SUMMARY line includes a stalled spec-review item too, consist
 ! echo "$out" | grep -q '{spawn}'
 check "the stalled summary's spawn command is a real path, not a leftover {spawn} placeholder" $?
 
-echo "$out" | grep -q "spawn-issue-pm.sh 10"
+echo "$out" | grep -q "spawn-issue-manager.sh 10"
 check "the stalled summary's spawn command resolves to the real script next to board.py" $?
 
 echo "$out" | grep -q "^➡️  Next up — finish:$" \

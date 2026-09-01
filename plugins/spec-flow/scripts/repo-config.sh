@@ -108,7 +108,7 @@ path_rejection_reason() {
 # Resolve the consuming repo's root. `git rev-parse --show-toplevel` returns the WORKTREE root, so
 # an issue worktree reads the policy its own branch carries — which is what we want. No published
 # environment variable names the consuming repo's root (CLAUDE_PROJECT_DIR does not exist), so git
-# is the only route; scripts/spawn-issue-pm.sh already sets that precedent.
+# is the only route; scripts/spawn-issue-manager.sh already sets that precedent.
 #
 # The character guard lives here, not in `instruction`, so BOTH subcommands agree about whether a
 # given repo can be described safely. `check` prints the same path in a message every caller relays

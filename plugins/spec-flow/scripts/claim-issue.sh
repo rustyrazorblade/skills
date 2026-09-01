@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claim a GitHub issue for this issue-pm session — assign, label agent:active, and post the
+# Claim a GitHub issue for this issue-manager session — assign, label agent:active, and post the
 # "claimed" comment once, idempotently. `--add-assignee`/`--add-label` are safe to repeat, but the
 # comment only posts on a genuinely fresh claim, not a re-activation of your own in-flight issue.
 # See activate/SKILL.md step 1 (multi-user guard / claim) for the full reasoning.
@@ -12,7 +12,7 @@ fi
 n="$1"
 # Validate before anything reaches gh. Without this, `claim-issue.sh -5` is parsed as an OPTION by
 # three separate gh calls, producing three confusing errors instead of one usage message.
-# spawn-issue-pm.sh guards its own issue argument the same way.
+# spawn-issue-manager.sh guards its own issue argument the same way.
 if [[ ! "$n" =~ ^[0-9]+$ ]]; then
   echo "claim-issue: issue number must be numeric, got '$n'" >&2
   echo "usage: claim-issue.sh <issue-number>" >&2

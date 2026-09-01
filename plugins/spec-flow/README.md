@@ -15,8 +15,8 @@ refine     design                                  review panel (repo-defined)
 Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
 directly — it runs the board, grooms new work, and decides what's next, but doesn't drive an
 individual issue itself. When you're ready to start or resume an issue, it launches a dedicated
-**`issue-pm`** (named `issue-pm-<N>-<slug>` — a readable slug from the issue's own title, so several
-open sessions are distinguishable at a glance in `claude agents`; falls back to the bare `issue-pm-<N>`
+**`issue-manager`** (named `issue-manager-<N>-<slug>` — a readable slug from the issue's own title, so several
+open sessions are distinguishable at a glance in `claude agents`; falls back to the bare `issue-manager-<N>`
 for a title with no alphanumeric characters to slug) as its **own separate background
 Claude Code process** —
 you attach to it yourself (`claude agents` — an interactive picker, select it from the list;
@@ -43,7 +43,7 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
 - **GitHub** — `gh` authenticated, and the repo hosted on GitHub (issues/labels/PRs backbone). If
   you have more than one `gh` account/host configured (common in a corporate environment running
   both github.com and a GitHub Enterprise host), make sure the one active by default (`gh auth
-  status`) is the right one for this repo — every skill and `scripts/spawn-issue-pm.sh` shell out
+  status`) is the right one for this repo — every skill and `scripts/spawn-issue-manager.sh` shell out
   to bare `gh` commands with no `--repo`/account override, so whichever account is active is the
   one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.
 - **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` +
@@ -55,7 +55,7 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   lenses (they degrade to an inline pass if unavailable).
 - **Agent teams (optional, default mode)** — `/spec-flow:implement` defaults to running its
   review panel as an [agent team](https://code.claude.com/docs/en/agent-teams) led by
-  `issue-pm`, which requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by
+  `issue-manager`, which requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by
   default):
   ```json
   { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
@@ -75,9 +75,9 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   — and a missing `spec-flow/TESTING.md` stops the pipeline rather than falling back to it. A repo
   with no test suite and no test-running CI is a perfectly valid policy here; write that plainly
   rather than inheriting a template that does not apply. See **Test policy** in `docs/workflow.md`.
-- **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-pm` runs isolated in its
+- **`.claude/worktrees/` and `.spec-flow/` gitignored** — every `issue-manager` runs isolated in its
   own git worktree, named `issue-<N>` deterministically, via Claude Code's `EnterWorktree` tool,
-  called explicitly as `issue-pm`'s first action (confirmed by test: isolation is **not**
+  called explicitly as `issue-manager`'s first action (confirmed by test: isolation is **not**
   automatic in front of a Bash-driven file write — only in front of an Edit/Write tool call — so
   the spawn prompt calls it up front rather than relying on that). Add both `.claude/worktrees/`
   and `.spec-flow/` to the repo's `.gitignore`, once, on your trunk branch — every issue's worktree
@@ -133,7 +133,7 @@ All skills are namespaced under the plugin:
 | `/spec-flow:activate <N>` | Claim it → review it with you (scope/AC freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions) → worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless the docs' own layout is changing or it documents a tech change — otherwise it's just a quick review of the issue's own scope. A `type:tech-debt` issue always skips spec generation, and by default the design stop too — architect auto-adopts the confirmed Direction unless something's actually wrong. |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → the review panel your `spec-flow/WORKFLOWS.md` names → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
-| `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Runs when you notice CI go red, or when `issue-pm` notices itself (a single check tied to its own push, not a poll loop) — either way the fix confirms the flagged test locally before pushing again. |
+| `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Runs when you notice CI go red, or when `issue-manager` notices itself (a single check tied to its own push, not a poll loop) — either way the fix confirms the flagged test locally before pushing again. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
 | `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, then removes the worktree. Never opens a PR; never touches the OpenSpec archive — that's `project-manager`'s job, batched. |
 | `/spec-flow:archive` | Counts un-archived OpenSpec changes against a threshold (default 5, overridable) and, once you confirm the batch, spawns a dedicated background worker to sync+archive them all and land one PR. Not automatic — you (or project-manager noticing the buildup) trigger it. |
@@ -145,12 +145,12 @@ All skills are namespaced under the plugin:
 
 **Orchestration**
 - **`project-manager`** — the **central coordinator**, the agent you talk to directly. Runs the
-  board, grooms new work, tracks which issues have an `issue-pm` running, and decides what's next.
+  board, grooms new work, tracks which issues have an `issue-manager` running, and decides what's next.
   It coordinates; it never implements, never drives an issue's stages itself, and only crosses
   your two seams when you explicitly instruct it to for that run (see `docs/workflow.md`'s
   "Overriding either seam's default"). Wire it as your repo's **default agent** (next section).
-- **`issue-pm`** — the **per-issue delivery lead**. `project-manager` launches one (named
-  `issue-pm-<N>`) as its own background process — via `scripts/spawn-issue-pm.sh` — when you start
+- **`issue-manager`** — the **per-issue delivery lead**. `project-manager` launches one (named
+  `issue-manager-<N>`) as its own background process — via `scripts/spawn-issue-manager.sh` — when you start
   or resume work on issue `#N`; attach to it yourself (`claude agents`, then select the session id
   printed by the spawn script) to talk to it directly. It owns that issue alone, end to end: claims
   it, drives `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
@@ -188,7 +188,7 @@ All skills are namespaced under the plugin:
   prod (logging/metrics/tracing, no silent failures, no secrets in telemetry)?
 
 > **Override note:** plugin agents are namespaced (`spec-flow:reviewer`, …) when installed.
-> `issue-pm` spawns them (as Task-tool subagents, or as `implement`'s agent-team teammates) by
+> `issue-manager` spawns them (as Task-tool subagents, or as `implement`'s agent-team teammates) by
 > their **bare name** (`reviewer`, `tdd-developer`, …) first — so if the consuming repo defines its
 > own agent with the same bare name (project `.claude/agents/` or user `~/.claude/agents/`), **that
 > one overrides the plugin's**, a deliberate way to specialize an agent for a repo's stack. Claude
@@ -211,10 +211,10 @@ pipeline. Set it **per-project** in the consuming repo's `.claude/settings.json`
 ```
 
 Now opening that project drops you into the coordinator: it reads the board and tells you what's
-next. When you tell it to start (or resume) a specific issue, it launches that issue's `issue-pm`
+next. When you tell it to start (or resume) a specific issue, it launches that issue's `issue-manager`
 as its own background process and reports its session id — run `claude agents` and select it to
 attach and drive that issue directly, and switch back to the coordinator's own session (or another
-issue's `issue-pm`) whenever you want the cross-issue view again.
+issue's `issue-manager`) whenever you want the cross-issue view again.
 
 > **Why per-project and not in the plugin?** The plugin deliberately ships **no** root
 > `settings.json` with an `agent` field. A plugin that sets a default agent hijacks the main thread
@@ -232,7 +232,7 @@ they are the single source you maintain, and every repo using the plugin inherit
 
 - By default, the pipeline **never merges your feature PR and never pushes it to `main`** — it
   only pushes the issue branch and opens a PR; the squash-merge is your action in GitHub. An
-  `issue-pm` merges the feature PR itself only when you explicitly instruct it to for that run
+  `issue-manager` merges the feature PR itself only when you explicitly instruct it to for that run
   (see `docs/workflow.md`'s "Overriding either seam's default") — the `merge-on-green` label is
   the simplest way to say so, settable any time in GitHub itself, no session involved — and even
   then only after the PR's required CI checks are green. Separately, `finalize` never touches the

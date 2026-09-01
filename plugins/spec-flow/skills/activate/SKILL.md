@@ -6,7 +6,7 @@ argument-hint: [issue number — omit to take the highest-priority status:ready 
 
 # activate — decide the design, spec the work, then stop for approval
 
-You are this issue's `issue-pm`, running as your own dedicated background session. Take a
+You are this issue's `issue-manager`, running as your own dedicated background session. Take a
 `status:ready` issue and produce an owner-approvable plan on an isolated worktree — normally a
 committed OpenSpec change, but a content-only `type:docs` issue (the common case) skips that
 artifact entirely and the plan is just its own scope + acceptance criteria (see step 5), and a
@@ -25,7 +25,7 @@ Step 7 always still applies, in whichever lightweight form matches what was actu
 Neither applicable stop is optional by default beyond that; you hand back once the plan is
 committed (if applicable) and approved — you do not implement, and you do not start
 `/spec-flow:implement`. The only exception: if `.spec-flow/owner-instructions` at the worktree root
-(read fresh at each stop, not just once from your spawn prompt — see `agents/issue-pm.md`)
+(read fresh at each stop, not just once from your spawn prompt — see `agents/issue-manager.md`)
 explicitly says to auto-approve the design and/or the plan for this run, follow that instead of
 waiting — see steps 4 and 7 below for exactly how.
 
@@ -45,11 +45,11 @@ qualify), and confirm the choice with the owner.
 
    **Announce it clearly, first thing.** Before anything else, output a one-line header —
    `Issue <N>: <title>` — as your first visible text. This is what the owner sees first when they
-   attach; with several `issue-pm` sessions possibly running at once, it's how they tell this tab
+   attach; with several `issue-manager` sessions possibly running at once, it's how they tell this tab
    apart from the others and rename it.
 
    **Epic guard.** If `subIssuesSummary.total > 0`, this is a parent/epic issue — its own scope is
-   just a rollup of its sub-issues, nothing to spec or implement directly. `scripts/spawn-issue-pm.sh`
+   just a rollup of its sub-issues, nothing to spec or implement directly. `scripts/spawn-issue-manager.sh`
    already refuses to spawn against one, so reaching this point on a real epic should be rare (a
    respawn of a stale session, or activate invoked some other way) — refuse here too rather than
    claiming it: list its sub-issues (`gh issue view <N> --json subIssues --jq '.subIssues.nodes[] |
@@ -78,7 +78,7 @@ qualify), and confirm the choice with the owner.
 
    **Review the issue with the owner, right after claiming, before anything else runs.** Skip this
    entirely if `.spec-flow/owner-instructions` (already written by your first actions, before this
-   skill started — see `agents/issue-pm.md`) says to skip the review for this run; absent that, it
+   skill started — see `agents/issue-manager.md`) says to skip the review for this run; absent that, it
    always runs, for every issue type — `type:docs` and `type:tech-debt` included, since their fast
    paths only ever skip the design/spec machinery further down in this skill, never this. Not a
    third seam alongside the two below — a lighter, unconditional check before either of them (see
@@ -91,7 +91,7 @@ qualify), and confirm the choice with the owner.
 
    **You do not search the backlog yourself — read the shortlist.** `project-manager` runs that
    search before it spawns you and passes the result in; your first actions wrote it to
-   `.spec-flow/backlog-overlap` at the worktree root (see `agents/issue-pm.md`). Its first line is
+   `.spec-flow/backlog-overlap` at the worktree root (see `agents/issue-manager.md`). Its first line is
    `issue: <N>`, naming the issue it was searched for; the rest is the shortlist.
    ```bash
    head -1 .spec-flow/backlog-overlap 2>/dev/null   # must read exactly `issue: <N>` for YOUR N
@@ -187,7 +187,7 @@ qualify), and confirm the choice with the owner.
    **not** automatic for everything: confirmed by test, Claude Code only isolates you in front of
    an `Edit`/`Write` tool call — never before a Bash-driven file write (`printf > f`, a heredoc,
    an external CLI like `openspec` writing files itself), and `gh` calls (step 1) don't trigger it
-   either. If `scripts/spawn-issue-pm.sh` spawned you, its prompt already told you to call
+   either. If `scripts/spawn-issue-manager.sh` spawned you, its prompt already told you to call
    `EnterWorktree` as your very first action, before step 1 — so by now you should already be
    isolated. **Check, don't trust it:** `git rev-parse --show-toplevel` should return a path
    containing `.claude/worktrees/issue-<N>`, not the repo's primary checkout. If it doesn't
@@ -810,7 +810,7 @@ qualify), and confirm the choice with the owner.
   below) and PR-body correlator, and it's what makes a fresh spawn resume an existing-but-untracked
   worktree automatically instead of duplicating it (confirmed by test). It's only guaranteed to be
   where you're standing if step 2 actually confirmed it; isolation doesn't happen for free. That
-  isolation is per-**session**, not per-issue on its own — it's `scripts/spawn-issue-pm.sh`
+  isolation is per-**session**, not per-issue on its own — it's `scripts/spawn-issue-manager.sh`
   respawning a past session by name instead of always starting fresh, plus the worktree name itself
   now being deterministic, that keeps this issue to one worktree in practice (see **Coordination
   signals** in `docs/workflow.md`). The issue number is the one thing that matters for finding

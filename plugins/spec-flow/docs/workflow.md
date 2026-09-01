@@ -11,7 +11,7 @@ issue's pipeline turn-by-turn with you, in its own context, until it merges.
 This file is the canonical reference. The pipeline is implemented as the plugin's skills
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board|archive|setup`) plus a roster of agents: a
 `project-manager` central coordinator you talk to directly for cross-issue state and grooming, an
-`issue-pm` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
+`issue-manager` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
 issue leads** below); `product-manager`, `architect` and `design-critic` at the front of the pipeline
 (refine → design → attack the design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a review panel
 whose members this repo names in its own `spec-flow/WORKFLOWS.md` — bundled lenses are `reviewer`,
@@ -25,12 +25,12 @@ PRs).
 
 ## The two human seams
 
-`groom` runs in the central coordinator; `activate` onward runs in that issue's `issue-pm`, once
+`groom` runs in the central coordinator; `activate` onward runs in that issue's `issue-manager`, once
 it's launched (see **Coordinator and issue leads** below) — the sequence below is the same either
 way, just split across two separate processes instead of one conversation:
 
 ```
- FOREGROUND (you + coordinator, then you + issue-pm)   BACKGROUND (subagent teams)   GITHUB (you)
+ FOREGROUND (you + coordinator, then you + issue-manager)   BACKGROUND (subagent teams)   GITHUB (you)
  ┌────────────────────────────┐
  │ /spec-flow:groom  rough idea     │
  │   → scoped GitHub issue      │
@@ -83,7 +83,7 @@ way, just split across two separate processes instead of one conversation:
 `/spec-flow:activate` reviews the issue with you directly: is the scope/acceptance criteria you
 wrote at `groom` still what you want, and does anything else open in the backlog overlap, duplicate,
 or depend on it — a check `groom` can't have made, since it only ever saw the backlog as it stood
-when this issue was filed. `issue-pm` drafts **up to five** issue-specific questions from what the
+when this issue was filed. `issue-manager` drafts **up to five** issue-specific questions from what the
 overlap search actually found (see **Backlog overlap** below), asked **one at a time**, never a
 fixed checklist — a simple issue may earn none at all. This runs for every issue, `type:docs` and
 `type:tech-debt` included (their fast paths only ever skip the design/spec machinery further down,
@@ -93,26 +93,26 @@ override mechanism: `.spec-flow/owner-instructions` (see **Overriding either sea
 can tell it to skip this review for the run, same free-text, owner's-own-words instruction the
 seams already read.
 
-**Backlog overlap — searched by `project-manager`, never by `issue-pm`.** "Does anything else open
+**Backlog overlap — searched by `project-manager`, never by `issue-manager`.** "Does anything else open
 overlap, duplicate, or block this issue" is a cross-issue question, so it belongs to the agent that
 owns cross-issue state. `project-manager` answers it **before** it spawns anything, and hands the
-answer over; `issue-pm` reads the answer and never queries the backlog itself.
+answer over; `issue-manager` reads the answer and never queries the backlog itself.
 
 The search costs real context. `gh issue list --state open --json ...,body --limit 100` pulls every
 open issue's **full body** — measured at ~7k tokens on an 18-issue repo, scaling to 36k-180k at the
-100-issue cap. Run inside `issue-pm`, that lands before it has read a line of code, and is paid
+100-issue cap. Run inside `issue-manager`, that lands before it has read a line of code, and is paid
 again on every parallel spawn. So:
 
 - `project-manager` delegates the search to a throwaway `general-purpose` subagent on `haiku` —
   mechanical filtering, not judgment — which reads the bodies in its own context and returns
   **only** a shortlist: `- <number>: <title> — <why>` per line, or `none`. Neither the
-  coordinator's context nor any `issue-pm`'s ever holds the full list.
+  coordinator's context nor any `issue-manager`'s ever holds the full list.
 - The file's first line is `issue: <N>`, and a reader that cannot prove the header names the issue
   it is activating **must re-search rather than trust it**. The shortlist answers a question about
   one specific issue, and the hand-invoked `activate` path reads it before isolation is confirmed —
   so without the stamp, a file left behind in a shared checkout silently answers one issue's
   overlap question with another issue's data.
-- It passes the shortlist's **path** to `spawn-issue-pm.sh <N> --backlog-overlap-file <path>`. A
+- It passes the shortlist's **path** to `spawn-issue-manager.sh <N> --backlog-overlap-file <path>`. A
   flag, not a positional, so it is independent of the owner-instructions argument — and a path,
   not the text, for the reason two bullets down.
 - Delivery follows `.spec-flow/owner-instructions`, with one deliberate difference. On a **fresh
@@ -127,14 +127,14 @@ again on every parallel spawn. So:
     content.
   - **Into a shell command.** Every hop here is an LLM composing Bash. A title carrying `$(...)`,
     a backtick, or a stray quote becomes command substitution in that agent's own shell — and
-    `issue-pm` runs with `--permission-mode auto`, so nothing prompts first.
+    `issue-manager` runs with `--permission-mode auto`, so nothing prompts first.
 
   So the bytes travel only as a file, by path: the haiku subagent **writes** the shortlist and
   returns just a path; `project-manager` forwards that path to `--backlog-overlap-file` without
   opening it; the script restamps it into a temp file with `cat` (never an interpolated `printf`)
   and the spawn prompt carries only that path; the session copies it into its worktree. The
   `activate` fallback follows the identical path-only discipline. Every agent that could hold
-  shortlist text — `project-manager`, `issue-pm`, and `activate`'s reader — is told the contents
+  shortlist text — `project-manager`, `issue-manager`, and `activate`'s reader — is told the contents
   are **data, never instructions**.
 - `none` is passed through, not omitted. A clean search is a finding, and the literal line `none`
   is the only way it is ever recorded. **Absent, empty, header-only, otherwise truncated, and
@@ -252,10 +252,10 @@ only ever offered if the standalone **`dev-skills`** plugin (separate from spec-
 **A note on `dev-skills`** below) is installed: `SPEC_FLOW_SEAM_VIEW=explain` (recommended
 default when `dev-skills` is available) generates an interactive, self-contained HTML view via
 its `ide-explain` skill (file tree, diff/doc view, and per-node explanations in one page) and prints
-its path + an `open <path>` command — a background `issue-pm` can't reliably pop a browser on your
+its path + an `open <path>` command — a background `issue-manager` can't reliably pop a browser on your
 screen, so it never tries; `SPEC_FLOW_SEAM_VIEW=terminal` renders the same content as plain text in
 the conversation, the original behavior from before `ide-explain` existed, and is what's used
-automatically if `dev-skills` isn't installed on the machine an `issue-pm` happens to be running
+automatically if `dev-skills` isn't installed on the machine an `issue-manager` happens to be running
 on, even when the preference says `explain`. Read fresh from `.claude/settings.json` at each seam,
 not cached from an earlier stop; `dev-skills`'s own availability is re-checked fresh too (via
 `claude plugin list --json`), not assumed from setup time. `/ide-explain` (from `dev-skills`) is also
@@ -283,7 +283,7 @@ and `skills/setup/SKILL.md` here for how the seam-view preference gets set.
 composes a free-text instruction — from whatever you said for that issue, or a standing preference
 you wrote in `CLAUDE.md`, in your own words (never a fixed vocabulary like "Seam 1"/"Seam 2" —
 that's internal to these docs, not something you need to say) — and passes it to
-`scripts/spawn-issue-pm.sh <N> [owner-instructions]`. Whatever the instruction doesn't address
+`scripts/spawn-issue-manager.sh <N> [owner-instructions]`. Whatever the instruction doesn't address
 still stops and waits, by default; nothing is ever inferred or carried over from a different
 issue's spawn. Seam 2's auto-merge path only actually merges once the PR's required CI checks
 report green — an instruction to merge automatically doesn't skip that; a hard dependency the
@@ -295,7 +295,7 @@ auto-approve instruction.
 binary, GitHub-native "how to handle this issue" setting (metadata about what's being built, not
 code), so it lives as a label rather than needing to go through the spawn-time instruction above:
 apply it directly in GitHub, or tell `project-manager`, any time — before spawn, after spawn, even
-on a live `issue-pm` — and `implement` checks it fresh at step 5, no worktree/file involved. The
+on a live `issue-manager` — and `implement` checks it fresh at step 5, no worktree/file involved. The
 free-text instruction still works too (either one triggers auto-merge); the label just doesn't
 require composing a sentence or waiting for a spawn/respawn to deliver it. Other, less binary
 instructions (Seam 1 auto-approve, anything not reducible to a yes/no) still go through the
@@ -304,13 +304,13 @@ file below.
 The instruction doesn't just live in the spawn prompt — it's persisted to
 **`.spec-flow/owner-instructions`** at the issue's worktree root — gitignored via the one-time,
 trunk-branch `.gitignore` entry every issue's worktree already inherits (see **Prerequisites** in
-the README; the same entry also covers `.spec-flow/flagged-tests` below) — which `issue-pm`
+the README; the same entry also covers `.spec-flow/flagged-tests` below) — which `issue-manager`
 re-reads fresh at each approval point rather than trusting memory of its original spawn prompt.
 This is what makes updating it work across a crash: `claude respawn` (used to recover a
-stopped/crashed `issue-pm`, see **Coordination
-signals** below) sends no new prompt of its own, so `spawn-issue-pm.sh <N> "<new instructions>"`
+stopped/crashed `issue-manager`, see **Coordination
+signals** below) sends no new prompt of its own, so `spawn-issue-manager.sh <N> "<new instructions>"`
 on that same issue instead writes the new text directly into the already-resolved worktree. A
-currently **live** `issue-pm` is untouched by any of this — the spawn script refuses to respawn
+currently **live** `issue-manager` is untouched by any of this — the spawn script refuses to respawn
 over a running session; changing a live session's instructions means attaching and saying so
 directly.
 
@@ -370,9 +370,9 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | | `status:in-progress` | Background team implementing. |
 | | `status:in-review` | PR open; awaiting your GitHub review (Seam 2). |
 | | `status:addressing` | Resolving your review comments. |
-| Coordination | `agent:active` | An `issue-pm` is currently claimed/running on this issue — see **Coordination signals** below. |
-| | `blocked` | `issue-pm` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
-| | `needs-attention` | `issue-pm` hit something outside the two defined owner seams that only you can resolve — an ambiguous call, a conflict it can't cleanly reconcile, a repeated failure — and is waiting (see the issue's comments for what). Distinct from `blocked`, which is specifically a hard dependency on another issue. See **Coordination signals** below. |
+| Coordination | `agent:active` | An `issue-manager` is currently claimed/running on this issue — see **Coordination signals** below. |
+| | `blocked` | `issue-manager` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
+| | `needs-attention` | `issue-manager` hit something outside the two defined owner seams that only you can resolve — an ambiguous call, a conflict it can't cleanly reconcile, a repeated failure — and is waiting (see the issue's comments for what). Distinct from `blocked`, which is specifically a hard dependency on another issue. See **Coordination signals** below. |
 | Fast path | `type:docs` | Documentation-only — `activate`/`implement` always skip the architect consult, design-choice stop, and review panel, and skip spec generation too unless the docs' own layout is changing or it documents a tech change (see **Docs fast path** above). Offered by `groom`, never inferred silently. |
 | | `type:tech-debt` | Structural, behavior-preserving fix filed by `/tech-debt` (dev-skills) (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** below). |
 | Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
@@ -382,36 +382,36 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 
 **Epics / parent issues are never directly workable.** An issue with GitHub native sub-issues
 (`subIssuesSummary.total > 0`) is a rollup of its children, not its own unit of work — there's
-nothing to spec or implement against the epic itself. `scripts/spawn-issue-pm.sh` checks this
+nothing to spec or implement against the epic itself. `scripts/spawn-issue-manager.sh` checks this
 before doing anything else and refuses to spawn against one (listing its sub-issues instead), and
 `board` pulls epics into their own informational section rather than ever surfacing one as READY
 or "next up," whatever `status:*` label it happens to carry. Work the sub-issues individually.
 
 ## Coordination signals
 
-Every `issue-pm` runs as an independent process — potentially on a different machine, spawned by a
+Every `issue-manager` runs as an independent process — potentially on a different machine, spawned by a
 different user's `project-manager`, with no shared memory, messaging, or session state between
 them. GitHub is the only thing every one of them, and every `project-manager`, already reads and
 writes — so it's the coordination surface, not `claude agents --json --all` (which only ever
 reflects the local machine's session registry, and says nothing about another developer's
-`issue-pm` running on their own machine — and needs `--all` even for that: every `issue-pm` is a
+`issue-manager` running on their own machine — and needs `--all` even for that: every `issue-manager` is a
 `background` session, invisible without it, confirmed by test).
 
-- **`agent:active`** — set on the fresh-spawn path by `scripts/spawn-issue-pm.sh` itself, *before*
+- **`agent:active`** — set on the fresh-spawn path by `scripts/spawn-issue-manager.sh` itself, *before*
   it launches anything (not left for `activate` to get to once the session finally runs — that gap
   was minutes wide and two near-simultaneous spawns on different machines could both slip through
   it; `activate`'s own `--add-label` is now just a harmless no-op confirming what's already there).
-  Removed by `finalize` on close, and removed by `issue-pm` itself if it hands back or shuts down
+  Removed by `finalize` on close, and removed by `issue-manager` itself if it hands back or shuts down
   before finishing for any other reason — and by the spawn script itself if it sets the label but
   the launch then fails, so a bad spawn never leaves a false-positive lock behind. This, not
   `claude agents --json --all`, is the authoritative "is anything actually working this issue"
   signal — `board` reads it directly (see its **Steps**).
 
-  `scripts/spawn-issue-pm.sh` checks its **own machine's, this repo's** past sessions first — a
-  session is named `issue-pm-<N>-<slug>` (a readable slug from the issue's title at spawn time, so
+  `scripts/spawn-issue-manager.sh` checks its **own machine's, this repo's** past sessions first — a
+  session is named `issue-manager-<N>-<slug>` (a readable slug from the issue's title at spawn time, so
   several open sessions are distinguishable in `claude agents` without attaching to each — falling
-  back to the bare `issue-pm-<N>` for a title with nothing alphanumeric to slug), matched
-  by the stable `issue-pm-<N>` prefix rather than the full name — the title, and so the slug, can
+  back to the bare `issue-manager-<N>` for a title with nothing alphanumeric to slug), matched
+  by the stable `issue-manager-<N>` prefix rather than the full name — the title, and so the slug, can
   change on GitHub between spawns, so an exact match against today's title would miss a session
   spawned under an earlier one. The lookup is also scoped to sessions whose `cwd` falls under this
   repo's own root, not by name alone; otherwise a same-numbered issue in a different repo on this
@@ -425,7 +425,7 @@ reflects the local machine's session registry, and says nothing about another de
   exactly that after every respawn and stops the session immediately rather than letting it run
   there, clearing `agent:active` and surfacing a recovery command instead. Only when there's no
   local record at all does it fall back to the GitHub label — refuse if `agent:active` is set (an
-  issue-pm may be running on another machine this one can't see), spawn fresh otherwise.
+  issue-manager may be running on another machine this one can't see), spawn fresh otherwise.
 
   What's still not airtight: label-then-spawn isn't a true compare-and-swap (GitHub's API has no
   atomic label-if-absent), so it narrows the cross-machine race to roughly the time this script
@@ -433,7 +433,7 @@ reflects the local machine's session registry, and says nothing about another de
   you're retrying from still needs a human to clear a stale label — nothing detects that on its
   own. A same-machine crash, the common case, now recovers on its own via respawn (or fails safe,
   loudly, if its worktree is gone).
-- **Progress comments.** `issue-pm` posts a **new** comment (never edits one in place — the point
+- **Progress comments.** `issue-manager` posts a **new** comment (never edits one in place — the point
   is a readable timeline, not a live-updating status line) on the issue at each meaningful
   milestone: claimed, spec committed, draft PR opened, each `tasks.md` checkpoint during
   `implement`, each review round's result, addressed-comments pushed, CI flagged, merged and
@@ -441,11 +441,11 @@ reflects the local machine's session registry, and says nothing about another de
   spec is actually archived, as part of whatever batch it landed in. A fresh `project-manager`
   (yours or another user's) or the owner can read the issue's comment history and know exactly
   where things stand without attaching to the session at all. Team mode
-  (the `implement` default) posts these at full granularity since `issue-pm` is directly driving
+  (the `implement` default) posts these at full granularity since `issue-manager` is directly driving
   each step; workflow mode is coarser — only before and after, since the script itself has no
   per-step hook back out to a comment.
 - **`blocked`** — added alongside a comment naming the specific blocking issue and why, whenever
-  `issue-pm` identifies a hard dependency on another unmerged issue (most likely during
+  `issue-manager` identifies a hard dependency on another unmerged issue (most likely during
   `activate`'s design step, but not only then), **and** a native GitHub issue dependency (see **The
   two human seams** above) — the label is what's queryable/bootstrapped like every other label in
   the fixed vocabulary; the native link is what actually renders in GitHub's UI. Both removed, with
@@ -457,12 +457,12 @@ reflects the local machine's session registry, and says nothing about another de
   existed. `finalize` runs its `sweep` on close, which removes the label and every native link
   without needing to know the blocking issue.
 - **`needs-attention`** — added alongside a comment naming exactly what's needed, whenever
-  `issue-pm` is genuinely stuck on something with no defined next step of its own: not one of **The
+  `issue-manager` is genuinely stuck on something with no defined next step of its own: not one of **The
   two human seams** (those are scheduled stops, already surfaced their own way — spec approval,
   review + merge) and not a hard dependency on another issue (that's `blocked`, above). Covers the
   ad hoc case — an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a conflict it
   can't reconcile on its own, a failure that repeats past the point retrying makes sense — where
-  guessing would be worse than waiting. `issue-pm` stops and waits once it's set, the same as at
+  guessing would be worse than waiting. `issue-manager` stops and waits once it's set, the same as at
   either seam. Its comment's first line is prefixed `🆘 Needs attention:` — the board finds the
   reason by that prefix, exactly as it finds a `blocked` reason by `⛔ Blocked on #`. Removed, with
   a follow-up comment, once the owner resolves it and work resumes; `finalize` also sweeps it, so a
@@ -481,13 +481,13 @@ pull request     body contains "Closes #N"
 ```
 
 The worktree's name is passed explicitly, not left to Claude Code's default random one:
-`issue-pm`'s spawn prompt, and `activate` step 2's fallback check, both call `EnterWorktree` with
+`issue-manager`'s spawn prompt, and `activate` step 2's fallback check, both call `EnterWorktree` with
 `name: "issue-<N>"`. This isn't just cosmetic — confirmed by test, `EnterWorktree` called with a
 name that already exists on disk does **not** error, it re-enters and resumes that same worktree.
 So a fresh spawn whose local session registry lost track of a prior run (the session evicted, or a
 different run on this machine) still lands back in the same worktree instead of duplicating it.
-This reinforces, rather than replaces, `scripts/spawn-issue-pm.sh`'s own respawn logic (looking for
-a past local session whose name carries the `issue-pm-<N>` prefix and `claude respawn`ing it — see
+This reinforces, rather than replaces, `scripts/spawn-issue-manager.sh`'s own respawn logic (looking for
+a past local session whose name carries the `issue-manager-<N>` prefix and `claude respawn`ing it — see
 **Coordination signals** below): respawn recovers the session's own history when a local record
 exists; the deterministic
 worktree name recovers the *files* even when it doesn't.
@@ -510,44 +510,44 @@ grooming new work, deciding what's next. It does not drive an individual issue's
 a subagent either. Instead:
 
 - When you want to start or resume work on a specific issue, `project-manager` runs
-  `scripts/spawn-issue-pm.sh <N>`, which launches a dedicated **`issue-pm`** (named `issue-pm-<N>`)
+  `scripts/spawn-issue-manager.sh <N>`, which launches a dedicated **`issue-manager`** (named `issue-manager-<N>`)
   as its **own separate background Claude Code process** — `claude --bg` — and prints the session
   id. **Background-only, deliberately**: you manage running sessions yourself via `claude agents`
   (an interactive picker — select the session by name/id; there is no direct "attach by id"
   command), not a tab or window opened for you on every spawn. You talk to that process directly,
   in its own context, once attached; it never shares the coordinator's.
-- That `issue-pm` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
+- That `issue-manager` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged and closed
   — if it committed one (not every issue does, see **Docs fast path** and **Tech-debt fast path**),
   its OpenSpec change is archived later, in bulk, by `project-manager` (see **Bulk spec archiving**),
-  not by `issue-pm` itself.
+  not by `issue-manager` itself.
 - Several issues can be in flight at once, each its own process — `claude agents` lists them all,
   attach to whichever one you want to talk to. It's the spawn script, not `project-manager` itself,
   that guards against duplicates — this machine's own past sessions first (respawning a crashed one
   rather than starting fresh), the `agent:active` label otherwise — so it never launches a second
-  `issue-pm` for an issue that already has one running, on this machine or another.
+  `issue-manager` for an issue that already has one running, on this machine or another.
 - `project-manager` still runs `groom` and `board` itself (no issue exists to hand off yet, or the
   work spans all issues), and `adopt-tiering`, `setup`, `archive`, and, when `dev-skills` is
   installed, `/tech-debt` (repo-wide, not tied to any issue).
-- `project-manager` never attaches to an `issue-pm`'s session, runs `claude logs` against one, or
+- `project-manager` never attaches to an `issue-manager`'s session, runs `claude logs` against one, or
   reads its transcript. Its view of an in-flight issue is exactly what `claude agents --json --all`
   plus GitHub give it — labels, PR, CI, and whether the session is alive — which is the entire
   point of running it as a separate process instead of a subagent: the coordinator's own context
   never fills with one issue's implementation detail.
 
 This is the default flow, not an opt-in — every time you start work on an issue, expect
-`project-manager` to launch its `issue-pm` as a fresh process rather than driving the stages
+`project-manager` to launch its `issue-manager` as a fresh process rather than driving the stages
 inline.
 
 ### Worktree isolation
 
-`issue-pm` sessions get their file isolation from Claude Code itself, not from this plugin — via
+`issue-manager` sessions get their file isolation from Claude Code itself, not from this plugin — via
 the `EnterWorktree` tool, which creates the worktree and switches the session into it, branched
 from the repo's default branch. **Not automatic for everything, confirmed by test:** Claude Code
 calls `EnterWorktree` on its own in front of an `Edit`/`Write` tool call, but never in front of a
 Bash-driven file write (`printf > f`, a heredoc, an external CLI like `openspec` writing files
-itself) — so `scripts/spawn-issue-pm.sh`'s spawn prompt tells `issue-pm` to call it explicitly, as
+itself) — so `scripts/spawn-issue-manager.sh`'s spawn prompt tells `issue-manager` to call it explicitly, as
 its very first action, with `name: "issue-<N>"`, rather than trusting it to happen implicitly or
 letting it generate a random name; `activate` step 2 verifies isolation happened rather than
 assuming it, and passes the same name if it has to call `EnterWorktree` itself as a fallback. This
@@ -563,7 +563,7 @@ primary checkout.
 ## Bulk spec archiving
 
 `finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — and doing it
-per-issue, inline in each `issue-pm`, meant a git worktree and a set of `gh`/OpenSpec commands
+per-issue, inline in each `issue-manager`, meant a git worktree and a set of `gh`/OpenSpec commands
 every single time, for zero review value each time. So `finalize` doesn't touch it at all anymore:
 once an issue's PR merges, its `openspec/changes/issue-<N>` change (when one exists — a
 content-only `type:docs` issue commits none, and neither does any `type:tech-debt` issue; see
@@ -575,9 +575,9 @@ on the default branch, compares it against a threshold (**default 5**, overridab
 standing preference once, in this conversation or in `CLAUDE.md`, or override ad hoc for just one
 run: "archive these 3 now"), and — only once you've confirmed the specific batch — spawns a
 dedicated **`archive-batch`** worker as its own separate background Claude Code process (via
-`scripts/spawn-archive-batch.sh`), the same delegation pattern as `issue-pm`: `project-manager`
+`scripts/spawn-archive-batch.sh`), the same delegation pattern as `issue-manager`: `project-manager`
 coordinates, it doesn't do the archiving itself. You can attach to that worker
-(`claude agents` — select it from the list) to watch it, same as any `issue-pm`.
+(`claude agents` — select it from the list) to watch it, same as any `issue-manager`.
 
 The worker (`agents/archive-batch.md`) does the whole batch in one pass: one short-lived worktree
 cut from the default branch, `openspec-sync-specs`/`openspec-archive-change` for every pending
@@ -594,7 +594,7 @@ automatically (required checks pending, branch protection) stops the worker and 
 mechanical, the same way `implement`'s own auto-merge reports a blocked merge. A genuine content
 conflict while reconciling two changes' delta specs is different: rather than stopping and handing
 back for you to resolve separately later, the worker **pauses and works it out with you
-interactively**, right there in that session — the same way `issue-pm` waits at a design or spec
+interactively**, right there in that session — the same way `issue-manager` waits at a design or spec
 seam — then continues the batch from where it left off once you've resolved it together. It posts
 a comment on every issue involved first, so there's a trail (and an attach pointer) even if you're
 not watching when it happens.
@@ -676,7 +676,7 @@ options either way — proceed with a corrected still-preserving shape, narrow t
 genuinely is preserving, or split the behavior change into its own freshly groomed issue and run
 the full pipeline for it: `architect`'s consult at `activate` (before anything is implemented), or
 `tdd-developer`/the `spec` lens mid-`implement` (after some of it already is). Full detail in
-`agents/issue-pm.md`'s **Escalation** section — never silently pick an option; this is exactly the
+`agents/issue-manager.md`'s **Escalation** section — never silently pick an option; this is exactly the
 kind of consequential call that belongs to you.
 
 **`type:docs` and `type:tech-debt` never combine** — an issue is either a documentation change or a
@@ -689,9 +689,9 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 |---|---|---|
 | `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Grills shape-defining ambiguity (recommended default per question); for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`. |
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue always skips spec generation and, by default, the design-choice stop too (`architect` auto-adopts the confirmed Direction unless something's wrong) — see **Tech-debt fast path** above. |
-| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-pm` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
+| `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-manager` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
-| `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-pm` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. Exits cleanly, doing nothing, where the repo's policy says CI is not a test gate. See **Test policy** below. |
+| `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-manager` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. Exits cleanly, doing nothing, where the repo's policy says CI is not a test gate. See **Test policy** below. |
 | `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
@@ -703,19 +703,19 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 
 **Orchestration**
 - `project-manager` — the **central coordinator**, the agent you talk to directly. It knows the
-  whole lifecycle, runs the board, tracks which issues have an `issue-pm` running (`agent:active`,
+  whole lifecycle, runs the board, tracks which issues have an `issue-manager` running (`agent:active`,
   via `board`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
   `product-manager` subagent, and any specific issue's `activate → implement → address → finalize`
-  to that issue's `issue-pm`, launched as its own background process. It coordinates; it does not
+  to that issue's `issue-manager`, launched as its own background process. It coordinates; it does not
   implement, does not drive an issue's stages inline, and only crosses your two seams when you
   explicitly instruct it to for that run (see **Overriding either seam's default**, above; neither
-  it nor the `issue-pm` it launches ever infers or assumes one). Wire it as
+  it nor the `issue-manager` it launches ever infers or assumes one). Wire it as
   a repo's **default agent** (in that repo's `.claude/settings.json`) to make it your standing
   entry point. The plugin ships **no** root `settings.json` with an `agent` field — opting your
   repos in is your choice, per repo, so the plugin never hijacks the main thread of every project
   that installs it.
-- `issue-pm` — the **per-issue delivery lead**, launched by `project-manager` (named
-  `issue-pm-<N>`, via `scripts/spawn-issue-pm.sh`) as its own separate background Claude Code
+- `issue-manager` — the **per-issue delivery lead**, launched by `project-manager` (named
+  `issue-manager-<N>`, via `scripts/spawn-issue-manager.sh`) as its own separate background Claude Code
   process when you start or resume work on issue `#N`. You attach to it yourself (`claude agents`,
   then select the session id printed by the spawn script) — not a subagent you switch to inside
   another conversation.
@@ -824,7 +824,7 @@ and its fix rounds. Under ordinary feature TDD, editing one test file three time
 `build-engineer` and the docs polish pass never carry it. The triage gate above is what covers
 every other path, and it needs no counter.
 
-**The two modes stop differently.** In `team` mode the teammate messages `issue-pm` mid-run, which
+**The two modes stop differently.** In `team` mode the teammate messages `issue-manager` mid-run, which
 surfaces the stop to the owner live; the owner chooses continue or revert, and a fresh
 `tdd-developer` is respawned with that decision. In `workflow` mode the script cannot pause, so it
 asks the agent to prefix its summary with the token `BREAKER-STOP:`; on seeing that token the
@@ -838,7 +838,7 @@ editing the file the breaker just stopped.
 Two modes, chosen by `SPEC_FLOW_IMPLEMENT_MODE` (`skills/implement/SKILL.md`, step 4):
 
 - **`team`** (default) — an [agent team](https://code.claude.com/docs/en/agent-teams) with
-  `issue-pm` as the lead. `issue-pm` can only lead a team because it's already its own top-level
+  `issue-manager` as the lead. `issue-manager` can only lead a team because it's already its own top-level
   session, not a subagent — agent teams don't nest, so this specifically couldn't work the other
   way around. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (see **Prerequisites** in the
   README); missing that, `implement` falls back to `workflow` mode automatically.
@@ -1054,7 +1054,7 @@ implement → push → CI runs ──(red)──▶ /spec-flow:sync-ci
 
 - **`/spec-flow:sync-ci <N>`** — pulls the branch's latest CI failures (the `spec-flow-failures`
   artifact) and appends them to the flagged set. Session-driven, and self-invoked the moment
-  CI-red is known: you notice it, or `issue-pm` does — a single check of the run tied to the push
+  CI-red is known: you notice it, or `issue-manager` does — a single check of the run tied to the push
   it just made (`implement` step 5, `address` step 4), never a standing poll loop. Either way, the
   fix that follows confirms the newly flagged test(s) pass **locally** before pushing again — a
   guess-and-wait-for-CI round trip costs 20-30 minutes for feedback a local run gives in about one.
@@ -1072,8 +1072,8 @@ the repo's own to state rather than the plugin's to assume.
 ## Substrate and constraints
 
 - **Session-driven, not cron.** Everything is triggered and narrated by a session — the central
-  coordinator's, or the issue's `issue-pm` once it's launched. `/spec-flow:implement` runs in
-  `issue-pm`'s own session either way — as an agent team it leads (default) or a background
+  coordinator's, or the issue's `issue-manager` once it's launched. `/spec-flow:implement` runs in
+  `issue-manager`'s own session either way — as an agent team it leads (default) or a background
   `Workflow` it invokes (fallback) — that is *not* cron either; both are scoped to the lead's own
   session and don't outlive it. `/spec-flow:address` is invoked by you when you return, never
   polled. `/tech-debt` (dev-skills)'s once-a-week/20-merges cadence (see above) is the same shape —
@@ -1090,7 +1090,7 @@ the repo's own to state rather than the plugin's to assume.
   either — see **Tech-debt fast path** — and implements straight from its confirmed Direction,
   behavior-preservation checked in place of spec conformance); TDD; significant design
   decisions are the owner's (an advisor agent only advises); the feature lands on `main` via PR,
-  merged by the owner by default. An `issue-pm` merges it itself only when the `merge-on-green`
+  merged by the owner by default. An `issue-manager` merges it itself only when the `merge-on-green`
   label is set or explicitly instructed to for that run (see **Overriding either seam's default**,
   above), never on its own initiative, and only after required CI checks are green. Separately,
   the OpenSpec archive is never code and never touched by any single issue's `finalize` — it's

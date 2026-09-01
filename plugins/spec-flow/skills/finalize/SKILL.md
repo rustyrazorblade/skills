@@ -6,7 +6,7 @@ argument-hint: [issue number, with its PR already squash-merged]
 
 # finalize — close out an issue after merge
 
-You are this issue's `issue-pm`, running as your own dedicated background session. The PR for
+You are this issue's `issue-manager`, running as your own dedicated background session. The PR for
 issue `#N` has **merged** — the owner's squash-merge in GitHub by default, or `implement`'s own
 auto-merge if `merge-on-green` was set or this run's `.spec-flow/owner-instructions` said to (see
 its SKILL.md step 5); either way, by the time this runs the merge has already happened. Close the
@@ -75,7 +75,7 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    a `status:*`, `agent:active`, `merge-on-green` or `needs-attention` label, or
    `blocked-dependency.sh sweep` for `blocked` — then read back again. If it still names a label,
    STOP and tell the owner which labels survive on which issue. Do not continue to step 3: a closed issue still carrying `agent:active` makes every
-   future `spawn-issue-pm.sh` on that number refuse, and step 3 removes the working directory
+   future `spawn-issue-manager.sh` on that number refuse, and step 3 removes the working directory
    `gh issue` needs to infer the repo, so you cannot come back and retry afterwards.
 
 3. **Remove your own worktree and branch — hand off to a script that only acts once verified

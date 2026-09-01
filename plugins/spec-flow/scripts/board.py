@@ -25,8 +25,8 @@ from pathlib import Path
 
 # Resolved from this file's own location, not templated -- board.py runs as a plain script, not
 # SKILL.md prose, so there's no ${CLAUDE_PLUGIN_ROOT} substitution happening on its stdout. This
-# script already lives in scripts/ alongside spawn-issue-pm.sh.
-SPAWN_SCRIPT = str(Path(__file__).resolve().parent / "spawn-issue-pm.sh")
+# script already lives in scripts/ alongside spawn-issue-manager.sh.
+SPAWN_SCRIPT = str(Path(__file__).resolve().parent / "spawn-issue-manager.sh")
 
 STATUS_ORDER = ["spec-review", "in-review", "in-progress", "addressing", "ready"]
 # The actual pipeline order (docs/workflow.md's lifecycle diagram), LEAST advanced first.
@@ -193,12 +193,12 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             if n is not None:
                 pr_by_issue.setdefault(n, pr)  # first PR that closes it wins -- one PR per issue is the pipeline's own convention
 
-    # (name, id, startedAt) tuples, not a dict keyed by exact name -- spawn-issue-pm.sh names a
-    # session "issue-pm-<N>-<slug>" (a readable slug from the issue title, so several open tabs
+    # (name, id, startedAt) tuples, not a dict keyed by exact name -- spawn-issue-manager.sh names a
+    # session "issue-manager-<N>-<slug>" (a readable slug from the issue title, so several open tabs
     # are distinguishable at a glance), never a fixed string this side could match exactly
     # against. startedAt is kept so a rare double-match (a stale registry entry alongside its
     # live respawn) resolves to the most recent session, the same tie-break
-    # spawn-issue-pm.sh's own lookup already uses (`sort_by(.startedAt) | last`).
+    # spawn-issue-manager.sh's own lookup already uses (`sort_by(.startedAt) | last`).
     live_sessions = []
     for s in sessions:
         if s.get("state") in ("working", "blocked") and s.get("name"):
@@ -232,15 +232,19 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             "pr_url": pr["url"] if pr else None,
             "ci": ci_status(pr.get("statusCheckRollup")) if pr else None,
         }
-        # Boundary-safe prefix match (exact "issue-pm-<n>", or "issue-pm-<n>-" followed by the
-        # slug) so issue #4 can never match a live "issue-pm-42-..." session -- a bare
-        # startswith("issue-pm-4") would.
-        session_prefix = f"issue-pm-{n}"
+        # Boundary-safe prefix match (exact "issue-manager-<n>", or "issue-manager-<n>-" followed by the
+        # slug) so issue #4 can never match a live "issue-manager-42-..." session -- a bare
+        # startswith("issue-manager-4") would.
+        # MIGRATION: the agent was renamed from `issue-pm` to `issue-manager`. Sessions started
+        # before the rename keep the old name, and a board that stopped matching them would render
+        # every one of them as stalled while they are running perfectly well. Both prefixes are
+        # matched until no `issue-pm-*` session remains.
+        session_prefixes = (f"issue-manager-{n}", f"issue-pm-{n}")
         attach_id = None
         if row["agent_active"]:
             matches = [
                 (live_id, started_at) for live_name, live_id, started_at in live_sessions
-                if live_name == session_prefix or live_name.startswith(session_prefix + "-")
+                if any(live_name == p or live_name.startswith(p + "-") for p in session_prefixes)
             ]
             if matches:
                 attach_id = max(matches, key=lambda m: m[1])[0]
@@ -255,7 +259,7 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
     return rows
 
 
-# Everything "past status:ready" in the pipeline sense -- a live issue-pm SHOULD be driving each
+# Everything "past status:ready" in the pipeline sense -- a live issue-manager SHOULD be driving each
 # of these, so missing agent:active on any of them is the stalled signal, not just some of them
 # (confirmed against the spec: "Stalled -- any issue ... past status:ready with no agent:active").
 PAST_READY_STATUSES = ("spec-review", "in-review", "in-progress", "addressing")
@@ -271,7 +275,7 @@ def liveness_marker(row):
         return ""
     if not row["agent_active"]:
         return " 🔴 STALLED — no agent:active label"
-    # The label is a claim, not proof: a crashed issue-pm leaves it set. But attach_id only ever
+    # The label is a claim, not proof: a crashed issue-manager leaves it set. But attach_id only ever
     # sees THIS machine's sessions, so its absence does not prove death -- the session may be
     # running on another machine, or the claude CLI may have failed. Three honest states, not two.
     if not row["attach_id"]:
@@ -328,7 +332,7 @@ def render_board(rows, me, archive_pending):
         # Only a MISSING label proves nothing is driving this. A label with no local session is
         # ambiguous (another machine, or a dead session) -- the 🟡 marker reports that honestly
         # rather than asserting death here, where the suggested remedy is a spawn that
-        # spawn-issue-pm.sh would refuse anyway while the label is still set.
+        # spawn-issue-manager.sh would refuse anyway while the label is still set.
         return r["mine"] and r["status"] in PAST_READY_STATUSES and not r["agent_active"]
 
     blocked_on_you = [r for r in staged if is_blocked_on_you(r)]
@@ -497,7 +501,7 @@ def main():
     def needs_attention_note_fn(n):
         # Must filter by prefix. Without one this returns the last comment of ANY kind, and the
         # pipeline posts several after an attention request, so the row shows an unrelated line.
-        # issue-pm posts the request with this prefix; see agents/issue-pm.md.
+        # issue-manager posts the request with this prefix; see agents/issue-manager.md.
         body = last_comment_matching(n, prefix="🆘 Needs attention")
         return body.splitlines()[0] if body else None
 

@@ -1,12 +1,12 @@
 ---
 name: implement
-description: Implement an approved issue — run tdd-developer → review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. A type:tech-debt issue runs the full review panel as normal (behavior-preservation mode, no spec) but works from the issue's own Direction instead of tasks.md, and opens its own draft PR after the first commit since none exists yet. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the plan first — a committed spec, or for a content-only type:docs/type:tech-debt issue, its scope + acceptance criteria (or Direction). Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
+description: Implement an approved issue — run tdd-developer → review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-manager (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. A type:tech-debt issue runs the full review panel as normal (behavior-preservation mode, no spec) but works from the issue's own Direction instead of tasks.md, and opens its own draft PR after the first commit since none exists yet. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the plan first — a committed spec, or for a content-only type:docs/type:tech-debt issue, its scope + acceptance criteria (or Direction). Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
 argument-hint: [issue number, with its plan already approved]
 ---
 
 # implement — build the approved spec, open a PR
 
-You are this issue's `issue-pm`, running as your own dedicated background session. The owner has
+You are this issue's `issue-manager`, running as your own dedicated background session. The owner has
 **approved the plan** for issue `#N` — a committed spec, or for a content-only `type:docs` issue,
 its scope + acceptance criteria, or for a `type:tech-debt` issue, its confirmed Direction (see Input
 below). Drive the implementation team to completion and
@@ -560,7 +560,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
    **If any answer is no, do not run the commands below.** Instead: add `needs-attention`
    (`gh issue edit <N> --add-label needs-attention`) with a comment naming exactly what is
-   unresolved — first line prefixed `🆘 Needs attention:`, per `agents/issue-pm.md` — keep
+   unresolved — first line prefixed `🆘 Needs attention:`, per `agents/issue-manager.md` — keep
    `agent:active` and `status:in-progress` as they are, and stop. **If a PR exists**, also leave it
    a draft and write the residual findings into its body. **If none exists** — a fast-path run that
    halted before its PR was ever opened, which is exactly what question 4 catches — put the

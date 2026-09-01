@@ -1,6 +1,6 @@
 {
   "name": "spec-flow",
-  "version": "0.40.0",
+  "version": "0.41.0",
   "description": "Session-driven multi-agent delivery pipeline: groom → activate (spec) → implement (5-lens review panel) → address → finalize, over OpenSpec + GitHub.",
   "author": { "name": "Jon Haddad" },
   "repository": "https://github.com/rustyrazorblade/skills",

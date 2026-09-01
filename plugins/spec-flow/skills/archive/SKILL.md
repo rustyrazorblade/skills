@@ -6,11 +6,11 @@ description: Check the buildup of un-archived OpenSpec changes waiting on the de
 # archive — batch-archive the piled-up OpenSpec changes
 
 You are the central `project-manager` (this isn't tied to any one issue, so it's yours to run, the
-same way `board`/`groom`/`setup` are — no `issue-pm` involved). Every finalized issue leaves its
+same way `board`/`groom`/`setup` are — no `issue-manager` involved). Every finalized issue leaves its
 `openspec/changes/issue-<N>` change sitting on the default branch, unarchived, until this runs.
 You **watch for the buildup and check in with the owner** — you never archive on your own
 initiative, and you never do the archiving work yourself; once the owner confirms, you delegate it
-to a dedicated background worker, the same way you delegate an issue to `issue-pm`.
+to a dedicated background worker, the same way you delegate an issue to `issue-manager`.
 
 ## Steps
 
@@ -59,12 +59,12 @@ to a dedicated background worker, the same way you delegate an issue to `issue-p
    ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-archive-batch.sh
    ```
    Report its one-line output — the session id — and tell the owner they can attach via
-   `claude agents` (select it from the list) to watch it work, same as an `issue-pm`. **Don't create the worktree,
+   `claude agents` (select it from the list) to watch it work, same as an `issue-manager`. **Don't create the worktree,
    run `openspec-sync-specs`/`openspec-archive-change`, or open the PR yourself** — if you catch
    yourself about to do any of that inline, stop; that's `agents/archive-batch.md`'s job, running
    as its own process specifically so this doesn't become work in your own context. If the script
    fails, relay its error verbatim rather than hand-rolling a replacement spawn — same rule as
-   `spawn-issue-pm.sh`.
+   `spawn-issue-manager.sh`.
 
 ## Rules
 

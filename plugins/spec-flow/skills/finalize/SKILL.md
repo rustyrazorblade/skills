@@ -1,6 +1,6 @@
 ---
 name: finalize
-description: Finalize a merged issue — close the GitHub issue, remove its lifecycle/coordination labels, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs once the FEATURE PR has merged — by the owner's squash-merge by default, or by `implement` itself if the `merge-on-green` label was set or this run's `.spec-flow/owner-instructions` said to auto-merge. Does NOT touch the OpenSpec archive — that's `project-manager`'s job, done in bulk across several issues at once via `/spec-flow:archive`, once enough have piled up. This skill never merges the feature PR and never opens a PR of its own.
+description: Finalize a merged issue — close the GitHub issue, remove its lifecycle/coordination labels, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs once the FEATURE PR has merged — by the owner's squash-merge by default, or by `implement` itself if the `merge-on-green` label was set or this run's the issue's owner instructions said to auto-merge. Does NOT touch the OpenSpec archive — that's `project-manager`'s job, done in bulk across several issues at once via `/spec-flow:archive`, once enough have piled up. This skill never merges the feature PR and never opens a PR of its own.
 argument-hint: [issue number, with its PR already squash-merged]
 ---
 
@@ -8,7 +8,7 @@ argument-hint: [issue number, with its PR already squash-merged]
 
 You are this issue's `issue-manager`, running as your own dedicated background session. The PR for
 issue `#N` has **merged** — the owner's squash-merge in GitHub by default, or `implement`'s own
-auto-merge if `merge-on-green` was set or this run's `.spec-flow/owner-instructions` said to (see
+auto-merge if `merge-on-green` was set or this run's the issue's owner instructions said to (see
 its SKILL.md step 5); either way, by the time this runs the merge has already happened. Close the
 issue and tear down your worktree — that's the whole job. **This skill itself never merges the
 feature PR** — that already happened, by whichever path, before this skill starts — **and it never

@@ -159,6 +159,31 @@ name="${name_prefix}${slug:+-$slug}"
 # `issue-pm-*` session remains, then this and its uses can go.
 legacy_name_prefix="issue-pm-${issue}"
 
+# Owner instructions travel as an issue COMMENT, not a file in the worktree. A worktree file is
+# lost the moment the worktree is recreated, is unreachable from any other machine, and is invisible
+# to the owner -- all three bit us in practice. A comment is durable, readable from a phone, and can
+# be changed while a session is running without touching it.
+#
+# The marker is load-bearing: issue-manager finds instruction comments by this exact prefix, the same
+# way board.py finds a blocked reason by its own prefix. Do not reword it in one place only.
+INSTRUCTION_MARKER='🤖 Owner instructions'
+
+# `cat` from a temp file, never an interpolated --body: instructions are free text and routinely
+# contain backticks, quotes and newlines, none of which may become shell or argv.
+post_instructions() {
+  local n="$1" body="$2" tmp
+  tmp=$(mktemp "${TMPDIR:-/tmp}/spec-flow-instructions.XXXXXX") || return 1
+  { printf '%s\n\n' "$INSTRUCTION_MARKER"; printf '%s\n' "$body"; } > "$tmp"
+  if ! gh issue comment "$n" --body-file "$tmp" >/dev/null 2>&1; then
+    rm -f "$tmp"
+    echo "spawn-issue-manager: couldn't post owner instructions to #${n}. The session is unaffected;" >&2
+    echo "post them yourself, or re-run this script once gh is working." >&2
+    return 1
+  fi
+  rm -f "$tmp"
+  return 0
+}
+
 lookup_session_id() {
   # $1 = session name, $2 = repo root to scope the match to (see the REPO_ROOT comment above) —
   # cwd == root covers a stopped session whose registry entry reverted to the primary checkout;
@@ -286,6 +311,14 @@ if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state"
   # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
   # `claude logs` positively says the process is gone.
   if claude logs "$existing_id" > /dev/null 2>&1; then
+    # Instructions given for a session that is already running are now deliverable, which they
+    # were not when they lived in a worktree file: a comment can be posted under a live session
+    # safely, and the session picks it up at its next seam check without being interrupted. This is
+    # the main thing the move to comments buys.
+    if [[ -n "$owner_instructions" ]]; then
+      post_instructions "$issue" "$owner_instructions" \
+        && echo "spawn-issue-manager: posted owner instructions to #${issue} — ${existing_name} reads them at its next seam check." >&2
+    fi
     echo "already running: ${existing_name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
     # `claude logs` reads a log FILE, so a crash that leaves the log behind reports success for a
     # dead session and this refusal repeats on every run. Name the escape, or the only way out is
@@ -386,14 +419,12 @@ if [[ -n "$existing_id" ]]; then
 
   # `claude respawn` sends NO new prompt — it just resumes the session's prior context — so an
   # owner-instructions arg given on a respawn would otherwise never reach the session at all.
-  # Write it directly into the (now-confirmed) worktree instead: issue-manager re-reads this file fresh
-  # at each seam check rather than trusting its own memory of the original spawn prompt (see
-  # agents/issue-manager.md), so this is picked up the next time it hits one. No arg given here means
-  # "no change" — leave whatever's already on disk (from an earlier spawn/respawn) alone.
+  # Post it as an issue comment: issue-manager re-reads the issue's instruction comments fresh at
+  # each seam check rather than trusting its memory of the original spawn prompt (see
+  # agents/issue-manager.md). No arg here means "no change" — the existing comments still stand.
   if [[ -n "$owner_instructions" ]]; then
-    mkdir -p "${respawned_cwd}/.spec-flow"
-    printf '%s\n' "$owner_instructions" > "${respawned_cwd}/.spec-flow/owner-instructions"
-    echo "spawn-issue-manager: updated .spec-flow/owner-instructions for ${existing_name} (${session_id}) — it reads this fresh at its next seam check." >&2
+    post_instructions "$issue" "$owner_instructions" \
+      && echo "spawn-issue-manager: posted owner instructions to #${issue} — ${existing_name} (${session_id}) reads them fresh at its next seam check." >&2
   fi
 
   # Same reasoning as owner-instructions directly above: a respawn sends no new prompt, so the
@@ -516,11 +547,17 @@ else
   instructions_clause="Stop at both owner approval points, exactly as your agent instructions describe."
   persist_clause=""
   if [[ -n "$owner_instructions" ]]; then
+    # Posted to the issue rather than passed in the prompt alone: a respawn sends no new prompt, so
+    # the comment is what survives. The prompt still names them so the session acts on them now,
+    # without waiting for its first seam check.
+    post_instructions "$issue" "$owner_instructions" || true
     instructions_clause="The owner has given you these instructions for this run — they take precedence over your default of stopping and waiting at both approval points, wherever they say to proceed instead. Follow them exactly; where they're silent on a given point, the default (stop and wait) still applies: \"${owner_instructions}\""
-    # Told here, not written by this script: the worktree doesn't exist yet (EnterWorktree hasn't
-    # run), so only the spawned session itself can create the file, right after it isolates.
-    persist_clause=" Immediately after that, write these owner autonomy instructions verbatim to .spec-flow/owner-instructions inside that worktree (create the .spec-flow directory if needed) — this makes them durable across a future respawn, which sends you no new prompt of its own. From here on, re-read that file fresh at each seam-check point described in your agent instructions rather than relying on memory of this spawn prompt: a later respawn may update it directly."
   fi
+  # Every session re-reads its instructions from the ISSUE at each seam check, whether or not this
+  # spawn supplied any: the owner may post or change them at any time, from any machine, while the
+  # session is running. Memory of this prompt is not a substitute, and neither is a worktree file --
+  # a worktree is recreated often enough that a file there is simply lost.
+  persist_clause=" At each seam-check point described in your agent instructions, re-read the instruction comments on this issue fresh (gh issue view ${issue} --json comments -- the latest comment whose first line is ${INSTRUCTION_MARKER}) rather than relying on memory of this prompt. The owner can post a new one at any time, and the latest one wins."
 
   # The backlog-overlap shortlist rides in the same way, and for the same reason as
   # persist_clause: this script can't write the file into the worktree itself because the worktree

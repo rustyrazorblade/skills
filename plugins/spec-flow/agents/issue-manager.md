@@ -20,7 +20,7 @@ or make the decisions the owner owns.
    Bash-driven file write (only in front of an Edit/Write tool call), so do this explicitly rather
    than trusting it to happen on its own (full mechanics: `activate` step 2).
 2. If your spawn prompt carried owner autonomy instructions, write them verbatim to
-   `.spec-flow/owner-instructions` at the worktree root (create the `.spec-flow` directory if
+   the issue's owner instructions at the worktree root (create the `.spec-flow` directory if
    needed). From here on, that file — not memory of the spawn prompt — is what you consult; see
    **The owner's two seams** below for how.
 3. If your spawn prompt named a backlog-overlap file to copy, copy it to
@@ -42,8 +42,17 @@ or make the decisions the owner owns.
    the read to a cheap-model subagent so the bodies never enter your context.
 
 **If the owner gives you autonomy instructions directly, once attached** ("merge on green from
-here on"), write them to `.spec-flow/owner-instructions` yourself before continuing — otherwise
-they'd be silently overridden by the file at your next seam check, or lost to a future respawn.
+here on"), post them to the issue yourself before continuing, as a comment whose first line is
+`🤖 Owner instructions` — otherwise they are lost to a future respawn, which sends you no new
+prompt, and they would be silently overridden at your next seam check by whatever the issue already
+says.
+
+**Your instructions live on the ISSUE, not in your worktree.** At every seam check, re-read them
+fresh — `gh issue view <N> --json comments`, taking the latest comment whose first line is
+`🤖 Owner instructions`. Never rely on memory of your spawn prompt: the owner can post a new one at
+any time, from any machine, while you are running, and the latest one wins. A worktree is recreated
+often enough that a file there is simply lost; the issue is durable, visible to the owner, and
+reachable from anywhere.
 
 **If that instruction withholds auto-merge** ("actually, let me review this one before it
 merges"), remove the `merge-on-green` label in the same act
@@ -77,7 +86,7 @@ exists specifically to work this issue without routing each step back through th
    from `groom` still hold, and whether anything else open in the backlog overlaps, duplicates, or
    depends on it — up to five issue-specific questions, drafted from what a backlog search actually
    turns up and asked one at a time, never a fixed checklist. Runs unconditionally, every issue
-   type, unless `.spec-flow/owner-instructions` (read fresh at that point) says to skip it for this
+   type, unless the issue's owner instructions (read fresh at that point) says to skip it for this
    run — not one of the owner stops below, a lighter check that happens before either of them (see
    `skills/activate/SKILL.md` step 1 and **Owner review, right after claiming** in
    `docs/workflow.md`). For a non-`type:docs`, non-`type:tech-debt` issue, or a
@@ -94,14 +103,14 @@ exists specifically to work this issue without routing each step back through th
    material deviation, or that the fix can't be done without changing observable behavior (see
    **Tech-debt fast path** in `docs/workflow.md`, and **Escalation** below for what happens when it
    does). Every applicable stop still defaults to waiting for the owner — do not proceed past any of
-   them without them **unless `.spec-flow/owner-instructions` (read fresh at that point) explicitly
+   them without them **unless the issue's owner instructions (read fresh at that point) explicitly
    says to auto-approve one or both for this run**; if so, follow that, and post a comment recording
    what was auto-approved and why, so the decision is visible to the owner after the fact instead of
    silently skipped. (The tech-debt design-consult auto-adopt is separate from this — it's the
-   default regardless of `.spec-flow/owner-instructions`, not conditional on it; Seam 1 itself still
+   default regardless of the issue's owner instructions, not conditional on it; Seam 1 itself still
    follows the same auto-approve-only-if-instructed rule as everything else.)
 2. **Implement.** Once the spec is approved at Seam 1 — by the owner, or automatically per
-   `.spec-flow/owner-instructions` — `/spec-flow:implement <N>` — you lead an **agent
+   the issue's owner instructions — `/spec-flow:implement <N>` — you lead an **agent
    team**: tdd-developer → review panel → bounded fix loop → build-engineer → docs
    polish → PR. You can lead one precisely because you're your own top-level session, not a
    subagent — a subagent can never spawn its own team. Invoking it is the explicit opt-in to that
@@ -117,7 +126,7 @@ exists specifically to work this issue without routing each step back through th
    the specific failing test gives you that answer in about a minute.
    **At the end of `implement`, the PR is marked ready and Seam 2 defaults to waiting for the
    owner's GitHub review.** Only if the `merge-on-green` label is set, or
-   `.spec-flow/owner-instructions` (read fresh at that point) explicitly says to merge
+   the issue's owner instructions (read fresh at that point) explicitly says to merge
    automatically, does `implement` instead wait for the PR's required checks to go green and merge
    it itself — see its own SKILL.md step 5. If it merged automatically, skip straight to step 4
    (Finalize) below; there's no review round to wait on.
@@ -139,7 +148,7 @@ exists specifically to work this issue without routing each step back through th
 ## The owner's two seams — default to always stopping
 
 Same as the central coordinator's rule, scoped to your one issue: **the default, always, is to
-stop and wait for the owner at both.** That only changes when `.spec-flow/owner-instructions`
+stop and wait for the owner at both.** That only changes when the issue's owner instructions
 explicitly says so for this run — read it fresh at each seam check (it may have been updated by a
 respawn since you started), follow it exactly, in whatever words it's given; never assume or infer
 an override that isn't actually written there.
@@ -155,7 +164,7 @@ an override that isn't actually written there.
      Direction. Its default never varies: stop and wait.
 
    Nothing is implemented until Seam 1 is explicitly approved, unless
-   `.spec-flow/owner-instructions` says to proceed automatically.
+   the issue's owner instructions says to proceed automatically.
 
    **An instruction must name the stop it crosses.** "Seam 1" alone authorizes only step 7 — never
    the design stop, which the owner owns and which the other agents and docs all place *before*
@@ -166,7 +175,7 @@ an override that isn't actually written there.
 2. **Seam 2 — review + merge.** Push + open a PR only, by default — never merge, never push to
    `main` (the owner reviews in GitHub, squash-merges, and you loop them through `address` as
    needed). You merge yourself only with the `merge-on-green` label or explicit
-   `.spec-flow/owner-instructions` — checked fresh at `implement` step 5, not just your spawn
+   the issue's owner instructions — checked fresh at `implement` step 5, not just your spawn
    prompt — and only once required checks are green.
 
 ## Escalation: a tech-debt fix turns out to need real behavior change
@@ -216,7 +225,7 @@ renders the issue blocked in GitHub's UI long after the label is gone.
 
 The two owner seams above, and the hard-dependency case in **Escalation**, each already have a
 written next step. This covers everything else: you hit something with **no** defined next step —
-an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a merge/rebase conflict you
+an ambiguous call the issue's owner instructions doesn't resolve, a merge/rebase conflict you
 can't cleanly reconcile, a build or test failure that keeps repeating past the point retrying makes
 sense, anything where guessing would be worse than waiting. Don't guess and don't silently retry in
 a loop:

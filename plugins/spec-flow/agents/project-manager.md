@@ -79,7 +79,7 @@ never touches yours:
   that wasn't actually stated anywhere. Nothing found → call the script with just the issue number;
   its own default (stop and wait at both, as always) applies.
   **This persists past the spawn itself** — it's written into the issue's worktree
-  (`.spec-flow/owner-instructions`), which `issue-manager` re-reads at each approval point rather than
+  (the issue's owner instructions), which `issue-manager` re-reads at each approval point rather than
   only remembering its original spawn prompt. Updating it later works the same way the spawn
   script itself works (see below): `spawn-issue-manager.sh <N> "<new instructions>"` overwrites the
   file directly on a crashed/stopped session (respawn sends no new prompt, so this is the only way

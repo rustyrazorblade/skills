@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per the issue's own owner-instruction comment; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -14,7 +14,7 @@ artifact entirely and the plan is just its own scope + acceptance criteria (see 
 was filed, plus whatever existing specified behavior nearby must be preserved (see step 5's
 tech-debt branch). Right after claiming, step 1 also reviews the issue with the owner — scope/
 acceptance-criteria freshness plus a backlog overlap check, up to five issue-specific questions —
-unconditionally, for every issue type; skippable only via `.spec-flow/owner-instructions` for this
+unconditionally, for every issue type; skippable only via the issue's owner instructions for this
 run, not one of the stops below. This skill stops for the owner **twice** in the normal case: once
 at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam 1** — to
 approve
@@ -24,7 +24,7 @@ auto-adopts the issue's confirmed Direction instead of waiting — see step 4's 
 Step 7 always still applies, in whichever lightweight form matches what was actually produced.
 Neither applicable stop is optional by default beyond that; you hand back once the plan is
 committed (if applicable) and approved — you do not implement, and you do not start
-`/spec-flow:implement`. The only exception: if `.spec-flow/owner-instructions` at the worktree root
+`/spec-flow:implement`. The only exception: if the issue's owner instructions at the worktree root
 (read fresh at each stop, not just once from your spawn prompt — see `agents/issue-manager.md`)
 explicitly says to auto-approve the design and/or the plan for this run, follow that instead of
 waiting — see steps 4 and 7 below for exactly how.
@@ -77,7 +77,7 @@ qualify), and confirm the choice with the owner.
    this session is; see **Coordination signals** in `docs/workflow.md`.
 
    **Review the issue with the owner, right after claiming, before anything else runs.** Skip this
-   entirely if `.spec-flow/owner-instructions` (already written by your first actions, before this
+   entirely if the issue's owner instructions (already written by your first actions, before this
    skill started — see `agents/issue-manager.md`) says to skip the review for this run; absent that, it
    always runs, for every issue type — `type:docs` and `type:tech-debt` included, since their fast
    paths only ever skip the design/spec machinery further down in this skill, never this. Not a
@@ -179,7 +179,7 @@ qualify), and confirm the choice with the owner.
    # or, if anything changed:
    gh issue comment <N> --body "🔎 Reviewed with owner — updated: <what changed, one line>."
    ```
-   **If `.spec-flow/owner-instructions` skips this review for the run**, post that plainly instead,
+   **If the issue's owner instructions skips this review for the run**, post that plainly instead,
    same auditability as every other auto-approved step: `gh issue comment <N> --body "Owner review
    skipped per this run's instructions."`
 
@@ -288,7 +288,7 @@ qualify), and confirm the choice with the owner.
    architect found, why it changed the picture, and the owner's options — proceed anyway with the
    corrected shape, narrow the fix to what *is* behavior-preserving, or treat this as a real feature
    change and route it through the full pipeline instead, generating a real spec for the behavior
-   delta). **None of these three ever auto-approve, even if `.spec-flow/owner-instructions` says to
+   delta). **None of these three ever auto-approve, even if the issue's owner instructions says to
    auto-approve this run** — they're facts architect determined, not a stylistic choice, same as the
    hard-dependency rule below.
 
@@ -297,7 +297,7 @@ qualify), and confirm the choice with the owner.
    comments elsewhere in this step:
    `gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."`
    Then go straight to step 5's tech-debt branch. This is the *default* for `type:tech-debt`, not
-   conditional on `.spec-flow/owner-instructions` — the owner already made this decision once, item
+   conditional on the issue's owner instructions — the owner already made this decision once, item
    by item, when they confirmed the finding in `/tech-debt` (dev-skills); step 4 here is a safety check
    against staleness/scope-creep, not a second design-choice gate.
 
@@ -354,9 +354,9 @@ qualify), and confirm the choice with the owner.
    **This is the one thing auto mode never
    skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
    decision — label it, comment, and stop for the owner regardless of what
-   `.spec-flow/owner-instructions` says for this run.
+   the issue's owner instructions says for this run.
 
-   **Absent a hard dependency, and only if `.spec-flow/owner-instructions` (read fresh at this
+   **Absent a hard dependency, and only if the issue's owner instructions (read fresh at this
    point) explicitly says to auto-approve the design for this run**, skip the wait instead of
    pausing: take the architect's recommended option, and post a comment naming what was chosen and
    why, alongside the debt-item list above:
@@ -501,7 +501,7 @@ qualify), and confirm the choice with the owner.
      - **A genuine hard conflict is a real blocker** — the same class as an architect-flagged hard
        dependency (step 4): if another in-flight change modifies the same requirement in a way this
        change can't cleanly coexist with, that always stops Seam 1 for the owner, even under a full
-       `.spec-flow/owner-instructions` auto-approve for this run. Say so plainly when it happens —
+       the issue's owner instructions auto-approve for this run. Say so plainly when it happens —
        don't silently proceed past a real conflict because the run was told to auto-approve.
    - **Build an explicit AC→scenario mapping, as a real committed artifact — not just a claim made
      in prose at step 7.** A coverage summary that only ever exists as the model's own narrated
@@ -561,7 +561,7 @@ qualify), and confirm the choice with the owner.
    ```
 
    **First, determine whether this is a fresh look or a re-review** — read `.spec-flow/seam1-last-shown-sha` in the worktree (gitignored,
-   same category of file as `.spec-flow/owner-instructions`; this step both reads and, at the end,
+   same category of file as the issue's owner instructions; this step both reads and, at the end,
    writes it):
    - **Missing** → fresh look. Render the full spec below, exactly as this step already describes.
    - **Present and equal to the current `git rev-parse HEAD`** → nothing has changed since the
@@ -732,7 +732,7 @@ qualify), and confirm the choice with the owner.
    issue, or any `type:tech-debt` issue, never reaches this paragraph at all — both took a
    lightweight branch above instead.)
 
-   **Unless `.spec-flow/owner-instructions` (read fresh at this point) explicitly says to
+   **Unless this issue's owner instructions (re-read fresh at this point — the latest `🤖 Owner instructions` comment) explicitly says to
    auto-approve the spec for this run — and step 5's `overrides.md` didn't find a hard conflict**
    (an instruction naming "the spec" authorizes THIS stop whatever form its artifact takes on this
    issue — a committed spec, or the scope + acceptance criteria, or the Direction. Seam 1 is
@@ -753,12 +753,12 @@ qualify), and confirm the choice with the owner.
    instructions — proceeding to implement."`) Absent that explicit instruction, this stop always
    waits for the owner. Note this is a **separate** auto-approve gate from step 4's tech-debt
    auto-adopt above — step 4 auto-adopts *by default*, unconditionally; this one (Seam 1 itself)
-   still needs an explicit `.spec-flow/owner-instructions` opt-in, same as every other issue.
+   still needs an explicit the issue's owner instructions opt-in, same as every other issue.
 
    **Handling a redirect — capture it as a structured record, not just a reaction.** When the owner
    objects instead of approving, don't just regenerate from a fresh read of their chat message —
    append a durable entry to `.spec-flow/seam1-feedback.md` in the worktree (gitignored, same
-   category as `.spec-flow/owner-instructions`; **append, never overwrite** — this is a running
+   category as the issue's owner instructions; **append, never overwrite** — this is a running
    history across possibly several redirects) before touching anything:
    ```markdown
    ## Redirect — HEAD was <sha from `git rev-parse HEAD` right now>
@@ -782,7 +782,7 @@ qualify), and confirm the choice with the owner.
 - **Show, don't link.** At either stop, render inline in the conversation; never hand back only a
   file path and expect the owner to open it. The owner is not in an editor.
 - **Two real stops, in order, by default.** Step 4 (design choice) always precedes step 5
-  (generation) — never generate the spec before the owner has picked (or `.spec-flow/owner-instructions`
+  (generation) — never generate the spec before the owner has picked (or the issue's owner instructions
   auto-picked) among the architect's options. Step 7 (spec approval, Seam 1) always follows step 6
   (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until both stops
   have passed or been explicitly auto-approved per that file's current contents. **Two structural

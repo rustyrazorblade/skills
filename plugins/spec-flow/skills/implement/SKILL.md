@@ -38,7 +38,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    `project-manager`'s alone.
 
    **Confirm the precondition.** The issue must be `status:spec-review` AND the owner must have
-   approved — either in the conversation, or, if `.spec-flow/owner-instructions` (read fresh here)
+   approved — either in the conversation, or, if the issue's owner instructions (read fresh here)
    explicitly auto-approved the spec/plan for this run, that counts too (the normal case when
    `activate` launched you directly per its own auto-approve path). If you can't confirm either,
    ask before proceeding. Flip the label to in-progress:
@@ -565,7 +565,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    a draft and write the residual findings into its body. **If none exists** — a fast-path run that
    halted before its PR was ever opened, which is exactly what question 4 catches — put the
    residual findings in that issue comment instead; it is the only place they can land. Never mark a red or unapproved PR ready, and never
-   merge one, whatever `merge-on-green` or `.spec-flow/owner-instructions` say. Those authorize
+   merge one, whatever `merge-on-green` or the issue's owner instructions say. Those authorize
    crossing Seam 2 on a *finished* run; they do not authorize skipping the panel.
 
    When the gate passes, finalize the already-open draft PR
@@ -662,7 +662,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    comment and whenever you tell the owner directly (in this conversation, not just GitHub) that
    the PR is ready for review, further down in this step.
    Check whether to auto-merge — the `merge-on-green` label (checked fresh, not assumed) or
-   `.spec-flow/owner-instructions` (also read fresh, not from memory of the spawn prompt) saying so:
+   the issue's owner instructions (also read fresh, not from memory of the spawn prompt) saying so:
    ```bash
    gh issue view <N> --json labels --jq '[.labels[].name] | any(. == "merge-on-green")'
    ```
@@ -694,7 +694,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
 - **Never merge, never push to `main` — by default.** This skill pushes only the issue branch,
   opens a *draft* PR, and later marks it ready. It merges on its own only when the `merge-on-green`
-  label is set, or `.spec-flow/owner-instructions` explicitly said to — and even then only after
+  label is set, or the issue's owner instructions explicitly said to — and even then only after
   the PR's required checks report green, via a squash-merge of that one PR — never a direct push
   to `main`.
 - **If a PR already exists for the branch (re-run), reuse it rather than erroring.** Common after

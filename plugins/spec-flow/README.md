@@ -86,7 +86,7 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   primary checkout (see [Run parallel sessions with
   worktrees](https://code.claude.com/docs/en/worktrees)); `.spec-flow/` keeps per-branch runtime
   state — the flagged-test set (`/spec-flow:sync-ci`) and, if you use it, an issue's
-  `owner-instructions` autonomy override — from ever being committed.
+  per-branch runtime state — from ever being committed.
 
   **Add `.spec-flow/` with the leading dot. Never add `spec-flow/`.** They differ by one character
   and mean opposite things: `.spec-flow/` is gitignored per-branch runtime state, while

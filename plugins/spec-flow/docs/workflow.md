@@ -89,7 +89,7 @@ fixed checklist — a simple issue may earn none at all. This runs for every iss
 `type:tech-debt` included (their fast paths only ever skip the design/spec machinery further down,
 never this). It's not counted as one of the two seams below — it's a lighter, unconditional check
 that happens before either of them, not a third owner-approval gate — but it uses the same
-override mechanism: `.spec-flow/owner-instructions` (see **Overriding either seam's default** below)
+override mechanism: the issue's owner instructions (see **Overriding either seam's default** below)
 can tell it to skip this review for the run, same free-text, owner's-own-words instruction the
 seams already read.
 
@@ -115,9 +115,9 @@ again on every parallel spawn. So:
 - It passes the shortlist's **path** to `spawn-issue-manager.sh <N> --backlog-overlap-file <path>`. A
   flag, not a positional, so it is independent of the owner-instructions argument — and a path,
   not the text, for the reason two bullets down.
-- Delivery follows `.spec-flow/owner-instructions`, with one deliberate difference. On a **fresh
-  spawn** the worktree does not exist yet, so the session must create the file right after it
-  isolates; on a **respawn** — which sends no new prompt at all — the script writes it directly.
+- Delivery differs from owner instructions. Those go on the issue, where the owner can see and
+  change them; the shortlist is machine-generated working data with no reason to be public, so it
+  still travels as a file the session copies into its worktree.
 - **Only the path moves. The shortlist text is never retyped by anything.** Owner-instructions are
   safe to splice into a prompt or a command: the owner wrote them. A shortlist line quotes an
   *issue title*, and on any repo accepting outside issues those are attacker-controlled. Two
@@ -220,7 +220,7 @@ to weigh in on.
 **A re-review shows only what changed since your last look.** If the spec gets regenerated after
 you've already seen it once at Seam 1 — you redirected `activate`, or you're re-activating a stale
 change — step 7 doesn't re-dump the whole spec again. It tracks the commit SHA it last showed you
-in `.spec-flow/seam1-last-shown-sha` (gitignored, same category as `.spec-flow/owner-instructions`)
+in `.spec-flow/seam1-last-shown-sha` (gitignored per-branch runtime state)
 and, on a later re-entry, renders a diff scoped to just `openspec/changes/issue-<N>` between that
 SHA and the current one — a real diff view via `dev-skills`'s `ide-explain` skill (its `--path` flag
 scopes `--diff` to one directory instead of the whole repo) when `SPEC_FLOW_SEAM_VIEW=explain`, or
@@ -283,9 +283,18 @@ and `skills/setup/SKILL.md` here for how the seam-view preference gets set.
 composes a free-text instruction — from whatever you said for that issue, or a standing preference
 you wrote in `CLAUDE.md`, in your own words (never a fixed vocabulary like "Seam 1"/"Seam 2" —
 that's internal to these docs, not something you need to say) — and passes it to
-`scripts/spawn-issue-manager.sh <N> [owner-instructions]`. Whatever the instruction doesn't address
-still stops and waits, by default; nothing is ever inferred or carried over from a different
-issue's spawn. Seam 2's auto-merge path only actually merges once the PR's required CI checks
+`scripts/spawn-issue-manager.sh <N> [owner-instructions]`, which posts it to the issue as a comment
+whose first line is `🤖 Owner instructions`. **That comment is the channel, not the spawn.** Every
+`issue-manager` re-reads the latest such comment at each seam check, so you can post or change one
+yourself at any time — from any machine, while the session is running, without attaching to it — and
+the latest one wins. It also survives a respawn, which sends the session no new prompt at all.
+
+This used to be a file in the issue's worktree, which lost the instructions whenever the worktree
+was recreated, could not be read or written from another machine, and gave the owner no way to see
+what a session had been told.
+
+Whatever the instruction doesn't address still stops and waits, by default; nothing is ever inferred
+or carried over from a different issue. Seam 2's auto-merge path only actually merges once the PR's required CI checks
 report green — an instruction to merge automatically doesn't skip that; a hard dependency the
 architect flags, or a hard spec conflict step 5's override/conflict check finds (see **Spec
 override and conflict detection** below), always stops Seam 1 regardless, even under a full
@@ -298,21 +307,22 @@ apply it directly in GitHub, or tell `project-manager`, any time — before spaw
 on a live `issue-manager` — and `implement` checks it fresh at step 5, no worktree/file involved. The
 free-text instruction still works too (either one triggers auto-merge); the label just doesn't
 require composing a sentence or waiting for a spawn/respawn to deliver it. Other, less binary
-instructions (Seam 1 auto-approve, anything not reducible to a yes/no) still go through the
-file below.
+instructions (Seam 1 auto-approve, anything not reducible to a yes/no) go through the comment
+channel below.
 
-The instruction doesn't just live in the spawn prompt — it's persisted to
-**`.spec-flow/owner-instructions`** at the issue's worktree root — gitignored via the one-time,
-trunk-branch `.gitignore` entry every issue's worktree already inherits (see **Prerequisites** in
-the README; the same entry also covers `.spec-flow/flagged-tests` below) — which `issue-manager`
-re-reads fresh at each approval point rather than trusting memory of its original spawn prompt.
-This is what makes updating it work across a crash: `claude respawn` (used to recover a
-stopped/crashed `issue-manager`, see **Coordination
-signals** below) sends no new prompt of its own, so `spawn-issue-manager.sh <N> "<new instructions>"`
-on that same issue instead writes the new text directly into the already-resolved worktree. A
-currently **live** `issue-manager` is untouched by any of this — the spawn script refuses to respawn
-over a running session; changing a live session's instructions means attaching and saying so
-directly.
+The instruction doesn't just live in the spawn prompt — it's posted to **the issue**, as a comment
+whose first line is `🤖 Owner instructions`, which `issue-manager` re-reads fresh at each approval
+point rather than trusting memory of its original spawn prompt. The latest such comment wins.
+
+That makes it durable in the three ways a worktree file was not. It survives a **respawn**, which
+sends the session no new prompt of its own. It survives the **worktree being recreated**, which is
+routine and used to lose the instructions outright. And it is reachable from **anywhere** — you can
+post one from your phone, and you can change a **live** session's instructions without attaching to
+it or interrupting it, which the file could never do. `spawn-issue-manager.sh <N> "<new
+instructions>"` posts one for you and works whether the session is running, stopped, or crashed.
+
+It is also simply visible: the instructions a session is operating under are on the issue, where
+you and anyone else can read them.
 
 **Docs fast path.** A purely documentation issue (README, a docs/mdBook tree, comments — no
 behavior change) doesn't need an architect's design or a design-choice stop to decide between. Set
@@ -460,7 +470,7 @@ reflects the local machine's session registry, and says nothing about another de
   `issue-manager` is genuinely stuck on something with no defined next step of its own: not one of **The
   two human seams** (those are scheduled stops, already surfaced their own way — spec approval,
   review + merge) and not a hard dependency on another issue (that's `blocked`, above). Covers the
-  ad hoc case — an ambiguous call `.spec-flow/owner-instructions` doesn't resolve, a conflict it
+  ad hoc case — an ambiguous call the issue's owner instructions doesn't resolve, a conflict it
   can't reconcile on its own, a failure that repeats past the point retrying makes sense — where
   guessing would be worse than waiting. `issue-manager` stops and waits once it's set, the same as at
   either seam. Its comment's first line is prefixed `🆘 Needs attention:` — the board finds the
@@ -920,7 +930,7 @@ plugin shipped would be wrong somewhere by construction. A repo with no test-run
 | Directory | Committed? | What it holds | Lifetime |
 |---|---|---|---|
 | `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `TESTING.md`, its test and CI policy | Lives with the repo |
-| `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests`, `owner-instructions` | Dies with the branch |
+| `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests` | Dies with the branch |
 
 Only the **dotted** one belongs in `.gitignore`. A trailing-slash pattern with no interior slash
 matches at any depth, so an undotted `spec-flow/` entry would also swallow any nested directory of
@@ -1026,7 +1036,7 @@ is guarded locally instead of costing another CI round-trip.
 - A gitignored file, **`.spec-flow/flagged-tests`** inside the issue's worktree. One
   runner-selectable test id per line; `#` comments and blank lines ignored. Ignored via a
   `.spec-flow/` entry in the repo's `.gitignore` — the one-time, trunk-branch entry from
-  **Prerequisites** in the README (also covers `owner-instructions` above); `/spec-flow:sync-ci`
+  **Prerequisites** in the README; `/spec-flow:sync-ci`
   additionally double-checks it's there on each run, so it never commits either way.
 - **Starts empty on every new branch.** No bootstrap, no diff-based guessing.
 - **Populated only by CI failures on that branch** (via `/spec-flow:sync-ci`). Where the repo's

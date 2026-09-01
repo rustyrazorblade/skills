@@ -44,13 +44,38 @@ easy-db-lab kit install <name>
 easy-db-lab <name> start
 ```
 
+### A kit installed against a target is named `<kit>-<target>`
+
+**This is the single most common way a generated plan breaks at the benchmark step**, after the
+cluster is already provisioned and running. A kit installed with `--target` does NOT get a command
+group named after the kit — the target is part of the name:
+
+```bash
+# Plain install: the command group is the kit name
+easy-db-lab kit install sysbench
+easy-db-lab sysbench start
+
+# Kit-ref install: the command group is <kit>-<target>
+easy-db-lab kit install sysbench --target tidb
+easy-db-lab sysbench-tidb start     # NOT `sysbench start` — that group does not exist
+```
+
+The same kit installed against two targets gives two independent command groups
+(`sysbench-tidb`, `sysbench-cassandra`), which is the point: one cluster can benchmark several
+databases at once.
+
+**Confirm the group name rather than deriving it.** Run `easy-db-lab commands` immediately after
+installing and read the group back. It costs one command and it is the only thing that catches a
+naming variant this document has not anticipated.
+
 **No manual configuration is needed between these two steps.** The platform always handles infrastructure setup automatically — PersistentVolumes, storage, and any other prerequisites are created by `start`, not by the operator.
 
 You may add configuration between install and start if a test specifically requires non-default settings (e.g. replica count, cache size, restore from backup). But do not add steps to manually provision infrastructure — that is always handled automatically.
 
 ## After Installation
 
-Once a kit is installed, it provides its own subcommands under `easy-db-lab <kit-name>`. Run `easy-db-lab commands` after installation to see the full set of available subcommands for the installed kit.
+Once a kit is installed, it provides its own subcommands under `easy-db-lab <kit-name>` — or
+`easy-db-lab <kit>-<target>` when it was installed against a target, per the section above. Run `easy-db-lab commands` after installation to see the full set of available subcommands for the installed kit.
 
 **Important:** Kit subcommands only appear in `easy-db-lab commands` after the kit is installed. If you need to discover what commands, flags, or endpoints a kit provides before (or instead of) installing it, always use `kit info`:
 

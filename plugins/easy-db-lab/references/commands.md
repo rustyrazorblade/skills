@@ -2,6 +2,30 @@
 
 Generated from `easy-db-lab commands`. Use this as a fallback when the binary is not available.
 
+## How to read the listing
+
+Everything below is generated, so it does not distinguish the two kinds of argument by shape. You
+have to read the leading characters:
+
+- A line beginning with `--` or `-` is a **flag**: `--db <<count>>` is written `--db 3`.
+- A line beginning with `<<` is a **POSITIONAL**. It takes no `--`, and it goes after the flags.
+  `<<name>>` is written `my-cluster`, never `--name my-cluster`.
+
+That distinction is the single most common way a generated command fails. `init` is the one that
+bites: the cluster name is the last line of a thirty-line flag list, formatted identically to the
+flags above it, and `--name` reads as the obvious guess. It is not a valid option.
+
+```bash
+# Correct — name is positional, and comes after the flags
+easy-db-lab init my-cluster --db 3 --app 1 --instance i3.2xlarge --up
+
+# Wrong — fails immediately; there is no --name option
+easy-db-lab init --name my-cluster --db 3 --up
+```
+
+The other positionals below take the same form: `down <<vpcId>>`, `ip <<host>>`,
+`show-iam-policies <<policyName>>`, and `upload-keys <<localDir>>`.
+
 ```
 easy-db-lab - Tool to create Cassandra lab environments in AWS
   aws - AWS resource discovery and management operations

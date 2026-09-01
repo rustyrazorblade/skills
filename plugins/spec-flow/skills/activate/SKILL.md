@@ -499,8 +499,34 @@ qualify), and confirm the choice with the owner.
    git -C <worktree> commit -m "issue-<N>: spec (proposal/design/specs/tasks)"
    ```
 
-7. **Render for review, then mark spec-review and STOP.** **First, determine whether this is a
-   fresh look or a re-review** — read `.spec-flow/seam1-last-shown-sha` in the worktree (gitignored,
+7. **Render for review, then mark spec-review and STOP.**
+
+   **The GitHub comment IS the review artifact — never a bare "awaiting your review".** The spec
+   is committed in the worktree on your machine only; `activate` never pushes, so at this stop
+   there is no branch on GitHub, no PR, and no link that resolves to anything. An owner reading the
+   issue — on their phone, or after this session's render has scrolled away, or before they ever
+   attach — has literally nothing to look at. So whatever you render in the conversation, post the
+   same substance **into the issue comment** with `--body-file` (write it to a temp file first; the
+   render is long and full of backticks, so never inline it into an interpolated `--body`).
+   Whoever reads the issue later must be able to approve or redirect from the comment alone, and it
+   is also the durable record of exactly what was approved.
+
+   **Say what the owner can actually do.** End every Seam 1 render — in the conversation and in the
+   comment — with the three options stated explicitly, because "nothing happens until you approve"
+   names the consequence and not the action:
+
+   ```markdown
+   **Your options**
+   - **Approve** — say it looks good, and implementation starts (`/spec-flow:implement <N>`).
+   - **Redirect** — say what's wrong or what should change. It's recorded to
+     `.spec-flow/seam1-feedback.md`, the plan is regenerated, and you'll see only what changed —
+     not the whole thing again.
+   - **Ask** — question anything here before deciding. Asking is not approving; nothing proceeds.
+
+   Nothing is implemented until you approve.
+   ```
+
+   **First, determine whether this is a fresh look or a re-review** — read `.spec-flow/seam1-last-shown-sha` in the worktree (gitignored,
    same category of file as `.spec-flow/owner-instructions`; this step both reads and, at the end,
    writes it):
    - **Missing** → fresh look. Render the full spec below, exactly as this step already describes.
@@ -585,11 +611,18 @@ qualify), and confirm the choice with the owner.
    read — then mark spec-review the same way:
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
-   gh issue comment <N> --body "📝 Content-only docs change — no spec, ready for a quick review of the plan."
+   cat > "$T" <<'EOF'
+   📝 Content-only docs change — no spec. Here's the plan, for a quick review.
+
+   <the scope + acceptance criteria you just rendered, verbatim>
+
+   <the **Your options** block from the top of this step>
+   EOF
+   gh issue comment <N> --body-file "$T"
    ```
-   State plainly that nothing will be written until they approve, same as the full form below, then
-   skip the rest of this step (there's no spec to render) and go straight to the auto-approve
-   paragraph.
+   (`T=$(mktemp)`; remove it after.) The comment carries the plan itself, not a pointer to it —
+   see the rule at the top of this step. Then skip the rest of this step (there's no spec to
+   render) and go straight to the auto-approve paragraph.
 
    **For a `type:tech-debt` issue** (step 5's tech-debt branch — no spec, no step-6 commit), render
    instead: the issue's `## Direction` (as confirmed or corrected by step 3's architect brief), the
@@ -600,15 +633,34 @@ qualify), and confirm the choice with the owner.
    fix:
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
-   gh issue comment <N> --body "📝 Tech-debt fix confirmed (\`type:tech-debt\`) — no spec; ready for a quick review before implementation."
+   cat > "$T" <<'EOF'
+   📝 Tech-debt fix confirmed (`type:tech-debt`) — no spec. Here's the plan, for a quick review.
+
+   <the Direction, the adjacent-behavior list, and architect's risks you just rendered, verbatim>
+
+   <the **Your options** block from the top of this step>
+   EOF
+   gh issue comment <N> --body-file "$T"
    ```
-   State plainly that nothing will be written until they approve, then skip the rest of this step
-   and go straight to the auto-approve paragraph. **Otherwise** (a spec was generated — either a
+   (`T=$(mktemp)`; remove it after.) The comment carries the plan itself, not a pointer to it —
+   see the rule at the top of this step. Then skip the rest of this step and go straight to the
+   auto-approve paragraph. **Otherwise** (a spec was generated — either a
    non-docs, non-tech-debt issue, or a structural/tech-accompanying `type:docs` one):
    ```bash
    gh issue edit <N> --remove-label status:ready --add-label status:spec-review
-   gh issue comment <N> --body "📝 Spec committed (\`issue-<N>\`) — awaiting your review to approve implementation."
+   cat > "$T" <<'EOF'
+   📝 Spec committed (`issue-<N>`) — awaiting your review to approve implementation.
+
+   <the full render described below, verbatim: proposal, the design you chose at step 4,
+    requirements + scenarios, ac-coverage.md, overrides.md, tasks>
+
+   <the **Your options** block from the top of this step>
+   EOF
+   gh issue comment <N> --body-file "$T"
    ```
+   (`T=$(mktemp)`; remove it after.) On a re-review, the comment carries the same *changed*
+   sections the conversation render shows, plus a line naming what didn't change — not the whole
+   spec again.
    **On a re-review** (per this step's opening check — the marker SHA differs from current HEAD),
    render differently: `git diff <the recorded SHA> HEAD -- openspec/changes/issue-<N>` and show
    only the sections that actually changed, explicitly noting what didn't (e.g. "proposal and tasks
@@ -634,9 +686,11 @@ qualify), and confirm the choice with the owner.
    structural-debt task from step 4 — and, if any nearby structural debt was recommended as a
    separate issue, a one-line reminder of its disposition (filed as `#<M>`, or left for later).
    Summarize faithfully — it must be enough to approve or redirect without opening a file. You may
-   also give the path as a secondary reference, but the inline render is the deliverable. State
-   that nothing will be implemented until they approve. **Do not proceed to implementation.** When
-   the owner approves, the next step is `/spec-flow:implement <N>`.
+   also give the path as a secondary reference, but the render is the deliverable, and it goes in
+   BOTH places: the conversation and the issue comment (see the top of this step — the worktree
+   path is meaningless to anyone not sitting at this machine). End both with the **Your options**
+   block. **Do not proceed to implementation.** When the owner approves, the next step is
+   `/spec-flow:implement <N>`.
 
    **For a structural/tech-accompanying `type:docs` issue** (steps 3/4 skipped), there's no step-4
    design to restate — omit that part of the render and show the rest as normal: proposal,

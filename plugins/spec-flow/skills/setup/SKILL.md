@@ -38,7 +38,8 @@ later question moot.
    - **Refactor circuit breaker**: read `.claude/settings.json` for
      `env.SPEC_FLOW_REFACTOR_BREAKER`.
    - **Gitignore**: read `.gitignore` (if it exists) for `.claude/worktrees/` and `.spec-flow/`
-     entries. Also run `git check-ignore -v spec-flow/TESTING.md` — it must find **no** match. A match
+     entries. Also run `git check-ignore -v spec-flow/TESTING.md spec-flow/WORKFLOWS.md` — it must
+     find **no** match. A match
      means the repo is ignoring its own committed configuration directory, which is a bug, not a
      preference.
    - **Repo policy**: run the check that every other entry point runs —
@@ -89,6 +90,13 @@ later question moot.
    - **No repo policy** (step 1's `repo-config.sh check` exited 1) → this is the one item that acts
      outward: it opens a PR. See the carve-out in **Rules** below. Work it in three moves.
 
+     **The check names every config file the repo is missing, and they seed together** — one
+     proposal, one confirmation, one branch, one PR. Today that is `TESTING.md` (the test and CI
+     policy) and `WORKFLOWS.md` (the review panel and its gate). Propose each file the check named,
+     show them together, and land them in a single `seed-config.sh` call. Never seed one and leave
+     the other: the check keeps failing either way, and the owner would confirm twice for one
+     outcome.
+
      **First, propose.** Read the repo and write a concrete policy for it — not a template with
      blanks. Say what runs locally on every TDD cycle, what CI runs, whether CI is a test gate at
      all, and what gates merge. Reuse step 1's tiering detection, and read the repo's own
@@ -112,6 +120,16 @@ later question moot.
      choosing. `spec-flow/TESTING.md` in this plugin's own repo is a worked example of a policy
      nothing like the old shipped default.
 
+     **For `WORKFLOWS.md`**, the same rules apply with a different subject: it states which review
+     lenses run, what counts as must-fix, and the round cap. Read the repo first — a repo with an
+     established review culture may want fewer lenses, or none at all. A policy of "no automated
+     panel; the owner's review is the gate" is first-class, exactly like a repo with no test suite,
+     and the pipeline supports it directly: no lens runs, no fix loop runs, and the PR says plainly
+     that no panel ran. `${CLAUDE_PLUGIN_ROOT}/references/WORKFLOWS.md.template` holds the panel
+     spec-flow has always run, as a starting point — the same "open it only if it fits" rule as
+     the test template below. `spec-flow/WORKFLOWS.md` in this plugin's own repo is a worked
+     example that keeps the default and says why each lens earns its slot.
+
      Only where you have **already** determined that the repo has the tiered shape — a suite split
      structurally into a fast tier and a slow tier, CI that runs the tests, and merge gated on
      green CI — open `${CLAUDE_PLUGIN_ROOT}/references/TESTING.md.template` and use its wording.
@@ -129,12 +147,15 @@ later question moot.
 
      **Third, land it.** What you write carries neither the seeding notes above the template's
      boundary marker nor any reference to the template — the file reads as the repo's own policy.
-     Write the confirmed content to a temporary file, then:
+     Write each confirmed file to its own temporary file, then pass them all in one call as
+     `<target>=<content-file>` pairs:
      ```bash
-     bash ${CLAUDE_PLUGIN_ROOT}/scripts/seed-config.sh <content-file>
+     bash ${CLAUDE_PLUGIN_ROOT}/scripts/seed-config.sh \
+       TESTING.md=<content-file> WORKFLOWS.md=<content-file>
      ```
-     The script discovers the default branch, checks it for an existing policy, and on a clean repo
-     creates a branch, commits, pushes, and opens a PR. It never commits or pushes to the default
+     Pass only the files the check named as missing. The script discovers the default branch,
+     checks it for each existing policy, skips any already present and usable, and puts the rest in
+     one branch, one commit and one PR. It never commits or pushes to the default
      branch, never merges, and never touches the owner's working tree. Relay its output. Tell the
      owner the check keeps failing until that PR merges and their branch carries it.
    - **Agent teams env var unset** → explain the tradeoff in one line (richer team-led `implement`

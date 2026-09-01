@@ -54,7 +54,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    mdBook tree, comments, no behavior change — say so and offer to label it `type:docs` (recommend
    yes; a low-stakes default the owner can accept in one word). `activate` and `implement` both
    skip most of their heavyweight machinery for a `type:docs` issue — no architect design consult,
-   no design-choice stop, no 5-lens review panel, and (for most content-only docs work — the label
+   no design-choice stop, no review panel, and (for most content-only docs work — the label
    alone doesn't decide this; `activate` step 5 judges it from the issue's own scope) no OpenSpec
    spec generated at all — while still stopping at both owner seams as normal; see **Docs fast
    path** in `docs/workflow.md`. Not sure it's docs-only, or it touches behavior at all (even

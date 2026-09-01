@@ -32,10 +32,14 @@ usage() {
 
 # Required repo configuration, newline-delimited and pipe-separated: <relative path>|<what it is
 # for>. A later config file is one added line.
-REQUIRED_CONFIG='TESTING.md|the test and CI policy this repo runs on'
+REQUIRED_CONFIG='TESTING.md|the test and CI policy this repo runs on
+WORKFLOWS.md|the review panel and its gate this repo runs on'
 
 # The policy file `instruction` points at. Named separately from the registry because the pointer
-# is about this one file, while `check` walks all of them.
+# is about this one file (the test policy an agent needs quoted into a prompt), while `check` walks
+# all of them. Adding a config file does NOT mean adding it here — only a file some agent needs
+# pointed at mid-run belongs in this pointer. WORKFLOWS.md deliberately is not one: `implement`
+# reads it directly rather than quoting it into an agent prompt.
 POLICY_FILE='TESTING.md'
 
 # Self-located from BASH_SOURCE, in the manner of board.py's `Path(__file__).resolve().parent`, so
@@ -305,10 +309,12 @@ cmd_check() {
   # Ask git about the missing FILE, not the directory: a `spec-flow/` gitignore rule does not match
   # the bare directory name when the directory does not exist, but it does match a path beneath it.
   ignored=''
+  ignored_args=''
   while IFS='|' read -r path purpose state; do
     [[ -n "$path" ]] || continue
     if git -C "$root" check-ignore -q -- "$path" 2>/dev/null; then
       ignored='yes'
+      ignored_args="${ignored_args} ${path}"
     fi
   done <<<"$missing"
 
@@ -380,7 +386,10 @@ cmd_check() {
   if [[ -n "$ignored" ]]; then
     echo
     echo "Likely cause: that path is matched by a gitignore rule in this repo, so the configuration"
-    echo "cannot be committed. Run 'git check-ignore -v ${config_dir}/${POLICY_FILE}' to see which"
+    # Name the files actually found to be ignored, not a hardcoded one: pointing at TESTING.md
+    # when WORKFLOWS.md is the ignored file gives a command that finds no match and contradicts
+    # the diagnosis directly above it. `$ignored` holds the offending paths, one per line.
+    echo "cannot be committed. Run 'git check-ignore -v${ignored_args}' to see which"
     echo "rule. Note that 'spec-flow/' is the COMMITTED configuration directory and '.spec-flow/',"
     echo "with the leading dot, is the gitignored per-branch runtime state. Only the dotted one"
     echo "belongs in .gitignore. Those two names are literal here, whatever this repo's"

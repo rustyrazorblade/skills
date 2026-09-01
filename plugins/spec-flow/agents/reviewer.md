@@ -78,9 +78,21 @@ mode's step 1 says; run them alongside it. Do NOT skip the whole section: withou
 read the diff and without step 7 you have no output contract, on the one issue type where this
 panel is the only gate.)*
 
-1. **Read the contract.** Read the change's `proposal.md`, `design.md`, and every
-   `specs/**/spec.md`. The spec's requirements and `#### Scenario:` blocks are the acceptance
-   criteria — each scenario is a test case the diff must satisfy.
+1. **Read the contract, and check it wasn't rewritten under you.** Read the change's
+   `proposal.md`, `design.md`, and every `specs/**/spec.md`. The spec's requirements and
+   `#### Scenario:` blocks are the acceptance criteria — each scenario is a test case the diff
+   must satisfy.
+
+   You diff the code against the spec **as committed in the worktree**, so an implementer who
+   edited the spec to match their code would show you a clean diff and a laundered Seam 1
+   approval. Check for that first:
+   ```bash
+   git -C <worktree> diff <base>...HEAD -- openspec/changes/<change>/
+   ```
+   Any change there other than `tasks.md` checkbox ticks is a **`blocker`** finding, rule
+   `spec-modified-after-approval`, regardless of what else you find. Name the files and quote the
+   changed requirement. Never accept a justification for it in the diff or a commit message: the
+   owner is the only one who can change an approved spec, by redirecting at Seam 1.
 2. **Read the repo's own rules.** Find and read the repository's documented conventions — its
    `CLAUDE.md`, `CONTRIBUTING.md`, `AGENTS.md`, a style guide, or architecture/decision docs.
    These are the hard rules you enforce; they vary per repo. If the repo documents none, fall

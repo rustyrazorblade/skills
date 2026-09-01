@@ -12,12 +12,12 @@ This file is the canonical reference. The pipeline is implemented as the plugin'
 (`/spec-flow:groom|activate|implement|sync-ci|address|finalize|board|archive|setup`) plus a roster of agents: a
 `project-manager` central coordinator you talk to directly for cross-issue state and grooming, an
 `issue-pm` it spawns per issue to actually drive that issue's lifecycle (see **Coordinator and
-issue leads** below); `product-manager` and `architect` at the front of the pipeline (refine →
-design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a five-lens review
-panel of `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer` and
-`observability-reviewer` (the middle two wrap the built-in `/code-review` and `/security-review`
-skills, but are spawned as agents like the rest — see **the five lenses** below, and
-`implement.workflow.js`, which spawns all five by `agentType`).
+issue leads** below); `product-manager`, `architect` and `design-critic` at the front of the pipeline
+(refine → design → attack the design → proposal); `tdd-developer` and `build-engineer` for implementation/build; and a review panel
+whose members this repo names in its own `spec-flow/WORKFLOWS.md` — bundled lenses are `reviewer`,
+`code-reviewer`, `security-reviewer`, `test-rigor-reviewer` and `observability-reviewer` (the
+middle two wrap the built-in `/code-review` and `/security-review` skills, but are spawned as
+agents like the rest). See **Review panel** below.
 
 It rides on two backbones the consuming repo must provide: **OpenSpec** (the spec-approval seam,
 via the `openspec` CLI + the `/opsx:*` commands) and **GitHub** (`gh`-driven issues, labels, and
@@ -147,7 +147,11 @@ again on every parallel spawn. So:
   it cannot land in the primary checkout. It exists for hand-spawned sessions and worktrees
   predating this mechanism.
 
-**Design decision, before Seam 1.** `/spec-flow:activate` stops **twice**. First, right after the
+**Design decision, before Seam 1.** `design-critic` attacks the architect's plan first — the
+architect writes its own risks section, and the review panel only ever reviews code against the
+spec, so this is the one place a bad plan is caught before it becomes an approved one. Its findings
+are shown with the design options, not instead of them; the owner still decides.
+ `/spec-flow:activate` stops **twice**. First, right after the
 **`architect` agent** designs the work and surfaces options + trade-offs (with a relevant
 **domain-expert agent**, if one is available, consulted *concurrently* and adding deeper facts) —
 **you decide** among the options *before anything is generated*, so a chosen alternative can never
@@ -331,7 +335,7 @@ the book:
   and affected pages, never the prose that's actually going into the book.
 
 `implement` runs a single lightweight doc-writing pass either way instead of tdd-developer + the
-five-lens panel + build + polish — working `tasks.md` when a spec exists, or the issue's own
+review panel + build + polish — working `tasks.md` when a spec exists, or the issue's own
 acceptance criteria directly when it doesn't — with `architect` available **on demand** if the doc
 writer hits a real architecture question (not a mandatory gate). Seam 1 (spec approval, whichever
 form it took) and Seam 2 (review/merge) still apply exactly as normal either way — the fast path
@@ -629,7 +633,7 @@ it is still entirely your call.
 A `type:tech-debt` issue (filed by `/tech-debt` (dev-skills), confirmed by you one finding at a time
 before it ever became an issue) skips OpenSpec entirely — there's no behavior change to spec, so
 generating one would just be ceremony around a decision already made. It's still a real code
-change, so it still gets the full five-lens review panel at `implement` and a real PR at Seam 2;
+change, so it still gets the full review panel at `implement` and a real PR at Seam 2;
 only the OpenSpec-generation-and-approval machinery is what's skipped, replaced by narrower,
 cheaper checks that exist specifically to catch the one way this fast path could go wrong: a "pure
 refactor" that turns out not to be one.
@@ -745,7 +749,7 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   below).
 
 **Review panel** — `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer`,
-`observability-reviewer`; the five lenses run in parallel during `/spec-flow:implement`. Their
+`observability-reviewer`; the lenses this repo names run in parallel during `/spec-flow:implement`. Their
 individual mandates are described once, in full, in **Review panel** below — not repeated here.
 
 > If the consuming repo defines its own agent with one of these names (project or user scope),
@@ -839,13 +843,32 @@ Two modes, chosen by `SPEC_FLOW_IMPLEMENT_MODE` (`skills/implement/SKILL.md`, st
   way around. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (see **Prerequisites** in the
   README); missing that, `implement` falls back to `workflow` mode automatically.
 - **`workflow`** — the original `Workflow`-tool script (`skills/implement/implement.workflow.js`),
-  scripted rather than led. Same lenses, same rules, no team, no experimental flag needed.
+  scripted rather than led. Same lenses, same rules, no team, no experimental flag needed — it
+  cannot read files, so the lead derives the panel and gate from the repo's `WORKFLOWS.md` and
+  passes them in as args, the same way it passes the test-policy pointer. That is what stops the
+  two modes holding copies of the policy that drift apart.
 
-Either way, the review stage is not one reviewer — it is a **five-lens panel**; in team mode all
-five teammates run **in parallel** each round, in workflow mode the script runs all five the same
-way via `parallel()`. Their findings **merge** into one set; a fix round addresses every
-`blocker`/`major` from **any** lens; **approval requires every lens to approve with no must-fix
-findings.** The five lenses:
+Either way, the review stage is not one reviewer — it is a **panel**, and **the consuming repo
+decides who is on it.** Which lenses run, what counts as must-fix, and how many fix rounds are
+allowed all come from that repo's own `spec-flow/WORKFLOWS.md`. The plugin ships **no default
+panel**: if that file is absent the pipeline stops, exactly as it does for a missing
+`TESTING.md`. Same principle as the test policy — the pipeline carries the mechanism, the repo
+states the policy.
+
+What the plugin owns is the mechanism, and it is lens-count-agnostic: every lens runs **in
+parallel** each round (teammates in team mode, `parallel()` in workflow mode), findings **merge**
+into one set, a fix round addresses every must-fix finding from **any** lens, and **approval
+requires every lens the repo named to report and approve with no must-fix findings.** A lens that
+declines without naming a must-fix finding earns a synthesized `major`
+`unexplained-non-approval`. A named agent that cannot be resolved stops the run by name — never
+dropped, never substituted. A repo may state that **no** panel runs: then none does, no fix loop
+runs, and the PR says so rather than reporting an approval nobody gave.
+
+Each lens's own mandate and output contract stay plugin-owned, in its agent file — the repo's file
+says *which* lenses run and *what the panel does with their verdicts*, not how a lens forms one.
+
+The **bundled** lenses, which the seeding template proposes and this repo's own `WORKFLOWS.md`
+keeps:
 
 1. **spec** (`reviewer` agent) — spec-conformance + the repo's documented rules **and**
    spec-scenario → test traceability. Full mandate: `agents/reviewer.md`.
@@ -871,8 +894,10 @@ Each lens's full substance lives only in its agent file — `skills/implement/SK
 `implement.workflow.js` send only a short parameter stub (worktree/base/change/issue), never a
 restated mandate. `code-reviewer`/`security-reviewer` keep Skill-tool access (omit a restrictive
 `tools:` line) to invoke their built-in skills. Merge/approval logic generalizes over N lenses —
-only the spec lens owns `spec_conformance`/`tests_ran`. To add or remove a lens: write its agent
-file, then add a stub entry in both SKILL.md and `implement.workflow.js`'s `reviewLenses` array.
+only the spec lens owns `spec_conformance`/`tests_ran`. To add or remove a lens, **edit your repo's
+`spec-flow/WORKFLOWS.md`** — that is the whole procedure now, and it needs no change to the plugin.
+For a lens the plugin does not bundle, write its agent file in your repo's `.claude/agents/` and
+name it there; it runs on equal terms with a bundled one.
 
 ## Test policy
 
@@ -970,7 +995,7 @@ inspects or validates the policy's text.
 It defeats the direct attack, a policy file that tells an agent to push or post or fetch. It does
 not bound what the policy can ultimately cause, because *selecting commands is the whole capability*:
 a policy naming only `make lint` is entirely compliant while the same branch's `Makefile` does
-whatever it likes. The clause is also much stronger for the five review lenses, whose guardrails
+whatever it likes. The clause is also much stronger for the review lenses, whose guardrails
 forbid every outward action, than for the implementer teammates, whose guardrails deliberately
 permit pushing the issue branch.
 

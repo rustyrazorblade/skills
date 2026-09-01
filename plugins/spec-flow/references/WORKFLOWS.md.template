@@ -1,0 +1,65 @@
+# Seeding template — the default review panel
+
+Read this only during seeding. It describes the panel spec-flow has always run, written out so a
+repo can own it. It is a starting point, not a default: nothing in the pipeline reads this file,
+and a repo that never writes its own gets no panel at all.
+
+Copy the body below into the repo's `spec-flow/WORKFLOWS.md`, then edit it to what this repo
+actually wants. If the repo already has a review culture — a lens it does not need, a threshold it
+disagrees with — say that instead. An empty panel is a legitimate answer and is written out at the
+bottom.
+
+---
+
+# Review policy
+
+This repo owns this file. spec-flow reads it to decide who reviews an implementation and what has
+to be true before the work leaves the pipeline. Edit it freely; nothing here is spec-flow's to
+require.
+
+## The panel
+
+These lenses run **concurrently** on the branch diff, after implementation and before build:
+
+- **`reviewer`** — does the code do what the approved spec says, and does it follow this repo's
+  own documented conventions.
+- **`code-reviewer`** — correctness only: logic errors, boundary and edge cases, unhandled error
+  paths, concurrency and ordering, resource leaks.
+- **`security-reviewer`** — input validation, injection, tenant isolation, authorization, secret
+  and data exposure. It self-gates: on a diff touching no security-relevant surface it approves
+  without findings.
+- **`test-rigor-reviewer`** — whether the change's public surface and failure modes have tests
+  worth their cost, in both directions: missing coverage and over-built tests.
+- **`observability-reviewer`** — whether new code paths and failure modes are diagnosable in
+  production: logging at the right level and without leaking secrets, metrics on error paths,
+  nothing swallowed silently.
+
+A lens may be any agent this repo can resolve, including one defined in `.claude/agents/`. A named
+agent that cannot be resolved stops the run by name — it is never dropped or substituted.
+
+## The gate
+
+- **Must-fix** is every finding of severity `blocker` or `major`. `minor` and `nit` never block;
+  they are reported to the owner on the pull request.
+- The panel **approves** only when every lens reported, every lens approved, and must-fix is empty.
+  A lens that returns no result is never counted as an approval.
+- A lens that declines **without** naming a `blocker` or `major` earns a synthesized `major`
+  finding, `unexplained-non-approval`. Declining is a real verdict and has to be justified.
+- The panel runs at most **3 rounds**. The last round has no fix pass after it, so that is up to
+  two rounds of fixes: review, fix, review, fix, review. If the panel has not approved by then, the
+  pull request stays a draft, the outstanding findings go to the owner, and build and polish do not
+  run.
+
+## Exemptions
+
+- A **content-only `type:docs`** change skips the panel entirely — a single doc-writing pass runs
+  instead.
+- A **`type:tech-debt`** change runs the full panel in behavior-preservation mode: there is no
+  spec, so `reviewer` checks the diff against the issue's confirmed Direction and the existing test
+  suite rather than against generated scenarios.
+
+## If this repo wants no automated panel
+
+Replace everything above with a statement that no panel runs and the owner's own review is the
+gate. spec-flow will then go straight from implementation to build and polish, run no fix loop, and
+say plainly on the pull request that no panel ran. It will never report an approval nobody gave.

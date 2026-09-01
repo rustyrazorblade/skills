@@ -81,6 +81,9 @@ make_repo() {
   if [[ -n "$policy" ]]; then
     mkdir -p "$d/spec-flow"
     printf '%s' "$policy" > "$d/spec-flow/TESTING.md"
+    # Every entry in REQUIRED_CONFIG must be present for `check` to pass. A fixture that writes
+    # only one file tests "one config file is missing", not "the repo is configured".
+    printf '%s' "$policy" > "$d/spec-flow/WORKFLOWS.md"
   fi
   printf '%s' "$d"
 }
@@ -195,6 +198,7 @@ expect_contains "the pointer bounds the policy file's authority to naming comman
 d="$(make_repo relocated)"
 mkdir -p "$d/config/spec-flow-cfg"
 printf 'relocated policy\n' > "$d/config/spec-flow-cfg/TESTING.md"
+printf 'relocated policy\n' > "$d/config/spec-flow-cfg/WORKFLOWS.md"
 code=$( cd "$d" && SPEC_FLOW_CONFIG_DIR=config/spec-flow-cfg "$repo_config" check >/dev/null 2>&1; echo $? )
 expect_eq "SPEC_FLOW_CONFIG_DIR relocates where the policy is read from" 0 "$code"
 
@@ -292,6 +296,40 @@ expect_eq "an unconfigured repo still reports missing (1), not an environment er
 echo ""
 echo "=== repo-config.sh: exactly one policy filename resolves ==="
 
+# --- the registry holds a SET, so a repo can be half-configured ------------------------------
+# One file present and one missing is the common state during seeding, and the message has to give
+# the right remedy for each: seed the absent one, edit the present-but-unusable one.
+
+d=$(make_repo half-configured 'policy text')
+rm "$d/spec-flow/WORKFLOWS.md"
+half_out=$(cd "$d" && bash "$repo_config" check 2>&1 || true)
+half_code=$(run_code "$d" "$repo_config" check)
+expect_eq "a repo missing only WORKFLOWS.md fails the check" "1" "$half_code"
+expect_contains "the message names the missing file" "$half_out" "WORKFLOWS.md"
+# The check lists each unusable file on its own line, so assert on the LINE, not on a phrase that
+# never appears in the output at all. (This assertion previously matched "TESTING.md is", which the
+# output never contains in any state — so it passed whether or not the bug was present.)
+! echo "$half_out" | grep -qE '^[[:space:]]+.*spec-flow/TESTING\.md$'
+check "the message does not list the present file among the unusable ones" $?
+
+d=$(make_repo half-configured-other 'policy text')
+rm "$d/spec-flow/TESTING.md"
+half2_out=$(cd "$d" && bash "$repo_config" check 2>&1 || true)
+expect_contains "the mirror case names TESTING.md" "$half2_out" "TESTING.md"
+
+# Both missing: one message covering both, not two runs or two messages.
+d=$(make_repo neither-configured '')
+both_out=$(cd "$d" && bash "$repo_config" check 2>&1 || true)
+expect_contains "both-missing message names TESTING.md" "$both_out" "TESTING.md"
+expect_contains "both-missing message names WORKFLOWS.md" "$both_out" "WORKFLOWS.md"
+
+# A present-but-unusable second file must be distinguished from an absent one -- the remedy
+# differs (edit it, don't seed over it).
+d=$(make_repo workflows-empty 'policy text')
+printf '\n\n' > "$d/spec-flow/WORKFLOWS.md"
+empty_out=$(cd "$d" && bash "$repo_config" check 2>&1 || true)
+expect_contains "an empty WORKFLOWS.md is reported as present-but-empty" "$empty_out" "empty"
+
 # The rename from CI.md to TESTING.md is a clean break, by the owner's ruling: no alias, no
 # fallback, no did-you-mean. A repo carrying only the previous name is unconfigured and stops the
 # pipeline, exactly as one that never had a policy does. Asserted here because "we did not add a
@@ -360,9 +398,9 @@ expect_contains "seed-config's usage is its own, unshadowed by the sourced repo-
 
 printf '# comment only\n\n' > "$tmp_root/empty-policy.md"
 expect_eq "seeding refuses content empty once stripped, rather than seeding a failing policy" 2 \
-  "$(run_code "$d" "$seed_config" "$tmp_root/empty-policy.md")"
+  "$(run_code "$d" "$seed_config" "TESTING.md=$tmp_root/empty-policy.md")"
 expect_eq "seeding refuses a content file that does not exist" 2 \
-  "$(run_code "$d" "$seed_config" "$tmp_root/does-not-exist.md")"
+  "$(run_code "$d" "$seed_config" "TESTING.md=$tmp_root/does-not-exist.md")"
 
 echo ""
 echo "=== seed-config.sh: the full git/gh path, offline ==="
@@ -424,12 +462,17 @@ make_remote_pair() { # policy remote_name tag
   if [[ -n "$policy" ]]; then
     mkdir -p "$work/spec-flow"
     printf '%s' "$policy" > "$work/spec-flow/TESTING.md"
+    printf '%s' "$policy" > "$work/spec-flow/WORKFLOWS.md"
   fi
   git -C "$work" add -A >/dev/null
   git -C "$work" commit -qm initial
   git -C "$work" remote add "$remote_name" "$bare"
   git -C "$work" push -q "$remote_name" trunk
   printf '%s' "$work"
+}
+
+seed_branch_count_remote() {
+  git -C "$1" for-each-ref --format='%(refname:short)' refs/heads | grep -c '^spec-flow/' || true
 }
 
 seed_branch_count() {
@@ -443,7 +486,33 @@ bare="$tmp_root/remotes/happy.git"
 trunk_before="$(git -C "$bare" rev-parse trunk)"
 GH_STUB_LOG="$tmp_root/gh-happy.log"
 export GH_STUB_LOG
-expect_eq "seeding a clean repo succeeds" 0 "$(run_code "$work" "$seed_config" "$tmp_root/policy.md")"
+expect_eq "seeding a clean repo succeeds" 0 "$(run_code "$work" "$seed_config" "TESTING.md=$tmp_root/policy.md")"
+
+# --- the whole config set lands in ONE branch, ONE commit, ONE PR --------------------------------
+# The point of generalizing seed-config from one file to a set: a repo missing both config files
+# gets one confirmation and one PR, not a PR per file.
+# Own repo and own variable name -- `work` belongs to the happy-path case above and later cases
+# still read it.
+multi_work="$(make_remote_pair "" origin multiseed)"
+multi_code=$(run_code "$multi_work" "$seed_config" "TESTING.md=$tmp_root/policy.md" "WORKFLOWS.md=$tmp_root/policy.md")
+expect_eq "seeding two config files at once succeeds" 0 "$multi_code"
+expect_eq "seeding a set leaves exactly one seed branch" 1 "$(seed_branch_count_remote "$tmp_root/remotes/multiseed.git")"
+
+multi_work2="$(make_remote_pair "" origin multiseed2)"
+multi_out=$(run_stdout "$multi_work2" "$seed_config" "TESTING.md=$tmp_root/policy.md" "WORKFLOWS.md=$tmp_root/policy.md")
+expect_contains "the report names both seeded files" "$multi_out" "WORKFLOWS.md"
+expect_contains "the report names the first file too" "$multi_out" "TESTING.md"
+
+# A malformed pair is rejected before anything is created.
+expect_eq "a bare content file without <target>= is rejected" 2 \
+  "$(run_code "$multi_work2" "$seed_config" "$tmp_root/policy.md")"
+expect_eq "a target that escapes the config dir is rejected" 2 \
+  "$(run_code "$multi_work2" "$seed_config" "../escape.md=$tmp_root/policy.md")"
+
+# One valid pair and one unreadable pair must fail BEFORE a branch exists -- a half-populated
+# seeding branch is worse than none.
+expect_eq "a set with one unreadable file fails without seeding any of it" 2 \
+  "$(run_code "$multi_work2" "$seed_config" "TESTING.md=$tmp_root/policy.md" "WORKFLOWS.md=$tmp_root/does-not-exist.md")"
 
 # Assert what gh was actually CALLED with, not merely that it was called.
 gh_log="$(cat "$tmp_root/gh-happy.log" 2>/dev/null)"
@@ -478,8 +547,8 @@ expect_reports_recovery() { # label output branch
 work="$(make_remote_pair "" origin reports)"
 bare="$tmp_root/remotes/reports.git"
 trunk_before="$(git -C "$bare" rev-parse trunk)"
-fail_out="$( cd "$work" && GH_STUB_MODE=fail "$seed_config" "$tmp_root/policy.md" 2>&1 >/dev/null )"
-code=$( cd "$work" && GH_STUB_MODE=fail "$seed_config" "$tmp_root/policy.md" >/dev/null 2>&1; echo $? )
+fail_out="$( cd "$work" && GH_STUB_MODE=fail "$seed_config" "TESTING.md=$tmp_root/policy.md" 2>&1 >/dev/null )"
+code=$( cd "$work" && GH_STUB_MODE=fail "$seed_config" "TESTING.md=$tmp_root/policy.md" >/dev/null 2>&1; echo $? )
 expect_eq "a failed PR creation exits 2 with seed-config's own code, not gh's raw status" 2 "$code"
 expect_eq "a failed PR creation still never moves the default branch" "$trunk_before" "$(git -C "$bare" rev-parse trunk)"
 failed_branch="$(git -C "$bare" for-each-ref --format='%(refname:short)' refs/heads | grep '^spec-flow/' | head -n 1)"
@@ -492,7 +561,7 @@ expect_not_contains "a failed PR creation never claims to have deleted anything"
 work="$(make_remote_pair "" origin interrupted)"
 bare="$tmp_root/remotes/interrupted.git"
 trunk_before="$(git -C "$bare" rev-parse trunk)"
-interrupt_out="$( cd "$work" && GH_STUB_MODE=interrupt "$seed_config" "$tmp_root/policy.md" 2>&1 )"
+interrupt_out="$( cd "$work" && GH_STUB_MODE=interrupt "$seed_config" "TESTING.md=$tmp_root/policy.md" 2>&1 )"
 int_branch="$(git -C "$bare" for-each-ref --format='%(refname:short)' refs/heads | grep '^spec-flow/' | head -n 1)"
 expect_eq "an interrupt still never moves the default branch" "$trunk_before" "$(git -C "$bare" rev-parse trunk)"
 expect_reports_recovery "an interrupt during PR creation" "$interrupt_out" "$int_branch"
@@ -525,7 +594,7 @@ chmod +x "$push_int_bin/git"
 work="$(make_remote_pair "" origin push_interrupted)"
 bare="$tmp_root/remotes/push_interrupted.git"
 trunk_before="$(git -C "$bare" rev-parse trunk)"
-push_int_out="$( cd "$work" && PATH="$push_int_bin:$PATH" "$seed_config" "$tmp_root/policy.md" 2>&1 )"
+push_int_out="$( cd "$work" && PATH="$push_int_bin:$PATH" "$seed_config" "TESTING.md=$tmp_root/policy.md" 2>&1 )"
 push_int_branch="$(git -C "$bare" for-each-ref --format='%(refname:short)' refs/heads | grep '^spec-flow/' | head -n 1)"
 expect_eq "an interrupt DURING the push still never moves the default branch" \
   "$trunk_before" "$(git -C "$bare" rev-parse trunk)"
@@ -558,7 +627,7 @@ chmod +x "$unreachable_bin/git"
 work="$(make_remote_pair "" origin unreachable)"
 bare="$tmp_root/remotes/unreachable.git"
 trunk_before="$(git -C "$bare" rev-parse trunk)"
-unreachable_out="$( cd "$work" && PATH="$unreachable_bin:$PATH" GH_STUB_MODE=fail "$seed_config" "$tmp_root/policy.md" 2>&1 >/dev/null )"
+unreachable_out="$( cd "$work" && PATH="$unreachable_bin:$PATH" GH_STUB_MODE=fail "$seed_config" "TESTING.md=$tmp_root/policy.md" 2>&1 >/dev/null )"
 unreachable_branch="$(git -C "$bare" for-each-ref --format='%(refname:short)' refs/heads | grep '^spec-flow/' | head -n 1)"
 expect_eq "an unreachable remote still never moves the default branch" \
   "$trunk_before" "$(git -C "$bare" rev-parse trunk)"
@@ -568,12 +637,12 @@ expect_reports_recovery "a remote unreachable after the push" "$unreachable_out"
 work="$(make_remote_pair "" upstream nonorigin)"
 bare="$tmp_root/remotes/nonorigin.git"
 expect_eq "seeding works when the remote is not named 'origin'" 0 \
-  "$(run_code "$work" "$seed_config" "$tmp_root/policy.md")"
+  "$(run_code "$work" "$seed_config" "TESTING.md=$tmp_root/policy.md")"
 expect_eq "seeding pushes via the resolved remote, not a hardcoded 'origin'" 1 "$(seed_branch_count "$bare")"
 
 work="$(make_remote_pair "an existing policy line" origin already)"
 expect_eq "a repo that already owns a usable policy is left alone, exit 0" 0 \
-  "$(run_code "$work" "$seed_config" "$tmp_root/policy.md")"
+  "$(run_code "$work" "$seed_config" "TESTING.md=$tmp_root/policy.md")"
 expect_eq "a repo that already owns its policy gets no branch and no PR" 0 \
   "$(seed_branch_count "$tmp_root/remotes/already.git")"
 
@@ -582,8 +651,8 @@ work="$(make_remote_pair '# heading only
 
 ' origin committed_empty)"
 expect_eq "a committed but unusable policy exits 1 rather than claiming the repo is configured" 1 \
-  "$(run_code "$work" "$seed_config" "$tmp_root/policy.md")"
-out="$(run_stdout "$work" "$seed_config" "$tmp_root/policy.md")"
+  "$(run_code "$work" "$seed_config" "TESTING.md=$tmp_root/policy.md")"
+out="$(run_stdout "$work" "$seed_config" "TESTING.md=$tmp_root/policy.md")"
 expect_contains "seed-config's exit-1 message goes to stdout, where relaying callers read it" \
   "$out" "already committed"
 

@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per this run's `.spec-flow/owner-instructions`; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -248,6 +248,27 @@ qualify), and confirm the choice with the owner.
    raises a specific domain question neither agent already answered, follow up with a second,
    targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
 
+   **Then spawn `design-critic` on what the architect returned**, before step 4's stop —
+   **normal issues only.** Skip it on both fast paths: a `type:docs` issue has no design stop at
+   all, and a `type:tech-debt` issue auto-adopts a Direction the owner already confirmed item by
+   item, so there is nowhere for findings to render and nothing for them to change. The architect's
+   own three checks (hard dependency, material deviation, not behavior-preserving) remain that
+   path's guard. It cannot
+   run concurrently with the architect — it needs the design as input — so this is one extra serial
+   consult, and it is worth it: the architect writes its own "Risks & impact" section, which is the
+   same agent grading its own proposal. `design-critic` is the only step that attacks the plan
+   while changing it is still cheap; everything adversarial after this point reviews *code against
+   the spec* and never asks whether the spec was worth matching.
+
+   Give it the issue's scope + acceptance criteria and the architect's full design. It returns
+   findings ranked by severity plus a one-line verdict, and it may correctly return nothing. It
+   produces no competing design and decides nothing.
+
+   **A `blocker` finding does not stop the pipeline by itself** — it is an input to the owner's
+   decision at step 4, not a veto over it. Carry the findings into that stop verbatim (see step 4)
+   rather than resolving them yourself: the whole point is that the owner sees the design and its
+   holes together, before approving either.
+
 4. **Stop and route the decision to the owner — before generating anything.** (Skipped entirely for
    `type:docs`, per step 3.)
 
@@ -289,6 +310,19 @@ qualify), and confirm the choice with the owner.
    spec generated in step 5 embodies whatever the owner picks here, so a chosen alternative must
    never leave stale traces of the rejected recommendation in `tasks.md` or the scenarios. The
    agents never make the architectural call.
+
+   **Present `design-critic`'s findings with the options, not after them.** Render them verbatim,
+   ranked, with its one-line verdict — the owner is choosing between designs, and the holes in each
+   are part of what they are choosing between. Never summarize them into reassurance, and never
+   resolve a finding on the owner's behalf by picking the option it points at: a `blocker` here
+   informs the decision, it does not make it. If the critic returned nothing, say that in one line;
+   a clean verdict is a real result and the owner should see it was asked for.
+
+   If the owner picks an option the critic's findings were not written against — an alternative
+   rather than the recommendation — say so plainly. The findings were aimed at the design as
+   presented, so they may not apply to the path actually chosen. Offer a second `design-critic`
+   pass on that path before generating anything; it is cheap, and it is the only way the chosen
+   design gets the same scrutiny the recommended one did. If the owner declines, proceed.
 
    **Also present any nearby structural debt the architect flagged**, alongside the design options.
    For each item the architect marked "fold into this change," confirm with the owner and, if

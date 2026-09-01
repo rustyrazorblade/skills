@@ -1,10 +1,10 @@
 export const meta = {
   name: 'flow-implement',
-  description: 'Implement an approved OpenSpec change in its worktree: tdd-developer applies tasks test-first, a five-lens review panel (spec, code-review, security-review, test-rigor, observability) reviews in parallel, bounded fix loop, build-engineer gets the build clean, then docs polish.',
+  description: "Implement an approved OpenSpec change in its worktree: tdd-developer applies tasks test-first, the review panel this repo's spec-flow/WORKFLOWS.md names reviews the diff in parallel, bounded fix loop to that file's round cap, build-engineer gets the build clean, then docs polish.",
   phases: [
     { title: 'Implement', detail: 'tdd-developer applies the OpenSpec tasks test-first' },
-    { title: 'Review', detail: 'five-lens panel (spec, code-review, security-review, test-rigor, observability) checks the diff in parallel' },
-    { title: 'Fix', detail: 'tdd-developer resolves reviewer findings (bounded loop)' },
+    { title: 'Review', detail: "the panel this repo's WORKFLOWS.md names checks the diff in parallel" },
+    { title: 'Fix', detail: "tdd-developer resolves must-fix findings (bounded by this repo's round cap)" },
     { title: 'Build', detail: 'build-engineer runs the format/lint/build gate' },
     { title: 'Polish', detail: 'docs + final tidy' },
   ],
@@ -25,7 +25,7 @@ const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // base should always be passed explicitly (SKILL.md resolves the repo's actual default branch
 // and passes it) — 'origin/main' here is only a last-resort fallback if it's ever omitted, not
 // an assumption this repo uses `main`.
-const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto', breaker = 'ask', testInstruction } = _args
+const { worktree, change, issue, base = 'origin/main', buildSystem = 'auto', breaker = 'ask', testInstruction, panel, gate } = _args
 if (!worktree || !change || issue === undefined || issue === null) {
   // Fail fast — never run a review against an empty/clean tree and report a false blocker.
   throw new Error(
@@ -37,6 +37,38 @@ if (!worktree || !change || issue === undefined || issue === null) {
 // as an arg — SKILL.md step 3 generates it with `scripts/repo-config.sh instruction` and passes it
 // through verbatim. Refuse rather than substitute a literal of our own: a default here is exactly
 // the hardcoded policy this arg exists to remove.
+// The repo owns its review policy (spec-flow/WORKFLOWS.md) exactly as it owns its test policy.
+// This script cannot read files, and the policy is deliberately prose with no schema, so the LEAD
+// reads it and passes the derived panel and gate here. Refuse rather than substitute: a default
+// lens list here is precisely the hardcoded policy these args exist to remove.
+//
+// `panel` is an array of { label, agentType } in the order the repo's file names them. An EMPTY
+// array is a legitimate, first-class policy -- "no automated panel; the owner's review is the
+// gate" -- and is not the same as the arg being absent, which is a bug.
+if (!Array.isArray(panel)) {
+  throw new Error(
+    'flow-implement: missing required arg `panel`. It is the review panel derived from the ' +
+      "repo's own spec-flow/WORKFLOWS.md by skills/implement/SKILL.md, as an array of " +
+      '{ label, agentType }. Pass [] for a repo whose policy is that no automated panel runs. ' +
+      'This script has no default panel and will not invent one.',
+  )
+}
+for (const lens of panel) {
+  if (!lens || typeof lens.label !== 'string' || typeof lens.agentType !== 'string') {
+    throw new Error(
+      `flow-implement: every entry in \`panel\` needs a string label and agentType. Got: ${JSON.stringify(lens)}`,
+    )
+  }
+}
+// `gate` carries the thresholds the repo's file states. Same refusal for the same reason.
+if (!gate || !Array.isArray(gate.mustFixSeverities) || typeof gate.maxRounds !== 'number') {
+  throw new Error(
+    'flow-implement: missing or malformed required arg `gate`. Expected ' +
+      '{ mustFixSeverities: [...], maxRounds: <number> }, derived from the repo\'s own ' +
+      'spec-flow/WORKFLOWS.md. This script has no default gate and will not invent one.',
+  )
+}
+
 if (typeof testInstruction !== 'string' || !testInstruction.trim()) {
   throw new Error(
     'flow-implement: missing required arg `testInstruction`. It is the one-line pointer at the ' +
@@ -101,6 +133,10 @@ const REVIEW_SCHEMA = {
 // reach the owner. On seeing it the script returns immediately (below) rather than running the
 // panel — a fix round would spawn a FRESH agent whose "in this run" edit counter resets, which
 // would let it resume editing the very file the breaker just stopped.
+// An implementer reports this when a finding can only be resolved by changing the approved
+// spec -- i.e. the spec is wrong, not the code. Distinct from loop exhaustion: more rounds can
+// never fix it, and it needs the owner at Seam 1, not another fix agent.
+const SPEC_DEFECT_TOKEN = 'SPEC-DEFECT:'
 const BREAKER_STOP_TOKEN = 'BREAKER-STOP:'
 const BREAKER_SENTENCES = {
   ask: ` If you have edited the same test file more than twice in this run, STOP: leave the tree exactly as it is, do NOT revert, and return a summary whose FIRST characters are the exact token \`${BREAKER_STOP_TOKEN}\` followed by the blocker and the classification you could not make. Do not keep editing that file.`,
@@ -117,7 +153,7 @@ const BREAKER = Object.prototype.hasOwnProperty.call(BREAKER_SENTENCES, breaker)
 // worktree and never take outward/backlog actions. Prioritization + issue creation are the
 // owner's job (a dogfooding finding: agents were auto-creating GitHub issues with self-assigned
 // priorities).
-const GUARDRAILS = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints so CI runs on the already-open draft PR (push somewhat frequently — after a completed task or a few green cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
+const GUARDRAILS = `GUARDRAILS (strict): The approved spec is READ-ONLY: never create, edit, or delete anything under \`openspec/changes/${change}/\` to resolve a finding — not the spec, not its scenarios, not ac-coverage.md or overrides.md. The owner approved that spec at Seam 1 and the review panel diffs your code against it as committed, so editing it to match the code silently launders their approval instead of fixing anything. \`tasks.md\` checkboxes are the ONE exception — tick those as you go. If a finding can only be resolved by changing the spec, the spec is what's wrong: STOP and say so, prefixed \`SPEC-DEFECT:\`, naming the requirement and why the code cannot satisfy it as written. Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints so CI runs on the already-open draft PR (push somewhat frequently — after a completed task or a few green cycles — not on every commit). Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR (it is already open as a draft — leave it draft), do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
 // Review lenses are critics, not implementers — they must never commit or push (unlike
 // GUARDRAILS above, which permits checkpoint pushes for the tdd-developer/build-engineer phases),
@@ -174,6 +210,7 @@ function halt(what, detail, rounds, completed) {
       ? completed.tests_detail
       : `not assessed — ${what} stopped the run before review completed`,
     spec_conformance: completed ? completed.spec_conformance : 'unknown',
+    panel_ran: typeof panelRan === 'undefined' ? null : panelRan,
     approved: false,
     review_rounds: rounds,
     residual_findings: [detail],
@@ -184,6 +221,12 @@ function halt(what, detail, rounds, completed) {
     polish: 'n/a',
   }
 }
+
+// The fix-round guardrails for a type:tech-debt issue: no spec exists on that path, so the
+// spec-read-only rule and the SPEC-DEFECT instruction are omitted -- an agent told to report a
+// defect in a spec that does not exist can only produce nonsense. Distinct from the tech-debt
+// IMPLEMENT guardrails, which additionally permit opening the draft PR; a fix round must not.
+const GUARDRAILS_TECH_DEBT_FIX = `GUARDRAILS (strict): Operate ONLY inside the worktree, on the issue branch. You MAY \`git push\` the issue branch to its own remote at checkpoints. Do NOT create or edit GitHub issues, do NOT create/modify/mark-ready any PR, do NOT post GitHub comments, do NOT push to \`main\` or any branch other than the issue branch, and do NOT take any other outward or destructive action. If you discover follow-up work, related bugs, or candidate new issues, LIST them in your returned summary for the owner to triage — never file them yourself. Backlog creation and prioritization are the owner's job, not yours.`
 
 phase('Implement')
 let implementReturn = null
@@ -229,8 +272,17 @@ ${GUARDRAILS}`,
   )
 }
 
+// An implementer can hit a spec defect before the panel ever runs -- same exit, same reason.
+if (typeof implementReturn === 'string' && implementReturn.trim().startsWith(SPEC_DEFECT_TOKEN)) {
+  return halt(
+    'a spec defect',
+    `spec defect reported during Implement — the approved spec cannot be satisfied as written, so this returns to you rather than proceeding. Re-run /spec-flow:activate ${issue} to redirect at Seam 1: ${implementReturn.trim()}`,
+    0,
+  )
+}
+
 // A dead agent is not a successful one. `agent()` resolves to null when the subagent dies on a
-// terminal API error or the user skips it mid-run, so an unchecked return sends five review lenses
+// terminal API error or the user skips it mid-run, so an unchecked return sends the review lenses
 // and two fix rounds at a tree nobody implemented — and reports the resulting findings as if the
 // work had been attempted. Guarded for missing args at the top of this file; guard it here too.
 // MUST sit after BOTH branches above: it applies to whichever one ran.
@@ -243,13 +295,13 @@ if (implementReturn === null) {
 }
 
 // ── Phases: Review → Fix (bounded loop) ──────────────────────────────────────
-const MAX_ROUNDS = 3
+const MAX_ROUNDS = gate.maxRounds
 let review = null
 let round = 0
 const residual = []
 
-// Review is a PANEL of FIVE lenses (spec, code-review, security-review, test-rigor,
-// observability), run in parallel each round. Findings merge; a fix round addresses blocker/major
+// Review is a PANEL whose members come from the repo's own spec-flow/WORKFLOWS.md, run in
+// parallel each round. Findings merge; a fix round addresses blocker/major
 // from ANY lens; approval requires every lens to approve with no must-fix findings. The
 // merge/approval logic generalizes over N lenses — adding or removing a lens needs NO change to
 // the loop below. Full per-lens mandate: docs/workflow.md's "Review panel" section, or each
@@ -258,45 +310,34 @@ const residual = []
 // prompt when spawned by agentType, so each prompt below sends only the runtime values, never a
 // restatement (that restatement is exactly what used to drift between here, SKILL.md, the agent
 // file, and workflow.md).
-const reviewLenses = [
-  {
-    label: 'spec',
-    agentType: 'reviewer',
-    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
+// WHICH lenses run comes from the repo's spec-flow/WORKFLOWS.md, via the `panel` arg. HOW a lens
+// is briefed stays plugin-owned mechanism: every lens gets the same panel-mode prompt and the same
+// JSON output contract, which the repo's file explicitly does not govern. The spec lens alone
+// carries the extra approved-spec check, since only it diffs code against a spec.
+const SPEC_INTEGRITY_CHECK = isTechDebt ? '' : `
+FIRST, before reviewing anything else: the spec is the artifact the owner approved at Seam 1, and you diff the code against it AS COMMITTED — so an implementer who edits the spec to match their code silently launders that approval and you would see a clean diff. Check whether the approved spec was modified after approval:
+  git -C ${worktree} diff ${base}...HEAD -- openspec/changes/${change}/
+Any change there other than \`tasks.md\` checkbox ticks is a BLOCKER finding, rule "spec-modified-after-approval", whatever else you find. Name the files and quote the changed requirement. Do not accept a justification for it in the diff or a commit message; the owner is the only one who can change an approved spec, by redirecting at Seam 1.
+`
+const reviewLenses = panel.map(({ label, agentType }) => ({
+  label,
+  agentType,
+  prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
 Follow your agent definition's process and output contract exactly (JSON only).
+${agentType === 'reviewer' ? SPEC_INTEGRITY_CHECK : ''}
 ${testInstruction}`,
-  },
-  {
-    label: 'code-review',
-    agentType: 'code-reviewer',
-    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
-Follow your agent definition's process and output contract exactly (JSON only).
-${testInstruction}`,
-  },
-  {
-    label: 'security-review',
-    agentType: 'security-reviewer',
-    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
-Follow your agent definition's process and output contract exactly (JSON only).
-${testInstruction}`,
-  },
-  {
-    label: 'test-rigor',
-    agentType: 'test-rigor-reviewer',
-    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
-Follow your agent definition's process and output contract exactly (JSON only).
-${testInstruction}`,
-  },
-  {
-    label: 'observability',
-    agentType: 'observability-reviewer',
-    prompt: `Panel mode. worktree: ${worktree}. base: ${base}. change: "${change}". issue: #${issue}.
-Follow your agent definition's process and output contract exactly (JSON only).
-${testInstruction}`,
-  },
-]
+}))
 
-while (round < MAX_ROUNDS) {
+// An empty panel is a first-class policy, not a misconfiguration: a repo may state that no
+// automated review runs and the owner's own review is the gate. The loop is skipped entirely --
+// no lens, no fix round -- and the run goes straight to Build and Polish. What it must NOT do is
+// report an approval: nobody approved anything. `panelRan` keeps that distinction downstream.
+const panelRan = reviewLenses.length > 0
+if (!panelRan) {
+  log("Repo policy states no automated review panel runs — skipping Review and Fix. The owner's own review is the gate.")
+}
+
+while (panelRan && round < MAX_ROUNDS) {
   round++
   phase('Review')
   const lensResults = await parallel(
@@ -326,7 +367,10 @@ while (round < MAX_ROUNDS) {
     if (r && r.approve === false && !hasMustFix) {
       findings.push({
         id: `unexplained-${reviewLenses[i].label}`,
-        severity: 'major',
+        // Must be a severity THIS repo treats as must-fix, or the finding cannot do its job: on a
+        // blockers-only gate a hardcoded 'major' never enters mustFix, the lens's non-approval
+        // has nothing to point at, and the loop burns its rounds dispatching empty fix passes.
+        severity: gate.mustFixSeverities[0] || 'major',
         location: `(${reviewLenses[i].label} lens report)`,
         rule: 'unexplained-non-approval',
         problem: `${reviewLenses[i].label} lens returned approve=false with no findings (summary: ${r.summary || 'none given'})`,
@@ -334,17 +378,20 @@ while (round < MAX_ROUNDS) {
       })
     }
   })
-  const mustFix = findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
+  const mustFix = findings.filter(f => gate.mustFixSeverities.includes(f.severity))
   // Key WITHOUT severity: the same finding re-reported at a higher severity in a later round must
   // land on the same key, so escalating it into mustFix can remove it here. Keying on severity too
   // would leave the round-1 copy behind, and the PR body would list as "non-blocking" something
   // that was actually fixed.
   const key = f => `${f.location}|${f.rule}|${f.problem}`
   findings
-    .filter(f => f.severity === 'minor' || f.severity === 'nit')
+    .filter(f => !gate.mustFixSeverities.includes(f.severity))
     .forEach(f => nonBlocking.set(key(f), `[${f.severity}] ${f.location} (${f.rule}): ${f.problem}`))
   mustFix.forEach(f => nonBlocking.delete(key(f)))
-  const specLens = lensResults[0] // aligned with reviewLenses[0] (the spec reviewer)
+  // Identify the spec lens by the AGENT that owns spec conformance, never by position or label:
+// the panel comes from the repo's file, in the repo's order, with the repo's names.
+const specIdx = reviewLenses.findIndex(l => l.agentType === 'reviewer')
+const specLens = specIdx >= 0 ? lensResults[specIdx] : null
   review = {
     summary: lensResults
       .map((r, i) => `[${reviewLenses[i].label}] ${r ? r.summary : '(no result)'}`)
@@ -362,6 +409,18 @@ while (round < MAX_ROUNDS) {
   if (round >= MAX_ROUNDS) {
     residual.push(...mustFix.map(f => `[${f.severity}] ${f.location}: ${f.problem}`))
     if (missingLenses.length) residual.push(`lens(es) did not report: ${missingLenses.join(', ')}`)
+    break
+  }
+
+  if (mustFix.length === 0 && missingLenses.length === 0) {
+    // Not approved, nothing must-fix, no lens missing. Another round cannot change anything: the
+    // same inputs produce the same verdict, and a Fix agent would be handed an empty findings
+    // list. Stop and hand the disagreement to the owner instead of burning the remaining rounds.
+    residual.push(
+      'the panel did not approve, but reported no must-fix findings and no missing lenses — ' +
+        'a lens declined on something this repo\'s gate does not treat as blocking. Nothing to fix ' +
+        'automatically; this needs your call.',
+    )
     break
   }
 
@@ -383,12 +442,23 @@ Fix each, keep whatever the repo's policy names as the local gate green, commit 
 Push the branch at checkpoints so CI keeps running on the draft PR. Never touch main; leave the PR a draft. Return what you changed.
 ${testInstruction}
 
-${GUARDRAILS}${isTechDebt ? BREAKER : ''}`,
+${isTechDebt ? `${GUARDRAILS_TECH_DEBT_FIX}${BREAKER}` : GUARDRAILS}`,
     { agentType: 'tdd-developer', label: `fix:${change}#${round}`, phase: 'Fix' },
   )
   // The fix prompt carries the breaker on the tech-debt path, so a fix round can trip one. Its
   // return was discarded, so the trip was swallowed and the next round spawned a fresh developer
   // whose "in this run" counter reset -- resuming edits on the very file the breaker stopped.
+  if (typeof fixReturn === 'string' && fixReturn.trim().startsWith(SPEC_DEFECT_TOKEN)) {
+    // The spec itself is the problem, so more rounds cannot help -- the one thing that would
+    // resolve the finding (changing the spec) is exactly what GUARDRAILS forbids, and only the
+    // owner can do it by redirecting at Seam 1. Exit now with a category that says which.
+    return halt(
+      'a spec defect',
+      `spec defect reported in fix round ${round} — the approved spec cannot be satisfied as written, so this returns to you rather than looping. Re-run /spec-flow:activate ${issue} to redirect at Seam 1: ${fixReturn.trim()}`,
+      round,
+      review,
+    )
+  }
   if (typeof fixReturn === 'string' && fixReturn.trim().startsWith(BREAKER_STOP_TOKEN)) {
     return halt(
       'refactor circuit breaker',
@@ -410,7 +480,7 @@ ${GUARDRAILS}${isTechDebt ? BREAKER : ''}`,
 // regardless — that round's own Build phase runs again once it's actually approved, so running
 // Build/Polish now is pure waste: extra agent runs and commits on a tree already known to change.
 let polish = 'n/a'
-if (review && review.approve) {
+if (!panelRan || (review && review.approve)) {
   phase('Build')
   const buildHint = buildSystem && buildSystem !== 'auto' ? ` (build system: ${buildSystem})` : ''
   const buildReturn = await agentNS(
@@ -471,15 +541,26 @@ return {
   change,
   issue,
   tests_ran: review ? review.tests_ran : 'unknown',
-  tests_detail: review ? review.tests_detail : 'not assessed — no review round completed',
+  tests_detail: review
+    ? review.tests_detail
+    : (panelRan
+        ? 'not assessed — no review round completed'
+        : "not assessed — this repo's policy states no automated review panel runs"),
   spec_conformance: review ? review.spec_conformance : 'unknown',
-  approved: !!(review && review.approve && residual.length === 0),
+  // `approved` means the panel approved. With no panel there is no approval to report, however
+  // cleanly the run went -- saying otherwise would credit a review that never happened.
+  panel_ran: panelRan,
+  approved: panelRan ? !!(review && review.approve && residual.length === 0) : false,
   review_rounds: round,
   residual_findings: residual,
   // Deliberately non-blocking findings (e.g. test-rigor's over-testing/test-practicality flags)
   // from EVERY round, not just the last — these reach the owner in the PR body at Seam 2, and
   // reading only the final round silently dropped everything raised earlier in the run.
   non_blocking_findings: [...nonBlocking.values()],
-  review_summary: review ? review.summary : 'no review captured',
+  review_summary: review
+    ? review.summary
+    : (panelRan
+        ? 'no review captured'
+        : "No automated review panel ran: this repo's spec-flow/WORKFLOWS.md states that the owner's own review is the gate. Nothing here was reviewed by an agent."),
   polish: polish || 'n/a',
 }

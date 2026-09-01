@@ -102,7 +102,7 @@ exists specifically to work this issue without routing each step back through th
    follows the same auto-approve-only-if-instructed rule as everything else.)
 2. **Implement.** Once the spec is approved at Seam 1 — by the owner, or automatically per
    `.spec-flow/owner-instructions` — `/spec-flow:implement <N>` — you lead an **agent
-   team**: tdd-developer → five-lens review panel → bounded fix loop → build-engineer → docs
+   team**: tdd-developer → review panel → bounded fix loop → build-engineer → docs
    polish → PR. You can lead one precisely because you're your own top-level session, not a
    subagent — a subagent can never spawn its own team. Invoking it is the explicit opt-in to that
    team's cost; launch it only after approval.
@@ -147,7 +147,8 @@ an override that isn't actually written there.
 1. **Seam 1 — spec/plan approval.** `activate` has TWO owner stops, and they are NOT the same
    thing. Name them separately whenever you write or read an instruction:
    - **The design stop** (`activate` step 4) — where the architectural decision actually gets
-     made, before anything is generated. Skipped entirely on a `type:docs` issue; auto-adopts by
+     made, before anything is generated. `design-critic`'s findings are rendered with the options
+     here; they inform the choice and never make it. Skipped entirely on a `type:docs` issue; auto-adopts by
      default on a `type:tech-debt` one (see step 1 above). It is **not** Seam 1.
    - **Seam 1 itself** (`activate` step 7) — approval of the plan that came out of that choice:
      a committed spec, or on a content-only fast path the scope + acceptance criteria, or the

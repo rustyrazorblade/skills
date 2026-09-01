@@ -4,7 +4,11 @@
 # and had it CONFIRMED, and has written the confirmed content to a file; this script only moves it
 # onto a branch and opens a PR. It decides nothing about the content.
 #
-#   seed-config.sh <content-file>
+#   seed-config.sh <target>=<content-file> [<target>=<content-file> ...]
+#
+# One PR seeds the whole set: a repo missing both TESTING.md and WORKFLOWS.md gets one branch, one
+# commit and one PR, after one confirmation — not a PR per file. <target> is the file name inside
+# the resolved config dir (e.g. TESTING.md); <content-file> holds the confirmed content.
 #
 # It never commits or pushes to the default branch, never merges, and never touches the owner's
 # working tree or current branch: the commit is made in a throwaway detached worktree that is
@@ -45,13 +49,34 @@ set -euo pipefail
 # Named distinctly from repo-config.sh's own `usage`, which this script sources below and which
 # would otherwise silently replace this one.
 seed_usage() {
-  echo "usage: seed-config.sh <content-file>" >&2
-  echo "  <content-file>  a file holding the policy content the owner has already confirmed." >&2
+  echo "usage: seed-config.sh <target>=<content-file> [<target>=<content-file> ...]" >&2
+  echo "  <target>        the file name inside the config dir, e.g. TESTING.md" >&2
+  echo "  <content-file>  a file holding the content the owner has already confirmed" >&2
+  echo "  All pairs land in ONE branch, ONE commit and ONE pull request." >&2
   exit 2
 }
 
-content_file="${1:-}"
-[[ -n "$content_file" && $# -eq 1 ]] || seed_usage
+# Parse <target>=<content-file> pairs into two positional arrays kept in lock step. Bash 3.2 has
+# no associative arrays (macOS default), so two indexed arrays it is.
+[[ $# -ge 1 ]] || seed_usage
+seed_targets=()
+seed_sources=()
+for pair in "$@"; do
+  case "$pair" in
+    *=*) ;;
+    *) echo "seed-config: expected <target>=<content-file>, got '$pair'." >&2; seed_usage ;;
+  esac
+  t="${pair%%=*}"
+  f="${pair#*=}"
+  # The target is a bare file name inside the config dir. Reject anything that could escape it:
+  # this value becomes a path written inside a git worktree.
+  case "$t" in
+    ''|*/*|.|..) echo "seed-config: invalid target '$t' — expected a bare file name." >&2; exit 2 ;;
+  esac
+  [[ -n "$f" ]] || { echo "seed-config: no content file given for '$t'." >&2; exit 2; }
+  seed_targets+=("$t")
+  seed_sources+=("$f")
+done
 
 for bin in git gh; do
   command -v "$bin" >/dev/null 2>&1 || {
@@ -71,24 +96,40 @@ done
 # shellcheck source=repo-config.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repo-config.sh"
 
-[[ -f "$content_file" && -r "$content_file" ]] || {
-  echo "seed-config: '$content_file' is not a readable file." >&2
-  exit 2
-}
-config_usable "$content_file" || {
-  echo "seed-config: '$content_file' is empty once blank and comment lines are stripped. Seeding" >&2
-  echo "an empty policy would leave the repo failing its own check. Nothing written." >&2
-  exit 2
-}
+# Validate EVERY pair before writing anything: a set that is half-valid must fail before it
+# creates a branch, not halfway through populating one.
+i=0
+while [[ $i -lt ${#seed_sources[@]} ]]; do
+  f="${seed_sources[$i]}"
+  t="${seed_targets[$i]}"
+  [[ -f "$f" && -r "$f" ]] || {
+    echo "seed-config: '$f' (for ${t}) is not a readable file." >&2
+    exit 2
+  }
+  config_usable "$f" || {
+    echo "seed-config: '$f' (for ${t}) is empty once blank and comment lines are stripped." >&2
+    echo "Seeding an empty policy would leave the repo failing its own check. Nothing written." >&2
+    exit 2
+  }
+  i=$((i + 1))
+done
 
 root=$(resolve_repo_root)
 config_dir=$(resolve_config_dir)
-rel_path="${config_dir}/${POLICY_FILE}"
+# Every target, repo-relative, for the commit/PR text and the message on failure.
+rel_paths=()
+i=0
+while [[ $i -lt ${#seed_targets[@]} ]]; do
+  rel_paths+=("${config_dir}/${seed_targets[$i]}")
+  i=$((i + 1))
+done
+rel_path="${rel_paths[0]}"   # the first, for messages that name a single representative path
 
 work_dir=$(mktemp -d)
 work_tree="${work_dir}/seed"
 branch=''
 pushed=''
+pending_list=''   # set once the pending set is known; cleanup may run before that
 remote='origin'
 default_br=''
 cleanup_done=''
@@ -115,7 +156,7 @@ cleanup() {
   if [[ -n "$pushed" && -n "$branch" ]]; then
     echo "seed-config: no pull request was opened for the branch this run pushed." >&2
     echo "  branch: ${branch}  (on ${remote})" >&2
-    echo "It holds one commit adding ${rel_path}. Nothing was committed or pushed to" >&2
+    echo "It holds one commit adding ${pending_list:-$rel_path}. Nothing was committed or pushed to" >&2
     echo "${default_br:-the default branch}, and nothing was merged." >&2
     echo "Either open the pull request yourself:" >&2
     echo "  gh pr create --head ${branch} --base ${default_br}" >&2
@@ -198,17 +239,27 @@ esac
 step="fetching ${remote}/${default_br}"
 git -C "$root" fetch --quiet "$remote" "$default_br"
 
-step="reading ${rel_path} from ${remote}/${default_br}"
+# Probe each target on the default branch. A file already present and usable is skipped, not
+# overwritten -- seeding must never clobber a policy the repo already owns. A file present but
+# UNUSABLE stops the whole run: a second copy is not what is wrong there.
+step="reading the config set from ${remote}/${default_br}"
 committed_probe="${work_dir}/committed-policy"
-if git -C "$root" cat-file -e "${remote}/${default_br}:${rel_path}" 2>/dev/null; then
-  git -C "$root" cat-file -p "${remote}/${default_br}:${rel_path}" >"$committed_probe" 2>/dev/null
-  probe_state=0
-  config_state "$committed_probe" || probe_state=$?
-  if [[ "$probe_state" -eq 0 ]]; then
-    echo "seed-config: this repo already owns its policy — '${rel_path}' is on ${remote}/${default_br}."
-    echo "Nothing changed, no branch created, no PR opened."
-    exit 0
-  fi
+pending_targets=()
+pending_sources=()
+skipped=()
+i=0
+while [[ $i -lt ${#seed_targets[@]} ]]; do
+  t_rel="${rel_paths[$i]}"
+  if git -C "$root" cat-file -e "${remote}/${default_br}:${t_rel}" 2>/dev/null; then
+    git -C "$root" cat-file -p "${remote}/${default_br}:${t_rel}" >"$committed_probe" 2>/dev/null
+    probe_state=0
+    config_state "$committed_probe" || probe_state=$?
+    if [[ "$probe_state" -eq 0 ]]; then
+      skipped+=("$t_rel")
+      i=$((i + 1))
+      continue
+    fi
+    rel_path="$t_rel"
   # Exit 1 carries its message on STDOUT, matching repo-config.sh's convention and what the relaying
   # callers are written against — a caller capturing stdout alone must not relay an empty string.
   echo "seed-config: '${rel_path}' is already committed on ${remote}/${default_br}. Checking it: it is"
@@ -217,8 +268,21 @@ if git -C "$root" cat-file -e "${remote}/${default_br}:${rel_path}" 2>/dev/null;
   echo "Seeding cannot help — a second copy is not what is wrong. Edit the committed file so it"
   echo "states this repo's policy, or delete it from ${remote}/${default_br} and run this again."
   echo "Nothing was changed and no PR was opened."
-  exit 1
+    exit 1
+  fi
+  pending_targets+=("$t_rel")
+  pending_sources+=("${seed_sources[$i]}")
+  i=$((i + 1))
+done
+
+# Everything the caller asked for is already on the default branch and usable.
+if [[ ${#pending_targets[@]} -eq 0 ]]; then
+  echo "seed-config: this repo already owns its policy — ${skipped[*]} already on ${remote}/${default_br}."
+  echo "Nothing changed, no branch created, no PR opened."
+  exit 0
 fi
+rel_path="${pending_targets[0]}"
+pending_list=$(printf '%s, ' "${pending_targets[@]}"); pending_list="${pending_list%, }"
 
 branch="spec-flow/seed-config-$(date +%Y%m%d%H%M%S)-$$"
 
@@ -227,21 +291,27 @@ branch="spec-flow/seed-config-$(date +%Y%m%d%H%M%S)-$$"
 step="creating a temporary worktree from ${remote}/${default_br}"
 git -C "$root" worktree add --quiet --detach "$work_tree" "${remote}/${default_br}"
 
-step="writing ${rel_path} in the temporary worktree"
-mkdir -p "$(dirname "${work_tree}/${rel_path}")"
-cat "$content_file" >"${work_tree}/${rel_path}"
+step="writing ${pending_list} in the temporary worktree"
+i=0
+while [[ $i -lt ${#pending_targets[@]} ]]; do
+  mkdir -p "$(dirname "${work_tree}/${pending_targets[$i]}")"
+  cat "${pending_sources[$i]}" >"${work_tree}/${pending_targets[$i]}"
+  i=$((i + 1))
+done
 
-step="committing ${rel_path}"
-git -C "$work_tree" add -- "$rel_path"
-if [[ -z "$(git -C "$work_tree" status --porcelain -- "$rel_path")" ]]; then
-  echo "seed-config: '${rel_path}' is unchanged from ${remote}/${default_br}. Nothing to commit."
+step="committing ${pending_list}"
+git -C "$work_tree" add -- "${pending_targets[@]}"
+if [[ -z "$(git -C "$work_tree" status --porcelain -- "${pending_targets[@]}")" ]]; then
+  echo "seed-config: ${pending_list} unchanged from ${remote}/${default_br}. Nothing to commit."
   exit 1
 fi
-git -C "$work_tree" commit --quiet -m "spec-flow: this repo states its own test and CI policy
+# Title names the set, not one file: this commit may add one config file or several, and a title
+# hardcoded to "test and CI policy" was wrong the moment a second policy file existed.
+git -C "$work_tree" commit --quiet -m "spec-flow: this repo states its own policy
 
-Adds ${rel_path}, the policy spec-flow reads at the start of every run. spec-flow
-ships no default and falls back to nothing, so this file is what the pipeline
-obeys. Every line of it is this repo's to change."
+Adds ${pending_list} — the policy spec-flow reads at the start of every run. spec-flow
+ships no default and falls back to nothing, so these files are what the pipeline
+obeys. Every line of them is this repo's to change."
 
 step="pushing ${branch} to ${remote}"
 # Set BEFORE the push, not after. Bash defers a signal handler until the running foreground command
@@ -254,12 +324,12 @@ step="pushing ${branch} to ${remote}"
 pushed='yes'
 git -C "$work_tree" push --quiet "$remote" "HEAD:refs/heads/${branch}"
 
-echo "seed-config: pushed branch ${branch} to ${remote}, holding one commit that adds ${rel_path}."
+echo "seed-config: pushed branch ${branch} to ${remote}, holding one commit that adds ${pending_list}."
 
 step="opening the pull request"
 pr_url=$(gh pr create --head "$branch" --base "$default_br" \
-  --title "spec-flow: this repo states its own test and CI policy" \
-  --body "Adds \`${rel_path}\`, this repo's own test and CI policy.
+  --title "spec-flow: this repo states its own policy" \
+  --body "Adds ${pending_list}, this repo's own spec-flow policy.
 
 spec-flow reads this file at the start of every run. It ships no default and falls back to nothing,
 so this file is the only thing the pipeline obeys — and every line of it is yours to change,
@@ -273,6 +343,6 @@ say-so. Review it as you would any other PR; nothing merges it for you.")
 pushed=''
 
 echo "seed-config: opened ${pr_url}"
-echo "Branch ${branch} holds ${rel_path}. Nothing was committed or pushed to ${default_br}, and"
+echo "Branch ${branch} holds ${pending_list}. Nothing was committed or pushed to ${default_br}, and"
 echo "nothing was merged. The check keeps failing until this PR lands on ${default_br} and the"
 echo "branch you are working on carries it."

@@ -195,7 +195,7 @@ for state.
 Two goals drive every decision you make, and they're in tension — optimize only for speed and
 quality slips; optimize only for quality and the owner sits idle waiting on one thing at a time.
 
-- **Quality, structurally enforced.** The spec seam and the 5-lens review panel exist so
+- **Quality, structurally enforced.** The spec seam and the review panel exist so
   correctness, security, test rigor, and observability are checked by construction, not by
   vigilance — the owner shouldn't have to remember to ask "did anyone check for X." Never let an
   owner shortcut ("just skip the review panel this once") erode that; surface the tradeoff instead

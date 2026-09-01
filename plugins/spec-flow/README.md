@@ -8,7 +8,7 @@ agents you invoke turn-by-turn.
 ```
 groom ─▶ activate ─▶ [SEAM 1: you approve the spec] ─▶ implement ─▶ [SEAM 2: you review + squash-merge] ─▶ finalize
   │          │                                              │
-refine     design                                  5-lens review panel
+refine     design                                  review panel (repo-defined)
 (product)  (architect)
 ```
 
@@ -54,14 +54,14 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
 - **Built-in skills** — `/code-review` and `/security-review` are used by two of the review
   lenses (they degrade to an inline pass if unavailable).
 - **Agent teams (optional, default mode)** — `/spec-flow:implement` defaults to running its
-  five-lens review as an [agent team](https://code.claude.com/docs/en/agent-teams) led by
+  review panel as an [agent team](https://code.claude.com/docs/en/agent-teams) led by
   `issue-pm`, which requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (experimental, disabled by
   default):
   ```json
   { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
   ```
   in the consuming repo's (or your own) `settings.json`. Not set? `implement` falls back to the
-  bundled `Workflow`-tool script automatically — same five lenses, no team. Set
+  bundled `Workflow`-tool script automatically — same panel, no team. Set
   `SPEC_FLOW_IMPLEMENT_MODE=workflow` to use that mode on purpose instead of relying on fallback.
 - **`spec-flow/TESTING.md` — this repo's own test and CI policy.** spec-flow ships **no default
   policy and no fallback**: the repo states what runs locally, what runs in CI, whether CI is a test
@@ -131,7 +131,7 @@ All skills are namespaced under the plugin:
 |---|---|
 | `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Grills shape-defining ambiguity one question at a time with a recommended default; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
 | `/spec-flow:activate <N>` | Claim it → review it with you (scope/AC freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions) → worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless the docs' own layout is changing or it documents a tech change — otherwise it's just a quick review of the issue's own scope. A `type:tech-debt` issue always skips spec generation, and by default the design stop too — architect auto-adopts the confirmed Direction unless something's actually wrong. |
-| `/spec-flow:implement <N>` | After approval: background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
+| `/spec-flow:implement <N>` | After approval: background team (tdd-developer → the review panel your `spec-flow/WORKFLOWS.md` names → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Runs when you notice CI go red, or when `issue-pm` notices itself (a single check tied to its own push, not a poll loop) — either way the fix confirms the flagged test locally before pushing again. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |

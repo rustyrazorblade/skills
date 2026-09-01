@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an approved issue — run tdd-developer → 5-lens review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. A type:tech-debt issue runs the full review panel as normal (behavior-preservation mode, no spec) but works from the issue's own Direction instead of tasks.md, and opens its own draft PR after the first commit since none exists yet. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the plan first — a committed spec, or for a content-only type:docs/type:tech-debt issue, its scope + acceptance criteria (or Direction). Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
+description: Implement an approved issue — run tdd-developer → review panel → fix loop → build-engineer → docs polish in the issue's own worktree, then push the branch and open a PR. Defaults to an agent team led by issue-pm (SPEC_FLOW_IMPLEMENT_MODE=team, requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1); falls back automatically, or via SPEC_FLOW_IMPLEMENT_MODE=workflow, to the original Workflow-tool script. A type:docs issue instead runs a single lightweight doc-writing pass with architect available on demand, skipping the review panel/build/polish entirely. A type:tech-debt issue runs the full review panel as normal (behavior-preservation mode, no spec) but works from the issue's own Direction instead of tasks.md, and opens its own draft PR after the first commit since none exists yet. Third stage of the flow delivery workflow (see docs/workflow.md). Requires the owner to have approved the plan first — a committed spec, or for a content-only type:docs/type:tech-debt issue, its scope + acceptance criteria (or Direction). Invoking this skill is the explicit opt-in to that orchestration, whichever mode.
 argument-hint: [issue number, with its plan already approved]
 ---
 
@@ -14,7 +14,7 @@ open a review-ready PR — by default as an **agent team** you lead (see step 4)
 what running as your own top-level session (not a subagent) makes possible at all: a team needs a
 lead, only a top-level session can be one, and a subagent can never spawn its own team. Where
 agent teams aren't available or wanted, the same work runs instead as the original `Workflow`-tool
-script — same five lenses, same rules, no team. **Invoking this skill is the owner's explicit
+script — same panel, same rules, no team. **Invoking this skill is the owner's explicit
 opt-in** to that orchestration, whichever mode it resolves to.
 
 Input: an issue number `#N`, normally with an OpenSpec change `issue-<N>` — deterministic, from
@@ -115,7 +115,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh instruction
    ```
    That stdout — one line — is the **TEST INSTRUCTION**. Append it **verbatim** to the prompt of
-   every teammate you spawn below that runs tests: the implementer, every fix round, the five
+   every teammate you spawn below that runs tests: the implementer, every fix round, the
    review lenses, and step 5's `fix-ci`. (`build-engineer` gets the same line too, for its format
    and lint gate rather than for tests — step 4e says why. That is the only teammate outside this
    list, so do not read this list as forbidding it.) Do not paraphrase it, summarize it, or wrap it
@@ -143,7 +143,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
    **Docs fast path.** If the issue carries `type:docs` (set at `groom`, carried through
    `activate` — see **Docs fast path** in `docs/workflow.md`), skip everything else in this step —
-   Team/Workflow mode, the five-lens panel, the fix loop, Build, Polish — entirely and run this
+   Team/Workflow mode, the review panel, the fix loop, Build, Polish — entirely and run this
    instead. **Mode-independent**: it's one plain subagent spawn (the Agent tool, `tdd-developer`
    agent type, same mechanism `activate` step 3 uses for `architect`), not an agent-team teammate,
    so `SPEC_FLOW_IMPLEMENT_MODE`/`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` don't apply here.
@@ -177,7 +177,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       documented (step 5 uses it in place of `review_summary`), then go straight to step 5 — no
       review panel, no build step. A docs-only change has no code to lint/build/review through five
       lenses built for behavior.
-   This is the ONLY thing that skips the five-lens panel — every other issue, however small, still
+   This is the ONLY thing that skips the review panel — every other issue, however small, still
    goes through it in full. **A `type:tech-debt` issue does NOT take this docs branch** — it still
    needs real code review, so it goes through the normal Implement → Review → Fix → Build → Polish
    sequence below like any other issue; the only difference is what `CHANGE_PARAM` resolves to.
@@ -224,7 +224,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    `SPEC_FLOW_IMPLEMENT_MODE` — `team` (default) or `workflow`. `team` is an agent team led by
    you, spawned fresh each run — richer (teammates message each other, self-claim work) but
    experimental and token-heavier. `workflow` is the original bounded `Workflow`-tool script
-   (`implement.workflow.js`) — the same five lenses and the same merge/approve/fix-loop rules,
+   (`implement.workflow.js`) — the same panel and the same merge/approve/fix-loop rules,
    just scripted instead of reasoned through, for when agent teams aren't available or wanted. If
    the env var is unset or `team` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is **not** set, fall
    back to `workflow` automatically and say so — don't fail the run over a missing opt-in flag.
@@ -245,7 +245,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    printed in step 2, not a shell variable (don't assume `main`); the review lenses diff
    `base...HEAD` in the worktree, so a wrong base reviews
    the wrong range. Track `tests_ran`, `tests_detail`, `spec_conformance`, `approve`,
-   `review_rounds`, `residual_findings`, `non_blocking_findings`, and `review_summary` as you go —
+   `review_rounds`, `residual_findings`, `non_blocking_findings`, `panel_ran`, and `review_summary`
+   as you go —
    step 5's PR body needs them; there's no script returning them for you now.
 
    **GUARDRAILS (implementer teammates — tdd-developer, build-engineer):**
@@ -260,6 +261,14 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    > work, related bugs, or
    > candidate new issues, LIST them in your final report for the owner to triage — never file
    > them yourself. Backlog creation and prioritization are the owner's job, not yours.
+   > **The approved spec is READ-ONLY** (omit this sentence for a `type:tech-debt` issue, which has
+   > no spec): never create, edit, or delete anything under `openspec/changes/<change>/` to resolve
+   > a finding — not the spec, not its scenarios, not `ac-coverage.md` or `overrides.md`. The owner
+   > approved that spec at Seam 1 and the review panel diffs your code against it as committed, so
+   > editing it to match the code silently launders their approval instead of fixing anything.
+   > `tasks.md` checkboxes are the ONE exception — tick those as you go. If a finding can only be
+   > resolved by changing the spec, the spec is what's wrong: STOP and say so, prefixed
+   > `SPEC-DEFECT:`, naming the requirement and why the code cannot satisfy it as written.
 
    **On a tech-debt run in Team mode**, append the **BREAKER SENTENCE** resolved above to this
    block for the implementer spawns only — step 4a's Implement, every fix round in step 4d, and
@@ -309,9 +318,16 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       real commit to open it against. Do this before moving to step b, so CI starts running while
       the panel reviews.
 
-   b. **Review — five lenses, spawned together, every round.** Once Implement's task is complete,
-      spawn all five teammates in one message so they run in parallel, each depending on
-      Implement's task in the shared task list (so none can start early), each told to reply to
+   b. **Review — the panel this repo names, spawned together, every round.** **Read
+      `spec-flow/WORKFLOWS.md` first** (via `${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh
+      instruction`'s directory, or `SPEC_FLOW_CONFIG_DIR` when set — the same file step 0's check
+      already required). It states which lenses run, what counts as must-fix, and the round cap.
+      **This plugin ships no default panel**: if you cannot read that file, stop and say so — do
+      not fall back to a list of your own. The five below are what the seeding template proposes,
+      not what the pipeline requires.
+
+      Spawn the lenses that file names, all in one message so they run in parallel, each depending
+      on Implement's task in the shared task list (so none can start early), each told to reply to
       you with **exactly** this JSON contract in its final message before marking its task
       complete — and nothing else:
       ```
@@ -339,7 +355,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       and must guess a test command — the hardcoded-policy behavior this whole change removes. The
       five, named `spec`, `code-review`, `security-review`, `test-rigor`, `observability`:
 
-      All five are backed by this plugin's own agent definitions (`agents/reviewer.md`,
+      The bundled ones are backed by this plugin's own agent definitions (`agents/reviewer.md`,
       `code-reviewer.md`, `security-reviewer.md`, `test-rigor-reviewer.md`,
       `observability-reviewer.md`). Spawning by that agent type already applies its full mandate,
       process, and output contract as the teammate's system prompt, so every spawn prompt below
@@ -358,6 +374,9 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       informational context, same as any other diff-review run. Only the teammate name and backing
       agent type vary otherwise:
 
+      The bundled lenses and their backing agents — use whichever subset this repo's file names,
+      and resolve any agent it names that isn't here from `.claude/agents/` on equal terms:
+
       | Teammate | Agent |
       |---|---|
       | `spec` | `reviewer` |
@@ -366,9 +385,19 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       | `test-rigor` | `test-rigor-reviewer` |
       | `observability` | `observability-reviewer` |
 
+      **A lens the repo names that you cannot resolve stops the run, by name.** Never drop it and
+      never substitute another — the same refusal the pipeline gives for an unresolvable
+      `SPEC_FLOW_DEVELOPER_AGENT`. A panel silently one lens short is worse than a stopped run.
+
+      **If the repo's file states that no panel runs**, spawn nothing: skip this step and step c
+      and d entirely, go straight to step e (Build), and in step 5's PR body say plainly that no
+      review panel ran because that is this repo's policy. Never report an approval — nobody
+      approved anything.
+
    c. **Merge and gate.** Once every review task is complete — or a teammate goes idle without
       reporting, which counts exactly like a missing lens, never silently dropped from the vote —
-      parse each teammate's JSON from its message to you. Merge `findings` across all five.
+      parse each teammate's JSON from its message to you. Merge `findings` across every lens the
+      repo's file named.
       **Before computing `mustFix`: any lens that reported `approve: false` with NO blocker/major
       finding among what it reported** (the spec lens can do this — it requires
       `spec_conformance: "full"` to approve, so a `"partial"` verdict alone sets `approve: false`
@@ -380,19 +409,34 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       "unexplained-non-approval", problem: "<lens> lens returned approve=false with no findings
       (summary: <its summary>)", fix: "Re-review and either approve, or report a specific blocking
       finding."}`. Add these to `findings` alongside whatever each lens actually reported, THEN
-      compute `mustFix` = every `blocker`/`major` finding (including synthesized ones). **Approve**
-      only if every one of the five reported AND every `approve` is `true` AND `mustFix` is empty.
+      compute `mustFix` = every finding at the severities **this repo's `WORKFLOWS.md` names as
+      must-fix** — and synthesize the `unexplained-non-approval` finding at the FIRST of those
+      severities, never a fixed `major`: on a blockers-only gate a `major` would never enter
+      `mustFix`, leaving the non-approval with nothing to act on (including synthesized ones); the seeded default is `blocker` plus `major`.
+      **Approve** only if every lens the repo named reported AND every `approve` is `true` AND
+      `mustFix` is empty. Never count a lens the repo removed as missing, and never count a lens
+      that returned no result as an approval.
       Either way, post the round's result as a comment:
       `gh issue comment <N> --body "✅ Review panel approved (round <R>)."` or
       `gh issue comment <N> --body "🔁 Review round <R>: <M> must-fix finding(s), fixing…"`.
 
-   d. **Fix — bounded, max 3 rounds.** Not approved and a round remains (start at round 1, cap at
-      3): `mustFix` non-empty → message the `tdd-developer` teammate (respawn it, named `fix-N`,
+   d. **Fix — bounded by this repo's round cap.** The cap comes from `WORKFLOWS.md` (the seeded
+      default is 3). Not approved and a round remains: `mustFix` non-empty → message the `tdd-developer` teammate (respawn it, named `fix-N`,
       if it already shut down) with the consolidated `mustFix` list (severity, location, rule,
       problem, suggested fix for each), the TEST INSTRUCTION, and the implementer GUARDRAILS —
       resolve each, test-first where behavior changes, commit, push at checkpoints. Then go back
       to step b for a fresh review round. `mustFix` empty but a lens is simply missing → skip
-      straight back to step b, nothing to fix yet. At round 3 with still no approval: stop,
+      straight back to step b, nothing to fix yet. **Not approved, `mustFix` empty AND no lens
+      missing** — reachable when a lens declines over something this repo's gate does not treat as
+      must-fix — **stop the loop**: another round has the same inputs and produces the same verdict,
+      and a fix teammate would be handed an empty list. Take step 5's gate failure path and tell the
+      owner a lens declined on a non-blocking finding, so it needs their call. **If any implementer's report contains
+      `SPEC-DEFECT:`, stop the loop immediately** — the approved spec is what's wrong, more rounds
+      cannot fix it (the one change that would resolve the finding is the one GUARDRAILS forbids),
+      and only the owner can change it. Take step 5's gate failure path with that report as the
+      residual finding, and tell the owner plainly that this is a spec defect, not an
+      implementation failure: the next step is `/spec-flow:activate <N>` to redirect at Seam 1, not
+      a re-run of implement. At the repo's round cap with still no approval: stop,
       collect the outstanding `mustFix` findings (plus which lens(es) never reported) as
       **residual**, and skip straight to step 5's **gate** — do not run Build/Polish on a tree
       that's going through another round regardless. The gate fails on this path, so step 5 stops
@@ -449,10 +493,28 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        "base":     "origin/<DEFAULT_BR>",
        "buildSystem": "auto",
        "breaker":  "<BREAKER_PARAM — \"ask\" (default) or \"revert\" on the tech-debt path; \"off\" on the normal path>",
-       "testInstruction": "<the TEST INSTRUCTION — step 3's stdout, pasted verbatim, on one line>"
+       "testInstruction": "<the TEST INSTRUCTION — step 3's stdout, pasted verbatim, on one line>",
+       "panel": [
+         {"label": "spec",             "agentType": "reviewer"},
+         {"label": "code-review",      "agentType": "code-reviewer"},
+         {"label": "security-review",  "agentType": "security-reviewer"},
+         {"label": "test-rigor",       "agentType": "test-rigor-reviewer"},
+         {"label": "observability",    "agentType": "observability-reviewer"}
+       ],
+       "gate": {"mustFixSeverities": ["blocker", "major"], "maxRounds": 3}
      }
    }
    ```
+   **`panel` and `gate` are derived by YOU from this repo's `spec-flow/WORKFLOWS.md`** — the values
+   shown above are what the seeding template proposes, not a default to paste blind. Read that file
+   and write the lenses it names, in its order, with the gate thresholds it states. A repo whose
+   policy is that no automated panel runs gets `"panel": []`, which is valid and means exactly
+   that: the script spawns nothing, runs no fix loop, goes straight to Build and Polish, and
+   reports that no panel ran rather than an approval. Both are **required**: the script cannot read
+   files, so it throws rather than substituting a panel of its own — the same contract as
+   `testInstruction`, and for the same reason. This is what stops Workflow mode and Team mode
+   holding two copies of the policy that drift apart.
+
    `testInstruction` is **required**. The script cannot read files or the environment, so this is
    the only way the repo's policy reaches Workflow mode, and the script throws rather than
    substituting a default of its own. Paste step 3's stdout exactly as printed: it is one line, and
@@ -461,7 +523,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    JSON string, or a shell command — so pasting it as-is into the JSON value below is safe. A space
    in the path is fine and does not need quoting here.
    The script runs the identical sequence as Team mode above — tdd-developer implements test-first
-   → the same five-lens panel reviews the diff in parallel, each lens the same prompt and JSON
+   → the same panel reviews the diff in parallel, each lens the same prompt and JSON
    contract as Team mode's step b → the same bounded (3-round) fix loop → build-engineer gets the
    build clean → docs polish — as a scripted `agent()`/`parallel()` loop instead of you reasoning
    through it as a team lead. It returns a summary object (`tests_ran`, `tests_detail`, `spec_conformance`,
@@ -482,7 +544,10 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    **Gate — check this first, before any command below.** Every path into this step must pass it,
    including the "skip straight to step 5" route out of step 4d. Answer all four:
 
-   - Did the review panel approve? (Or, on the docs fast path, did step 4c report done?)
+   - Did the review panel approve? (Or, on the docs fast path, did step 4c report done? Or does
+     this repo's `WORKFLOWS.md` state that **no panel runs** — in which case there is no approval
+     to wait for and this question does not apply. Workflow mode reports that as
+     `panel_ran: false`.)
    - Did the run reach here without a refactor circuit breaker trip, in Implement or in any fix
      round?
    - Did every agent this run depended on actually return a result, rather than dying or being

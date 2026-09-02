@@ -12,24 +12,19 @@ anything.
 
 ## Steps
 
-1. **Run the board script — it owns every `gh`/`git`/`claude` call and the entire join.** No raw
-   GitHub JSON belongs in your context for this skill; the script fetches issues, PRs (correlated
-   via `closingIssuesReferences`, not branch-name guessing), CI rollups, local `claude agents`
-   sessions, and the OpenSpec archive-pending count, joins all of it, and prints the finished board
-   text — bucketed (BLOCKED ON YOU / IN FLIGHT / READY / BACKLOG / EPICS), priority-sorted, with
-   "next up" and stalled/blocked/needs-attention already computed:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/board.py
-   ```
-   Print its stdout directly to the owner — **this IS the board, not raw material to reformat or
-   re-derive.** Pass `--user <login>` only if the owner explicitly wants it scoped to someone other
-   than the authenticated `gh` user; the default (the authenticated user) is almost always right.
-
-2. **Add the one judgment call the script can't make.** If its "Next up" line picked a BACKLOG
-   issue to groom (nothing higher up the ladder was available), look at that issue and say in one
-   line whether it looks too large to spec and land as one unit — suggest splitting it into smaller
-   issues if so. This is genuine judgment (reading the issue's substance), not something
-   mechanical; everything else in the render already reflects the rules below.
+**Run the board script — it owns every `gh`/`git`/`claude` call and the entire join.** No raw
+GitHub JSON belongs in your context for this skill; the script fetches issues, PRs (correlated
+via `closingIssuesReferences`, not branch-name guessing), CI rollups, local `claude agents`
+sessions, and the OpenSpec archive-pending count, joins all of it, and prints the finished board
+text — bucketed (BLOCKED ON YOU / IN FLIGHT / READY), priority-sorted, with "next up",
+stalled/blocked/needs-attention, and counts for the unbounded categories (ungroomed backlog,
+epics) already computed:
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/board.py
+```
+Print its stdout directly to the owner — **this IS the board, not raw material to reformat or
+re-derive.** Pass `--user <login>` only if the owner explicitly wants it scoped to someone other
+than the authenticated `gh` user; the default (the authenticated user) is almost always right.
 
 ## Rules
 

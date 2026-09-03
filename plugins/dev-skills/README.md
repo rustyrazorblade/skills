@@ -38,6 +38,7 @@ resolve in any repo where the plugin is installed.
 |-------|---------|
 | `/refactor [target]` | Behavior-preserving change, in any language. |
 | `/tech-debt [path]` | Repo-wide structural audit: review agents find SOLID, duplication, and layering problems, rank the 10 most impactful, drop anything already an open issue, and walk you through the rest one at a time. You decide per finding whether to file it |
+| `/complexity-reduction [target] [--refactor]` | Measure cognitive complexity and duplication with PMD (Java) or `rust-code-analysis-cli` (Rust), over a subsystem or a diff. Reports functions at or above 15 and stops; `--refactor` opts into pure-move extraction with a re-measure after every step. |
 | `/ide-explain <issue-N \| base-ref> [docs...]` | An IDE-style HTML view of an issue, a diff, docs, or any mix. |
 | `/walkthrough [what to walk through]` | A diagram-first, ordered-step presentation. |
 | `/prose-review [target] [--fix]` | Grade prose against `prose-style.md`. Reports by default. |

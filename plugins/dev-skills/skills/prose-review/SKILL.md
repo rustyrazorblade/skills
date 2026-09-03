@@ -18,6 +18,9 @@ Jon passes `--fix`.
 
 You judge words.  You never judge code, and you never edit code.
 
+Grader agents do the grading.  You resolve the scope, you merge their findings, and you apply them.
+Sections 1 to 5 and 8 to 9 are your work.  Sections 6 and 7 are the contract you hand to a grader.
+
 ## 1. Read the style reference first
 
 `prose-style.md` is the authority.  Read the whole file before you grade a single passage.  Do not
@@ -32,6 +35,9 @@ Find it in this order:
 A repo's own copy always wins; the bundled copy is the fallback, so the skill works in a repo that
 has no copy of its own.  Never hardcode a path to a copy in some other repo.  If you find no copy
 at all, stop and say so.  Do not substitute general style knowledge.
+
+Resolve the path to an absolute path and keep it.  Every grader gets that path and reads the file
+itself.  Never paste the file's contents into a prompt, and never summarise it for a grader.
 
 Every rule below is a pointer into that file, not a replacement for it.  When the two disagree,
 `prose-style.md` wins.
@@ -81,8 +87,8 @@ bad one, and leave it alone.
 
 ## 4. Run the Axis 1 pre-pass
 
-Axis 1 violations are the highest severity and the cheapest to find.  Grep the in-scope files for
-the tells:
+Axis 1 violations are the highest severity and the cheapest to find.  Run this pre-pass yourself,
+once, over the whole scope, before you fan out.  Grep the in-scope files for the tells:
 
 ```
 grep -nEi '(previously|formerly|used to|originally|in the first version|as of v|now correct|changed from|per review|review feedback|no longer|refactored|improved|new implementation|updated to)' <files>
@@ -94,12 +100,61 @@ Treat every hit as a candidate, not a verdict.  "No longer" and "instead of" hav
 hit is a violation only when it references this branch's own unmerged history.  A reference to
 merged history, a shipped release, or an open upstream bug is legitimate permanent context.
 
+Split the hits by file and hand each grader the hits for its own files.  A grader still greps its
+own artifact; your pass gives it a head start and gives you the whole-scope picture the shards
+cannot see.
+
 Read `prose-style.md`'s squash-target section before you judge a contrast drawn against a sibling
 commit.  A fixup commit that exists only to correct an earlier commit on the same unmerged branch is
 itself an Axis 1 violation, whatever its wording.  Report it and point at `/squash`.  Never rewrite
 history to fix it yourself; see the guardrails.
 
-## 5. Grade each passage
+## 5. Fan out the grading
+
+You never grade.  Every verdict comes from a grader agent.
+
+Spawn every agent in one message, so they run at the same time.  Each one is
+`subagent_type: general-purpose`, `model: opus`.  Grading rewrites prose against a style authority;
+that needs the strongest tier, not a fast lookup.
+
+**One grader per file shard.**  Sort the in-scope files by path.  Deal them into shards of at most
+eight files.  Cap the fan-out at six graders; past 48 files the shards grow instead of the agent
+count.  A one-file scope still gets one grader; you do not grade it yourself.
+
+Shard by whole files, never by line range.  A grader needs the whole file to check an anchor and to
+check a referent.
+
+**One agent per opt-in artifact.**  `--commits`, `--pr`, and `--notes` each get their own agent,
+spawned alongside the file graders.  Release notes are prose in a file, so that agent works from the
+file, not from the diff alone.
+
+Every prompt carries, verbatim:
+
+- The absolute path to `prose-style.md` from section 1, and the instruction to read the whole file
+  before grading a single passage.
+- The agent's own file list, or its own artifact.
+- The section 4 grep hits for its own files, marked as candidates, not verdicts.
+- The base revision and the scope rule from section 3, so it can tell an added line from a
+  pre-existing one.
+- Sections 6 and 7 of this skill: the grading contract, and the never-touch list.
+- The finding format from section 8, and the instruction to return findings only.
+
+No grader edits anything, ever, `--fix` included.  State that in every prompt.  Snapshot the tree
+before you spawn:
+
+```
+git status --porcelain
+```
+
+Hold that output.  Run it again after the last agent returns and compare.  Any difference means an
+agent wrote to the tree against instruction.  Stop, show Jon the difference, and apply nothing.
+
+Print the fan-out before you spawn: the grader count, and the files each one gets.
+
+## 6. The grading contract
+
+Hand this section to every grader verbatim.  It is written for the grader, so "you" means the
+grader.
 
 Follow this order.  It exists because `prose-style.md` says to regenerate, not to patch; a rewrite
 that starts from the old wording inherits the old residue.
@@ -148,9 +203,15 @@ to grade against.
 - **flag** — you cannot verify the fact the passage encodes.  Leave it exactly as it is and report
   it.
 
-Give every verdict except **keep** its full replacement text in the report, even without `--fix`.
-The replacement is the finding.  A finding that only names the problem makes Jon do the regeneration
-this skill exists to do.
+Give every verdict except **keep** its full replacement text, even without `--fix`.  The replacement
+is the finding.  A finding that only names the problem makes Jon do the regeneration this skill
+exists to do.
+
+A **relocate** whose target file sits outside your own shard is a **flag** instead.  Name the target
+and say you could not see it.
+
+Quote the exact existing text for every finding, character for character, so the main thread can
+match it without a line number.  A cut shifts every line below it.
 
 ### Two rules that override the cutting instinct
 
@@ -160,7 +221,9 @@ show.  Deleting it destroys the only copy.  Flag it instead.
 **Never invent a fact.**  If a replacement would assert something you have not read in the code, do
 not assert it.
 
-## 6. Never touch these
+## 7. Never touch these
+
+Part of the grading contract.  Hand it to every grader with section 6.
 
 - The Apache licence header.
 - Generated files, and vendored or third-party source.
@@ -170,7 +233,22 @@ not assert it.
 - Commented-out code.  That is a code question, not a prose question.  Report it and move on.
 - Any line of code, in any way, for any reason.
 
-## 7. Report
+## 8. Merge and report
+
+Collect every agent's findings.  Do this work yourself; never hand a merge to an agent.
+
+Merge rules:
+
+- Sort by file path, then by line.  Shard boundaries never appear in the report.
+- Graders do not share files, so two findings never cover one passage.  If they do, one grader
+  strayed outside its shard: drop the stray finding and say so.
+- Check every cross-shard **relocate** and every **flag** that names a target outside its grader's
+  shard.  Read the target yourself.  Keep the verdict if it holds; downgrade it to a **flag** if it
+  does not.
+- Normalise the severities against `prose-style.md` yourself.  Two graders grade the same violation
+  at the same severity or the report is not readable.
+- Send a finding back to its own grader, once, if it arrives without its full replacement text or
+  without the exact existing text.  Never write the replacement yourself.
 
 Without `--fix`, stop here.  Group by file, then by artifact:
 
@@ -191,21 +269,25 @@ release-note passage that is false or unactionable; `[M]` for a change in what t
 away; `[L]` for pure STE mechanics.  Do not rank the findings by urgency and do not recommend an
 order; Jon decides that.
 
-Then list separately, under a **Left alone** heading:
+Then list separately, under a **Left alone** heading, merging every agent's own list into one:
 
-- Every **flag** verdict, with the reason you could not verify it.
-- Every commented-out block you found.
-- Every out-of-scope bad passage you noticed, including one in an artifact Jon did not select.
+- Every **flag** verdict, with the reason it could not be verified.
+- Every commented-out block any grader found.
+- Every out-of-scope bad passage any grader noticed, including one in an artifact Jon did not
+  select.
 
-## 8. Apply, with `--fix` only
+## 9. Apply, with `--fix` only
+
+You apply the edits.  You are the only writer.  Never spawn an agent to edit, and never reopen a
+grader to apply its own finding.
 
 Apply what you reported, artifact by artifact.  Report first, then edit — never edit a passage you
 did not report.
 
 **Comments, javadoc, and release notes.**  Edit one file at a time.  Match the exact existing text
-and replace it; do not edit by line number, because a cut shifts every line below it.  Match the
-surrounding comment conventions — capitalisation, `//` against `/* */`, indentation.  House
-convention wins over personal preference.
+the grader quoted and replace it; do not edit by line number, because a cut shifts every line below
+it.  Match the surrounding comment conventions — capitalisation, `//` against `/* */`, indentation.
+House convention wins over personal preference.
 
 **The PR description.**  Outward-facing.  Show the replacement body and get Jon's word before you
 run `gh pr edit <n> --body`.
@@ -235,8 +317,12 @@ Close with a one-line tally: `Applied 3 changes across 1 file.  Diff verified: c
 
 - Judge words.  Never edit code.
 - Report by default.  Edit only with `--fix`.
+- Every verdict comes from a grader.  Every edit comes from you.  Never swap the two.
+- A grader never edits, never commits, and never leaves its own shard.
+- One round of graders per run.  Never respawn a shard for a second opinion; send a single finding
+  back to its own grader instead.
 - Never commit and never push.  Jon reviews with `git diff` and commits himself.
 - Never rewrite git history, even with `--fix`.
 - Never widen the scope, or the artifact set, past what Jon named.
-- If the review would change more than roughly 40 passages, say so and confirm the scope before you
-  start editing.
+- If the merged report would change more than roughly 40 passages, say so and confirm the scope
+  before you start editing.

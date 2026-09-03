@@ -47,6 +47,10 @@ before anything is deleted, and it carries a standing contract that binds the ca
 whole run: triage a failing test from the spec, never edit one to make it go green, and revert
 instead of grinding.
 
+`/prose-review` fans out. It shards the in-scope files across parallel grader agents, and gives
+each opt-in artifact its own agent. The main thread resolves the scope, merges the findings, and
+is the only writer.
+
 `ide-explain` and `walkthrough` each render one self-contained HTML page. No server, no CDN; it opens
 over `file://`.
 

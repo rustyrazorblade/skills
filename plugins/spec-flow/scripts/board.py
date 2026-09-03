@@ -5,10 +5,15 @@ Moves everything `board/SKILL.md` used to make the model do by hand — pulling 
 list`/`gh pr list` JSON into context, joining it against PR/CI state and local sessions, bucketing
 by lifecycle, computing "next up"/"blocked on you"/"stalled", and formatting the final board text —
 into one script. The model runs this and prints its stdout; it never sees the raw GitHub JSON and
-never hand-writes a join script. Stdlib only, shells out to `gh`/`git`/`claude`.
+never hand-writes a join script. `render_board()` is one function per rendered section, and every
+section renders only when it has something to report — no empty header, no zero count, no
+placeholder line. The two unbounded categories (the ungroomed backlog and the epic list) report as
+counts in the summary line rather than as rows, so the board's rendered length does not grow with
+the backlog. `prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead
+of one-by-one inside `build_rows()`. Stdlib only, shells out to `gh`/`git`/`claude`.
 
 THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked on you",
-"stalled", "claimed", the "next up" ladder, epic exclusion and PR/CI correlation. Each rule is
+"stalled", "claimed", what "next up" recommends, epic exclusion and PR/CI correlation. Each rule is
 stated in a comment beside the code that implements it. skills/board/SKILL.md covers how to invoke
 this and what to do with the output; it deliberately does not restate the rules, so the two cannot
 drift apart.
@@ -35,6 +40,17 @@ STATUS_ORDER = ["spec-review", "in-review", "in-progress", "addressing", "ready"
 # opposite of what a stale-leftover tie-break is for.
 LIFECYCLE_ORDER = ["ready", "spec-review", "in-progress", "in-review", "addressing"]
 PRIORITY_ORDER = ["P0", "P1", "P2", "P3"]
+# Rendered instead of the literal label text. A keycap is three codepoints -- the digit, U+FE0F and
+# U+20E3 -- but a terminal draws it in about two cells, so format-width padding (`:3`) pads a
+# prioritized row differently from an unprioritized one and every column after it drifts. Emit the
+# keycap followed by a literal space instead, and PRIORITY_BLANK when there is no priority label:
+# all four keycaps are the same width, so the columns line up without measuring anything.
+PRIORITY_KEYCAP = {"P0": "0️⃣", "P1": "1️⃣", "P2": "2️⃣", "P3": "3️⃣"}
+PRIORITY_BLANK = "  "
+
+
+def keycap(priority):
+    return PRIORITY_KEYCAP.get(priority, PRIORITY_BLANK)
 
 
 def fail(message):
@@ -65,7 +81,7 @@ PR_LIMIT = 200
 
 def fetch_issues():
     return gh_json(["issue", "list", "--state", "open", "--json",
-                     "number,title,labels,url,assignees,subIssuesSummary,subIssues",
+                     "number,title,labels,url,assignees,subIssuesSummary",
                      "--limit", str(ISSUE_LIMIT)], default=[])
 
 
@@ -112,12 +128,34 @@ def fetch_archive_pending():
 
 
 def last_comment_matching(number, prefix=None):
+    args = ["issue", "view", str(number), "--json", "comments"]
     try:
-        comments = json.loads(run(["gh", "issue", "view", str(number), "--json", "comments"])).get("comments", [])
-    except subprocess.CalledProcessError:
+        comments = json.loads(run(["gh", *args])).get("comments", [])
+    except subprocess.CalledProcessError as e:
+        print(f"board: warning: 'gh {' '.join(args)}' failed, continuing without it: {e.stderr.strip()}", file=sys.stderr)
+        return None
+    except json.JSONDecodeError as e:
+        print(f"board: warning: 'gh {' '.join(args)}' returned malformed JSON, continuing without it: {e}", file=sys.stderr)
         return None
     candidates = [c.get("body", "") for c in comments if not prefix or c.get("body", "").startswith(prefix)]
     return candidates[-1] if candidates else None
+
+
+def prefetch_notes(issues):
+    blocked_numbers = [i["number"] for i in issues if "blocked" in label_names(i)]
+    attention_numbers = [i["number"] for i in issues if "needs-attention" in label_names(i)]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        blocked_futures = {n: pool.submit(last_comment_matching, n, "⛔ Blocked on") for n in blocked_numbers}
+        # Must filter by prefix. Without one this returns the last comment of ANY kind, and
+        # the pipeline posts several after an attention request, so the row shows an
+        # unrelated line. issue-manager posts the request with this prefix; see
+        # agents/issue-manager.md.
+        attention_futures = {n: pool.submit(last_comment_matching, n, "🆘 Needs attention")
+                             for n in attention_numbers}
+    return (
+        {n: f.result() for n, f in blocked_futures.items()},
+        {n: f.result() for n, f in attention_futures.items()},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -222,9 +260,6 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             "assignee": assignee,
             "mine": me is not None and assignee == me,
             "is_epic": is_epic,
-            "sub_issues": issue.get("subIssues", {}).get("nodes", []) if is_epic else [],
-            "sub_total": (issue.get("subIssuesSummary") or {}).get("total", 0),
-            "sub_completed": (issue.get("subIssuesSummary") or {}).get("completed", 0),
             "agent_active": "agent:active" in labels,
             "blocked": "blocked" in labels,
             "needs_attention": "needs-attention" in labels,
@@ -284,7 +319,7 @@ def liveness_marker(row):
 
 
 def render_row(row):
-    bits = [f"{row['status'] or '(no status)':13} #{row['number']:<5} {row['priority'] or '--':3} {row['title']}"]
+    bits = [f"{row['status'] or '(no status)':13} #{row['number']:<5} {keycap(row['priority'])} {row['title']}"]
     bits.append(f"@{row['assignee']}" if row["assignee"] else "(unclaimed)")
     if row["pr_number"]:
         ci_marker = {"green": "✅ CI", "running": "⏳ CI", "failing": "❌ CI"}[row["ci"]]
@@ -301,13 +336,141 @@ def render_row(row):
     return "  " + "  ".join(b for b in bits if b)
 
 
+def render_blocked_on_you(blocked_on_you):
+    out = []
+    if blocked_on_you:
+        out.append("⛳ BLOCKED ON YOU")
+        for r in blocked_on_you:
+            out.append(render_row(r))
+        out.append("")
+    return out
+
+
+def render_unrecognized(unrecognized):
+    out = []
+    if unrecognized:
+        out.append("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)")
+        for r in unrecognized:
+            out.append(render_row(r))
+        out.append("")
+    return out
+
+
+def render_in_flight(in_flight):
+    out = []
+    if in_flight:
+        out.append("🔧 IN FLIGHT (agents / CI)")
+        for r in in_flight:
+            out.append(render_row(r))
+        out.append("")
+    return out
+
+
+def render_ready(ready_rows):
+    out = []
+    if ready_rows:
+        out.append("📋 READY")
+        for r in ready_rows:
+            out.append(render_row(r))
+        out.append("")
+    return out
+
+
+# --- Next up (never an epic) ---------------------------------------------------------------
+# (verb, row, action) — rendered as a header plus one `- <number>: <title> → <action>` line, so
+# the title is never wedged between two colons in a single sentence. See the convention in
+# docs/workflow.md.
+def compute_next_up(ready_rows):
+    # The ONE thing the board recommends: an unclaimed status:ready issue, highest priority first.
+    # It is the only work on the board with no owner at all. Merging a green PR, unblocking a
+    # stopped agent and grooming a backlog issue were each recommended here once, and each names
+    # work another agent already drives -- that issue's own issue-manager, or the backlog's. The
+    # board reports state; it does not direct work it does not drive. See design.md, D4.
+    unclaimed_ready = [r for r in ready_rows if r["assignee"] is None]
+    if not unclaimed_ready:
+        return None
+    unclaimed_ready.sort(key=lambda r: priority_key(r["priority"]))
+    top = unclaimed_ready[0]
+    return ("activate", top, f"/spec-flow:activate {top['number']}")
+
+
+def count_bit(n, singular, plural=None):
+    # A zero count renders nothing at all. `blocked: 0` makes the reader parse a number to learn
+    # that nothing happened; an absent entry reports the same thing by saying nothing.
+    if not n:
+        return None
+    return f"{n} {singular if n == 1 else (plural or singular + 's')}"
+
+
+def render_summary(non_epics, blocked_rows, backlog, epics):
+    # The ungroomed backlog and the epic list appear here and nowhere else. Both grow without
+    # bound -- the delivery buckets above are bounded by how many agents can run at once, these are
+    # bounded by nothing -- so they report as a number and the board's length stops tracking the
+    # size of the backlog. See design.md, D2.
+    summary_bits = [
+        count_bit(len(backlog), "ungroomed", "ungroomed"),
+        count_bit(len(epics), "epic"),
+        count_bit(sum(1 for r in non_epics if r["agent_active"]), "agent:active", "agent:active"),
+        count_bit(len(blocked_rows), "blocked", "blocked"),
+        count_bit(sum(1 for r in non_epics if r["needs_attention"]), "needs-attention", "needs-attention"),
+        count_bit(sum(1 for r in non_epics if r["attach_id"]), "local session matched", "local sessions matched"),
+        count_bit(sum(1 for r in non_epics if r["pr_number"]), "open PR"),
+    ]
+    summary_bits = [b for b in summary_bits if b]
+    if not summary_bits:
+        return []
+    return ["(" + " · ".join(summary_bits) + ")"]
+
+
+def render_archive_suggestion(archive_pending):
+    # Its own line rather than a summary entry, and only when something is actually pending: the
+    # absent line is the report. On screen there is something to archive; off screen there is not,
+    # with no `specs pending archive: 0` to read past either way.
+    if not archive_pending:
+        return []
+    noun = "spec" if archive_pending == 1 else "specs"
+    return ["", f"🗄️  {archive_pending} {noun} pending archive → /spec-flow:archive"]
+
+
+def render_next_up(next_up):
+    out = []
+    if next_up:
+        out.append("")
+        verb, row, action = next_up
+        out.append(f"➡️  Next up — {verb}:")
+        out.append(f"  - {describe(row)} → {action}")
+    return out
+
+
+# Convention: one issue per line, `- <number>: <title>` — never comma-joined inline.
+# See docs/workflow.md, "Conventions".
+def render_stalled(stalled):
+    out = []
+    if stalled:
+        out.append("")
+        out.append("🔴 Stalled (yours, no agent:active):")
+        for r in stalled:
+            out.append(f"  - {describe(r)} → {SPAWN_SCRIPT} {r['number']}")
+    return out
+
+
+def render_blocked(blocked_rows):
+    out = []
+    if blocked_rows:
+        out.append("")
+        out.append("🔒 Blocked:")
+        for r in blocked_rows:
+            out.append(f"  - {describe(r)} — {r['blocked_note']}")
+    return out
+
+
 def render_board(rows, me, archive_pending):
     epics = [r for r in rows if r["is_epic"]]
     non_epics = [r for r in rows if not r["is_epic"]]
+    # Counted, never rendered as rows -- so neither list needs sorting.
     backlog = [r for r in non_epics if r["status"] is None]
     staged = [r for r in non_epics if r["status"] is not None]
     staged.sort(key=lambda r: (priority_key(r["priority"]), r["number"]))
-    backlog.sort(key=lambda r: (priority_key(r["priority"]), r["number"]))
 
     def is_blocked_on_you(r):
         if not r["mine"]:
@@ -351,126 +514,33 @@ def render_board(rows, me, archive_pending):
                     if r["status"] not in STATUS_ORDER
                     and r not in blocked_on_you]
 
-    out = ["## Delivery board", ""]
-
-    if blocked_on_you:
-        out.append("⛳ BLOCKED ON YOU")
-        for r in blocked_on_you:
-            out.append(render_row(r))
-        out.append("")
-
-    if unrecognized:
-        out.append("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)")
-        for r in unrecognized:
-            out.append(render_row(r))
-        out.append("")
-
-    if in_flight:
-        out.append("🔧 IN FLIGHT (agents / CI)")
-        for r in in_flight:
-            out.append(render_row(r))
-        out.append("")
-
-    if ready_rows:
-        out.append("📋 READY")
-        for r in ready_rows:
-            out.append(render_row(r))
-        out.append("")
-
-    if backlog:
-        out.append("📥 BACKLOG (ungroomed)")
-        for r in backlog:
-            out.append(f"  (no labels)  #{r['number']:<5} {r['title']}  → /spec-flow:groom {r['number']}")
-        out.append("")
-
-    if epics:
-        out.append("📦 EPICS (not directly workable — see sub-issues)")
-        for r in epics:
-            out.append(f"  {r['status'] or '(no status)':13} #{r['number']:<5} {r['priority'] or '--':3} {r['title']}  "
-                        f"{r['sub_total']} sub-issues ({r['sub_completed']} done)")
-            # Convention: one issue per line, `- <number>: <title>` — never a comma-joined
-            # run of issues inline. See docs/workflow.md, "Conventions".
-            if r["sub_issues"]:
-                for s in r["sub_issues"]:
-                    out.append(f"      - {s.get('number')}: {s.get('title', '')}")
-            else:
-                out.append("      (no sub-issues listed)")
-        out.append("")
-
-    # --- Next up (scoped to `me`, never an epic) -------------------------------------------
-    # (verb, row, action) — rendered as a header plus one `- <number>: <title> → <action>` line,
-    # so the title is never wedged between two colons in a single sentence. See the convention in
-    # docs/workflow.md.
-    next_up = None
-    # Rung 0: anything already in the BLOCKED ON YOU bucket outranks starting or grooming work --
-    # it is the closest thing to landed, and the board contradicted itself by rendering an issue
-    # under "blocked on you" and then recommending the owner go groom something else.
-    mine_in_review_green = [r for r in staged if r["mine"] and r["status"] == "in-review" and r["ci"] == "green"]
-    other_blocked_on_you = [r for r in blocked_on_you if r not in mine_in_review_green]
-    if mine_in_review_green:
-        mine_in_review_green.sort(key=lambda r: priority_key(r["priority"]))
-        top = mine_in_review_green[0]
-        next_up = ("finish", top, f"PR #{top['pr_number']} is green, merge it")
-    elif other_blocked_on_you:
-        other_blocked_on_you.sort(key=lambda r: priority_key(r["priority"]))
-        top = other_blocked_on_you[0]
-        if top["needs_attention"]:
-            action = "an agent is stopped waiting on you — see the issue comments"
-        elif top["status"] == "spec-review":
-            action = "approve or redirect the spec (Seam 1)"
-        elif top["status"] == "ready":
-            action = "a session is parked on your design choice — attach to it"
-        else:
-            action = f"review PR #{top['pr_number']}" if top["pr_number"] else "review it"
-        next_up = ("unblock", top, action)
-    else:
-        unclaimed_ready = [r for r in ready_rows if r["assignee"] is None]
-        if unclaimed_ready:
-            unclaimed_ready.sort(key=lambda r: priority_key(r["priority"]))
-            top = unclaimed_ready[0]
-            next_up = ("activate", top, f"/spec-flow:activate {top['number']}")
-        elif backlog:
-            top = backlog[0]
-            next_up = ("groom", top, f"/spec-flow:groom {top['number']}")
-
     stalled = [r for r in staged if is_stalled(r)]
     blocked_rows = [r for r in non_epics if r["blocked"]]
+    next_up = compute_next_up(ready_rows)
 
-    summary_bits = [
-        f"agent:active: {sum(1 for r in non_epics if r['agent_active'])}",
-        f"blocked: {len(blocked_rows)}",
-        f"needs-attention: {sum(1 for r in non_epics if r['needs_attention'])}",
-        f"local sessions matched: {sum(1 for r in non_epics if r['attach_id'])}",
-        f"open PRs: {sum(1 for r in non_epics if r['pr_number'])}",
-    ]
-    if archive_pending:
-        summary_bits.append(f"specs pending archive: {archive_pending} → /spec-flow:archive")
-    out.append("(" + " · ".join(summary_bits) + ")")
+    out = ["## Delivery board", ""]
+    out += render_blocked_on_you(blocked_on_you)
+    out += render_unrecognized(unrecognized)
+    out += render_in_flight(in_flight)
+    out += render_ready(ready_rows)
+    out += render_summary(non_epics, blocked_rows, backlog, epics)
+    out += render_archive_suggestion(archive_pending)
+    out += render_next_up(next_up)
+    out += render_stalled(stalled)
+    out += render_blocked(blocked_rows)
 
-    if next_up:
-        out.append("")
-        verb, row, action = next_up
-        out.append(f"➡️  Next up — {verb}:")
-        out.append(f"  - {describe(row)} → {action}")
-    # Convention: one issue per line, `- <number>: <title>` — never comma-joined inline.
-    # See docs/workflow.md, "Conventions".
-    if stalled:
-        out.append("")
-        out.append("🔴 Stalled (yours, no agent:active):")
-        for r in stalled:
-            out.append(f"  - {describe(r)} → {SPAWN_SCRIPT} {r['number']}")
-    if blocked_rows:
-        out.append("")
-        out.append("🔒 Blocked:")
-        for r in blocked_rows:
-            out.append(f"  - {describe(r)} — {r['blocked_note']}")
+    # Each row section appends a trailing "" to separate itself from the next one. Whichever
+    # section happens to be last has nothing to separate itself from, so drop that separator --
+    # otherwise removing sections leaves the board padded with the gaps they used to fill.
+    while out and not out[-1]:
+        out.pop()
 
     return "\n".join(out)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Render the spec-flow delivery board deterministically.")
-    parser.add_argument("--user", help="scope 'next up'/'blocked on you' to this login (default: gh's authenticated user)")
+    parser.add_argument("--user", help="scope 'blocked on you' to this login (default: gh's authenticated user)")
     args = parser.parse_args()
 
     for binary in ("gh", "git"):
@@ -491,18 +561,17 @@ def main():
         print("board: warning: couldn't resolve the authenticated user ('gh api user' failed) — "
               "'mine'/'blocked on you' scoping will show nothing as yours", file=sys.stderr)
 
+    blocked_bodies, attention_bodies = prefetch_notes(issues)
+
     def blocked_reason_fn(n):
-        body = last_comment_matching(n, prefix="⛔ Blocked on")
+        body = blocked_bodies.get(n)
         if not body:
             return None
         m = re.match(r"^(⛔ Blocked on #\d+[^\n]*)", body)
         return m.group(1) if m else body.splitlines()[0]
 
     def needs_attention_note_fn(n):
-        # Must filter by prefix. Without one this returns the last comment of ANY kind, and the
-        # pipeline posts several after an attention request, so the row shows an unrelated line.
-        # issue-manager posts the request with this prefix; see agents/issue-manager.md.
-        body = last_comment_matching(n, prefix="🆘 Needs attention")
+        body = attention_bodies.get(n)
         return body.splitlines()[0] if body else None
 
     rows = build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_note_fn)

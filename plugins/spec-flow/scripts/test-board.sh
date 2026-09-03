@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # Structural + behavioral test for board.py. Fakes `gh`/`git`/`claude` on PATH so this runs
 # offline, deterministically, and exercises the branches this repo's own real board data
-# doesn't (epics, PR/CI correlation, blocked/needs-attention reasons, stalled detection, the
-# "next up" ladder) rather than relying on live GitHub state. Exits non-zero if any assertion
+# doesn't (epics, PR/CI correlation, blocked/needs-attention reasons, stalled detection,
+# "next up") rather than relying on live GitHub state. Exits non-zero if any assertion
 # fails. macOS bash 3.2 compatible (no associative arrays, no mapfile).
+#
+# Four fixtures, each with a job:
+#   1  the broad behavioral fixture -- every bucket, PR/CI correlation, liveness, notes
+#   2  the concurrent comment prefetch and its per-row failure isolation
+#   3  nothing to report -- the conditional-rendering fixture (no section, no zero count)
+#   4  "next up" priority ordering and its refusal to name a claimed issue
+# Plus in-process python blocks for the cases a PATH fixture can't reach cheaply: the three
+# liveness states of one green in-review PR, backlog-size line invariance, and keycap alignment.
 set -uo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -27,14 +35,17 @@ check() {
 command -v python3 >/dev/null 2>&1 || { echo "test-board: 'python3' is required but not on PATH." >&2; exit 1; }
 
 fake_bin_dir="$(mktemp -d)"
-trap 'rm -rf "$fake_bin_dir"' EXIT
+fake_bin_dir2="$(mktemp -d)"
+fake_bin_dir3="$(mktemp -d)"
+fake_bin_dir4="$(mktemp -d)"
+trap 'rm -rf "$fake_bin_dir" "$fake_bin_dir2" "$fake_bin_dir3" "$fake_bin_dir4"' EXIT
 
 # ---------------------------------------------------------------------------
-# Fixture: 8 issues covering every branch --
+# Fixture 1: 12 issues covering every branch --
 #   #10 status:spec-review, mine                  -> BLOCKED ON YOU
-#   #11 status:in-review, mine, PR #90 CI green    -> BLOCKED ON YOU + next-up candidate
+#   #11 status:in-review, mine, PR #90 CI green    -> BLOCKED ON YOU (never a merge suggestion)
 #   #12 status:in-progress, mine, NO agent:active  -> STALLED
-#   #13 status:ready, unclaimed, P0                -> READY, next-up candidate if #11 didn't win
+#   #13 status:ready, unclaimed, P0                -> READY, and the "next up" pick
 #   #14 status:ready, claimed by alice              -> READY, not "yours"
 #   #15 blocked label, mine                         -> BLOCKED (reason from last matching comment)
 #   #16 needs-attention label, mine                 -> BLOCKED ON YOU (reason from 🆘-prefixed comment)
@@ -45,8 +56,8 @@ trap 'rm -rf "$fake_bin_dir"' EXIT
 #   #18 status:ready, mine, agent:active             -> BLOCKED ON YOU (activate's design stop --
 #                                                        holds status:ready the whole wait)
 #   #19 status:in-review, mine, NO linked PR (ci None) -> BLOCKED ON YOU, not "waiting on CI"
-#   #20 epic (subIssuesSummary.total=2)              -> EPICS, excluded from every other bucket
-#   #30 no status label                              -> BACKLOG
+#   #20 epic (subIssuesSummary.total=2)              -> counted as "1 epic", rendered as no row
+#   #30 no status label                              -> counted as "1 ungroomed", no row
 # ---------------------------------------------------------------------------
 cat > "$fake_bin_dir/gh" <<'GHEOF'
 #!/usr/bin/env bash
@@ -141,20 +152,8 @@ check "a session under the PRE-RENAME issue-pm- prefix still matches its issue (
 echo "$out" | grep -q "#12 .*STALLED"
 check "in-progress issue with no agent:active is marked STALLED" $?
 
-echo "$out" | grep -qE "^  \(no labels\)  #30"
-check "issue with no status label lands in BACKLOG" $?
-
 ! echo "$out" | grep -q "#20 .*BLOCKED ON YOU\|#20 .*READY"
-check "epic never appears in READY/BLOCKED ON YOU (only in its own EPICS section)" $?
-
-# `check` only sees the LAST command's status, so every condition must be one expression.
-echo "$out" | grep -q "EPICS" \
-  && echo "$out" | grep -q "^      - 21: Sub one$" \
-  && echo "$out" | grep -q "^      - 22: Sub two$"
-check "epic lists its sub-issues one per line, as '- <number>: <title>'" $?
-
-! echo "$out" | grep -q "Sub one), #22"
-check "epic sub-issues are never comma-joined inline" $?
+check "epic never appears in READY/BLOCKED ON YOU" $?
 
 echo "$out" | sed -n '/🔒 Blocked:/,$p' | grep -q "^  - 15: Blocked item — ⛔ Blocked on #99 — waiting on infra work.$"
 check "blocked reason comes from the matching ⛔-prefixed comment, not just 'see issue comments'" $?
@@ -168,7 +167,27 @@ check "needs-attention note comes from the matching 🆘-prefixed comment, not a
 echo "$out" | grep -q "#16 .*🟡 claimed — agent:active set, no session on this machine"
 check "an agent:active label with no local session renders claimed, neither active nor stalled" $?
 
-# --- issue 58: work blocked on the owner must be visible and must outrank starting new work ---
+# --- Unbounded categories report as counts, never as rows (spec: counts, not rows) ---
+
+# The exact summary line, not a substring: this asserts BOTH that the two unbounded categories are
+# counted and that every other count is still reported, in one place that a new fixture row breaks
+# loudly rather than silently.
+echo "$out" | grep -qxF "(1 ungroomed · 1 epic · 5 agent:active · 1 blocked · 1 needs-attention · 2 local sessions matched · 1 open PR)"
+check "the summary line reports every non-zero count, including ungroomed and epics" $?
+
+! echo "$out" | grep -q "#30"
+check "the ungroomed backlog issue is counted, never rendered as its own row" $?
+
+! echo "$out" | grep -q "BACKLOG"
+check "no BACKLOG section is rendered at all" $?
+
+! echo "$out" | grep -q "#20"
+check "the epic is counted, never rendered as its own row" $?
+
+! echo "$out" | grep -q "EPICS\|Sub one\|Sub two"
+check "no EPICS section and no epic sub-issue rows are rendered" $?
+
+# --- issue 58: work blocked on the owner must be visible ---
 
 # #18 is parked at activate's design-choice stop. It holds status:ready throughout that wait, so a
 # status-only rule renders it as an untouched backlog item and the owner never learns a session is
@@ -207,17 +226,66 @@ check "an issue shown under BLOCKED ON YOU is not rendered again under READY" $?
 blocked_section | grep -q "#19"
 check "status:in-review with no linked PR is blocked on you, not 'waiting on CI'" $?
 
-# "Next up" must draw from the board's own top bucket. Previously the ladder went straight from
-# mine+in-review+green to unclaimed-ready, so it told the owner to go groom while a spec sat
-# waiting for their approval.
-# Whatever it picks must come from the top bucket while that bucket is non-empty -- never a
-# "groom" or "activate" recommendation, which is what the old ladder produced by skipping it.
-echo "$out" | grep -qE "Next up — (finish|unblock):"
-check "'next up' draws from BLOCKED ON YOU while that bucket is non-empty, never groom/activate" $?
+# --- "Next up" names only unclaimed ready work ---
 
-# The fixture always has #11 (mine + in-review + green), so the "finish" rung always wins and the
-# new "unblock" rung never executes through the fixture. Exercise the ladder directly instead,
-# with no green in-review row present, so a regression that drops the rung is actually caught.
+# #11 is mine, in-review, with a green PR and a live session. That used to be the top "next up"
+# rung ("PR #90 is green, merge it"). It names work #11's own issue-manager already drives, so the
+# board reports the row and recommends the one issue nobody owns instead.
+echo "$out" | grep -qx "➡️  Next up — activate:"
+check "'next up' recommends activating unclaimed ready work" $?
+
+echo "$out" | sed -n '/Next up — activate:/,$p' | grep -q "^  - 13: Ready unclaimed → /spec-flow:activate 13$"
+check "'next up' names the highest-priority unclaimed ready issue (#13, P0)" $?
+
+! echo "$out" | grep -q "merge it"
+check "'next up' never recommends merging a green in-review PR" $?
+
+! echo "$out" | grep -qE "Next up — (finish|unblock|groom):"
+check "the finish/unblock/groom rungs are gone entirely" $?
+
+! echo "$out" | sed -n '/Next up — activate:/,$p' | grep -q "^  - 16:"
+check "a needs-attention issue is reported under BLOCKED ON YOU but never named by 'next up'" $?
+
+blocked_section | grep -q "#16"
+check "the same needs-attention issue does render its own BLOCKED ON YOU row" $?
+
+# --- the rest of fixture 1's coverage ---
+
+echo "$out" | grep -qx "🗄️  2 specs pending archive → /spec-flow:archive"
+check "the archive suggestion is its own line, names the count, and excludes the 'archive' entry" $?
+
+! echo "$out" | grep -q "specs pending archive:"
+check "the archive suggestion is no longer wedged into the summary line" $?
+
+echo "$out" | grep -q "#17 .*@alice"
+check "another user's spec-review issue is still shown (not silently dropped)" $?
+
+! blocked_section | grep -q "#17"
+check "another user's spec-review issue is NOT counted as blocked on you" $?
+
+section "🔧 IN FLIGHT" | grep -q "#17"
+check "another user's spec-review issue shows under IN FLIGHT for visibility" $?
+
+echo "$out" | sed -n '/Stalled (yours, no agent:active):/,$p' | grep -q "^  - 10: Spec review item →"
+check "the stalled SUMMARY line includes a stalled spec-review item too, consistent with its inline 🔴 STALLED marker" $?
+
+! echo "$out" | grep -q '{spawn}'
+check "the stalled summary's spawn command is a real path, not a leftover {spawn} placeholder" $?
+
+echo "$out" | grep -q "spawn-issue-manager.sh 10"
+check "the stalled summary's spawn command resolves to the real script next to board.py" $?
+
+# --- Keycap priority (spec: P0-P3 render as 0️⃣-3️⃣, unprioritized rows stay aligned) ---
+
+echo "$out" | grep -q "#13    0️⃣ Ready unclaimed"
+check "a P0 row's priority column renders the keycap, not the text 'P0'" $?
+
+! echo "$out" | grep -qE "#1[0-9] +P[0-3] "
+check "no row renders a literal P0/P1/P2/P3 in its priority column" $?
+
+# ---------------------------------------------------------------------------
+# In-process render tests: the cases a PATH fixture can't reach cheaply.
+# ---------------------------------------------------------------------------
 python3 - "$script_dir" <<'PYEOF'
 import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
@@ -229,24 +297,111 @@ def row(**kw):
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
 
-# A spec awaiting approval, plus an unclaimed ready item. Nothing green and in-review.
-rows = [row(number=10, status="spec-review"), row(number=30, status="ready", assignee=None, mine=False)]
-rendered = board.render_board(rows, "me", 0)
-out = rendered if isinstance(rendered, str) else "\n".join(rendered)
-assert "Next up — unblock:" in out, "expected the unblock rung to win; got:\n" + out
-assert "#10" in out or "10:" in out, "expected issue 10 to be recommended; got:\n" + out
+def next_up_lines(rendered):
+    lines = rendered.splitlines()
+    hits = [i for i, l in enumerate(lines) if l.startswith("➡️  Next up")]
+    if not hits:
+        return []
+    assert len(hits) == 1, f"more than one 'next up' header:\n{rendered}"
+    return lines[hits[0]:hits[0] + 2]
 
-# CI state mapping (issue 58 defect 4): queued/gated states are pending, never failing.
-for st in ("PENDING", "WAITING", "REQUESTED", "EXPECTED"):
-    got = board.ci_status([{"state": st}])
-    assert got == "running", f"{st} -> {got}, expected running"
-assert board.ci_status([{"status": "COMPLETED", "conclusion": None}]) == "running", "unknown conclusion must be pending"
-assert board.ci_status([{"state": "SUCCESS"}]) == "green"
-assert board.ci_status([{"conclusion": "FAILURE"}]) == "failing"
+# A green in-review PR is owned by that issue's own issue-manager whatever its liveness, so none of
+# the three states may produce a merge recommendation, and none may displace the unclaimed ready
+# item. The liveness marker is asserted too, so a state that stops being reachable fails loudly
+# instead of passing vacuously.
+for agent_active, attach_id, marker in ((True, "sess-1", "🟢 active"),
+                                        (True, None, "🟡 claimed"),
+                                        (False, None, "🔴 STALLED")):
+    rows = [row(number=11, status="in-review", ci="green", pr_number=90,
+                agent_active=agent_active, attach_id=attach_id),
+            row(number=13, title="Ready unclaimed", status="ready", priority="P0",
+                assignee=None, mine=False)]
+    out = board.render_board(rows, "me", 0)
+    assert marker in out, f"expected the {marker} state to be reachable; got:\n{out}"
+    assert "merge" not in out, f"{marker}: recommended a merge; got:\n{out}"
+    assert next_up_lines(out) == ["➡️  Next up — activate:",
+                                  "  - 13: Ready unclaimed → /spec-flow:activate 13"], \
+        f"{marker}: wrong 'next up'; got:\n{out}"
 PYEOF
-check "'next up' unblock rung fires with no green in-review item, and CI states map correctly" $?
+check "'next up' never recommends merging a green in-review PR, in any of the three liveness states" $?
 
-# Separate block so a failure below reports under its own name, not the ladder/CI check's.
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# The property the caps could only approximate: the board's rendered length does not vary with the
+# size of the backlog. Same state twice, differing only in how many ungroomed issues exist.
+def render(n_backlog):
+    rows = [row(number=10, status="spec-review"),
+            row(number=13, status="ready", priority="P0", assignee=None, mine=False)]
+    rows += [row(number=1000 + i, status=None, mine=False, assignee=None) for i in range(n_backlog)]
+    return board.render_board(rows, "me", 3)
+
+small, large = render(1), render(500)
+assert len(small.splitlines()) == len(large.splitlines()), \
+    f"backlog size changed the board's length: {len(small.splitlines())} vs {len(large.splitlines())}"
+# ...because the size is reported, not because it is ignored.
+assert "1 ungroomed" in small and "500 ungroomed" in large, f"backlog count not reported:\n{large}"
+
+# A needs-attention issue reports its row, with its attach instruction, and is still not the thing
+# "next up" names.
+rows = [row(number=16, title="Needs attention item", status="in-progress", needs_attention=True,
+            attention_note="🆘 Needs attention: owner input needed", agent_active=True,
+            attach_id="sess-xyz"),
+        row(number=13, title="Ready unclaimed", status="ready", priority="P0",
+            assignee=None, mine=False)]
+out = board.render_board(rows, "me", 0)
+lines = out.splitlines()
+start = lines.index("⛳ BLOCKED ON YOU")
+blocked = lines[start + 1:lines.index("", start)]
+assert any("#16" in l and "attach: claude agents — select sess-xyz" in l for l in blocked), \
+    f"needs-attention row missing from BLOCKED ON YOU, or missing its attach instruction:\n{out}"
+assert "  - 13: Ready unclaimed → /spec-flow:activate 13" in lines, f"wrong 'next up':\n{out}"
+assert not any(l.startswith("  - 16:") for l in lines), f"'next up' named the owned issue:\n{out}"
+PYEOF
+check "backlog size does not change the board's length, and BLOCKED ON YOU reports without recommending" $?
+
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+assert [board.keycap(p) for p in ("P0", "P1", "P2", "P3")] == ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
+assert board.keycap(None) == board.keycap("P9") == "  ", "an unknown priority must render the blank"
+
+# A keycap is three codepoints -- digit, U+FE0F, U+20E3 -- but a terminal draws it in two cells,
+# so len() proves nothing about alignment. Substitute each keycap for the two spaces it occupies
+# and measure what is left. That is exactly the equivalence PRIORITY_BLANK relies on.
+def cells(s):
+    for kc in board.PRIORITY_KEYCAP.values():
+        s = s.replace(kc, "  ")
+    return len(s)
+
+rows = [row(number=13, title="AAA", status="ready", priority="P1", assignee=None, mine=False),
+        row(number=14, title="BBB", status="ready", priority=None, assignee=None, mine=False)]
+out = board.render_board(rows, "me", 0)
+line_a = next(l for l in out.splitlines() if "AAA" in l)
+line_b = next(l for l in out.splitlines() if "BBB" in l)
+assert "1️⃣" in line_a and "P1" not in line_a, f"P1 did not render as a keycap:\n{line_a}"
+assert cells(line_a[:line_a.index("AAA")]) == cells(line_b[:line_b.index("BBB")]), \
+    f"prioritized and unprioritized rows misalign:\n{line_a}\n{line_b}"
+PYEOF
+check "priority renders as a keycap, and a prioritized row stays aligned with an unprioritized one" $?
+
+# Separate block so a failure below reports under its own name, not the render checks'.
 python3 - "$script_dir" <<'PYEOF'
 import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
@@ -260,8 +415,15 @@ def row(**kw):
 
 # An unknown status: label must land in a visible bucket, not vanish from the board entirely.
 out2 = board.render_board([row(number=99, status="in-progres", mine=False, assignee="alice")], "me", 0)
-out2 = out2 if isinstance(out2, str) else "\n".join(out2)
 assert "99" in out2, "an unrecognized status: label vanished from the board:\n" + out2
+
+# CI state mapping (issue 58 defect 4): queued/gated states are pending, never failing.
+for st in ("PENDING", "WAITING", "REQUESTED", "EXPECTED"):
+    got = board.ci_status([{"state": st}])
+    assert got == "running", f"{st} -> {got}, expected running"
+assert board.ci_status([{"status": "COMPLETED", "conclusion": None}]) == "running", "unknown conclusion must be pending"
+assert board.ci_status([{"state": "SUCCESS"}]) == "green"
+assert board.ci_status([{"conclusion": "FAILURE"}]) == "failing"
 
 # gh can emit an explicit JSON null; .get(default) returns the null and the old code raised on it,
 # taking down the whole render.
@@ -296,32 +458,313 @@ for seed in ("0", "1", "7", "42", "1234", "99999"):
                             capture_output=True, text=True, env=env, check=True).stdout.strip())
 assert seen == {expected}, f"status_of/priority_of wrong or hash-seed dependent: {seen} != {{{expected!r}}}"
 PYEOF
-check "unknown status label is rendered, null labels don't crash, label resolution is deterministic and lifecycle-ordered" $?
+check "unknown status label is rendered, CI states map correctly, null labels don't crash, label resolution is deterministic and lifecycle-ordered" $?
 
-echo "$out" | grep -q "specs pending archive: 2 → /spec-flow:archive"
-check "archive-pending count excludes the 'archive' entry itself" $?
+# ---------------------------------------------------------------------------
+# Fixture 2: the concurrent-prefetch fixture. Eleven ungroomed issues and an
+# epic with six sub-issues, both of which now report as counts -- kept at those
+# sizes so a regression that reintroduces per-issue rows is unmistakable. Five
+# blocked/needs-attention issues exercise the prefetch: a normal success (#401),
+# a `gh issue view` process failure (#402), a malformed-JSON response (#405), a
+# dual-labeled issue needing two independent calls (#404), and a plain
+# needs-attention success (#403).
+# ---------------------------------------------------------------------------
+cat > "$fake_bin_dir2/gh" <<'GHEOF'
+#!/usr/bin/env bash
+log_dir="$(cd "$(dirname "$0")" && pwd)"
+case "$1 $2" in
+  "issue list")
+    cat <<'JSON'
+[
+  {"number":201,"title":"Backlog 201","labels":[],"url":"https://x/201","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":202,"title":"Backlog 202","labels":[],"url":"https://x/202","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":203,"title":"Backlog 203","labels":[],"url":"https://x/203","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":204,"title":"Backlog 204","labels":[],"url":"https://x/204","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":205,"title":"Backlog 205 top priority","labels":[{"name":"P0"}],"url":"https://x/205","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":206,"title":"Backlog 206","labels":[],"url":"https://x/206","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":207,"title":"Backlog 207","labels":[],"url":"https://x/207","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":208,"title":"Backlog 208","labels":[],"url":"https://x/208","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":209,"title":"Backlog 209","labels":[],"url":"https://x/209","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":210,"title":"Backlog 210","labels":[],"url":"https://x/210","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":211,"title":"Backlog 211","labels":[],"url":"https://x/211","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":300,"title":"Big epic","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/300","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":6},"subIssues":{"nodes":[{"number":301,"title":"Sub 301"},{"number":302,"title":"Sub 302"},{"number":303,"title":"Sub 303"},{"number":304,"title":"Sub 304"},{"number":305,"title":"Sub 305"},{"number":306,"title":"Sub 306"}]}},
+  {"number":401,"title":"Blocked ok","labels":[{"name":"status:in-progress"},{"name":"blocked"}],"url":"https://x/401","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":402,"title":"Blocked process failure","labels":[{"name":"status:in-progress"},{"name":"blocked"}],"url":"https://x/402","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":403,"title":"Attention ok","labels":[{"name":"status:in-progress"},{"name":"needs-attention"}],"url":"https://x/403","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":404,"title":"Dual label","labels":[{"name":"status:in-progress"},{"name":"blocked"},{"name":"needs-attention"}],"url":"https://x/404","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":405,"title":"Blocked malformed json","labels":[{"name":"status:in-progress"},{"name":"blocked"}],"url":"https://x/405","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}}
+]
+JSON
+    ;;
+  "pr list")
+    echo "[]"
+    ;;
+  "api user")
+    echo "me"
+    ;;
+  "repo view")
+    echo "main"
+    ;;
+  "issue view")
+    echo "$3" >> "$log_dir/issue_view_calls.log"
+    case "$3" in
+      401) echo '{"comments":[{"body":"note"},{"body":"⛔ Blocked on #77 — waiting on review."}]}' ;;
+      402) exit 1 ;;
+      403) echo '{"comments":[{"body":"first"},{"body":"🆘 Needs attention: needs input on design choice."}]}' ;;
+      404) echo '{"comments":[{"body":"first"},{"body":"⛔ Blocked on #88 — waiting on data."}]}' ;;
+      405) echo 'not valid json{' ;;
+      *) echo '{"comments":[]}' ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_bin_dir2/gh"
 
-echo "$out" | grep -q "#17 .*@alice"
-check "another user's spec-review issue is still shown (not silently dropped)" $?
+cat > "$fake_bin_dir2/git" <<'GITEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "ls-tree" ]]; then
+  printf 'archive\n'
+  exit 0
+fi
+exit 1
+GITEOF
+chmod +x "$fake_bin_dir2/git"
 
-! echo "$out" | sed -n '/BLOCKED ON YOU/,/^$/p' | grep -q "#17"
-check "another user's spec-review issue is NOT counted as blocked on you" $?
+cat > "$fake_bin_dir2/claude" <<'CLAUDEEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "agents" ]]; then
+  echo '[]'
+  exit 0
+fi
+exit 1
+CLAUDEEOF
+chmod +x "$fake_bin_dir2/claude"
 
-echo "$out" | sed -n '/IN FLIGHT/,/^$/p' | grep -q "#17"
-check "another user's spec-review issue shows under IN FLIGHT for visibility" $?
+err2_log="$fake_bin_dir2/stderr.log"
+out2="$(PATH="$fake_bin_dir2:$PATH" python3 "$board" 2>"$err2_log")"
+status2=$?
+check "fixture 2: board.py exits 0" "$status2"
 
-echo "$out" | sed -n '/Stalled (yours, no agent:active):/,$p' | grep -q "^  - 10: Spec review item →"
-check "the stalled SUMMARY line includes a stalled spec-review item too, consistent with its inline 🔴 STALLED marker" $?
+echo "$out2" | grep -qxF "(11 ungroomed · 1 epic · 4 blocked · 2 needs-attention)"
+check "the summary counts eleven ungroomed and one epic, and omits every zero count" $?
 
-! echo "$out" | grep -q '{spawn}'
-check "the stalled summary's spawn command is a real path, not a leftover {spawn} placeholder" $?
+! echo "$out2" | grep -qE "#(20[1-9]|21[01]) "
+check "none of the eleven ungroomed issues renders a row" $?
 
-echo "$out" | grep -q "spawn-issue-manager.sh 10"
-check "the stalled summary's spawn command resolves to the real script next to board.py" $?
+! echo "$out2" | grep -q "Sub 30"
+check "none of the epic's six sub-issues renders a row" $?
 
-echo "$out" | grep -q "^➡️  Next up — finish:$" \
-  && echo "$out" | sed -n '/Next up — finish:/,$p' | grep -q "^  - 11: .* → PR #90 is green, merge it$"
-check "'next up' picks the mine+in-review+green-CI item over a ready/unclaimed one" $?
+! echo "$out2" | grep -q "Next up"
+check "'next up' renders nothing when no unclaimed ready issue exists, even with a full backlog" $?
+
+! echo "$out2" | grep -q "pending archive"
+check "no archive line renders when nothing is pending archive" $?
+
+echo "$out2" | grep -q "401.*BLOCKED on ⛔ Blocked on #77 — waiting on review."
+check "prefetch: a successful blocked-note fetch renders normally, attached to its own row" $?
+
+echo "$out2" | grep -q "402.*see issue comments"
+check "prefetch: a failed gh issue view (process error) falls back to 'see issue comments'" $?
+
+echo "$out2" | grep -q "405.*see issue comments"
+check "prefetch: a malformed-JSON gh issue view response falls back to 'see issue comments'" $?
+
+grep -q "^board: warning:.*402" "$err2_log"
+check "prefetch: a stderr warning is printed for the process-error fetch (issue #402)" $?
+
+grep -q "^board: warning:.*405" "$err2_log"
+check "prefetch: a stderr warning is printed for the malformed-JSON fetch (issue #405)" $?
+
+! grep -q "^board: warning:.*401" "$err2_log"
+check "prefetch: no stderr warning is printed for the successful fetch (issue #401)" $?
+
+echo "$out2" | grep -q "403.*NEEDS ATTENTION — 🆘 Needs attention: needs input on design choice."
+check "prefetch: a successful needs-attention fetch renders normally, attached to its own row" $?
+
+echo "$out2" | grep -q "404.*BLOCKED on ⛔ Blocked on #88 — waiting on data."
+check "prefetch: a dual-labeled (blocked + needs-attention) issue's blocked note renders" $?
+
+echo "$out2" | grep -q "404.*NEEDS ATTENTION"
+check "prefetch: the same dual-labeled issue's needs-attention note also renders" $?
+
+calls_402=$(grep -c '^402$' "$fake_bin_dir2/issue_view_calls.log")
+if [[ "$calls_402" -eq 1 ]]; then status_calls_402=0; else status_calls_402=1; fi
+check "prefetch: issue #402 was fetched exactly once, not retried after its failure" $status_calls_402
+
+calls_404=$(grep -c '^404$' "$fake_bin_dir2/issue_view_calls.log")
+if [[ "$calls_404" -eq 2 ]]; then status_calls_404=0; else status_calls_404=1; fi
+check "prefetch: the dual-labeled issue got two independent gh calls (blocked + needs-attention)" $status_calls_404
+
+total_calls=$(wc -l < "$fake_bin_dir2/issue_view_calls.log")
+if [[ "$total_calls" -eq 6 ]]; then status_total_calls=0; else status_total_calls=1; fi
+check "prefetch: total gh issue-view calls match the (issue, note-kind) pair count exactly" $status_total_calls
+
+# ---------------------------------------------------------------------------
+# Fixture 3: nothing to report. Three ungroomed issues and one epic -- both
+# count-only categories -- and no delivery work at all, so every section, the
+# archive line and "next up" must be absent, leaving three lines of board.
+# ---------------------------------------------------------------------------
+cat > "$fake_bin_dir3/gh" <<'GHEOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "issue list")
+    cat <<'JSON'
+[
+  {"number":501,"title":"Backlog 501","labels":[],"url":"https://x/501","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":502,"title":"Backlog 502","labels":[],"url":"https://x/502","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":503,"title":"Backlog 503","labels":[],"url":"https://x/503","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":600,"title":"Small epic","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/600","assignees":[],"subIssuesSummary":{"completed":1,"percentCompleted":33,"total":3},"subIssues":{"nodes":[{"number":601,"title":"Sub 601"},{"number":602,"title":"Sub 602"},{"number":603,"title":"Sub 603"}]}}
+]
+JSON
+    ;;
+  "pr list")
+    echo "[]"
+    ;;
+  "api user")
+    echo "me"
+    ;;
+  "repo view")
+    echo "main"
+    ;;
+  "issue view")
+    echo '{"comments":[]}'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_bin_dir3/gh"
+
+cat > "$fake_bin_dir3/git" <<'GITEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "ls-tree" ]]; then
+  printf 'archive\n'
+  exit 0
+fi
+exit 1
+GITEOF
+chmod +x "$fake_bin_dir3/git"
+
+cat > "$fake_bin_dir3/claude" <<'CLAUDEEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "agents" ]]; then
+  echo '[]'
+  exit 0
+fi
+exit 1
+CLAUDEEOF
+chmod +x "$fake_bin_dir3/claude"
+
+out3="$(PATH="$fake_bin_dir3:$PATH" python3 "$board")"
+status3=$?
+check "fixture 3: board.py exits 0" "$status3"
+
+# The whole render, exactly. A section that leaves its trailing blank-line separator behind, or a
+# header with nothing under it, fails here and nowhere else.
+expected3='## Delivery board
+
+(3 ungroomed · 1 epic)'
+if [[ "$out3" == "$expected3" ]]; then status_exact3=0; else status_exact3=1; fi
+check "a board with nothing to report is three lines: the title and the two counts" "$status_exact3"
+
+! echo "$out3" | grep -q "BLOCKED ON YOU"
+check "the BLOCKED ON YOU header does not appear when nothing is blocked on the owner" $?
+
+! echo "$out3" | grep -qE "IN FLIGHT|READY|UNRECOGNIZED|Stalled|Blocked:"
+check "no other section header appears when it has no rows" $?
+
+! echo "$out3" | grep -qE "(^|[ (·])0 "
+check "no zero count is rendered anywhere" $?
+
+! echo "$out3" | grep -q "pending archive"
+check "no 'specs pending archive: 0' text appears when nothing is pending" $?
+
+! echo "$out3" | grep -q "Next up"
+check "no 'next up' line renders when no unclaimed ready issue exists" $?
+
+# ---------------------------------------------------------------------------
+# Fixture 4: "next up" ordering. Four status:ready issues -- P2, unprioritized
+# and P0 unclaimed, plus a P1 claimed by alice. The P0 (#705) is placed out of
+# number order, and the claimed P1 (#706) outranks it by nothing but assignment,
+# so a recommendation that ignores either priority or ownership names the wrong
+# issue.
+# ---------------------------------------------------------------------------
+cat > "$fake_bin_dir4/gh" <<'GHEOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "issue list")
+    cat <<'JSON'
+[
+  {"number":701,"title":"Ready 701","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/701","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":702,"title":"Ready 702","labels":[{"name":"status:ready"}],"url":"https://x/702","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":705,"title":"Ready 705 top priority","labels":[{"name":"status:ready"},{"name":"P0"}],"url":"https://x/705","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":706,"title":"Ready 706 claimed","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/706","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}}
+]
+JSON
+    ;;
+  "pr list")
+    echo "[]"
+    ;;
+  "api user")
+    echo "me"
+    ;;
+  "repo view")
+    echo "main"
+    ;;
+  "issue view")
+    echo '{"comments":[]}'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_bin_dir4/gh"
+
+cat > "$fake_bin_dir4/git" <<'GITEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "ls-tree" ]]; then
+  printf 'issue-1\nissue-2\nissue-3\narchive\n'
+  exit 0
+fi
+exit 1
+GITEOF
+chmod +x "$fake_bin_dir4/git"
+
+cat > "$fake_bin_dir4/claude" <<'CLAUDEEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "agents" ]]; then
+  echo '[]'
+  exit 0
+fi
+exit 1
+CLAUDEEOF
+chmod +x "$fake_bin_dir4/claude"
+
+out4="$(PATH="$fake_bin_dir4:$PATH" python3 "$board")"
+status4=$?
+check "fixture 4: board.py exits 0" "$status4"
+
+echo "$out4" | sed -n '/Next up — activate:/,$p' | grep -q "^  - 705: Ready 705 top priority → /spec-flow:activate 705$"
+check "'next up' names the P0 issue when unclaimed ready issues exist at P0 and P2" $?
+
+! echo "$out4" | grep -qE "activate (701|702)$"
+check "'next up' does not name a lower-priority or unprioritized ready issue" $?
+
+! echo "$out4" | grep -q "activate 706"
+check "'next up' does not name a status:ready issue that already has an assignee" $?
+
+echo "$out4" | grep -qx "🗄️  3 specs pending archive → /spec-flow:archive"
+check "the archive suggestion renders with its count when specs are pending" $?
+
+# Note on prefetch transparency: fixture 1's blocked/needs-attention assertions match exact
+# rendered note text, and are the transparency check -- they must still pass with
+# last_comment_matching()'s calls behind the concurrent prefetch's dict-lookup indirection,
+# proving the parallelized fetch produces the same note content as the serial code it replaced.
 
 echo ""
 echo "----------------------------------------"

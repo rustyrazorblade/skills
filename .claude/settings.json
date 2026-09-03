@@ -8,8 +8,7 @@
     ]
   },
   "enabledPlugins": {
-    "skill-creator@claude-plugins-official": true,
-    "dev-skills@rustyrazorblade-plugins": true
+    "skill-creator@claude-plugins-official": true
   },
   "agent": "spec-flow:project-manager"
 }

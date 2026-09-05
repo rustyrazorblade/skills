@@ -91,7 +91,7 @@ YAMLs the owner copies into `.github/`), `refactoring-discipline.md` (read by `t
 the template (read only during seeding) — so a contributor browsing the directory learns the
 no-runtime-read rule without opening the file. It also states the
 `<destination-filename>.template` naming convention as a convention, binding on any template whose
-destination is a single named file rather than on this one file. The qualifier is load-bearing: the
+destination is a single named file rather than on this one file. The qualifier is necessary: the
 workflow YAMLs in `ci/` have no single destination, because the owner picks one by runner and names
 the copied file, so the convention cannot reach them and does not claim to.
 

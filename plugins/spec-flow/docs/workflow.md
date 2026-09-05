@@ -768,8 +768,8 @@ individual mandates are described once, in full, in **Review panel** below — n
 ## Developer agent
 
 `tdd-developer` is bundled with this plugin and is the default. It is language-neutral by design:
-it carries the TDD loop, the SOLID rules, and the refactoring discipline, plus a thin layer of
-per-language style.
+it carries the TDD loop, the SOLID rules, and the refactoring discipline, plus a small set of
+per-language style rules.
 
 Deep language expertise lives elsewhere, in the standalone **`dev-skills`** plugin. Its `rust-dev`
 agent reads the full Rust style guide, carries a nextest recipe tuned for low token use, and
@@ -1012,7 +1012,7 @@ permit pushing the issue branch.
 **The real boundary.** Running spec-flow's panel over a diff executes commands that diff controls.
 That is what the pipeline is for, not a defect in it — and it means **spec-flow must not be pointed
 at an untrusted third-party branch.** The control at that boundary is the permission and sandbox
-layer the session runs under, not prose in a prompt. What the pipeline does enforce mechanically is
+mechanism the session runs under, not prose in a prompt. What the pipeline does enforce mechanically is
 narrower and worth stating exactly: the policy file must be a real file physically inside the
 repository, so a committed symlink cannot redirect that read to `~/.ssh/id_rsa` or anything else
 outside the tree. That is a path check rather than a content check, which is why it coexists with

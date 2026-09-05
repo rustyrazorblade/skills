@@ -1,6 +1,6 @@
 # Session 1: Cassandra Fundamentals
 
-**Audience:** Developers new to Cassandra or building on shaky foundations.
+**Audience:** Developers new to Cassandra or unsure of the basics.
 **Goal:** Understand how Cassandra stores and distributes data, how to design tables correctly, and how to write applications that use Cassandra well.
 
 ---
@@ -50,7 +50,7 @@
 >
 > This session touches three things: **architecture**, **data modeling**, and **query patterns**. In a relational database you can mostly treat these as separate concerns — you learn SQL, you design tables against third normal form, and the database figures out how to execute your queries efficiently. Cassandra doesn't work that way. These three are deeply interrelated, and you can't make good decisions about any one of them without understanding the other two.
 >
-> - **Architecture** — how data is distributed across nodes, how writes and reads flow through the cluster, how replicas reconcile. This isn't "ops trivia" you can skip as a developer. It's the foundation that dictates the rules of data modeling.
+> - **Architecture** — how data is distributed across nodes, how writes and reads flow through the cluster, how replicas reconcile. This isn't "ops trivia" you can skip as a developer. It dictates the rules of data modeling.
 > - **Data modeling** — how you lay out partitions, choose clustering columns, and design tables. Every choice here is a direct consequence of the architecture. A partition key isn't just an identifier; it's the thing that decides which node your data lives on and whether your workload creates hot spots.
 > - **Query patterns** — what queries you're allowed to run efficiently, and what queries will burn the cluster down. In Cassandra, the query patterns you need *drive the table design*, not the other way around. There's no query planner to save you — if the table isn't designed for the query, the query either doesn't work or takes down production.
 >

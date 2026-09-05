@@ -49,7 +49,7 @@ If the binary cannot be found, load `../../references/commands.md` as a fallback
 
 ### `commands` is the index, not the documentation — run `--help` per command
 
-**`$EDB commands` prints only a one-line description per subcommand. It silently drops the full help text, which is where the load-bearing warnings live.** Treat it as a table of contents for finding what exists, then read the actual entry.
+**`$EDB commands` prints only a one-line description per subcommand. It silently drops the full help text, which is where the critical warnings live.** Treat it as a table of contents for finding what exists, then read the actual entry.
 
 **Once you know which commands the plan will use, run `--help` on each one** before writing any step that invokes it:
 

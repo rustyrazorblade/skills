@@ -164,7 +164,7 @@ that starts from the old wording inherits the old residue.
 2. List the facts the reader needs that the artifact's own context cannot state for itself.
 3. Cut from that list every fact `prose-style.md` says to cut for this artifact.
 4. Write the replacement from the surviving list alone.  Do not reread the old text yet.
-5. Now read the old text once.  Look only for a load-bearing fact you missed.  If you find one, add
+5. Now read the old text once.  Look only for a non-inferable fact you missed.  If you find one, add
    it to the list and write again from the list.  Never paste the old phrasing back.
 6. Check the anchor.  A mechanism-level comment belongs at the operation it protects, not at a type
    declaration or an enclosing method.  If the same invariant is relied on at several sites, anchor

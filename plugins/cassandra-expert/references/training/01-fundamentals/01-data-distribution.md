@@ -4,7 +4,7 @@
 Understand how Cassandra decides which node stores which data, and why that decision is entirely determined by the partition key.
 
 ## Why This Matters
-Every performance problem in Cassandra eventually traces back to data distribution. If you don't understand how data is placed, you can't reason about hot spots, replication, consistency, or query performance. This is the foundational mental model for everything else.
+Every performance problem in Cassandra eventually traces back to data distribution. If you don't understand how data is placed, you can't reason about hot spots, replication, consistency, or query performance. This is the core mental model for everything else.
 
 ## Why We Start Here (Not With Tables)
 

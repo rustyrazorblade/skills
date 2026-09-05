@@ -34,7 +34,7 @@ The syntax is deliberately simple:
 CREATE INDEX users_by_email ON users (email) USING 'sai';
 ```
 
-The next topic ([What SAI Is and Why the Partition Key Rule Exists](./02-what-is-sai.md)) covers *how* this works at the storage layer, and why the partition key rule is load-bearing.
+The next topic ([What SAI Is and Why the Partition Key Rule Exists](./02-what-is-sai.md)) covers *how* this works at the storage layer, and why the partition key rule exists.
 
 ### The One Rule
 
@@ -48,7 +48,7 @@ The next topic explains why, in detail. For now: commit the rule to memory and b
 
 | Topic | What you'll learn |
 |---|---|
-| [What SAI Is](./02-what-is-sai.md) | The per-SSTable storage model and why the partition key rule is load-bearing. |
+| [What SAI Is](./02-what-is-sai.md) | The per-SSTable storage model and why the partition key rule exists. |
 | [Creating and Managing SAI Indexes](./03-creating-managing-indexes.md) | Syntax, naming, building, dropping, and operational considerations. |
 | [Querying with SAI](./04-querying-with-sai.md) | Query patterns that work, patterns that don't, and how to identify problem queries. |
 | [SAI vs. Denormalization](./05-sai-vs-denormalization.md) | When to use SAI and when to reach for a dedicated table instead. |

@@ -179,7 +179,7 @@ Mixing these two analyses leads to incorrect conclusions about root cause and in
 
 ## The Per-Rack vs Full-Ring Distinction
 
-### Mathematical Foundation
+### The Mathematics
 
 With NTS, when a keyspace has RF == rack count (e.g., RF=3 with 3 racks), every partition is replicated to all 3 racks. A node's data within its rack is determined by the gap between it and the next same-rack node — cross-rack tokens in between are irrelevant.
 

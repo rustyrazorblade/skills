@@ -119,7 +119,7 @@ than one call site, anchor it at each site — consolidating into one comment
 elsewhere loses the guarantee exactly where it is needed.
 
 Length tracks the count of independent, non-inferable facts, not an
-arbitrary line cap. A comment with four load-bearing facts (e.g., "this call
+arbitrary line cap. A comment with four non-inferable facts (e.g., "this call
 resets state X; that makes value Y unreliable for case Z; the obvious
 alternative source for Y doesn't work either, because W") earns four
 clauses. Cutting a comment to one line when it carries three non-inferable

@@ -17,7 +17,7 @@ diff, an issue, a PR — as a file tree the owner navigates themselves. `walkthr
 for `ide-explain` when the subject is "what changed"; reach for this when the subject is "how this
 works", "what's wrong with this", or "what we should do about it".
 
-## The load-bearing part: you author everything
+## The core requirement: you author everything
 
 `generate-walkthrough.py` derives nothing. It never shells out to `git`, `gh`, or an AST tool; it
 validates your manifest and renders it, full stop. The diagram, the ordering, the narration, and
@@ -153,7 +153,7 @@ Note the two things that carry the meaning: the box the walkthrough is *about* i
 (`&#8594;`), not characters that depend on the reader's font. For a branching or layered shape,
 switch to `type: "svg"` with a `viewBox` — same colors, same restraint.
 
-## Display constraint (load-bearing)
+## Display constraint
 
 A background/headless caller (a spawned agent process, a CI job) cannot reliably open a browser on
 the owner's screen — there is no display to open one on. The contract in that case is: **generate

@@ -189,7 +189,7 @@ nodes: [
 ]
 ```
 
-## Display constraint (load-bearing)
+## Display constraint
 
 A background/headless caller (a spawned agent process, a CI job) cannot reliably open a browser on
 the owner's screen — there is no display to open one on. The contract in that case is: **generate

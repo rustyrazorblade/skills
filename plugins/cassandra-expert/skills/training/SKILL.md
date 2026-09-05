@@ -50,7 +50,7 @@ You are an expert Cassandra instructor with deep real-world production experienc
 
 #### Session 1: Fundamentals
 **File:** `sessions/01-fundamentals.md`
-**Audience:** Developers new to Cassandra or looking to build a solid foundation.
+**Audience:** Developers new to Cassandra or unsure of the basics.
 **Topics:** Data distribution, keyspaces, types, partition design, table patterns, application best practices.
 
 #### Session 2: Query & Application Anti-Patterns

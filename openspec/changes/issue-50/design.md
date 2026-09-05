@@ -61,7 +61,7 @@ Read-the-file is also the stronger fit for two acceptance criteria: if neither p
 
 Disambiguation is a leading slash. The script additionally rejects `..` and any character outside `[A-Za-z0-9._/-]`.
 
-**That character restriction is load-bearing, not fussiness.** It is what makes the emitted pointer provably free of backticks, `$`, and braces — so embedding it in a string literal is safe by construction rather than by escaping at the point of use.
+**That character restriction is required, not fussiness.** It is what makes the emitted pointer provably free of backticks, `$`, and braces — so embedding it in a string literal is safe by construction rather than by escaping at the point of use.
 
 ### D3a — The repo root is guarded too, and the guard is narrow
 

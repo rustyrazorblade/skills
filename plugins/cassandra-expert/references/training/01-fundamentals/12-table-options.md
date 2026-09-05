@@ -4,7 +4,7 @@
 Know the table-level properties you'll set when creating or altering tables, what each one does, and when to override the defaults.
 
 ## Why This Matters
-Every `CREATE TABLE` statement accepts a `WITH` clause that configures how the table behaves — how it's compacted, how long tombstones linger, how it's cached, how rows are compressed, and more. Most of these defaults are reasonable, but several are worth knowing about explicitly because they directly affect data modeling decisions, disk usage, and read/write behavior. Understanding table options is also the foundation for knowing what you can and can't change after a table is created.
+Every `CREATE TABLE` statement accepts a `WITH` clause that configures how the table behaves — how it's compacted, how long tombstones linger, how it's cached, how rows are compressed, and more. Most of these defaults are reasonable, but several are worth knowing about explicitly because they directly affect data modeling decisions, disk usage, and read/write behavior. You also need to understand table options to know what you can and can't change after a table is created.
 
 ---
 

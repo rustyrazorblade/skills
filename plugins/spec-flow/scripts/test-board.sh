@@ -198,14 +198,18 @@ check "no EPICS section and no epic sub-issue rows are rendered" $?
 # awk, not sed: BSD sed (macOS default) has no `\|` alternation, so a `/^\(a\|b\)/` terminator
 # never matches, the range runs to end of output, and the assertion passes vacuously.
 # Section rows are indented two spaces; headers are not. Print rows until the next unindented line.
-section() {
-  echo "$out" | awk -v hdr="$1" '
+# section_in takes the render to search, so a fixture other than fixture 1 can extract a block
+# too. Counting rows over a whole board is a trap: a ready row rendered under BLOCKED ON YOU
+# matches the same regex, and fixture 1's own render contains exactly such a row.
+section_in() {
+  echo "$1" | awk -v hdr="$2" '
     !inside && index($0, hdr) { inside = 1; next }
     inside && /^[[:space:]]*$/ { next }
     inside && /^[^[:space:]]/  { exit }
     inside                      { print }
   '
 }
+section() { section_in "$out" "$1"; }
 blocked_section() { section "⛳ BLOCKED ON YOU"; }
 ready_section()   { section "📋 READY"; }
 
@@ -293,7 +297,7 @@ board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
 def row(**kw):
     base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                is_epic=False, agent_active=False,
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
 
@@ -332,7 +336,7 @@ board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
 def row(**kw):
     base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                is_epic=False, agent_active=False,
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
 
@@ -375,7 +379,7 @@ board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
 def row(**kw):
     base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                is_epic=False, agent_active=False,
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
 
@@ -409,7 +413,7 @@ board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
 def row(**kw):
     base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, sub_issues=[], sub_total=0, sub_completed=0, agent_active=False,
+                is_epic=False, agent_active=False,
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
 

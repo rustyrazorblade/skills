@@ -1,12 +1,12 @@
 ## 1. Baseline
 
-- [ ] 1.1 Run `plugins/spec-flow/scripts/test-board.sh` and record the PASS/FAIL counts. Every later step compares against this baseline, so a regression is attributable to one step.
+- [x] 1.1 Run `plugins/spec-flow/scripts/test-board.sh` and record the PASS/FAIL counts. Every later step compares against this baseline, so a regression is attributable to one step.
 
 ## 2. Test-harness groundwork
 
-- [ ] 2.1 Split `section()` in `test-board.sh` into `section_in "$text" "$hdr"`, with `section()` delegating as `section_in "$out" "$1"`. Leave the awk body unchanged so every existing call site keeps working.
-- [ ] 2.2 Drop the stale `sub_issues`, `sub_total` and `sub_completed` keys from all four copies of the `row()` factory in `test-board.sh`. `build_rows` no longer produces them.
-- [ ] 2.3 Re-run the suite. It must match the 1.1 baseline exactly; these two steps change no rendered output.
+- [x] 2.1 Split `section()` in `test-board.sh` into `section_in "$text" "$hdr"`, with `section()` delegating as `section_in "$out" "$1"`. Leave the awk body unchanged so every existing call site keeps working.
+- [x] 2.2 Drop the stale `sub_issues`, `sub_total` and `sub_completed` keys from all four copies of the `row()` factory in `test-board.sh`. `build_rows` no longer produces them.
+- [x] 2.3 Re-run the suite. It must match the 1.1 baseline exactly; these two steps change no rendered output.
 
 ## 3. The cap
 

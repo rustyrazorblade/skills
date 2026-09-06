@@ -1,10 +1,10 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per the issue's own owner-instruction comment; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, review what's already written for staleness/blockers/duplicates (raise problems only; the design and scope were settled with the owner at groom), have architect verify the issue's recorded `## Direction` against current code and auto-adopt it, then OpenSpec propose and stop for spec approval (Seam 1) with the whole spec rendered inline. Second stage of the flow delivery workflow (see docs/workflow.md). Never implements itself. An issue with no `## Direction` (filed by hand, or before grooming decided designs) falls back to a full architect + design-critic consult and always stops for the owner's design choice. A `type:docs` issue skips design entirely; a content-only one also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue skips OpenSpec generation and auto-adopts its Direction the same way, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
-# activate — decide the design, spec the work, then stop for approval
+# activate — verify the plan, spec the work, then stop for approval
 
 You are this issue's `issue-manager`, running as your own dedicated background session. Take a
 `status:ready` issue and produce an owner-approvable plan on an isolated worktree — normally a
@@ -12,22 +12,34 @@ committed OpenSpec change, but a content-only `type:docs` issue (the common case
 artifact entirely and the plan is just its own scope + acceptance criteria (see step 5), and a
 `type:tech-debt` issue skips it too — its plan is the Direction already confirmed when the issue
 was filed, plus whatever existing specified behavior nearby must be preserved (see step 5's
-tech-debt branch). Right after claiming, step 1 also reviews the issue with the owner — scope/
-acceptance-criteria freshness plus a backlog overlap check, up to five issue-specific questions —
-unconditionally, for every issue type; skippable only via the issue's owner instructions for this
-run, not one of the stops below. This skill stops for the owner **twice** in the normal case: once
-at step 4 to pick the design, before anything is generated, and again at step 7 — **Seam 1** — to
-approve
-whatever step 5 produced. Step 4's wait is skipped for every `type:docs` issue (no design to
-choose) and, by default, for `type:tech-debt` too (the architect still runs at step 3, but
-auto-adopts the issue's confirmed Direction instead of waiting — see step 4's tech-debt branch);
-Step 7 always still applies, in whichever lightweight form matches what was actually produced.
-Neither applicable stop is optional by default beyond that; you hand back once the plan is
-committed (if applicable) and approved — you do not implement, and you do not start
-`/spec-flow:implement`. The only exception: if the issue's owner instructions at the worktree root
-(read fresh at each stop, not just once from your spawn prompt — see `agents/issue-manager.md`)
-explicitly says to auto-approve the design and/or the plan for this run, follow that instead of
-waiting — see steps 4 and 7 below for exactly how.
+tech-debt branch).
+
+**The design is not decided here. It was decided at `/spec-flow:groom`, with the owner.** The
+issue body carries a `## Direction` — the chosen design, the alternatives that lost, and
+`design-critic`'s surviving concerns — and your job is to verify it against the code as it stands,
+not to re-open it. Right after claiming, step 1 reviews what is written for staleness, blockers,
+and duplicates, and raises **only** what it actually finds wrong; the expected outcome is zero
+questions and a clean pass. Step 3's architect then verifies the Direction, and step 4 adopts it
+without waiting unless a hard dependency, a material deviation, or (on `type:tech-debt`) a
+behavior change turns up. Every stage that used to ask the owner something here now assumes
+grooming answered it. That is what lets a worker run this issue with nobody attached.
+
+**The fallback:** an issue with **no `## Direction`** gets the full treatment instead. That is an
+issue filed by hand, by an outside contributor, or before grooming decided designs. Step 3 runs
+`architect` and `design-critic` from scratch. Step 4 always stops for the owner to choose, because
+nobody has made that call yet.
+
+So this skill normally stops for the owner **once**: at step 7 — **Seam 1** — to approve whatever
+step 5 produced. It stops twice on the no-`Direction` fallback, and whenever step 4 finds a hard
+dependency, a material deviation, or a tech-debt behavior change.
+You hand back once the plan is committed (if applicable) and approved. You do not implement, and
+you do not start `/spec-flow:implement`.
+
+**Only Seam 1 can be auto-approved.** If the issue's owner instructions (read fresh at that stop,
+not once from your spawn prompt — see `agents/issue-manager.md`) says to auto-approve the plan for
+this run, follow it — see step 7. **The design stop can never be auto-approved.** When it fires,
+nobody has made that decision yet, so an instruction written before the run cannot have consented
+to it. See step 4.
 
 Input: an issue number `#N`. If omitted, pick the highest-priority `status:ready` issue that is
 unassigned or already assigned to you (`gh issue list --label status:ready --json
@@ -152,19 +164,26 @@ qualify), and confirm the choice with the owner.
    hand-invoked activate to misread. Carry the subagent's **path** forward to step 2, which writes
    the file once isolation is confirmed.
 
-   Then draft **up to five** issue-specific questions from what
-   you actually find — never a fixed checklist recited regardless of the issue, and never more than
-   the ambiguity actually calls for; a straightforward issue with no backlog overlap may earn zero
-   questions, and saying so plainly and moving on is the right outcome, not a shortfall. Typical
-   shapes, only when the issue or the backlog search actually raises them: does the scope/acceptance
-   criteria in front of you still match what the owner wants; is this still the right priority given
-   what else is in flight; a backlog hit that looks like the same area — ask whether it's related, a
-   duplicate, or a dependency, or just coincidentally similar; anything that's changed since this
-   was filed that the acceptance criteria doesn't capture.
+   **This is a review, not a refinement pass. Raise problems; don't re-open settled questions.**
+   The issue was scoped, questioned, and designed at `/spec-flow:groom`, with the owner, before it
+   ever reached you. Your job here is to check that what is written still holds against the world
+   as it is now, and to say so when it doesn't. **The default outcome is zero questions**: you
+   confirm the issue reads clean and proceed. That is success, not a shortfall.
 
-   Ask them **one at a time** — never dump the whole list on the owner at once — and follow up on
-   whatever the answer actually raises rather than moving mechanically to the next scripted
-   question. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
+   Raise something only when you find one of these, and only then:
+   - **Stale** — the code moved under the issue since it was filed, and the scope, acceptance
+     criteria, or `## Direction` no longer describes reality.
+   - **Blocked** — a backlog hit is a genuine hard dependency on unmerged work.
+   - **Duplicated** — a backlog hit is the same work, already filed or already in flight.
+   - **Incomplete** — something the issue needed decided was left explicitly unanswered under
+     **Open questions**, and implementation cannot proceed without it.
+
+   Never ask the owner to re-confirm scope that nothing has invalidated, re-rank a priority that
+   nothing has changed, or re-choose a design they already chose. Those questions were asked at
+   `groom`, and asking them again is the cost this pipeline exists to remove.
+
+   Ask whatever you do raise **one at a time** — never dump several on the owner at once — and
+   follow up on whatever the answer actually raises. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
    the architect-flagged case at step 4 below (`blocked` label + native GitHub issue dependency +
    comment) — don't invent a second mechanism for the same fact. If an answer changes the scope or
    acceptance criteria, update the issue body before continuing so the change is durable, not just
@@ -175,10 +194,11 @@ qualify), and confirm the choice with the owner.
    Close with one comment either way, so the review is visible to anyone reading the issue without
    attaching to this session:
    ```bash
-   gh issue comment <N> --body "🔎 Reviewed with owner — confirmed as filed."
-   # or, if anything changed:
+   gh issue comment <N> --body "🔎 Reviewed — still accurate as filed."
+   # or, if anything was stale and got corrected:
    gh issue comment <N> --body "🔎 Reviewed with owner — updated: <what changed, one line>."
    ```
+   The first form is the expected one. Post it and keep going; a clean review needs no owner.
    **If the issue's owner instructions skips this review for the run**, post that plainly instead,
    same auditability as every other auto-approved step: `gh issue comment <N> --body "Owner review
    skipped per this run's instructions."`
@@ -221,8 +241,9 @@ qualify), and confirm the choice with the owner.
    mandatory gate here.
 
    **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
-   **Tech-debt fast path** in `docs/workflow.md`). The issue body already carries a `## Direction`
-   from `/tech-debt` (dev-skills) — a concrete shape, not a design brief — so spawn `architect` with a
+   **Tech-debt fast path** in `docs/workflow.md`). If it carries **no** `## Direction` (hand-labeled,
+   never filed by `/tech-debt`), treat it as the no-`Direction` fallback below instead. Otherwise the
+   issue body already carries a `## Direction` from `/tech-debt` (dev-skills) — a concrete shape, not a design brief — so spawn `architect` with a
    **narrowed charter** instead of the normal design-from-scratch mandate: *"Direction (already
    confirmed by the owner when this issue was filed): `<the issue's Direction section, verbatim>`.
    Don't design from scratch — verify this specific fix still applies (the finding's file:line
@@ -236,28 +257,41 @@ qualify), and confirm the choice with the owner.
    can't be done behavior-preserving, that's exactly what step 4's tech-debt branch escalates to the
    owner.
 
-   Otherwise (a normal issue): before generating anything, spawn
-   the `architect` subagent with the issue's scope + acceptance
-   criteria. If a domain-expert agent is available in the consuming repo (e.g. a database or
-   domain expert), spawn it **at the same time** — one message, two tool calls — with the same
-   scope + acceptance criteria; both are independent read-only advisors working from the same
-   input, so there's no reason to serialize them. The architect returns a design proposal —
-   approach, structure/boundaries (SOLID), data model, key interfaces, risks & impact, and
-   **trade-offs framed as owner decisions** (recommended option + alternatives + why). The
-   domain-expert returns the domain facts behind those trade-offs. If the architect's design
-   raises a specific domain question neither agent already answered, follow up with a second,
-   targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
+   **Otherwise (a normal issue): the design was already decided at `/spec-flow:groom`, so verify
+   it — don't re-derive it.** The issue body carries a `## Direction` section: the design the owner
+   chose, the alternatives that lost, and `design-critic`'s surviving concerns. The owner made that
+   call once, with the architect's options and the critic's findings in front of them. Re-opening it
+   here spends their attention twice and stops a pipeline that is meant to run without them.
 
-   **Then spawn `design-critic` on what the architect returned**, before step 4's stop —
-   **normal issues only.** Skip it on both fast paths: a `type:docs` issue has no design stop at
-   all, and a `type:tech-debt` issue auto-adopts a Direction the owner already confirmed item by
-   item, so there is nowhere for findings to render and nothing for them to change. The architect's
-   own three checks (hard dependency, material deviation, not behavior-preserving) remain that
-   path's guard. It cannot
+   Spawn `architect` with the same **narrowed charter** the tech-debt path uses: *"Direction
+   (already confirmed by the owner when this issue was filed): `<the issue's Direction section,
+   verbatim>`. Don't design from scratch — verify this design still applies against the code as it
+   stands now, and turn it into a brief: confirmed shape (or a corrected one, if the code moved
+   under it), risks & blast radius, and any hard dependency on other unmerged work."* If a
+   domain-expert agent is available in the consuming repo, and the Direction raises a domain
+   question `groom` didn't already settle, spawn it at the same time — one message, two tool calls.
+   Both agents **advise**; neither makes the call.
+
+   **If the issue has no `## Direction` section** — filed by hand, filed before this stage existed,
+   or filed by an outside contributor — there is nothing to verify. Fall back to the full
+   design-from-scratch consult: spawn `architect` with the issue's scope + acceptance criteria, and
+   a domain expert concurrently when one fits, for a design proposal with approach,
+   structure/boundaries (SOLID), data model, key interfaces, risks & impact, and **trade-offs framed
+   as owner decisions** (recommended option + alternatives + why). That path always stops for the
+   owner at step 4, because nobody has chosen anything yet.
+
+   **Then spawn `design-critic` on what the architect returned** — but **only on the
+   no-`Direction` fallback above**, where a design is genuinely being made here for the first time.
+   Skip it everywhere else. A normal issue already ran `design-critic` at `groom`, against the same
+   design, and its surviving concerns are recorded in the `## Direction` section; running it again
+   re-litigates a decision the owner already made with those findings in hand. A `type:docs` issue
+   has no design stop at all, and a `type:tech-debt` issue auto-adopts a Direction the owner
+   confirmed item by item. On all three, the architect's own checks (hard dependency, material
+   deviation, not behavior-preserving) are the guard. It cannot
    run concurrently with the architect — it needs the design as input — so this is one extra serial
    consult, and it is worth it: the architect writes its own "Risks & impact" section, which is the
-   same agent grading its own proposal. `design-critic` is the only step that attacks the plan
-   while changing it is still cheap; everything adversarial after this point reviews *code against
+   same agent grading its own proposal. On this fallback, `design-critic` is the only place the plan is
+   attacked before it is approved; everything adversarial after this point reviews *code against
    the spec* and never asks whether the spec was worth matching.
 
    Give it the issue's scope + acceptance criteria and the architect's full design. It returns
@@ -269,11 +303,22 @@ qualify), and confirm the choice with the owner.
    rather than resolving them yourself: the whole point is that the owner sees the design and its
    holes together, before approving either.
 
-4. **Stop and route the decision to the owner — before generating anything.** (Skipped entirely for
-   `type:docs`, per step 3.)
+4. **Adopt the recorded Direction, or stop and route a genuine decision to the owner.** (Skipped
+   entirely for `type:docs`, per step 3.)
 
-   **For a `type:tech-debt` issue, auto-adopt by default — don't wait for the owner** unless one of
-   three specific problems fires, each of which stops exactly like the hard-dependency case below
+   **An issue carrying a `## Direction` auto-adopts it by default — don't wait for the owner.**
+   This is now the normal case, not an exception: `groom` ran `architect` and `design-critic` and
+   the owner chose, so there is no decision left to route. The three problems below are the only
+   things that stop it, and they are facts the architect determined, not matters of taste.
+   `type:tech-debt` reaches this same branch by the same reasoning; its Direction came from
+   `/tech-debt` (dev-skills) instead of from `groom`, and nothing else about the handling differs.
+
+   **An issue with no `## Direction`** — step 3's fallback ran a full design-from-scratch consult —
+   **always stops here for the owner**, no exceptions and no auto-approve. Present the architect's
+   options and `design-critic`'s findings together, one decision at a time, and let the owner
+   choose. Nobody has made this call yet, and it is not yours to make.
+
+   The three problems that stop an auto-adopt, each exactly like the hard-dependency case below
    always has:
    - **Architect flagged a hard dependency** on another unmerged issue — handled identically to the
      normal case further down this step (label, comment, native link, stop for the owner). Never
@@ -281,9 +326,11 @@ qualify), and confirm the choice with the owner.
    - **Architect reports a material deviation** from the issue's confirmed Direction (the code moved
      enough that the original shape no longer fits, or the "corrected" shape from step 3 changes
      what the fix actually does, not just where it touches).
-   - **Architect reports the fix can't be done without changing observable behavior.** This is the
-     single most important check in the whole fast path — it's what stops a "pure refactor" that
-     turns out not to be one from silently proceeding without ever going through spec approval.
+   - **Architect reports the fix can't be done without changing observable behavior** —
+     `type:tech-debt` only, where behavior preservation is the whole premise. This is the single
+     most important check in that fast path: it's what stops a "pure refactor" that turns out not
+     to be one from silently proceeding without ever going through spec approval. It does not apply
+     to a normal issue, where changing behavior is the point.
    Any of the three → **stop and present it to the owner** exactly like a real design decision (what
    architect found, why it changed the picture, and the owner's options — proceed anyway with the
    corrected shape, narrow the fix to what *is* behavior-preserving, or treat this as a real feature
@@ -295,13 +342,25 @@ qualify), and confirm the choice with the owner.
    **None of the three fired** → adopt architect's confirmed (or corrected) shape without waiting,
    and post a comment naming what was adopted, same auditability as the docs/design auto-approve
    comments elsewhere in this step:
-   `gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."`
-   Then go straight to step 5's tech-debt branch. This is the *default* for `type:tech-debt`, not
-   conditional on the issue's owner instructions — the owner already made this decision once, item
-   by item, when they confirmed the finding in `/tech-debt` (dev-skills); step 4 here is a safety check
-   against staleness/scope-creep, not a second design-choice gate.
+   ```bash
+   # normal issue
+   gh issue comment <N> --body "🧭 Direction verified against current code — proceeding with: <shape, one line>."
+   # type:tech-debt
+   gh issue comment <N> --body "🔧 Tech-debt fix confirmed — proceeding with: <shape, one line>."
+   ```
+   Then go to step 5 — its tech-debt branch for a `type:tech-debt` issue, its normal branch
+   otherwise. This is the *default* whenever a `## Direction` exists, and it is **not** conditional
+   on the issue's owner instructions: the owner already made this decision once, with the
+   architect's options and `design-critic`'s findings in front of them, at `groom` or at
+   `/tech-debt` (dev-skills). Step 4 is a staleness and scope-creep check, not a second
+   design-choice gate.
 
-   **Otherwise (a normal issue):** every consequential
+   **If the architect flagged nearby structural debt during an auto-adopt**, apply the
+   structural-debt rule further down this step. There is no owner waiting here, so fold **nothing**
+   into scope on your own — list every item, exactly as the architect worded it, in the comment
+   above, for the owner to triage later.
+
+   **For the no-`Direction` fallback only:** every consequential
    design / data-model choice the architect surfaced (new tables / partition or clustering keys /
    indexes / schema changes / a new public interface / a concurrency model) is the **owner's** to
    make. Present the architect's (and domain-expert's) options inline — recommended choice +
@@ -330,10 +389,10 @@ qualify), and confirm the choice with the owner.
    separate issue," ask the owner whether to file it now (if so, `gh issue create` it as its own
    ungroomed backlog item — this is the owner's explicit call, not something you do on your own
    initiative) or leave it for later. Never fold a "separate issue" item into the current change's
-   scope without the owner explicitly saying so. **In auto mode (below), there's no owner to ask —
+   scope without the owner explicitly saying so. **During an auto-adopt there's no owner to ask —
    never fold ANY flagged debt item into scope on your own, "fold into this change" or not. List
-   every item, exactly as the architect recommended it, in the auto-approval comment instead, for
-   the owner to triage once they're back.**
+   every item, exactly as the architect recommended it, in the adopt comment instead, for the owner
+   to triage once they're back.**
 
    **If the architect's design surfaces a hard dependency on another, unmerged issue** (this one
    genuinely can't land first, not just "would be cleaner after"), say so to the owner here, then
@@ -356,12 +415,16 @@ qualify), and confirm the choice with the owner.
    decision — label it, comment, and stop for the owner regardless of what
    the issue's owner instructions says for this run.
 
-   **Absent a hard dependency, and only if the issue's owner instructions (read fresh at this
-   point) explicitly says to auto-approve the design for this run**, skip the wait instead of
-   pausing: take the architect's recommended option, and post a comment naming what was chosen and
-   why, alongside the debt-item list above:
-   `gh issue comment <N> --body "Design auto-approved per this run's instructions: <recommended option, one line>."`
-   Then proceed to step 5. Absent that explicit instruction, this is always a real pause.
+   **This stop is never auto-approved, whatever the issue's owner instructions says.** It fires
+   only when nobody has chosen a design — the no-`Direction` fallback — or when architect found a
+   problem that invalidates the choice already made. An instruction is composed before the run, when
+   the issue was assumed to carry a decided Direction, so it cannot be consent to a decision that
+   does not exist yet. An instruction naming "the design" applies to nothing here; treat it as
+   silent and wait.
+
+   Auto-approval reaches Seam 1 only (step 7). If you are tempted to cross this stop because the
+   pipeline is meant to run unattended, that is exactly backwards: an issue that arrived without a
+   Direction is the one issue that must wait for its owner.
 
 5. **For a `type:docs` issue, first decide whether it needs a spec at all — most don't.** A
    generated OpenSpec spec that just restates the book's own content in `#### Scenario:` blocks is
@@ -408,7 +471,8 @@ qualify), and confirm the choice with the owner.
    - **Nothing there:** proceed fresh, naming the change `issue-<N>`.
    - **`issue-<N>` already there** (re-activation, resuming your own earlier pass): orient
      yourself in it first — read its proposal/design/specs/tasks and the branch's `git log` —
-     then assess whether it already reflects the design the owner just chose at step 4. If it
+     then assess whether it already reflects the Direction step 4 adopted (or, on the fallback, the
+     design the owner chose there). If it
      does, continue from it rather than regenerating from scratch. If it doesn't (the owner picked
      differently this time, or it's stale/partial), say so and regenerate the affected parts.
      **If `ac-coverage.md` and/or `overrides.md` are missing** (a change dir from before these
@@ -421,20 +485,26 @@ qualify), and confirm the choice with the owner.
      for the same issue.
 
    Run the OpenSpec flow for the change (`issue-<N>`) against the issue's scope and acceptance
-   criteria, folding in the design the **owner chose** in step 4 — not the architect's raw
-   recommendation if they picked differently:
-   - Use `openspec-explore` to think through the change if it's non-trivial.
+   criteria, folding in the Direction step 4 adopted — not the architect's raw recommendation if the
+   owner picked differently:
    - Use `openspec-propose` to generate proposal + design + specs + tasks for `issue-<N>`.
+     **Do not use `openspec-explore`.** The thinking it does was already done, with the owner, and
+     better: `groom` shaped the what and why with `product-manager`, and its step 5 settled the how
+     with `architect` and `design-critic`. `openspec-propose` transcribes those decisions into
+     OpenSpec's format. It does not get to re-derive them, and an exploratory pass here would
+     quietly compete with a design the owner already chose.
    - **Require `design.md` to actually carry what step 3/4 produced, not a compressed memory of
      it three steps later.** `openspec-propose`'s own template doesn't know this pipeline's
      step 3/4 exists, so after it runs, directly edit `design.md` (or write these sections
      yourself if `openspec-propose` left them thin) to guarantee both are present:
-     - **`## Alternatives Considered`** — one entry per option the architect actually presented
-       at step 4, not just the one chosen: the option, why it was rejected, and — if the owner
-       picked differently than the architect's own recommendation — a note that this was an
-       explicit owner override, not the advisor's pick. This is a transcription job, not
-       synthesis: the full architect output is already in context from step 3, so copy it in
-       faithfully rather than re-summarizing from memory.
+     - **`## Alternatives Considered`** — one entry per option that was actually on the table when
+       the owner chose, not just the one they picked: the option, why it was rejected, and — if the
+       owner picked differently than the architect's own recommendation — a note that this was an
+       explicit owner override, not the advisor's pick. Copy these from the issue's `## Direction`
+       section, which recorded them at `groom`; on the no-`Direction` fallback, copy them from the
+       architect output already in context from step 3. Either way this is a transcription job,
+       not synthesis — copy faithfully rather than re-summarizing from memory. A structural
+       `type:docs` issue has neither, since steps 3 and 4 were skipped; omit the section entirely.
      - **`## Domain Facts`** — when a domain-expert agent was consulted at step 3, its supporting
        facts, attributed to it, not folded anonymously into the architect's own reasoning. Omit
        this section entirely (not a stub) when no domain-expert was available.
@@ -447,8 +517,8 @@ qualify), and confirm the choice with the owner.
      all mean going back and filling them in properly before proceeding, the same discipline as
      `ac-coverage.md`'s "every row must resolve" rule below. This is what makes Seam 1 (step 7's
      render) actually informative instead of forcing the owner to reconstruct the architect's
-     reasoning from a comment history or their own memory of the step-4 conversation.
-   - If the owner agreed at step 4 to fold in any nearby structural-debt item, add it as an
+     reasoning from a comment history or their own memory of the design conversation.
+   - If the owner agreed to fold in any nearby structural-debt item, add it as an
      explicit task in `tasks.md` alongside the feature's own tasks — don't let it get lost between
      the decision and the generated plan.
    - Translate the issue's acceptance criteria into spec `#### Scenario:` blocks.
@@ -685,8 +755,8 @@ qualify), and confirm the choice with the owner.
    cat > "$T" <<'EOF'
    📝 Spec committed (`issue-<N>`) — awaiting your review to approve implementation.
 
-   <the full render described below, verbatim: proposal, the design you chose at step 4,
-    requirements + scenarios, ac-coverage.md, overrides.md, tasks>
+   <the full render described below, verbatim: Why, What changes, Design, Requirements,
+    AC coverage, Overrides, Tasks, Files written>
 
    <the **Your options** block from the top of this step>
    EOF
@@ -703,27 +773,46 @@ qualify), and confirm the choice with the owner.
    still render in full (current state, not a diff — see the `explain`-mode branch above for why).
    **On a fresh look or when nothing changed**, the rest of this paragraph is the full render:
 
-   **Show the spec in the conversation — do NOT just point at the worktree path.** The owner
-   reviews here, not in an editor. This is confirmation that step 5 faithfully translated the
-   design already **chosen at step 4** into a concrete spec — not the first time the owner sees
-   the decision. Render the substance inline: the **proposal** (why + what changes + scope), the
-   **design the owner chose at step 4** — `design.md`'s `## Alternatives Considered` and (when
-   present) `## Domain Facts` sections, verbatim, not re-narrated — so the owner can confirm this
-   is still what they meant and see exactly what the architect actually said, not a compressed
-   retelling of it, the **delta-spec requirements + their
-   `#### Scenario:` blocks** (the testable contract), the **`ac-coverage.md` table** and
-   **`overrides.md`** committed at step 5, both verbatim — render the actual files, not a fresh
-   paraphrase of them, so what the owner reads here is exactly the durable artifacts, not a second,
-   potentially-drifted retelling — so the owner can catch a dropped criterion, an unnoticed
-   override of existing behavior, or a conflict with another in-flight change before approving, not
-   after implementation — the **tasks** in order, including any folded-in
-   structural-debt task from step 4 — and, if any nearby structural debt was recommended as a
-   separate issue, a one-line reminder of its disposition (filed as `#<M>`, or left for later).
-   Summarize faithfully — it must be enough to approve or redirect without opening a file. You may
-   also give the path as a secondary reference, but the render is the deliverable, and it goes in
-   BOTH places: the conversation and the issue comment (see the top of this step — the worktree
-   path is meaningless to anyone not sitting at this machine). End both with the **Your options**
-   block. **Do not proceed to implementation.** When the owner approves, the next step is
+   **Show the spec inline. Pointing at a path is a defect, not a shortcut.** The owner reviews
+   here, in the conversation and in the issue comment — never in an editor, and never by going and
+   finding the files themselves. A render that says the spec "is available at" a path, or that
+   summarizes instead of showing, has failed this step. The path may appear as a secondary
+   reference, after the render, never in place of it.
+
+   Render these sections, in this order, with these headings. Bullets throughout — this is a
+   document the owner reads to make a decision, not a wall of prose:
+
+   - **Why** — the problem, from `proposal.md`. One short paragraph.
+   - **What changes** — from `proposal.md`'s `## What Changes`. One bullet per touched capability
+     or file, naming the user-visible or API-visible effect.
+   - **Design** — the chosen design, then each rejected alternative as its own bullet with the
+     reason it lost. Copy `design.md`'s `## Alternatives Considered` and, when present,
+     `## Domain Facts` **verbatim**, not re-narrated. The owner chose this at `groom`; showing it
+     back to them unaltered is how they confirm step 5 transcribed it faithfully.
+   - **Requirements** — each delta-spec requirement, with its `#### Scenario:` blocks as nested
+     bullets. This is the testable contract.
+   - **AC coverage** — the `ac-coverage.md` table, verbatim. Not a paraphrase: a dropped acceptance
+     criterion is exactly what this table exists to expose.
+   - **Overrides** — `overrides.md`, verbatim. This is where an unnoticed override of existing
+     behavior, or a collision with another in-flight change, becomes visible before implementation
+     rather than after.
+   - **Tasks** — numbered, in order, including any structural-debt task folded in at step 4. If any
+     nearby debt was recommended as a separate issue, one line on its disposition (filed as `#<M>`,
+     or left for later).
+   - **Files written** — every path that now exists under `openspec/changes/issue-<N>`, one per
+     bullet:
+     ```bash
+     find openspec/changes/issue-<N> -type f | sort
+     ```
+     This section is not optional. Step 6 commits the change directory before the owner sees any of
+     it, so this list is the only place they learn exactly what landed in `openspec/` on their
+     behalf. Never abbreviate it and never replace it with a count.
+   - **Your options** — the block from the top of this step.
+
+   The render is the deliverable and it goes in BOTH places: the conversation and the issue comment
+   (see the top of this step — the worktree path is meaningless to anyone not sitting at this
+   machine). It must be enough to approve or redirect without opening a file.
+   **Do not proceed to implementation.** When the owner approves, the next step is
    `/spec-flow:implement <N>`.
 
    **For a structural/tech-accompanying `type:docs` issue** (steps 3/4 skipped), there's no step-4
@@ -781,19 +870,19 @@ qualify), and confirm the choice with the owner.
 
 - **Show, don't link.** At either stop, render inline in the conversation; never hand back only a
   file path and expect the owner to open it. The owner is not in an editor.
-- **Two real stops, in order, by default.** Step 4 (design choice) always precedes step 5
-  (generation) — never generate the spec before the owner has picked (or the issue's owner instructions
-  auto-picked) among the architect's options. Step 7 (spec approval, Seam 1) always follows step 6
-  (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until both stops
-  have passed or been explicitly auto-approved per that file's current contents. **Two structural
-  exceptions**, each triggered by a distinct label — never combine, see the collision rule below:
+- **One stop by default; two on the fallback.** Step 4 adopts a recorded `## Direction` without
+  waiting. It stops only on the no-`Direction` fallback, or when architect reports a problem (see
+  step 4). Step 4 always precedes step 5: never generate the spec before the Direction is adopted
+  or, on the fallback, the owner has picked. Step 7 (spec approval, Seam 1) always follows step 6
+  (commit) — no implementation, no `/spec-flow:implement`, no pushing the branch, until every
+  applicable stop has passed. **Two structural exceptions**, each triggered by a distinct label —
+  never combine, see the collision rule below:
   - **`type:docs`**: always skips step 4 (there's no design to choose) entirely, not just
     auto-approves it; a **content-only** one also skips the OpenSpec-generation portion of step 5
     and all of step 6 (no spec generated or committed — see step 5's docs branch).
-  - **`type:tech-debt`**: step 4 still runs, but auto-adopts the confirmed Direction by default
-    instead of waiting — a real (if narrower) safety check, not a full skip, and it still stops for
-    a hard dependency, a material deviation, or infeasibility (see step 4's tech-debt branch); step
-    5's OpenSpec-generation portion and all of step 6 are always skipped, unconditionally (see step
+  - **`type:tech-debt`**: step 4 auto-adopts its Direction like any other issue that carries one,
+    and also stops if the fix cannot be done behavior-preserving (see step 4). Step 5's
+    OpenSpec-generation portion and all of step 6 are always skipped, unconditionally (see step
     5's tech-debt branch).
   Either way, step 7 (Seam 1) still always applies, in whichever lightweight form (spec, scope +
   acceptance criteria, or Direction + adjacent-behavior list) matches what was actually produced —
@@ -819,7 +908,8 @@ qualify), and confirm the choice with the owner.
 - One change per issue, named `issue-<N>` — deterministic, never derived from the title. **Not
   every issue gets one** — a content-only `type:docs` issue, or any `type:tech-debt` issue (step 5),
   generates no OpenSpec change at all, by design; don't treat its absence as a skipped step.
-- Architectural / data-model decisions are the owner's, made at step 4; the architect and any
+- Architectural / data-model decisions are the owner's, made at `groom` step 5, or at step 4 on
+  the no-`Direction` fallback; the architect and any
   domain-expert agent advise only, never decide.
 - **Nearby structural debt is a recommendation, not scope creep.** Never bundle a "recommend as a
   separate issue" item into the current change without the owner explicitly saying so, and never
@@ -828,7 +918,7 @@ qualify), and confirm the choice with the owner.
   to that same worktree automatically. If `openspec/changes/` already has something for this issue
   (step 5), orient yourself at that work-in-progress before touching anything — don't assume it's
   current, and don't assume it's safe to regenerate; read it, judge whether it still matches the
-  owner's step-4 choice, and continue it if so.
+  Direction step 4 adopted, and continue it if so.
 - **Never activate an issue assigned to someone else.** This repo may have multiple users; an
   issue's assignee is another person's claim. Stop and say so rather than proceeding.
 - **`agent:active` stays on past this skill** — `implement`/`address`/`finalize` inherit it;

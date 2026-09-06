@@ -7,9 +7,12 @@ agents you invoke turn-by-turn.
 
 ```
 groom ─▶ activate ─▶ [SEAM 1: you approve the spec] ─▶ implement ─▶ [SEAM 2: you review + squash-merge] ─▶ finalize
-  │          │                                              │
-refine     design                                  review panel (repo-defined)
-(product)  (architect)
+  │            │                                            │
+refine +     verify +                              review panel (repo-defined)
+design       spec
+(product,    (architect
+architect,    verifies)
+design-critic)
 ```
 
 Two tiers of agent run this. A **`project-manager`** is the central coordinator you talk to
@@ -129,8 +132,8 @@ All skills are namespaced under the plugin:
 
 | Command | Does |
 |---|---|
-| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Grills shape-defining ambiguity one question at a time with a recommended default; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
-| `/spec-flow:activate <N>` | Claim it → review it with you (scope/AC freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions) → worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless the docs' own layout is changing or it documents a tech change — otherwise it's just a quick review of the issue's own scope. A `type:tech-debt` issue always skips spec generation, and by default the design stop too — architect auto-adopts the confirmed Direction unless something's actually wrong. |
+| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue with a decided design (scope, acceptance criteria, `## Direction`, one `P0–P3`). Keeps a written question list and works it to zero before filing, one question at a time with a recommended default, never guessing in place of an answer; runs `architect` + `design-critic` read-only and has you pick the design here; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. This is where your attention gets spent, so the stages after it don't need you. |
+| `/spec-flow:activate <N>` | Claim it → review what's written for staleness, blockers, and duplicates, raising problems only (normally zero questions — the design and scope were settled with you at `groom`) → worktree + branch → architect verifies the issue's `## Direction` against current code and auto-adopts it → OpenSpec propose → commit spec → **stop for your approval** (Seam 1), with the whole spec rendered inline, including every file written. An issue with **no `## Direction`** (filed by hand, or by an outside contributor) falls back to a full architect + design-critic consult and **always stops for your design choice**. A `type:docs` issue skips design entirely, and skips spec generation too unless the docs' own layout is changing or it documents a tech change. A `type:tech-debt` issue skips spec generation and adopts its Direction the same way. |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → the review panel your `spec-flow/WORKFLOWS.md` names → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Runs when you notice CI go red, or when `issue-manager` notices itself (a single check tied to its own push, not a poll loop) — either way the fix confirms the flagged test locally before pushing again. |
@@ -153,7 +156,7 @@ All skills are namespaced under the plugin:
   `issue-manager-<N>`) as its own background process — via `scripts/spawn-issue-manager.sh` — when you start
   or resume work on issue `#N`; attach to it yourself (`claude agents`, then select the session id
   printed by the spawn script) to talk to it directly. It owns that issue alone, end to end: claims
-  it, drives `activate` (both owner stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
+  it, drives `activate` (its owner stop) → `implement` → `sync-ci`/`address` as needed → `finalize`, then
   hands back. This is the default flow for working an issue, not an opt-in.
 - **`archive-batch`** — the **one-shot bulk archiver**. `project-manager` launches one (named
   `archive-batch`) as its own background process — via `scripts/spawn-archive-batch.sh` — once
@@ -165,9 +168,14 @@ All skills are namespaced under the plugin:
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
   (the what/why). Consulted during `groom`.
 - **`architect`** — turns the refined idea into a **design** (structure, SOLID, data model,
-  trade-offs framed as owner decisions) that feeds the OpenSpec proposal. Consulted during
-  `activate`, concurrently with a domain-expert agent if one is available, and **before**
-  propose — you stop and decide right there, before anything is generated. Advises; never decides.
+  trade-offs framed as owner decisions) that feeds the OpenSpec proposal. Consulted during `groom`,
+  concurrently with a domain-expert agent if one is available; you choose among its options before
+  the issue is filed. Consulted again at `activate`, narrowed, to verify the recorded
+  `## Direction` against current code. Advises; never decides.
+- **`design-critic`** — attacks the architect's plan before any code exists: unstated assumptions,
+  missing edge cases, failure modes, acceptance criteria no option satisfies. Consulted during
+  `groom`, after the architect and before you choose; its surviving concerns are recorded in the
+  issue's `## Direction`. Findings only; never a competing design.
 
 **Implementation & build**
 - **`tdd-developer`** — test-first (red→green→refactor), SOLID. The implementer, and the default
@@ -239,9 +247,10 @@ they are the single source you maintain, and every repo using the plugin inherit
   OpenSpec archive at all (no code, nothing to review either way) — that's `project-manager`'s job,
   batched across however many issues have piled up and confirmed with you first — see **Bulk spec
   archiving** in `docs/workflow.md`.
-- Significant design / data-model decisions are made **before** Seam 1, during `activate`: the
-  `architect` (and a domain-expert agent, concurrently, if the repo has one) advises with options +
-  trade-offs, you decide right there before anything is generated; Seam 1 then confirms the
-  resulting spec faithfully reflects your choice. The agents never make the call.
+- Significant design / data-model decisions are made at `groom`, before the issue is filed. The
+  `architect`, `design-critic`, and a domain-expert agent (if the repo has one) advise with options
+  and trade-offs; you decide, and the choice is recorded as the issue's `## Direction`. `activate`
+  verifies that Direction against current code, and Seam 1 confirms the spec reflects it. The
+  agents never make the call.
 - Issues and PRs are always rendered as `<number>: <title>`, one per line with a `-` prefix — a
   bare number is meaningless, and a comma-joined run of issues is hard to read.

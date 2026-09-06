@@ -24,8 +24,8 @@
 
 ## 5. Behavior-preserving refactors
 
-- [ ] 5.1 Collapse `render_blocked_on_you`, `render_unrecognized` and `render_in_flight` into one `render_section(header, rows)`. READY becomes that call plus its withheld line.
-- [ ] 5.2 Re-run the suite. Fixture 3 compares a whole render, so any drift shows here.
+- [x] 5.1 Collapse `render_blocked_on_you`, `render_unrecognized` and `render_in_flight` into one `render_section(header, rows)`. READY becomes that call plus its withheld line.
+- [x] 5.2 Re-run the suite. Fixture 3 compares a whole render, so any drift shows here.
 - [ ] 5.3 Replace the `r not in blocked_on_you` scans at `board.py:502`, `507` and `515` with a set of blocked-on-you issue numbers. The current form compares whole row dicts field by field, up to 400 staged rows at `ISSUE_LIMIT`.
 - [ ] 5.4 Re-run the suite again, separately from 5.2, so a failure attributes to one refactor.
 

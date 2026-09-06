@@ -336,31 +336,13 @@ def render_row(row):
     return "  " + "  ".join(b for b in bits if b)
 
 
-def render_blocked_on_you(blocked_on_you):
+def render_section(header, rows):
+    # Every bucket renders the same shape: a header, its rows, and one trailing separator -- and
+    # an empty bucket renders nothing at all, so the board never shows a header with no rows.
     out = []
-    if blocked_on_you:
-        out.append("⛳ BLOCKED ON YOU")
-        for r in blocked_on_you:
-            out.append(render_row(r))
-        out.append("")
-    return out
-
-
-def render_unrecognized(unrecognized):
-    out = []
-    if unrecognized:
-        out.append("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)")
-        for r in unrecognized:
-            out.append(render_row(r))
-        out.append("")
-    return out
-
-
-def render_in_flight(in_flight):
-    out = []
-    if in_flight:
-        out.append("🔧 IN FLIGHT (agents / CI)")
-        for r in in_flight:
+    if rows:
+        out.append(header)
+        for r in rows:
             out.append(render_row(r))
         out.append("")
     return out
@@ -373,21 +355,20 @@ DEFAULT_READY_LIMIT = 5
 
 
 def render_ready(ready_rows, limit=DEFAULT_READY_LIMIT):
-    out = []
-    if ready_rows:
-        out.append("📋 READY")
-        # `staged` is sorted by (priority, number) before bucketing, so ready_rows already arrives
-        # in priority order and the first N are the N highest-priority ready issues. A slice of an
-        # unsorted list would be arbitrary.
-        for r in ready_rows[:limit]:
-            out.append(render_row(r))
-        # max(0, ...) is the guard, not a redundancy: count_bit tests `if not n`, which is false
-        # for a negative, so count_bit(-3, ...) returns '-3 more ready'. The plural is passed
-        # explicitly to avoid "1 more readys".
-        withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")
-        if withheld:
-            out.append(f"  … {withheld} — raise --ready-limit to see the rest")
-        out.append("")
+    if not ready_rows:
+        return []
+    # `staged` is sorted by (priority, number) before bucketing, so ready_rows already arrives in
+    # priority order and the first N are the N highest-priority ready issues. A slice of an
+    # unsorted list would be arbitrary.
+    out = render_section("📋 READY", ready_rows[:limit])
+    # max(0, ...) is the guard, not a redundancy: count_bit tests `if not n`, which is false for a
+    # negative, so count_bit(-3, ...) returns '-3 more ready'. The plural is passed explicitly to
+    # avoid "1 more readys".
+    withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")
+    if withheld:
+        # Inside the block, under the rows: the count belongs beside what it describes. The
+        # trailing separator render_section appended stays last.
+        out.insert(-1, f"  … {withheld} — raise --ready-limit to see the rest")
     return out
 
 
@@ -537,9 +518,10 @@ def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
     next_up = compute_next_up(ready_rows)
 
     out = ["## Delivery board", ""]
-    out += render_blocked_on_you(blocked_on_you)
-    out += render_unrecognized(unrecognized)
-    out += render_in_flight(in_flight)
+    out += render_section("⛳ BLOCKED ON YOU", blocked_on_you)
+    out += render_section("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)",
+                          unrecognized)
+    out += render_section("🔧 IN FLIGHT (agents / CI)", in_flight)
     out += render_ready(ready_rows, ready_limit)
     out += render_summary(non_epics, blocked_rows, backlog, epics)
     out += render_archive_suggestion(archive_pending)

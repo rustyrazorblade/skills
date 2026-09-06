@@ -495,12 +495,18 @@ def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
         return r["mine"] and r["status"] in PAST_READY_STATUSES and not r["agent_active"]
 
     blocked_on_you = [r for r in staged if is_blocked_on_you(r)]
-    ready_rows = [r for r in staged if r["status"] == "ready" and r not in blocked_on_you]
+    # Membership by issue number, not by row. `r not in blocked_on_you` compares whole row dicts
+    # field by field against every entry, over up to ISSUE_LIMIT staged rows and three buckets.
+    # The number is the row's identity, so the set answers the same question directly.
+    blocked_numbers = {r["number"] for r in blocked_on_you}
+
+    ready_rows = [r for r in staged
+                  if r["status"] == "ready" and r["number"] not in blocked_numbers]
     # Includes spec-review too -- someone ELSE's spec-review issue is neither "blocked on you"
     # (not yours) nor ready/backlog, so without this it would silently vanish from the board
     # entirely instead of showing "for visibility" as the spec requires.
     in_flight = [r for r in staged if r["status"] in PAST_READY_STATUSES
-                 and r not in blocked_on_you]
+                 and r["number"] not in blocked_numbers]
 
     # An issue whose status: label matches nothing this script knows (a typo like
     # "status:in-progres", or a label added since) is counted in the summary but rendered by no
@@ -508,7 +514,7 @@ def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
     # set; use it rather than letting an unknown value fall through every branch.
     unrecognized = [r for r in staged
                     if r["status"] not in STATUS_ORDER
-                    and r not in blocked_on_you]
+                    and r["number"] not in blocked_numbers]
 
     stalled = [r for r in staged if is_stalled(r)]
     blocked_rows = [r for r in non_epics if r["blocked"]]

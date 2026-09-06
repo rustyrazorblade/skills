@@ -17,14 +17,21 @@ GitHub JSON belongs in your context for this skill; the script fetches issues, P
 via `closingIssuesReferences`, not branch-name guessing), CI rollups, local `claude agents`
 sessions, and the OpenSpec archive-pending count, joins all of it, and prints the finished board
 text — bucketed (BLOCKED ON YOU / IN FLIGHT / READY), priority-sorted, with "next up",
-stalled/blocked/needs-attention, and counts for the unbounded categories (ungroomed backlog,
-epics) already computed:
+stalled/blocked/needs-attention, counts for the categories that report as numbers rather than rows
+(ungroomed backlog, epics), and the READY bucket already capped:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/board.py
 ```
 Print its stdout directly to the owner — **this IS the board, not raw material to reformat or
 re-derive.** Pass `--user <login>` only if the owner explicitly wants it scoped to someone other
 than the authenticated `gh` user; the default (the authenticated user) is almost always right.
+
+`--ready-limit <n>` sets how many READY rows render. The default is 5. The rows that render are
+the highest-priority ready issues, not the first five by number. The rest report as a count on one
+line inside the READY block: `… 4 more ready — raise --ready-limit to see the rest`. The cap is a
+display bound only; "next up" still considers every ready issue, so it can name one the cap
+withheld. There is no separate uncap flag: a large `n`, such as `--ready-limit 100`, renders the
+whole queue. A value below 1 is a usage error.
 
 ## Rules
 

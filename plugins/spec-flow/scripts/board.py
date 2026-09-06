@@ -7,10 +7,12 @@ by lifecycle, computing "next up"/"blocked on you"/"stalled", and formatting the
 into one script. The model runs this and prints its stdout; it never sees the raw GitHub JSON and
 never hand-writes a join script. `render_board()` is one function per rendered section, and every
 section renders only when it has something to report — no empty header, no zero count, no
-placeholder line. The two unbounded categories (the ungroomed backlog and the epic list) report as
-counts in the summary line rather than as rows, so the board's rendered length does not grow with
-the backlog. `prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead
-of one-by-one inside `build_rows()`. Stdlib only, shells out to `gh`/`git`/`claude`.
+placeholder line. Three categories grow without limit, and each one is bounded here: the ungroomed
+backlog and the epic list report as counts in the summary line rather than as rows, and the READY
+bucket renders at most `--ready-limit` rows and reports the rest as a count. The board's rendered
+length therefore tracks neither the size of the backlog nor the size of the ready queue.
+`prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead of
+one-by-one inside `build_rows()`. Stdlib only, shells out to `gh`/`git`/`claude`.
 
 THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked on you",
 "stalled", "claimed", what "next up" recommends, epic exclusion and PR/CI correlation. Each rule is
@@ -336,43 +338,39 @@ def render_row(row):
     return "  " + "  ".join(b for b in bits if b)
 
 
-def render_blocked_on_you(blocked_on_you):
+def render_section(header, rows):
+    # Every bucket renders the same shape: a header, its rows, and one trailing separator -- and
+    # an empty bucket renders nothing at all, so the board never shows a header with no rows.
     out = []
-    if blocked_on_you:
-        out.append("⛳ BLOCKED ON YOU")
-        for r in blocked_on_you:
+    if rows:
+        out.append(header)
+        for r in rows:
             out.append(render_row(r))
         out.append("")
     return out
 
 
-def render_unrecognized(unrecognized):
-    out = []
-    if unrecognized:
-        out.append("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)")
-        for r in unrecognized:
-            out.append(render_row(r))
-        out.append("")
-    return out
+# READY is the third unbounded category. `groom` adds status:ready issues and only `activate`
+# removes them, so a repo that grooms faster than it activates renders an ever-longer block. Five
+# is the display bound; --ready-limit raises it.
+DEFAULT_READY_LIMIT = 5
 
 
-def render_in_flight(in_flight):
-    out = []
-    if in_flight:
-        out.append("🔧 IN FLIGHT (agents / CI)")
-        for r in in_flight:
-            out.append(render_row(r))
-        out.append("")
-    return out
-
-
-def render_ready(ready_rows):
-    out = []
-    if ready_rows:
-        out.append("📋 READY")
-        for r in ready_rows:
-            out.append(render_row(r))
-        out.append("")
+def render_ready(ready_rows, limit=DEFAULT_READY_LIMIT):
+    if not ready_rows:
+        return []
+    # `staged` is sorted by (priority, number) before bucketing, so ready_rows already arrives in
+    # priority order and the first N are the N highest-priority ready issues. A slice of an
+    # unsorted list would be arbitrary.
+    out = render_section("📋 READY", ready_rows[:limit])
+    # max(0, ...) is the guard, not a redundancy: count_bit tests `if not n`, which is false for a
+    # negative, so count_bit(-3, ...) returns '-3 more ready'. The plural is passed explicitly to
+    # avoid "1 more readys".
+    withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")
+    if withheld:
+        # Inside the block, under the rows: the count belongs beside what it describes. The
+        # trailing separator render_section appended stays last.
+        out.insert(-1, f"  … {withheld} — raise --ready-limit to see the rest")
     return out
 
 
@@ -403,10 +401,14 @@ def count_bit(n, singular, plural=None):
 
 
 def render_summary(non_epics, blocked_rows, backlog, epics):
-    # The ungroomed backlog and the epic list appear here and nowhere else. Both grow without
-    # bound -- the delivery buckets above are bounded by how many agents can run at once, these are
-    # bounded by nothing -- so they report as a number and the board's length stops tracking the
-    # size of the backlog. See design.md, D2.
+    # The ungroomed backlog and the epic list appear here and nowhere else. Neither is bounded by
+    # anything, so both report as a number and the board's length stops tracking the size of the
+    # backlog. See design.md, D2.
+    #
+    # Not every delivery bucket above is bounded by how many agents can run at once. IN FLIGHT and
+    # BLOCKED ON YOU are. READY is bounded by grooming instead: `groom` adds status:ready issues
+    # and only `activate` removes them, so it needs a bound of its own. That bound is
+    # --ready-limit, applied in render_ready rather than here.
     summary_bits = [
         count_bit(len(backlog), "ungroomed", "ungroomed"),
         count_bit(len(epics), "epic"),
@@ -464,7 +466,7 @@ def render_blocked(blocked_rows):
     return out
 
 
-def render_board(rows, me, archive_pending):
+def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
     epics = [r for r in rows if r["is_epic"]]
     non_epics = [r for r in rows if not r["is_epic"]]
     # Counted, never rendered as rows -- so neither list needs sorting.
@@ -499,12 +501,18 @@ def render_board(rows, me, archive_pending):
         return r["mine"] and r["status"] in PAST_READY_STATUSES and not r["agent_active"]
 
     blocked_on_you = [r for r in staged if is_blocked_on_you(r)]
-    ready_rows = [r for r in staged if r["status"] == "ready" and r not in blocked_on_you]
+    # Membership by issue number, not by row. `r not in blocked_on_you` compares whole row dicts
+    # field by field against every entry, over up to ISSUE_LIMIT staged rows and three buckets.
+    # The number is the row's identity, so the set answers the same question directly.
+    blocked_numbers = {r["number"] for r in blocked_on_you}
+
+    ready_rows = [r for r in staged
+                  if r["status"] == "ready" and r["number"] not in blocked_numbers]
     # Includes spec-review too -- someone ELSE's spec-review issue is neither "blocked on you"
     # (not yours) nor ready/backlog, so without this it would silently vanish from the board
     # entirely instead of showing "for visibility" as the spec requires.
     in_flight = [r for r in staged if r["status"] in PAST_READY_STATUSES
-                 and r not in blocked_on_you]
+                 and r["number"] not in blocked_numbers]
 
     # An issue whose status: label matches nothing this script knows (a typo like
     # "status:in-progres", or a label added since) is counted in the summary but rendered by no
@@ -512,17 +520,21 @@ def render_board(rows, me, archive_pending):
     # set; use it rather than letting an unknown value fall through every branch.
     unrecognized = [r for r in staged
                     if r["status"] not in STATUS_ORDER
-                    and r not in blocked_on_you]
+                    and r["number"] not in blocked_numbers]
 
     stalled = [r for r in staged if is_stalled(r)]
     blocked_rows = [r for r in non_epics if r["blocked"]]
+    # compute_next_up receives the full list, never the slice: the cap is a display bound, not a
+    # change to what the board considers. render_board never holds a truncated list, so no later
+    # edit can hand one to compute_next_up by mistake.
     next_up = compute_next_up(ready_rows)
 
     out = ["## Delivery board", ""]
-    out += render_blocked_on_you(blocked_on_you)
-    out += render_unrecognized(unrecognized)
-    out += render_in_flight(in_flight)
-    out += render_ready(ready_rows)
+    out += render_section("⛳ BLOCKED ON YOU", blocked_on_you)
+    out += render_section("❓ UNRECOGNIZED STATUS (fix the label — these are in no pipeline stage)",
+                          unrecognized)
+    out += render_section("🔧 IN FLIGHT (agents / CI)", in_flight)
+    out += render_ready(ready_rows, ready_limit)
     out += render_summary(non_epics, blocked_rows, backlog, epics)
     out += render_archive_suggestion(archive_pending)
     out += render_next_up(next_up)
@@ -538,9 +550,25 @@ def render_board(rows, me, archive_pending):
     return "\n".join(out)
 
 
+def positive_int(value):
+    # An argparse type= callable rather than a check after parse_args: it gives exit 2, argparse's
+    # own `argument --ready-limit:` prefix and the usage line, and it runs before any gh call, so
+    # no board can print on the error path.
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}")
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {n}")
+    return n
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render the spec-flow delivery board deterministically.")
     parser.add_argument("--user", help="scope 'blocked on you' to this login (default: gh's authenticated user)")
+    parser.add_argument("--ready-limit", type=positive_int, default=DEFAULT_READY_LIMIT,
+                        help=f"how many READY rows to render (default: {DEFAULT_READY_LIMIT}); "
+                             "the rest report as a count. A large N is the uncap.")
     args = parser.parse_args()
 
     for binary in ("gh", "git"):
@@ -575,7 +603,7 @@ def main():
         return body.splitlines()[0] if body else None
 
     rows = build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_note_fn)
-    print(render_board(rows, me, archive_pending))
+    print(render_board(rows, me, archive_pending, args.ready_limit))
 
 
 if __name__ == "__main__":

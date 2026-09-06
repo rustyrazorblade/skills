@@ -10,17 +10,17 @@
 
 ## 3. The cap
 
-- [ ] 3.1 Declare `DEFAULT_READY_LIMIT = 5` directly above `render_ready` in `board.py`.
-- [ ] 3.2 Give `render_ready` a `limit=DEFAULT_READY_LIMIT` parameter and slice `ready_rows[:limit]`. Comment that `staged` is already sorted by `(priority, number)` before bucketing, so the first N are the N highest-priority ready issues.
-- [ ] 3.3 Append the withheld line: `withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")`, rendered as `f"  … {withheld} — raise --ready-limit to see the rest"` only when `withheld` is truthy. Comment that `max(0, …)` is the guard, because `count_bit` returns `'-3 more ready'` for a negative.
-- [ ] 3.4 Add `ready_limit=DEFAULT_READY_LIMIT` as `render_board`'s fourth parameter and pass it to `render_ready` alone. Comment that `compute_next_up` receives the full list, because the cap is a display bound and not a change to what the board considers.
+- [x] 3.1 Declare `DEFAULT_READY_LIMIT = 5` directly above `render_ready` in `board.py`.
+- [x] 3.2 Give `render_ready` a `limit=DEFAULT_READY_LIMIT` parameter and slice `ready_rows[:limit]`. Comment that `staged` is already sorted by `(priority, number)` before bucketing, so the first N are the N highest-priority ready issues.
+- [x] 3.3 Append the withheld line: `withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")`, rendered as `f"  … {withheld} — raise --ready-limit to see the rest"` only when `withheld` is truthy. Comment that `max(0, …)` is the guard, because `count_bit` returns `'-3 more ready'` for a negative.
+- [x] 3.4 Add `ready_limit=DEFAULT_READY_LIMIT` as `render_board`'s fourth parameter and pass it to `render_ready` alone. Comment that `compute_next_up` receives the full list, because the cap is a display bound and not a change to what the board considers.
 
 ## 4. The flag
 
-- [ ] 4.1 Add a `positive_int` callable that raises `argparse.ArgumentTypeError` for a non-integer and for `n < 1`.
-- [ ] 4.2 Wire `--ready-limit` into `main()`'s parser with `type=positive_int` and `default=DEFAULT_READY_LIMIT`, documenting the default in its help text.
-- [ ] 4.3 Pass `args.ready_limit` to `render_board` at `board.py:578`. Without this the flag parses, validates and is discarded, and every in-process test still passes.
-- [ ] 4.4 Confirm by hand that `--ready-limit 0` and `--ready-limit -1` exit non-zero with an empty stdout, and that `--ready-limit 2` changes the CLI render.
+- [x] 4.1 Add a `positive_int` callable that raises `argparse.ArgumentTypeError` for a non-integer and for `n < 1`.
+- [x] 4.2 Wire `--ready-limit` into `main()`'s parser with `type=positive_int` and `default=DEFAULT_READY_LIMIT`, documenting the default in its help text.
+- [x] 4.3 Pass `args.ready_limit` to `render_board` at `board.py:578`. Without this the flag parses, validates and is discarded, and every in-process test still passes.
+- [x] 4.4 Confirm by hand that `--ready-limit 0` and `--ready-limit -1` exit non-zero with an empty stdout, and that `--ready-limit 2` changes the CLI render.
 
 ## 5. Behavior-preserving refactors
 

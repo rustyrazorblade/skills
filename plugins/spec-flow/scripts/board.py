@@ -366,12 +366,27 @@ def render_in_flight(in_flight):
     return out
 
 
-def render_ready(ready_rows):
+# READY is the third unbounded category. `groom` adds status:ready issues and only `activate`
+# removes them, so a repo that grooms faster than it activates renders an ever-longer block. Five
+# is the display bound; --ready-limit raises it.
+DEFAULT_READY_LIMIT = 5
+
+
+def render_ready(ready_rows, limit=DEFAULT_READY_LIMIT):
     out = []
     if ready_rows:
         out.append("📋 READY")
-        for r in ready_rows:
+        # `staged` is sorted by (priority, number) before bucketing, so ready_rows already arrives
+        # in priority order and the first N are the N highest-priority ready issues. A slice of an
+        # unsorted list would be arbitrary.
+        for r in ready_rows[:limit]:
             out.append(render_row(r))
+        # max(0, ...) is the guard, not a redundancy: count_bit tests `if not n`, which is false
+        # for a negative, so count_bit(-3, ...) returns '-3 more ready'. The plural is passed
+        # explicitly to avoid "1 more readys".
+        withheld = count_bit(max(0, len(ready_rows) - limit), "more ready", "more ready")
+        if withheld:
+            out.append(f"  … {withheld} — raise --ready-limit to see the rest")
         out.append("")
     return out
 
@@ -464,7 +479,7 @@ def render_blocked(blocked_rows):
     return out
 
 
-def render_board(rows, me, archive_pending):
+def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
     epics = [r for r in rows if r["is_epic"]]
     non_epics = [r for r in rows if not r["is_epic"]]
     # Counted, never rendered as rows -- so neither list needs sorting.
@@ -516,13 +531,16 @@ def render_board(rows, me, archive_pending):
 
     stalled = [r for r in staged if is_stalled(r)]
     blocked_rows = [r for r in non_epics if r["blocked"]]
+    # compute_next_up receives the full list, never the slice: the cap is a display bound, not a
+    # change to what the board considers. render_board never holds a truncated list, so no later
+    # edit can hand one to compute_next_up by mistake.
     next_up = compute_next_up(ready_rows)
 
     out = ["## Delivery board", ""]
     out += render_blocked_on_you(blocked_on_you)
     out += render_unrecognized(unrecognized)
     out += render_in_flight(in_flight)
-    out += render_ready(ready_rows)
+    out += render_ready(ready_rows, ready_limit)
     out += render_summary(non_epics, blocked_rows, backlog, epics)
     out += render_archive_suggestion(archive_pending)
     out += render_next_up(next_up)
@@ -538,9 +556,25 @@ def render_board(rows, me, archive_pending):
     return "\n".join(out)
 
 
+def positive_int(value):
+    # An argparse type= callable rather than a check after parse_args: it gives exit 2, argparse's
+    # own `argument --ready-limit:` prefix and the usage line, and it runs before any gh call, so
+    # no board can print on the error path.
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}")
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {n}")
+    return n
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render the spec-flow delivery board deterministically.")
     parser.add_argument("--user", help="scope 'blocked on you' to this login (default: gh's authenticated user)")
+    parser.add_argument("--ready-limit", type=positive_int, default=DEFAULT_READY_LIMIT,
+                        help=f"how many READY rows to render (default: {DEFAULT_READY_LIMIT}); "
+                             "the rest report as a count. A large N is the uncap.")
     args = parser.parse_args()
 
     for binary in ("gh", "git"):
@@ -575,7 +609,7 @@ def main():
         return body.splitlines()[0] if body else None
 
     rows = build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_note_fn)
-    print(render_board(rows, me, archive_pending))
+    print(render_board(rows, me, archive_pending, args.ready_limit))
 
 
 if __name__ == "__main__":

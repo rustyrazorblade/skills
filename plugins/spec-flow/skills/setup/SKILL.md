@@ -170,7 +170,7 @@ later question moot.
    - **Seam visualization preference unset, AND the `dev-skills` plugin is installed/enabled**
      (skip this item entirely if `dev-skills` isn't installed — don't offer a preference for a
      plugin the owner doesn't have; they can install it and re-run `setup` any time) → explain the
-     choice in one line: at both owner seams (design approval, in-review), `activate`/`implement`
+     choice in one line: at both owner seams (Seam 1, the plan; Seam 2, in-review), `activate`/`implement`
      can either generate an interactive HTML view via `dev-skills`'s `ide-explain` skill — file tree,
      diff view, docs, all in one place — or render the same content as plain text in the terminal,
      same as before that plugin existed. Recommend the HTML view, default yes, but genuinely

@@ -309,8 +309,10 @@ over to another's; each run's instructions apply to that run alone.
    don't compose a spawn instruction premised on a stop that never fires.
 
    It fires in three cases:
-   - an issue with **no `## Direction`** — filed by hand, by an outside contributor, or before
-     grooming decided designs — where the owner must choose because nobody has;
+   - an issue that is **not `design:decided`** — filed by hand, by an outside contributor, or
+     before grooming decided designs — where the owner must choose because nobody has. The label
+     settles this, not a `## Direction` heading: anyone can type the heading, and only a stage that
+     put the choice to the owner applies the label;
    - an architect-flagged hard dependency or material deviation;
    - on `type:tech-debt`, a fix that turns out not to be behavior-preserving.
 

@@ -56,8 +56,8 @@ trap 'rm -rf "$fake_bin_dir" "$fake_bin_dir2" "$fake_bin_dir3" "$fake_bin_dir4"'
 #                                                        you" -- regression: used to vanish
 #                                                        entirely, since spec-review wasn't in
 #                                                        the IN FLIGHT status set)
-#   #18 status:ready, mine, agent:active             -> BLOCKED ON YOU (activate's design stop --
-#                                                        holds status:ready the whole wait)
+#   #18 status:ready, mine, agent:active             -> BLOCKED ON YOU (activate waiting on the
+#                                                        owner -- holds status:ready throughout)
 #   #19 status:in-review, mine, NO linked PR (ci None) -> BLOCKED ON YOU, not "waiting on CI"
 #   #20 epic (subIssuesSummary.total=2)              -> counted as "1 epic", rendered as no row
 #   #30 no status label                              -> counted as "1 ungroomed", no row
@@ -192,7 +192,8 @@ check "no EPICS section and no epic sub-issue rows are rendered" $?
 
 # --- issue 58: work blocked on the owner must be visible ---
 
-# #18 is parked at activate's design-choice stop. It holds status:ready throughout that wait, so a
+# #18 is parked on an activate question -- a step-1 staleness or blocker finding, or the design
+# stop on the undecided fallback. It holds status:ready throughout that wait, so a
 # status-only rule renders it as an untouched backlog item and the owner never learns a session is
 # waiting on their answer.
 # Section ranges must END at the next section header. The board's headers are emoji lines, not
@@ -217,7 +218,7 @@ blocked_section() { section "⛳ BLOCKED ON YOU"; }
 ready_section()   { section "📋 READY"; }
 
 blocked_section | grep -q "#18"
-check "activate's design-choice stop shows under BLOCKED ON YOU, not as a plain ready item" $?
+check "an activate wait on the owner shows under BLOCKED ON YOU, not as a plain ready item" $?
 
 # Positive canary FIRST: a negative assertion against a section that no longer exists (renamed
 # header, changed emoji) passes vacuously. #13 is the fixture's unclaimed ready item and must

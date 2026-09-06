@@ -38,9 +38,16 @@ label "agent:active"     --color 0e8a16 --description "An issue-manager is curre
 label "blocked"          --color b60205 --description "issue-manager identified a hard dependency on another unmerged issue"
 label "needs-attention"  --color e11d21 --description "issue-manager hit something only the owner can resolve — see issue comments"
 
-# Fast-path trigger — set by groom, read by activate/implement to skip the architect consult,
-# design-choice stop, and 5-lens review panel for documentation-only work.
+# Fast-path trigger — set by groom, read by activate/implement to skip the architect consult and
+# the 5-lens review panel for documentation-only work.
 label "type:docs" --color c5def5 --description "Documentation-only change — fast-tracked by activate/implement"
+
+# Proof that a ## Direction section came from a stage that put the choice to the owner, rather than
+# from whoever typed the issue. activate adopts a Direction ONLY when this label is present: the
+# heading alone proves nothing, because anyone can write it, and adopting an undecided one would
+# skip the design stop and design-critic without the owner ever seeing a choice. Applied by groom
+# step 8, by /tech-debt (dev-skills), and by activate step 4 when its fallback settles a design.
+label "design:decided" --color 1d76db --description "The ## Direction in this issue was chosen by the owner — activate adopts it instead of deciding again"
 
 # Owner-approval signal, set directly by the owner (in GitHub or via project-manager) any time —
 # this is metadata about how to handle the issue, so it lives in GitHub, not a worktree file.
@@ -57,4 +64,4 @@ if [[ $failed -gt 0 ]]; then
   echo "repo, and that your token can write labels there. Re-run this script once fixed." >&2
   exit 1
 fi
-echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, needs-attention, type:docs, merge-on-green, type:tech-debt, tech-debt-review) are present."
+echo "Done. The flow workflow labels (P0–P3, status:*, agent:active, blocked, needs-attention, type:docs, design:decided, merge-on-green, type:tech-debt, tech-debt-review) are present."

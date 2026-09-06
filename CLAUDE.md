@@ -4,11 +4,15 @@
 
 Three rules govern every change here.  They are not defaults to weigh; they hold unless Jon says otherwise for a specific piece of work.
 
-**Always work on a branch, in a worktree.**  Never edit the shared checkout to make a change.  Create a worktree for the branch and work there.  This keeps the shared checkout on `main` and clean, so the branch you are standing on is never a surprise.
+**Always work on a branch, in a worktree.**  Never write to the shared checkout.  Create a worktree for the branch and work there.  Reading it is fine, and some stages do exactly that: `groom` runs its bug repro and its read-only `architect` and `design-critic` passes in the primary checkout on purpose.  The rule is about writes, so that `git status` in the shared checkout always shows a clean `main`.
 
-**File new issues with `/spec-flow:groom`.**  Do not write an issue body by hand, and do not call `gh issue create` directly.  `groom` interviews for the shape of the work, records the scope, the acceptance criteria and the chosen design, and applies the labels the pipeline reads.  An issue filed any other way is missing the parts every later stage depends on.
+**File new issues with `/spec-flow:groom`.**  Do not write an issue body yourself, and do not call `gh issue create` directly.  `groom` interviews for the shape of the work, records the scope and the acceptance criteria, applies the labels the pipeline reads, and records the chosen design where there is one to record.
+
+The exception is a skill that files as one of its own documented steps, with the owner confirming each item first: `/tech-debt` in dev-skills, and `activate`'s offer to file nearby structural debt.  Those issues are already owner-shaped, and `/tech-debt` writes the `## Direction` section that `activate`, `implement` and `reviewer` all read.  The rule binds you when you are acting directly; it does not override a skill's own filing step.
 
 **Never change `main` directly without Jon's authorization for that change.**  Committing to `main`, pushing to `main`, and merging into it each need him to say so first.  Authorization for one change does not carry to the next.
+
+Two pipeline paths already merge to `main`, and both carry their own authorization: a PR labelled `merge-on-green`, which Jon sets per issue, and `/spec-flow:archive`, where his confirmation of the batch authorizes that batch's merge.  Nothing else does.
 
 ## Local development
 

@@ -164,15 +164,15 @@ an override that isn't actually written there.
 
 1. **Seam 1 — spec/plan approval.** `activate` normally has ONE owner stop, but it can have two.
    Name them separately whenever you write or read an instruction:
-   - **The design stop** (`activate` step 4) — **normally does not fire.** An issue carrying a
-     `## Direction` auto-adopts it, because the owner already made that choice at `groom` with
+   - **The design stop** (`activate` step 4) — **normally does not fire.** A `design:decided` issue
+     auto-adopts its `## Direction`, because the owner already made that choice at `groom` with
      `design-critic`'s findings in front of them. **When it does fire, it is never auto-approved**,
      whatever the instructions say: it fires precisely because nobody has made the decision, and an
      instruction written before the run cannot consent to one that did not exist yet. It fires in
-     two cases. The first is the
-     no-`Direction` fallback, where the design is decided for the first time. The second is when
-     architect reports a hard dependency, a material deviation, or a behavior change on a
-     `type:tech-debt` fix. Skipped entirely on a `type:docs` issue. It is **not** Seam 1.
+     three cases: the fallback for an issue that is not `design:decided`, where the design is
+     chosen for the first time; an architect-flagged hard dependency or material deviation; and, on
+     `type:tech-debt`, a fix that turns out not to be behavior-preserving. Skipped entirely on a
+     `type:docs` issue. It is **not** Seam 1.
    - **Seam 1 itself** (`activate` step 7) — approval of the plan that came out of that choice:
      a committed spec, or on a content-only fast path the scope + acceptance criteria, or the
      Direction. Its default never varies: stop and wait.
@@ -202,8 +202,10 @@ Two places catch this, at different points, and each has a **written** next step
   and three options: **(a)** proceed anyway with a corrected, still-behavior-preserving shape if
   one exists; **(b)** narrow the fix to just the part that *is* behavior-preserving, leaving the
   rest out of scope; **(c)** treat this as a real feature change and route it through the full
-  pipeline — re-run `activate` steps 3-7 for the behavior delta specifically (a normal design
-  consult + a real committed spec for just that delta), landing back at a normal Seam 1. Never
+  pipeline — split the behavior delta into its own freshly groomed issue, which gets a design the
+  owner chooses at `groom` and a committed spec of its own. Re-running `activate` on *this* issue
+  does not achieve that: it carries `design:decided`, so steps 3-7 adopt the Direction instead of
+  consulting. Never
   silently pick one — this is exactly the kind of consequential call that's the owner's.
 - **At `implement` (mid-implementation).** `tdd-developer` was explicitly instructed to stop and
   report rather than implement a behavior change it discovers is unavoidable (see `implement`

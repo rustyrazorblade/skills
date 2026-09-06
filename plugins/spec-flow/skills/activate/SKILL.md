@@ -88,7 +88,7 @@ qualify), and confirm the choice with the owner.
    *another* user's `project-manager` (or your own, from a different machine) — nothing else about
    this session is; see **Coordination signals** in `docs/workflow.md`.
 
-   **Review the issue with the owner, right after claiming, before anything else runs.** Skip this
+   **Review the issue right after claiming, before anything else runs.** Skip this
    entirely if the issue's owner instructions (already written by your first actions, before this
    skill started — see `agents/issue-manager.md`) says to skip the review for this run; absent that, it
    always runs, for every issue type — `type:docs` and `type:tech-debt` included, since their fast
@@ -96,10 +96,10 @@ qualify), and confirm the choice with the owner.
    third seam alongside the two below — a lighter, unconditional check before either of them (see
    **Owner review, right after claiming** in `docs/workflow.md`).
 
-   Two things are worth confirming before design work starts: whether the scope and acceptance
-   criteria written at `groom` still hold — this issue may have sat in the backlog a while — and
-   whether anything else open in the backlog overlaps, duplicates, or depends on it, which `groom`
-   had no way to check since it only ever saw the backlog as it stood when this issue was filed.
+   Two things need checking, and neither was knowable at `groom`: whether what the issue says still
+   holds, since it may have sat in the backlog a while and the code moved under it, and whether
+   anything else open in the backlog now overlaps, duplicates, or depends on it. `groom` only ever
+   saw the backlog as it stood when this issue was filed.
 
    **You do not search the backlog yourself — read the shortlist.** `project-manager` runs that
    search before it spawns you and passes the result in; your first actions wrote it to
@@ -240,9 +240,24 @@ qualify), and confirm the choice with the owner.
    question about whether the documentation matches the intended design — available, just not a
    mandatory gate here.
 
+   **Resolve one thing before either branch below: is this issue's design already decided?**
+   ```bash
+   gh issue view <N> --json labels --jq '[.labels[].name] | any(. == "design:decided")'
+   ```
+   **`true` is the only thing that counts as decided**, and the rest of this step calls that state
+   *decided*. The label is applied only by a stage that put the choice to the owner: `groom` step 8,
+   `/tech-debt` (dev-skills), or step 4's own fallback below. **A `## Direction` heading proves
+   nothing on its own** — anyone opening an issue can type one, and adopting it would skip the
+   design stop and `design-critic` without the owner ever having seen a choice. So `false` takes the
+   fallback even when a `## Direction` section is sitting right there. Say so plainly to the owner
+   when that happens, naming the section you are declining to adopt, rather than ignoring it
+   silently. If the label says decided but no `## Direction` section exists, stop and tell the
+   owner: something wrote the label without the section, and neither guessing a design nor
+   proceeding without one is right.
+
    **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
-   **Tech-debt fast path** in `docs/workflow.md`). If it carries **no** `## Direction` (hand-labeled,
-   never filed by `/tech-debt`), treat it as the no-`Direction` fallback below instead. Otherwise the
+   **Tech-debt fast path** in `docs/workflow.md`). If it is **not decided**, take the fallback
+   below instead. Otherwise the
    issue body already carries a `## Direction` from `/tech-debt` (dev-skills) — a concrete shape, not a design brief — so spawn `architect` with a
    **narrowed charter** instead of the normal design-from-scratch mandate: *"Direction (already
    confirmed by the owner when this issue was filed): `<the issue's Direction section, verbatim>`.
@@ -257,8 +272,8 @@ qualify), and confirm the choice with the owner.
    can't be done behavior-preserving, that's exactly what step 4's tech-debt branch escalates to the
    owner.
 
-   **Otherwise (a normal issue): the design was already decided at `/spec-flow:groom`, so verify
-   it — don't re-derive it.** The issue body carries a `## Direction` section: the design the owner
+   **Otherwise (a normal issue that is decided): the design was already chosen at
+   `/spec-flow:groom`, so verify it — don't re-derive it.** The issue body carries a `## Direction` section: the design the owner
    chose, the alternatives that lost, and `design-critic`'s surviving concerns. The owner made that
    call once, with the architect's options and the critic's findings in front of them. Re-opening it
    here spends their attention twice and stops a pipeline that is meant to run without them.
@@ -272,17 +287,17 @@ qualify), and confirm the choice with the owner.
    question `groom` didn't already settle, spawn it at the same time — one message, two tool calls.
    Both agents **advise**; neither makes the call.
 
-   **If the issue has no `## Direction` section** — filed by hand, filed before this stage existed,
-   or filed by an outside contributor — there is nothing to verify. Fall back to the full
+   **If the issue is not decided** — filed by hand, filed before this stage existed, or filed by an
+   outside contributor — there is nothing to verify. Fall back to the full
    design-from-scratch consult: spawn `architect` with the issue's scope + acceptance criteria, and
    a domain expert concurrently when one fits, for a design proposal with approach,
    structure/boundaries (SOLID), data model, key interfaces, risks & impact, and **trade-offs framed
    as owner decisions** (recommended option + alternatives + why). That path always stops for the
    owner at step 4, because nobody has chosen anything yet.
 
-   **Then spawn `design-critic` on what the architect returned** — but **only on the
-   no-`Direction` fallback above**, where a design is genuinely being made here for the first time.
-   Skip it everywhere else. A normal issue already ran `design-critic` at `groom`, against the same
+   **Then spawn `design-critic` on what the architect returned** — but **only on the fallback
+   above**, where a design is genuinely being made here for the first time.
+   Skip it everywhere else. A decided issue already ran `design-critic` at `groom`, against the same
    design, and its surviving concerns are recorded in the `## Direction` section; running it again
    re-litigates a decision the owner already made with those findings in hand. A `type:docs` issue
    has no design stop at all, and a `type:tech-debt` issue auto-adopts a Direction the owner
@@ -306,17 +321,36 @@ qualify), and confirm the choice with the owner.
 4. **Adopt the recorded Direction, or stop and route a genuine decision to the owner.** (Skipped
    entirely for `type:docs`, per step 3.)
 
-   **An issue carrying a `## Direction` auto-adopts it by default — don't wait for the owner.**
-   This is now the normal case, not an exception: `groom` ran `architect` and `design-critic` and
-   the owner chose, so there is no decision left to route. The three problems below are the only
-   things that stop it, and they are facts the architect determined, not matters of taste.
-   `type:tech-debt` reaches this same branch by the same reasoning; its Direction came from
-   `/tech-debt` (dev-skills) instead of from `groom`, and nothing else about the handling differs.
+   **A decided issue auto-adopts its Direction by default — don't wait for the owner.**
+   *Decided* means what step 3 resolved it to mean: the `design:decided` label, not the presence of
+   a heading. This is now the normal case, not an exception: `groom` ran `architect` and
+   `design-critic` and the owner chose, so there is no decision left to route. The three problems
+   below are the only things that stop it, and they are facts the architect determined, not matters
+   of taste. `type:tech-debt` reaches this same branch by the same reasoning; its Direction came
+   from `/tech-debt` (dev-skills) instead of from `groom`, and nothing else about the handling
+   differs.
 
-   **An issue with no `## Direction`** — step 3's fallback ran a full design-from-scratch consult —
+   **An undecided issue** — step 3's fallback ran a full design-from-scratch consult —
    **always stops here for the owner**, no exceptions and no auto-approve. Present the architect's
    options and `design-critic`'s findings together, one decision at a time, and let the owner
    choose. Nobody has made this call yet, and it is not yours to make.
+
+   **Once they choose on the fallback, write the choice back into the issue before going on.** The
+   choice must outlive this session: a worktree can be deleted, a change directory can be lost, and
+   `implement` and `reviewer` both read `## Direction` straight from the issue body on a
+   `type:tech-debt` run, where there is no `design.md` to hold it. Writing it back is also what
+   stops a later re-activation from asking the owner the same question a second time.
+   ```bash
+   gh issue view <N> --json body --jq .body > "$T"    # T=$(mktemp); remove it after
+   # Append a ## Direction section in the shape groom writes: the chosen design, then each
+   # rejected alternative with the reason it lost, then design-critic's surviving concerns.
+   gh issue edit <N> --body-file "$T"
+   gh issue edit <N> --add-label design:decided
+   gh issue comment <N> --body "🧭 Direction decided at activate and written to the issue body — this issue was filed without one."
+   ```
+   Write it with `--body-file`, never an interpolated `--body`: the section carries backticks and
+   the issue body carries whatever its author typed. Apply the label **after** the body write
+   succeeds, so a failed write never leaves an issue marked decided with no design in it.
 
    The three problems that stop an auto-adopt, each exactly like the hard-dependency case below
    always has:
@@ -410,7 +444,7 @@ qualify), and confirm the choice with the owner.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear <N> <M>
    ```
-   **This is the one thing auto mode never
+   **This is the one thing an auto-adopt never
    skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
    decision — label it, comment, and stop for the owner regardless of what
    the issue's owner instructions says for this run.
@@ -505,6 +539,13 @@ qualify), and confirm the choice with the owner.
        architect output already in context from step 3. Either way this is a transcription job,
        not synthesis — copy faithfully rather than re-summarizing from memory. A structural
        `type:docs` issue has neither, since steps 3 and 4 were skipped; omit the section entirely.
+     - **`## Surviving Concerns`** — `design-critic`'s findings that the chosen design does not
+       answer, copied from the issue's `## Direction`, or from the critic's output in context on
+       the fallback. These are the known holes the owner accepted when they chose, and this is
+       their only destination: `## Alternatives Considered` records what lost, not what is still
+       wrong with what won. Without this section they stop at the issue body, and the review panel
+       — which reads the spec, not the issue — never learns what to watch for. Omit the section
+       when the critic returned nothing, and say so in one line rather than leaving a stub.
      - **`## Domain Facts`** — when a domain-expert agent was consulted at step 3, its supporting
        facts, attributed to it, not folded anonymously into the architect's own reasoning. Omit
        this section entirely (not a stub) when no domain-expert was available.
@@ -889,9 +930,9 @@ qualify), and confirm the choice with the owner.
   neither exception ever removes Seam 1 itself.
 - **`type:docs` and `type:tech-debt` never combine.** If an issue somehow carries both (hand-edited
   in GitHub — `/tech-debt` (dev-skills) and `groom` each only ever apply one), don't silently pick
-  either fast path: say so to the owner and fall back to the full pipeline (design stop + real
-  spec) — the safer default when the labeling itself is ambiguous about what kind of change this
-  actually is.
+  either fast path: say so to the owner and fall back to the full pipeline — a real committed spec,
+  and the design stop too where the issue is not `design:decided`. That is the safer default when
+  the labeling itself is ambiguous about what kind of change this actually is.
 - Worktree managed by Claude Code's own `EnterWorktree` isolation, scoped to *this session's*
   life — not something this skill creates by hand, and not the Agent tool's throwaway `isolation:
   "worktree"`. Named `issue-<N>` explicitly (both the spawn prompt and step 2's fallback pass that

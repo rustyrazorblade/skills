@@ -132,8 +132,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
      reproduce).
    Keep it tight. A full spec usually comes later in `/spec-flow:activate` (a content-only
    `type:docs` issue skips that artifact — see **Docs fast path** in `docs/workflow.md` — but still
-   reviews this same scope + acceptance criteria at Seam 1); either way, this is the contract for
-   *what* and *why*, not *how*.
+   reviews this same scope + acceptance criteria at Seam 1). Either way, this body is the contract
+   the pipeline starts from: **Scope** and **Acceptance criteria** state the *what* and *why*, and
+   **Direction** states the *how* the owner chose at step 5.
 
 7. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
@@ -146,12 +147,19 @@ refines. Stay in the foreground — no worktrees, no implementation.
    tell it from a decision.
    ```bash
    gh issue create --title "<concise title>" --body "<the drafted body>" \
-     --label "<P0|P1|P2|P3>" --label "status:ready"
+     --label "<P0|P1|P2|P3>" --label "status:ready" --label "design:decided"
    ```
    If the owner accepted the docs-fast-track offer at step 3, add `--label "type:docs"` too.
 
+   **`design:decided` goes on only when step 5 actually produced a chosen design.** Drop it for a
+   `type:docs` issue, which skips step 5 and writes no `## Direction`, and drop it when the owner
+   deferred the design to **Open questions**. `activate` reads that label as permission to skip its
+   own design stop and `design-critic`, so applying it to an undecided issue sends a guess through
+   the pipeline as though the owner had settled it. The label is the claim; the section is only the
+   text.
+
 9. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
-   `status:ready` (plus `type:docs` if applicable):
+   `status:ready` (plus `type:docs` or `design:decided` where each applies):
    ```bash
    gh issue view <N> --json number,title,labels
    ```

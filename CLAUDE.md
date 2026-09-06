@@ -1,5 +1,15 @@
 # Skills Repository: Claude Instructions
 
+## How work reaches this repo
+
+Three rules govern every change here.  They are not defaults to weigh; they hold unless Jon says otherwise for a specific piece of work.
+
+**Always work on a branch, in a worktree.**  Never edit the shared checkout to make a change.  Create a worktree for the branch and work there.  This keeps the shared checkout on `main` and clean, so the branch you are standing on is never a surprise.
+
+**File new issues with `/spec-flow:groom`.**  Do not write an issue body by hand, and do not call `gh issue create` directly.  `groom` interviews for the shape of the work, records the scope, the acceptance criteria and the chosen design, and applies the labels the pipeline reads.  An issue filed any other way is missing the parts every later stage depends on.
+
+**Never change `main` directly without Jon's authorization for that change.**  Committing to `main`, pushing to `main`, and merging into it each need him to say so first.  Authorization for one change does not carry to the next.
+
 ## Local development
 
 To test plugin skills locally as slash commands, install the local directory as a marketplace.  Then add all the plugins.

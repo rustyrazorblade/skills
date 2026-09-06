@@ -7,9 +7,11 @@ by lifecycle, computing "next up"/"blocked on you"/"stalled", and formatting the
 into one script. The model runs this and prints its stdout; it never sees the raw GitHub JSON and
 never hand-writes a join script. `render_board()` is one function per rendered section, and every
 section renders only when it has something to report — no empty header, no zero count, no
-placeholder line. The two unbounded categories (the ungroomed backlog and the epic list) report as
-counts in the summary line rather than as rows, so the board's rendered length does not grow with
-the backlog. `prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead
+placeholder line. Three categories grow without bound, and each one is bounded here: the ungroomed
+backlog and the epic list report as counts in the summary line rather than as rows, and the READY
+bucket renders at most `--ready-limit` rows and reports the rest as a count. The board's rendered
+length therefore does not grow with the backlog or with the ready queue.
+`prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead
 of one-by-one inside `build_rows()`. Stdlib only, shells out to `gh`/`git`/`claude`.
 
 THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked on you",
@@ -399,10 +401,14 @@ def count_bit(n, singular, plural=None):
 
 
 def render_summary(non_epics, blocked_rows, backlog, epics):
-    # The ungroomed backlog and the epic list appear here and nowhere else. Both grow without
-    # bound -- the delivery buckets above are bounded by how many agents can run at once, these are
-    # bounded by nothing -- so they report as a number and the board's length stops tracking the
-    # size of the backlog. See design.md, D2.
+    # The ungroomed backlog and the epic list appear here and nowhere else. Neither is bounded by
+    # anything, so both report as a number and the board's length stops tracking the size of the
+    # backlog. See design.md, D2.
+    #
+    # The delivery buckets above are NOT all bounded by how many agents can run at once, as this
+    # comment once claimed. IN FLIGHT is, and so is BLOCKED ON YOU. READY is bounded by grooming:
+    # `groom` adds status:ready issues and only `activate` removes them. Its own bound is
+    # --ready-limit, applied in render_ready rather than here.
     summary_bits = [
         count_bit(len(backlog), "ungroomed", "ungroomed"),
         count_bit(len(epics), "epic"),

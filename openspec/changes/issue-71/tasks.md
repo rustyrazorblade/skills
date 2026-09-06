@@ -42,11 +42,11 @@
 
 ## 7. Prose
 
-- [ ] 7.1 Rewrite the "two unbounded categories" sentence in `board.py`'s module docstring to name the ready-queue bound alongside the backlog and epic counts.
-- [ ] 7.2 Rewrite `render_summary`'s comment at `board.py:406-409`. Its claim that "the delivery buckets above are bounded by how many agents can run at once" is false for READY, which is bounded by grooming.
-- [ ] 7.3 Document `--ready-limit` in `plugins/spec-flow/skills/board/SKILL.md` beside `--user`: the default of 5, that the remainder reports as a count inside the block, that "next up" still considers every ready issue, and that a large N is the uncap.
+- [x] 7.1 Rewrite the "two unbounded categories" sentence in `board.py`'s module docstring to name the ready-queue bound alongside the backlog and epic counts.
+- [x] 7.2 Rewrite `render_summary`'s comment at `board.py:406-409`. Its claim that "the delivery buckets above are bounded by how many agents can run at once" is false for READY, which is bounded by grooming.
+- [x] 7.3 Document `--ready-limit` in `plugins/spec-flow/skills/board/SKILL.md` beside `--user`: the default of 5, that the remainder reports as a count inside the block, that "next up" still considers every ready issue, and that a large N is the uncap.
 
 ## 8. Close out
 
-- [ ] 8.1 Run the full suite once more. It must exit 0 with no pre-existing assertion changed.
-- [ ] 8.2 Run `board.py` against this repo at the default and at `--ready-limit 100`, and confirm both renders read correctly.
+- [x] 8.1 Run the full suite once more. It must exit 0 with no pre-existing assertion changed.
+- [x] 8.2 Run `board.py` against this repo at the default and at `--ready-limit 100`, and confirm both renders read correctly.

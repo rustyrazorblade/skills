@@ -1,6 +1,6 @@
 ---
 name: groom
-description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. Grills shape-defining ambiguity (one question at a time, stated recommended default) rather than just drafting around it, verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. First stage of the flow delivery workflow (see docs/workflow.md).
+description: Turn a rough idea into a scoped, labeled GitHub issue with a decided design, ready for the delivery pipeline to run autonomously. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, a chosen design, and a priority. Keeps a written question list and works it to zero before filing (one question at a time, stated recommended default, never a guess in place of an answer), runs architect + design-critic read-only and has the owner pick the design here rather than after activation, verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. This is the stage that spends the owner's attention, so later stages don't have to. First stage of the flow delivery workflow (see docs/workflow.md).
 argument-hint: [rough idea — a todo, feature, or bug]
 ---
 
@@ -12,22 +12,44 @@ refines. Stay in the foreground — no worktrees, no implementation.
 
 ## Steps
 
-1. **Understand the idea — grill shape-defining ambiguity, don't just draft around it.** Read the
-   owner's description. For anything that changes the *shape* of the work (scope boundaries, which
-   of several plausible interpretations is meant, whether this is really two ideas bundled into
-   one), treat it as a short interview, not a form to fill in around:
+1. **Understand the idea — keep a written question list and work it to zero.** Read the owner's
+   description. `groom` is where the owner's attention is spent, deliberately. Every question
+   answered here is one `issue-manager` never has to stop and ask later. The pipeline downstream is
+   only as autonomous as this step is thorough. Treat it as an interview, not a form to fill in
+   around.
+
+   **Write the list down. It is an artifact, not a memory.** Before asking anything, draft the
+   numbered list of everything you need settled, and print it to the owner. Reprint it each time an
+   answer lands, marking each item `answered` or `open`. A list held only in your head erodes turn
+   by turn. That erosion is how this step fails: it drifts toward filing, and guesses fill the
+   gaps.
+
+   What belongs on the list — anything that changes the *shape* of the work:
+   - Scope boundaries, and what is explicitly out.
+   - Which of several plausible interpretations is meant.
+   - Whether this is really two ideas bundled into one.
+   - Priority, when the right one isn't obvious.
+   - Anything a later stage would otherwise have to stop and ask the owner about.
+
+   How to ask:
    - **One question at a time** — the owner can't usefully answer a batch.
    - **State your own recommended answer alongside every question** — a default they can accept in
      one word instead of composing an answer from scratch ("I'd scope this to X and leave Y for
      later — sound right?", not just "what should this cover?").
    - **Order dependent questions before the questions that depend on them.** Don't ask a detail
      question whose relevance hinges on an earlier, still-open one.
-   - **Don't draft the issue until shape-defining ambiguity is actually resolved.** This is the one
-     place `groom` diverges from "prefer a sensible draft the owner edits," below: get confirmation
-     on what the work *is* before writing it up, not after.
+   - **Follow up on the answer you actually got**, and add what it raises to the list. The list
+     grows during the interview; that is the list working, not a failure to plan it.
+
+   **Never guess in place of an answer.** A guessed shape reads exactly like a decided one once it
+   is in the issue body, and nothing downstream can tell them apart. If the owner declines to
+   answer an item, or defers it, record it in the issue body under **Open questions**, named as
+   unanswered. That is honest and it is durable; a silent guess is neither.
+
    For everything else — a detail a sensible default clearly covers, or a fact you can look up
    yourself (existing code, other issues, prior art) — don't ask; state the default/finding in the
-   draft and let the owner redline it. Over-asking is its own failure mode.
+   draft and let the owner redline it. Over-asking is its own failure mode, and a list padded with
+   questions you could have answered yourself wastes the same attention it is meant to protect.
 
 2. **For bug reports: verify before you draft.** If the idea describes something not working
    (symptoms, expected vs. actual behavior), don't draft acceptance criteria from an unconfirmed
@@ -45,8 +67,8 @@ refines. Stay in the foreground — no worktrees, no implementation.
      before attempting anything.
    - **Not practically verifiable here** (needs a live external service, specific hardware, a
      production-only condition) → say so, and proceed with the report as given, flagged
-     **unverified** in Notes/context — so the architect consult at `activate` treats the premise as
-     unconfirmed, not settled fact.
+     **unverified** in Notes/context — so the step-5 architect consult, and every stage after it,
+     treats the premise as unconfirmed, not settled fact.
    Matters most for a report you didn't personally observe — an externally filed bug, or one
    relayed secondhand — where nothing has actually confirmed it's real yet.
 
@@ -66,35 +88,88 @@ refines. Stay in the foreground — no worktrees, no implementation.
    from step 2 if this is a bug. It returns a structured refinement —
    problem statement, in/out scope, **testable WHEN/THEN acceptance criteria**, open questions, and
    context (`file:line`, duplicates). Bring that refinement back to the owner, loop on their edits,
-   and treat the result as the source for the issue body. (You own the *what/why*; design — the
-   *how* — comes later, from the `architect` at `/spec-flow:activate`.)
+   and treat the result as the source for the issue body.
 
-5. **Draft the issue body** from the refinement, with these sections:
+   **Every open question it returns goes onto step 1's list and gets asked.** Do not answer one on
+   the owner's behalf, and do not let it dissolve into the draft as a settled statement. The
+   subagent surfaced it precisely because it could not resolve it; resolving it silently here
+   throws away the finding.
+
+5. **Decide the design here — `architect`, then `design-critic`, then the owner picks.** This is
+   the decision that used to happen at `/spec-flow:activate`, after the issue was already claimed
+   and a worker was already running. It happens here instead, so the filed issue carries a decided
+   design and `issue-manager` can proceed without stopping to ask. **Skip this step entirely for a
+   `type:docs` issue** (step 3) — documentation content has no design to choose.
+
+   Both agents are read-only, so this runs in the primary checkout; `groom` still creates no
+   worktree and writes no code.
+   - Spawn `architect` with the refined scope and acceptance criteria. It returns options —
+     structure, module boundaries, data model, key interfaces — with the trade-offs behind each.
+     Spawn a domain-expert agent concurrently when the repo has one that fits the subject.
+   - Then spawn `design-critic` with the architect's output plus the same scope and acceptance
+     criteria. It attacks the plan: unstated assumptions, missing edge cases, failure modes, and
+     acceptance criteria no option actually satisfies. The architect grades its own work; this is
+     what stops that from being the last word.
+   - **Present the options to the owner and let them choose.** One decision at a time, with your
+     recommended option named. Significant design decisions are the owner's — you advise, they
+     decide. Never pick for them and never fold the choice into the draft as though it were
+     settled.
+
+6. **Draft the issue body** from the refinement, with these sections:
    - **Scope** — what's in, and explicitly what's out.
    - **Acceptance criteria** — a checklist of observable outcomes (these become the spec's
      scenarios later, when a spec gets generated at all — see the Docs fast path exception below —
      so make them testable).
+   - **Direction** — the design the owner chose at step 5: what it is, then each rejected
+     alternative with the reason it lost, then `design-critic`'s surviving concerns. Omit this
+     section entirely for a `type:docs` issue, which never runs step 5. This section is the
+     contract `issue-manager` starts from, so write it to be read by an agent that has no access
+     to this conversation.
+   - **Open questions** — anything on step 1's list the owner declined or deferred, stated as
+     unanswered. Omit the section when the list closed clean.
    - **Notes / context** — links, constraints, related code (`file:line`), related issues, and —
      for a bug — the step-2 verification verdict (confirmed repro, or flagged unverified/couldn't
      reproduce).
    Keep it tight. A full spec usually comes later in `/spec-flow:activate` (a content-only
    `type:docs` issue skips that artifact — see **Docs fast path** in `docs/workflow.md` — but still
-   reviews this same scope + acceptance criteria at Seam 1); either way, this is the contract for
-   *what* and *why*, not *how*.
+   reviews this same scope + acceptance criteria at Seam 1). Either way, this body is the contract
+   the pipeline starts from: **Scope** and **Acceptance criteria** state the *what* and *why*, and
+   **Direction** states the *how* the owner chose at step 5.
 
-6. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
+7. **Set priority.** Propose a priority and confirm with the owner. Exactly one of
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-7. **Create the issue:**
+8. **Check the question list, then create the issue.** Reprint step 1's list one last time. Every
+   item must be `answered`, or recorded under **Open questions** in the body because the owner
+   deferred it. **If anything is still open and unrecorded, stop and ask it — do not file.** This
+   is the gate: an issue filed over an open question ships a guess into a pipeline that cannot
+   tell it from a decision.
    ```bash
    gh issue create --title "<concise title>" --body "<the drafted body>" \
-     --label "<P0|P1|P2|P3>" --label "status:ready"
+     --label "<P0|P1|P2|P3>" --label "status:ready" --label "design:decided"
    ```
    If the owner accepted the docs-fast-track offer at step 3, add `--label "type:docs"` too.
 
-8. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
-   `status:ready` (plus `type:docs` if applicable):
+   **`design:decided` goes on only when step 5 actually produced a chosen design.** Drop it for a
+   `type:docs` issue, which skips step 5 and writes no `## Direction`, and drop it when the owner
+   deferred the design to **Open questions**. `activate` reads that label as permission to skip its
+   own design stop and `design-critic`, so applying it to an undecided issue sends a guess through
+   the pipeline as though the owner had settled it. The label is the claim; the section is only the
+   text.
+
+   **If `gh issue create` fails because `design:decided` does not exist, the repo is behind, not
+   broken.** The label ships in `bin/bootstrap-labels.sh`; a repo bootstrapped before it existed
+   does not have it, and `gh` refuses the whole command over one unknown label, so nothing is filed.
+   Do not silently retry without it. Tell the owner the repo needs
+   `bash ${CLAUDE_PLUGIN_ROOT}/bin/bootstrap-labels.sh` (or a `/spec-flow:setup` re-run, which
+   offers the same), then re-run the create without the label so their work is not lost. Say plainly
+   what that costs: the issue carries a decided `## Direction` that nothing can prove, so `activate`
+   takes its fallback and stops for a design choice the owner already made here. Applying
+   `design:decided` once the label exists clears it.
+
+9. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
+   `status:ready` (plus `type:docs` or `design:decided` where each applies):
    ```bash
    gh issue view <N> --json number,title,labels
    ```
@@ -102,6 +177,15 @@ refines. Stay in the foreground — no worktrees, no implementation.
 
 ## Rules
 
+- **A guess is never a default.** Where a sensible default covers a detail, state it in the draft
+  and let the owner redline it — that is a default. Where the answer changes the shape of the work
+  or the design, invent nothing: ask, or record it as an open question. Filing fast is worth
+  nothing if the issue says something the owner never agreed to.
+- **The question list is worked to zero before filing** (step 8). Deferred is a valid outcome and
+  gets written down; unasked is not.
+- **This is where the owner's attention gets spent.** A question answered here costs one exchange.
+  The same question reaching `issue-manager` costs a stop, a spawn, and a context switch. If no
+  human is present, an agent that was never authorized to decide it answers it instead.
 - Exactly one priority label. If the owner doesn't pick, recommend one and confirm before creating.
 - Don't groom the same idea twice — search open issues first (`gh issue list --search`) if it
   might already exist.

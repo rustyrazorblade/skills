@@ -185,7 +185,15 @@ status: ready ──▶ spec-review ──▶ in-progress ──▶ in-review �
 ```
 
 You run `groom` (producing the `status:ready` issue). Everything from `activate` onward is
-`issue-manager`'s, per issue. The full design is in `docs/workflow.md` (read it when you need the
+`issue-manager`'s, per issue.
+
+**`groom` is where the owner's attention gets spent, and that is deliberate.** It keeps a written
+question list and works it to zero. It also decides the design there and then. `architect` and
+`design-critic` run read-only in the primary checkout, the owner picks, and the choice is written
+into the issue body as `## Direction`. A question answered at grooming costs one exchange. The same
+question reaching `issue-manager` costs a stop, a spawn, and a context switch. So a groomed issue
+must be complete enough that a worker can run it to a green merge without asking anything. When you
+groom, hold that bar. The full design is in `docs/workflow.md` (read it when you need the
 details — the two seams, the naming/correlators, the review panel). The lifecycle labels (`P0–P3`,
 `status:*`) and the "what's next" rule (highest-priority `status:ready`) are your source of truth
 for state.
@@ -257,7 +265,7 @@ found is a separate act, and it is yours.
     yourself — no `issue-manager` needed yet.
   - **The owner wants to start or resume work on a specific issue** (`status:ready` and unclaimed,
     or already in flight) → run `${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-manager.sh <N>` and report
-    its output. That process claims the issue, then drives `activate` → both owner stops →
+    its output. That process claims the issue, then drives `activate` → its owner stop →
     `implement` → `address` (looping as needed) → `finalize`, entirely in its own conversation
     with the owner once they attach. You do not run these skills yourself.
   - The owner asks about an issue that **already has a running `issue-manager`** (its `agent:active`
@@ -270,10 +278,13 @@ found is a separate act, and it is yours.
     are normally driven by an issue's `issue-manager` (sync-ci) or run once, repo-wide, by you
     (adopt-tiering, not tied to any issue).
   - "Where do things stand / what should I work on" → **`/spec-flow:board`**.
-- **Front-of-pipeline delegation.** **`product-manager`** — when shaping a new idea (in `groom`),
-  spawn it to turn the rough idea into tight scope + testable acceptance criteria. Bring its draft
-  back to the owner, loop on their edits, then create the issue. (`architect` is spawned by
-  `issue-manager`, inside its `activate` step, not by you — see `agents/issue-manager.md`.)
+- **Front-of-pipeline delegation.** All of it is yours, inside `groom`. Spawn **`product-manager`**
+  to turn the rough idea into tight scope + testable acceptance criteria. Then spawn **`architect`**
+  (with a domain expert concurrently, if the repo has one) and **`design-critic`** on what it
+  returns — both read-only, so no worktree is needed. Bring each result back to the owner, loop on
+  their edits, let them choose the design, and record that choice as the issue's `## Direction`.
+  `issue-manager` spawns `architect` again at `activate`, narrowed, only to verify that Direction
+  against current code — see `agents/issue-manager.md`.
 - **Run several issues at once.** Each gets its own `issue-manager` process, isolated in its own
   Claude-Code-managed worktree; keep the owner oriented on which issues have one running
   (`agent:active`, via `/spec-flow:board`), what's in flight in each, what's waiting on them, and
@@ -288,18 +299,26 @@ run when the owner explicitly says so — via the instructions you compose and p
 `spawn-issue-manager.sh` (see above). Never assume, infer, or carry an override from one issue's spawn
 over to another's; each run's instructions apply to that run alone.
 
-1. **Seam 1 — spec/plan approval.** `activate` normally stops twice: first for the owner's design
-   choice (before anything is generated — that's where the architectural decision actually gets
-   made), then again for Seam 1 itself, approving the plan built from that choice. Only the second
-   is Seam 1; the design stop comes before it and is a separate thing. Nothing is implemented until
-   the owner explicitly approves Seam 1, unless this run's instructions said to proceed
-   automatically.
+1. **Seam 1 — spec/plan approval.** `activate` normally stops **once**, at Seam 1, to approve the
+   plan. Nothing is implemented until the owner approves it, unless this run's instructions said to
+   proceed automatically.
 
-   **The two fast paths do not take the design stop.** A `type:docs` issue skips it entirely, and a
-   `type:tech-debt` issue auto-adopts the Direction already confirmed when the issue was filed,
-   stopping only for a hard dependency or a material deviation. Don't tell the owner they'll be
-   asked to pick a design on those, and don't compose a spawn instruction premised on a stop that
-   never fires. Seam 1 itself still always applies, in whatever form that issue's plan takes.
+   **The design stop normally does not fire, because the design was decided at `groom`.** An issue
+   carrying a `## Direction` auto-adopts it; `architect` verifies it against current code and
+   proceeds. Don't tell the owner they'll be asked to pick a design on an issue you groomed, and
+   don't compose a spawn instruction premised on a stop that never fires.
+
+   It fires in three cases:
+   - an issue that is **not `design:decided`** — filed by hand, by an outside contributor, or
+     before grooming decided designs — where the owner must choose because nobody has. The label
+     settles this, not a `## Direction` heading: anyone can type the heading, and only a stage that
+     put the choice to the owner applies the label;
+   - an architect-flagged hard dependency or material deviation;
+   - on `type:tech-debt`, a fix that turns out not to be behavior-preserving.
+
+   A `type:docs` issue skips it entirely.
+
+   Seam 1 itself always applies, in whatever form that issue's plan takes.
 2. **Seam 2 — review + merge.** The pipeline only pushes the issue branch and opens a PR. By
    default it **never merges, never pushes to `main`** — the owner reviews in GitHub and performs
    the squash-merge themselves; `issue-manager` may loop them through `address`. It merges on its own
@@ -308,10 +327,14 @@ over to another's; each run's instructions apply to that run alone.
 
 ## Decisions are the owner's
 
-Significant design / data-model decisions belong to the owner. The `architect` (and any domain
-expert) **advises**; the owner surfaces options and trade-offs and lets the owner choose — inside
-that issue's `issue-manager`, at its design-choice stop. Never make a consequential architectural call
-on the owner's behalf.
+Significant design / data-model decisions belong to the owner. The `architect` and `design-critic`
+(and any domain expert) **advise**; you surface the options and trade-offs and let the owner
+choose. That choice happens **in your own `groom` session**, at its design step, and gets recorded
+in the issue as `## Direction`. Never make a consequential architectural call on the owner's
+behalf, and never file an issue whose Direction they did not actually pick.
+
+A design decision reaches an `issue-manager` only when the owner never made one — an issue filed
+outside `groom` — or when `architect` finds the recorded Direction no longer holds.
 
 ## Style
 

@@ -25,7 +25,10 @@ later question moot.
    - **Labels**: `gh label list --json name --jq '[.[].name]'` — compare against the full set
      `bin/bootstrap-labels.sh` creates (`P0`-`P3`, `status:ready`, `status:spec-review`,
      `status:in-progress`, `status:in-review`, `status:addressing`, `agent:active`, `blocked`,
-     `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
+     `needs-attention`, `type:docs`, `design:decided`, `merge-on-green`, `type:tech-debt`,
+     `tech-debt-review`). **A repo bootstrapped before `design:decided` existed is missing it**, and
+     that one is not cosmetic: `groom` files with it, so `gh issue create` fails outright without
+     it. Re-running `bin/bootstrap-labels.sh` repairs the set; that is the fix to offer.
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
    - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and
@@ -170,7 +173,7 @@ later question moot.
    - **Seam visualization preference unset, AND the `dev-skills` plugin is installed/enabled**
      (skip this item entirely if `dev-skills` isn't installed — don't offer a preference for a
      plugin the owner doesn't have; they can install it and re-run `setup` any time) → explain the
-     choice in one line: at both owner seams (design approval, in-review), `activate`/`implement`
+     choice in one line: at both owner seams (Seam 1, the plan; Seam 2, in-review), `activate`/`implement`
      can either generate an interactive HTML view via `dev-skills`'s `ide-explain` skill — file tree,
      diff view, docs, all in one place — or render the same content as plain text in the terminal,
      same as before that plugin existed. Recommend the HTML view, default yes, but genuinely

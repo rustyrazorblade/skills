@@ -486,9 +486,10 @@ def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
         # and running both belong to the pipeline (address handles a red PR), not to the owner.
         if r["status"] == "in-review" and r["ci"] in ("green", None):
             return True
-        # activate's design-choice stop is a real wait on the owner, but it holds status:ready the
-        # whole time (the flip happens later, in step 7). A ready issue that is claimed -- assigned,
-        # with a live session -- is parked on an answer, not waiting to be picked up.
+        # Everything activate waits on before step 7 holds status:ready the whole time (the flip
+        # happens in step 7). That covers a staleness/blocker question from its step-1 review, and
+        # the design-choice stop on the no-Direction fallback. A ready issue that is claimed --
+        # assigned, with a live session -- is parked on an answer, not waiting to be picked up.
         if r["status"] == "ready" and r["agent_active"]:
             return True
         return False

@@ -75,9 +75,15 @@ one finding at a time — what's worth turning into real backlog work.
 
 6. **File exactly what the owner accepted**, drafted with a distinct `## Direction` section (not
    folded into Notes) — keep it as its own heading, verbatim; some downstream consumer of the filed
-   issue may key off that section being present:
+   issue may key off that section being present. The `design:decided` label is the machine-readable
+   half of the same claim: the owner confirmed this fix item by item here, so a later stage adopts
+   the Direction rather than deciding it again. A consumer that keys off the label must find the
+   section, so never apply one without the other. (The label is defined by spec-flow's
+   `bin/bootstrap-labels.sh`; a repo that has not run it does not have the label, and `gh issue
+   create` fails on a label that does not exist. Say so and re-run without it rather than dropping
+   the section.)
    ```bash
-   gh issue create --title "<concise title>" --label "<P0|P1|P2|P3>" --label "status:ready" --label "type:tech-debt" \
+   gh issue create --title "<concise title>" --label "<P0|P1|P2|P3>" --label "status:ready" --label "type:tech-debt" --label "design:decided" \
      --body "## Scope
    <what this touches, in/out>
 

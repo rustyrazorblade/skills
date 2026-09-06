@@ -33,15 +33,17 @@ way, just split across two separate processes instead of one conversation:
  FOREGROUND (you + coordinator, then you + issue-manager)   BACKGROUND (subagent teams)   GITHUB (you)
  ┌────────────────────────────┐
  │ /spec-flow:groom  rough idea     │
- │   → scoped GitHub issue      │
- │ /spec-flow:activate <issue#>      │
- │   → review w/ owner          │
- │     (scope + backlog check)  │
- │   → worktree + branch        │
- │   → architect + domain expert│
- │     design (concurrently)    │
+ │   → question list → zero     │
+ │   → architect + design-critic│
  │   ⏸ you pick the design      │
- │   → openspec explore+propose │
+ │   → scoped issue + Direction │
+ │ /spec-flow:activate <issue#>      │
+ │   → review: stale? blocked?  │
+ │     (raise problems only)    │
+ │   → worktree + branch        │
+ │   → architect verifies the   │
+ │     Direction, auto-adopts   │
+ │   → openspec propose         │
  │     from your chosen design  │
  │   → commit spec              │
  │   → status:spec-review        │──┐
@@ -79,19 +81,28 @@ way, just split across two separate processes instead of one conversation:
                           └────────────────────────────┘
 ```
 
-**Owner review, right after claiming — not a third seam.** Before any design work starts,
-`/spec-flow:activate` reviews the issue with you directly: is the scope/acceptance criteria you
-wrote at `groom` still what you want, and does anything else open in the backlog overlap, duplicate,
-or depend on it — a check `groom` can't have made, since it only ever saw the backlog as it stood
-when this issue was filed. `issue-manager` drafts **up to five** issue-specific questions from what the
-overlap search actually found (see **Backlog overlap** below), asked **one at a time**, never a
-fixed checklist — a simple issue may earn none at all. This runs for every issue, `type:docs` and
-`type:tech-debt` included (their fast paths only ever skip the design/spec machinery further down,
-never this). It's not counted as one of the two seams below — it's a lighter, unconditional check
-that happens before either of them, not a third owner-approval gate — but it uses the same
-override mechanism: the issue's owner instructions (see **Overriding either seam's default** below)
-can tell it to skip this review for the run, same free-text, owner's-own-words instruction the
-seams already read.
+**Owner review, right after claiming — a check, not a seam, and normally silent.** Before any
+design work starts, `/spec-flow:activate` reads what the issue already says and checks it against
+the world as it now is. It raises something only when it finds one of four things:
+
+- **stale** — the scope, acceptance criteria, or `## Direction` no longer matches code that moved;
+- **blocked** — a backlog hit is a genuine hard dependency;
+- **duplicated** — a backlog hit is the same work, already filed;
+- **incomplete** — a question the issue recorded as explicitly unanswered blocks the work.
+
+The backlog check is the one thing `groom` genuinely could not do. It only ever saw the backlog as
+it stood when the issue was filed (see **Backlog overlap** below).
+
+**The expected outcome is zero questions.** `issue-manager` confirms the issue reads clean,
+comments saying so, and keeps going. It must not ask you to re-confirm scope nothing invalidated,
+re-rank a priority nothing changed, or re-choose a design you already chose. Those were settled at
+`groom`. Re-asking them is the cost this pipeline exists to remove. Whatever it does raise, it
+raises **one at a time**.
+
+This runs for every issue, `type:docs` and `type:tech-debt` included. It is not one of the two
+seams below — it is a lighter, unconditional check that happens before either of them — but it uses
+the same override mechanism: the issue's owner instructions (see **Overriding either seam's
+default** below) can tell it to skip this review for the run.
 
 **Backlog overlap — searched by `project-manager`, never by `issue-manager`.** "Does anything else open
 overlap, duplicate, or block this issue" is a cross-issue question, so it belongs to the agent that
@@ -147,22 +158,34 @@ again on every parallel spawn. So:
   it cannot land in the primary checkout. It exists for hand-spawned sessions and worktrees
   predating this mechanism.
 
-**Design decision, before Seam 1.** `design-critic` attacks the architect's plan first — the
+**Design decision — at `groom`, not at `activate`.** The **`architect` agent** designs the work and
+surfaces options + trade-offs (with a relevant **domain-expert agent**, if one is available,
+consulted *concurrently* and adding deeper facts). Then **`design-critic` attacks that plan** — the
 architect writes its own risks section, and the review panel only ever reviews code against the
 spec, so this is the one place a bad plan is caught before it becomes an approved one. Its findings
-are shown with the design options, not instead of them; the owner still decides.
- `/spec-flow:activate` stops **twice**. First, right after the
-**`architect` agent** designs the work and surfaces options + trade-offs (with a relevant
-**domain-expert agent**, if one is available, consulted *concurrently* and adding deeper facts) —
-**you decide** among the options *before anything is generated*, so a chosen alternative can never
-leave stale traces of the rejected recommendation in the generated spec/tasks. The agents never
-make the call. (A `type:docs` issue skips this design stop entirely; a `type:tech-debt` issue auto-adopts the
-Direction confirmed when it was filed, stopping only for a hard dependency or a material
-deviation — see **Docs fast path** and **Tech-debt fast path** below. Seam 1 itself still applies
-on both.)
+are shown with the options, not instead of them. **You decide** among them. The agents never make
+the call.
 
-**Seam 1 — spec approval.** Second, `/spec-flow:activate` stops again after generating the spec
-from your chosen design and committing it. Nothing is implemented until you explicitly approve.
+All of that happens during `/spec-flow:groom`, in the coordinator, before the issue is ever filed —
+both agents are read-only, so no worktree is needed. Your choice, the alternatives that lost, and
+the critic's surviving concerns are written into the issue body as **`## Direction`**. That section
+is the contract every later stage works from, and it is what lets a worker run the issue with
+nobody attached.
+
+At `/spec-flow:activate`, `architect` **verifies** that Direction against the code as it now stands
+and auto-adopts it. There is no design stop. It reappears only when there is a genuine decision
+nobody has made. An issue with **no `## Direction`** — filed by hand, by an outside contributor, or
+before grooming decided designs — runs the full architect + `design-critic` consult and always
+stops for you. An architect-flagged hard dependency or material deviation stops regardless. A
+`type:docs` issue has no design to choose; a `type:tech-debt` issue carries a Direction from
+`/tech-debt` (dev-skills) and adopts it the same way, also stopping if the fix turns out not to be
+behavior-preserving — see **Docs fast path** and **Tech-debt fast path** below.
+
+**Seam 1 — spec approval.** `/spec-flow:activate` stops after generating the spec from your chosen
+design and committing it. The whole spec is rendered inline, in the conversation and in a GitHub
+comment; never a pointer to a path. The render lists every file written under
+`openspec/changes/issue-<N>`, so you see what landed there before you approve. Nothing is
+implemented until you explicitly approve.
 This stop confirms the spec faithfully reflects the design you already picked — it is not the
 first time you see the decision. (For a content-only `type:docs` issue there's no spec to generate
 or commit — this stop instead reviews the issue's own scope + acceptance criteria; see **Docs fast
@@ -174,7 +197,7 @@ guarantees the architect's full advice — the alternatives it presented, the do
 behind them — survives from that conversation into the committed file. `activate` step 5 requires
 two sections regardless of what `openspec-propose` produced on its own: `## Alternatives
 Considered` (every option the architect presented, why each rejected one lost, and whether you
-overrode its recommendation — copied in from step 3's actual output, not re-synthesized from
+overrode its recommendation — copied in from the issue's `## Direction`, or from step 3's output on the no-`Direction` fallback, not re-synthesized from
 memory), and `## Domain Facts` when a domain-expert was consulted (omitted entirely, not stubbed,
 when one wasn't). `proposal.md`'s `## What Changes` is held to the same bar — the actual shape of
 the change, not a restated title. None of this is optional polish: it's what makes Seam 1's render
@@ -227,7 +250,7 @@ scopes `--diff` to one directory instead of the whole repo) when `SPEC_FLOW_SEAM
 a scoped `git diff` in terminal mode. `ac-coverage.md`/`overrides.md` still render in full either
 way — they're conclusions to re-check as a whole, not something that makes sense line-by-line.
 
-(Upstream of both stops, at `groom`, the **`product-manager`
+(Before `activate`, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
 architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
 question at a time, its own recommended answer stated alongside each one, dependent questions
@@ -293,12 +316,16 @@ This used to be a file in the issue's worktree, which lost the instructions when
 was recreated, could not be read or written from another machine, and gave the owner no way to see
 what a session had been told.
 
-Whatever the instruction doesn't address still stops and waits, by default; nothing is ever inferred
-or carried over from a different issue. Seam 2's auto-merge path only actually merges once the PR's required CI checks
-report green — an instruction to merge automatically doesn't skip that; a hard dependency the
-architect flags, or a hard spec conflict step 5's override/conflict check finds (see **Spec
-override and conflict detection** below), always stops Seam 1 regardless, even under a full
-auto-approve instruction.
+Whatever the instruction doesn't address still stops and waits, by default; nothing is ever
+inferred or carried over from a different issue.
+
+**An instruction reaches the two seams only. It never crosses the design stop.** When that stop
+fires, nobody has chosen a design — an issue arrived without a `## Direction`, or architect found
+the recorded one no longer holds. The instruction was composed before the run, on the assumption a
+design existed, so it cannot be consent to a decision that did not. Seam 2's auto-merge path also
+only merges once the PR's required CI checks report green. A hard dependency the architect flags,
+or a hard spec conflict step 5's override/conflict check finds (see **Spec override and conflict
+detection** below), always stops Seam 1 regardless, even under a full auto-approve instruction.
 
 **Seam 2's auto-merge specifically can also be set with the `merge-on-green` label** — it's a
 binary, GitHub-native "how to handle this issue" setting (metadata about what's being built, not
@@ -325,9 +352,9 @@ It is also simply visible: the instructions a session is operating under are on 
 you and anyone else can read them.
 
 **Docs fast path.** A purely documentation issue (README, a docs/mdBook tree, comments — no
-behavior change) doesn't need an architect's design or a design-choice stop to decide between. Set
-`type:docs` at `groom` (offered, never inferred silently — see its step 3); `activate` always skips
-the architect/domain-expert consult and the design-choice stop for it. Whether it *also* gets a
+behavior change) has no design to decide. Set `type:docs` at `groom` (offered, never inferred
+silently — see its step 3); `groom` then skips its own design step, so the issue carries no
+`## Direction`, and `activate` skips the architect/domain-expert consult for it. Whether it *also* gets a
 committed OpenSpec spec is a second, separate decision — most docs changes shouldn't get one at
 all, because translating a page's own prose into OpenSpec `#### Scenario:` blocks just duplicates
 the book:
@@ -526,7 +553,7 @@ a subagent either. Instead:
   (an interactive picker — select the session by name/id; there is no direct "attach by id"
   command), not a tab or window opened for you on every spawn. You talk to that process directly,
   in its own context, once attached; it never shares the coordinator's.
-- That `issue-manager` owns the issue's **entire remaining lifecycle** — both stops inside `activate`,
+- That `issue-manager` owns the issue's **entire remaining lifecycle** — the owner stop inside `activate`,
   `implement`, any `sync-ci`/`address` rounds, and `finalize` — entirely in its own session with
   you, in its own Claude-Code-isolated worktree. It hands back once the issue is merged and closed
   — if it committed one (not every issue does, see **Docs fast path** and **Tech-debt fast path**),
@@ -697,8 +724,8 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 
 | Skill | Phase | Does |
 |---|---|---|
-| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Grills shape-defining ambiguity (recommended default per question); for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`. |
-| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue always skips spec generation and, by default, the design-choice stop too (`architect` auto-adopts the confirmed Direction unless something's wrong) — see **Tech-debt fast path** above. |
+| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue with a decided design. Keeps a written question list and works it to zero before filing — never a guess in place of an answer; for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria, then `architect` + `design-critic` run read-only and you pick the design, recorded as `## Direction`. One `P0–P3` + `status:ready`. This is where your attention gets spent, so later stages don't need it. |
+| `/spec-flow:activate` | foreground | Pick a `status:ready` issue → review it for staleness/blockers/duplicates (raise problems only; normally zero questions) → worktree+branch → `architect` verifies the issue's `## Direction` against current code and auto-adopts it → openspec propose → commit spec → `status:spec-review`, then STOP for your spec approval (Seam 1), rendered inline. An issue with **no `## Direction`** falls back to a full `architect` + `design-critic` consult and always STOPS for your design choice. A `type:docs` issue skips design entirely, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue skips spec generation and adopts its Direction the same way — see **Tech-debt fast path** above. |
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-manager` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-manager` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. Exits cleanly, doing nothing, where the repo's policy says CI is not a test gate. See **Test policy** below. |
@@ -729,8 +756,8 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   process when you start or resume work on issue `#N`. You attach to it yourself (`claude agents`,
   then select the session id printed by the spawn script) — not a subagent you switch to inside
   another conversation.
-  It becomes your point of contact for that issue alone: claims it, drives `activate` (both owner
-  stops) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
+  It becomes your point of contact for that issue alone: claims it, drives `activate` (its owner
+  stop) → `implement` → `sync-ci`/`address` as needed → `finalize`, then hands back. See
   **Coordinator and issue leads** above.
 - `archive-batch` — the **one-shot bulk archiver**, launched by `project-manager` (named
   `archive-batch`, via `scripts/spawn-archive-batch.sh`) as its own separate background process
@@ -744,9 +771,15 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   the project-manager brings its draft back to you to edit. Owns the what/why, never the how.
 - `architect` — turns the refined idea into a **design** (approach, structure/boundaries to SOLID,
   data model, key interfaces) with **trade-offs framed as owner decisions**. Consulted during
-  `/spec-flow:activate`, concurrently with a domain-expert agent if one is available, and
-  **before** `openspec-propose` — you decide among its options right there, before anything is
-  generated, and Seam 1 later confirms the resulting spec. Advises only — never decides.
+  `/spec-flow:groom`, concurrently with a domain-expert agent if one is available; you decide among
+  its options before the issue is filed, and the choice is recorded as its `## Direction`.
+  Consulted again at `/spec-flow:activate`, narrowed, to verify that Direction against current
+  code. Advises only — never decides.
+- `design-critic` — attacks the architect's plan while changing it is still cheap: unstated
+  assumptions, missing edge cases, failure modes, and acceptance criteria no option satisfies.
+  Consulted during `/spec-flow:groom`, after the architect and before you choose; its surviving
+  concerns go into the `## Direction`. At `/spec-flow:activate` it runs only on the no-`Direction`
+  fallback. Produces findings only — never a competing design, never a decision.
 
 **Implementation & build**
 - `tdd-developer`, `build-engineer` — the implementation and build agents (bundled with the

@@ -109,14 +109,20 @@ affecting any other issue's note.
 - **THEN** that issue's row falls back to `"see issue comments"` exactly as today, and other
   rows' notes are unaffected — no single failure aborts the batch
 
-### Requirement: `render_board()` is decomposed into one function per section
-The system SHALL structure `render_board()` as one function per rendered section, each returning
-its own lines, so that a section's conditional presence is decided in one place rather than
-inline within a single large function.
+### Requirement: `render_board()` delegates every section to a render function
+The system SHALL structure `render_board()` so that every rendered section is produced by a render
+function returning its own lines, and a section's conditional presence is decided inside that
+function rather than inline within a single large function. Sections whose rendering is identical
+apart from the header MAY share one parameterized helper; what this requirement fixes is that the
+presence decision lives in a render function, not that each section has a function of its own.
 
 #### Scenario: A section with no content contributes no lines
-- **WHEN** a per-section render function is called with no rows to render
+- **WHEN** a section's render function is called with no rows to render
 - **THEN** it returns no lines, and the assembled board contains no trace of that section
+
+#### Scenario: Sections sharing a helper each decide their own presence
+- **WHEN** several sections are rendered through one shared parameterized helper
+- **THEN** each still renders only when it has rows, and an empty one contributes no lines
 
 ### Requirement: Test suite covers the new render
 The system's test suite (`test-board.sh`) SHALL cover the summary-count rendering of backlog and

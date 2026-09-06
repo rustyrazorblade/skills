@@ -27,11 +27,16 @@ This change collapses `render_blocked_on_you`, `render_unrecognized` and `render
 
 The requirement's stated purpose survives, and arguably improves: "a section's conditional presence is decided in one place" becomes true of exactly one place rather than four copies of the same three lines. Its scenario also still passes — `render_section(header, [])` returns no lines, and the assembled board contains no trace of that section.
 
-So this is a conflict of wording against an in-flight requirement, not of behavior. It exists only because the owner folded in a refactor the architect had recommended as a separate issue. It needs a decision, and the three ways out are:
+So this was a conflict of wording against an in-flight requirement, not of behavior. It existed only because the owner folded in a refactor the architect had recommended as a separate issue.
 
-1. **Drop the render-helper collapse from this change.** The conflict disappears entirely. The other three folded-in items are unaffected — none of them touches an `issue-46` requirement.
-2. **Keep the collapse and edit `issue-46`'s own delta** to describe the shared helper. `issue-46` is un-archived, so its delta is still editable; but editing another in-flight change's artifact from inside this one is a new coupling between two changes that must then archive together.
-3. **Keep the collapse and accept the wording tension**, on the ground that the requirement's purpose is preserved and its scenario still passes. The archived spec would then describe a decomposition the code implements by parameterization rather than by repetition.
+**Resolved: the owner chose to reword `issue-46`'s requirement.** This change edits `openspec/changes/issue-46/specs/delivery-board/spec.md`, renaming the requirement to "`render_board()` delegates every section to a render function" and restating it so that sections whose rendering differs only by header MAY share one parameterized helper. The presence decision must still live in a render function; that is what the requirement was always protecting. A second scenario was added for the shared-helper case. `openspec validate issue-46 --type change --strict` passes after the edit.
+
+The two rejected options, for the record:
+
+- **Drop the render-helper collapse from this change.** Rejected. The conflict would disappear, but so would work the owner explicitly asked for.
+- **Keep the collapse and leave `issue-46` as written.** Rejected. The archived spec would describe a decomposition the code implements by parameterization, so the spec would simply be wrong on that sentence.
+
+**Consequence of the chosen option: the two changes are now coupled.** `issue-71` carries an edit to `issue-46`'s delta, so `issue-46` must not be archived from a tree that lacks this branch. Both are already queued for the same bulk `/spec-flow:archive` pass, which satisfies this; archiving `issue-46` alone, before this branch merges, would archive the old wording and re-open the conflict.
 
 ### Not a conflict: unbounded categories
 

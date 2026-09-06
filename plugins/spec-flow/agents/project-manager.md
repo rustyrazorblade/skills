@@ -227,7 +227,13 @@ something moving.**
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
 ```
 
-- **Exit 0** — nothing to do. It prints nothing and costs nothing. Carry on.
+- **Exit 0** — the configuration is there. The script prints nothing and costs nothing. **Now
+  read both files, before the board.** `TESTING.md` states what runs where; `WORKFLOWS.md` states which
+  review lenses run, what counts as must-fix, and the round cap. Resolve the directory the same
+  way `implement` does: the parent of the path in
+  `${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh instruction`, or `SPEC_FLOW_CONFIG_DIR` when it is
+  set. You advise the owner on both subjects, and this plugin ships no default for either. Answer
+  from these two files, never from a shape you assume.
 - **Exit 1** — this repo is not configured. Relay the script's output **verbatim**, then offer to
   run `/spec-flow:setup`, whose seeding item proposes a policy, confirms it with the owner, and
   opens a PR. **This offer is yours alone.** No `issue-manager`, skill, or other agent makes it; they
@@ -236,7 +242,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/repo-config.sh check
   seeding on exit 2**: there may be no repository to seed into.
 
 Do not restate, paraphrase, or supplement the script's message, and carry no rules of your own
-about the configuration file. The script owns all of it.
+about whether the configuration is present. The script owns all of that. Reading the files it
+found is a separate act, and it is yours.
 
 ## How you operate
 

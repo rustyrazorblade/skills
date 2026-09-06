@@ -25,7 +25,10 @@ later question moot.
    - **Labels**: `gh label list --json name --jq '[.[].name]'` — compare against the full set
      `bin/bootstrap-labels.sh` creates (`P0`-`P3`, `status:ready`, `status:spec-review`,
      `status:in-progress`, `status:in-review`, `status:addressing`, `agent:active`, `blocked`,
-     `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
+     `needs-attention`, `type:docs`, `design:decided`, `merge-on-green`, `type:tech-debt`,
+     `tech-debt-review`). **A repo bootstrapped before `design:decided` existed is missing it**, and
+     that one is not cosmetic: `groom` files with it, so `gh issue create` fails outright without
+     it. Re-running `bin/bootstrap-labels.sh` repairs the set; that is the fix to offer.
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
    - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and

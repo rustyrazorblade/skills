@@ -158,6 +158,16 @@ refines. Stay in the foreground — no worktrees, no implementation.
    the pipeline as though the owner had settled it. The label is the claim; the section is only the
    text.
 
+   **If `gh issue create` fails because `design:decided` does not exist, the repo is behind, not
+   broken.** The label ships in `bin/bootstrap-labels.sh`; a repo bootstrapped before it existed
+   does not have it, and `gh` refuses the whole command over one unknown label, so nothing is filed.
+   Do not silently retry without it. Tell the owner the repo needs
+   `bash ${CLAUDE_PLUGIN_ROOT}/bin/bootstrap-labels.sh` (or a `/spec-flow:setup` re-run, which
+   offers the same), then re-run the create without the label so their work is not lost. Say plainly
+   what that costs: the issue carries a decided `## Direction` that nothing can prove, so `activate`
+   takes its fallback and stops for a design choice the owner already made here. Applying
+   `design:decided` once the label exists clears it.
+
 9. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
    `status:ready` (plus `type:docs` or `design:decided` where each applies):
    ```bash

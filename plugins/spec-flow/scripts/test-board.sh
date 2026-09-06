@@ -465,6 +465,233 @@ PYEOF
 check "unknown status label is rendered, CI states map correctly, null labels don't crash, label resolution is deterministic and lifecycle-ordered" $?
 
 # ---------------------------------------------------------------------------
+# issue 71: the READY cap's in-process properties -- the cases a PATH fixture
+# cannot reach cheaply. One block per property, each with its own check(), so a
+# failure reports under its own name rather than the whole cap's.
+# ---------------------------------------------------------------------------
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
+# carries the same status column, so a whole-board scan counts it under two headers.
+def section_rows(rendered, header):
+    lines = rendered.splitlines()
+    if header not in lines:
+        return []
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if not line or not line.startswith(" "):
+            break
+        out.append(line)
+    return out
+
+READY = "📋 READY"
+
+def ready(number, priority="P2", **kw):
+    return row(number=number, title=f"Ready {number}", status="ready", priority=priority, **kw)
+
+# Next up survives the cut. Five claimed P0s fill the default cap exactly, so the one unclaimed
+# issue is the one withheld. A cap applied before compute_next_up leaves the board with nothing to
+# recommend, which is the whole reason render_board slices in render_ready and nowhere else.
+rows = [ready(800 + i, "P0") for i in range(5)] + [ready(900, "P3", assignee=None, mine=False)]
+out = board.render_board(rows, "me", 0)
+assert "  - 900: Ready 900 \u2192 /spec-flow:activate 900" in out.splitlines(), \
+    f"'next up' lost the withheld unclaimed issue:\n{out}"
+rendered = section_rows(out, READY)
+assert len(rendered) == 6, f"expected five rows plus the withheld line, got {len(rendered)}:\n{out}"
+assert not any("#900" in line for line in rendered), \
+    f"#900 was withheld from the block, yet rendered in it:\n{out}"
+PYEOF
+check "'next up' still names a ready issue the cap withheld" $?
+
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
+# carries the same status column, so a whole-board scan counts it under two headers.
+def section_rows(rendered, header):
+    lines = rendered.splitlines()
+    if header not in lines:
+        return []
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if not line or not line.startswith(" "):
+            break
+        out.append(line)
+    return out
+
+READY = "📋 READY"
+
+def ready(number, priority="P2", **kw):
+    return row(number=number, title=f"Ready {number}", status="ready", priority=priority, **kw)
+
+# The property the cap exists for: the board's rendered length does not vary with the size of the
+# ready queue. Same board twice, differing only in how many ready issues exist.
+def render_ready_queue(n):
+    return board.render_board([ready(1000 + i) for i in range(n)], "me", 0)
+
+six, many = render_ready_queue(6), render_ready_queue(506)
+assert len(six.splitlines()) == len(many.splitlines()), \
+    f"ready-queue size changed the board's length: {len(six.splitlines())} vs {len(many.splitlines())}"
+# ...because each size is reported, not because it is ignored.
+assert "1 more ready" in six, f"withheld count not reported at six ready:\n{six}"
+assert "501 more ready" in many, f"withheld count not reported at 506 ready:\n{many}"
+assert "1 more readys" not in six, f"a single withheld row read as plural:\n{six}"
+PYEOF
+check "the board's length holds at 6 and at 506 ready issues, each reporting its own withheld count" $?
+
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
+# carries the same status column, so a whole-board scan counts it under two headers.
+def section_rows(rendered, header):
+    lines = rendered.splitlines()
+    if header not in lines:
+        return []
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if not line or not line.startswith(" "):
+            break
+        out.append(line)
+    return out
+
+READY = "📋 READY"
+
+def ready(number, priority="P2", **kw):
+    return row(number=number, title=f"Ready {number}", status="ready", priority=priority, **kw)
+
+# The cap takes the highest priority, not the first N given. The two survivors are placed second
+# and fourth in the list, so a slice of the unsorted input would render the wrong pair.
+rows = [ready(910, "P3"), ready(911, "P0"), ready(912, "P3"), ready(913, "P1"), ready(914, "P3")]
+out = board.render_board(rows, "me", 0, 2)
+rendered = section_rows(out, READY)
+assert [l for l in rendered if "#911" in l] and [l for l in rendered if "#913" in l], \
+    f"the P0 and the P1 did not both render at ready_limit=2:\n{out}"
+assert not any(f"#{n}" in l for l in rendered for n in (910, 912, 914)), \
+    f"a P3 displaced a higher-priority row at ready_limit=2:\n{out}"
+assert "3 more ready" in out, f"wrong withheld count at ready_limit=2 over five rows:\n{out}"
+PYEOF
+check "the cap renders the highest-priority rows, not the first N given" $?
+
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
+# carries the same status column, so a whole-board scan counts it under two headers.
+def section_rows(rendered, header):
+    lines = rendered.splitlines()
+    if header not in lines:
+        return []
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if not line or not line.startswith(" "):
+            break
+        out.append(line)
+    return out
+
+READY = "📋 READY"
+
+def ready(number, priority="P2", **kw):
+    return row(number=number, title=f"Ready {number}", status="ready", priority=priority, **kw)
+
+# Exactly at the cap: every row renders and nothing is withheld.
+for n in (1, 3, 7):
+    out = board.render_board([ready(920 + i) for i in range(n)], "me", 0, n)
+    assert len(section_rows(out, READY)) == n, \
+        f"{n} ready rows at ready_limit={n} did not render all {n}:\n{out}"
+    assert "more ready" not in out, f"a withheld line rendered at exactly the cap (n={n}):\n{out}"
+
+# Below the cap. max(0, ...) is what makes this hold: count_bit tests `if not n`, which is false
+# for -1, so without the guard this renders "-1 more ready" under four rows.
+out = board.render_board([ready(930 + i) for i in range(4)], "me", 0)
+assert len(section_rows(out, READY)) == 4, \
+    f"four ready rows below the default cap did not all render:\n{out}"
+assert "more ready" not in out, f"a withheld line rendered below the cap:\n{out}"
+PYEOF
+check "at and below the cap every ready row renders, with no withheld line and no negative count" $?
+
+python3 - "$script_dir" <<'PYEOF'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
+board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
+
+def row(**kw):
+    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
+                is_epic=False, agent_active=False,
+                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+    base.update(kw); return base
+
+# Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
+# carries the same status column, so a whole-board scan counts it under two headers.
+def section_rows(rendered, header):
+    lines = rendered.splitlines()
+    if header not in lines:
+        return []
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if not line or not line.startswith(" "):
+            break
+        out.append(line)
+    return out
+
+READY = "📋 READY"
+
+# The cap applies to READY alone. Nine of each of the two other row buckets, at a limit far below
+# and far above nine, so a cap wired into the shared render_section fails here either way.
+BLOCKED, IN_FLIGHT = "\u26f3 BLOCKED ON YOU", "\U0001f527 IN FLIGHT (agents / CI)"
+rows = ([row(number=940 + i, status="spec-review") for i in range(9)]
+        + [row(number=950 + i, status="in-progress", assignee="alice", mine=False,
+               agent_active=True, attach_id="s") for i in range(9)])
+for limit in (1, 500):
+    out = board.render_board(rows, "me", 0, limit)
+    assert len(section_rows(out, BLOCKED)) == 9, \
+        f"BLOCKED ON YOU was capped at ready_limit={limit}:\n{out}"
+    assert len(section_rows(out, IN_FLIGHT)) == 9, \
+        f"IN FLIGHT was capped at ready_limit={limit}:\n{out}"
+
+# No ready issue renders nothing at all -- no header, no rows, no withheld line -- at any limit.
+for limit in (1, 5, 500):
+    out = board.render_board([row(number=960, status="in-progress", agent_active=True)], "me", 0, limit)
+    assert READY not in out, f"a READY header rendered with no ready issue at limit {limit}:\n{out}"
+    assert "more ready" not in out, \
+        f"a withheld line rendered with no ready issue at limit {limit}:\n{out}"
+PYEOF
+check "no other bucket is capped, and no ready issue renders no READY block at all" $?
+
+# ---------------------------------------------------------------------------
 # Fixture 2: the concurrent-prefetch fixture. Eleven ungroomed issues and an
 # epic with six sub-issues, both of which now report as counts -- kept at those
 # sizes so a regression that reintroduces per-issue rows is unmistakable. Five
@@ -691,11 +918,16 @@ check "no 'specs pending archive: 0' text appears when nothing is pending" $?
 check "no 'next up' line renders when no unclaimed ready issue exists" $?
 
 # ---------------------------------------------------------------------------
-# Fixture 4: "next up" ordering. Four status:ready issues -- P2, unprioritized
-# and P0 unclaimed, plus a P1 claimed by alice. The P0 (#705) is placed out of
-# number order, and the claimed P1 (#706) outranks it by nothing but assignment,
-# so a recommendation that ignores either priority or ownership names the wrong
-# issue.
+# Fixture 4: "next up" ordering and the READY cap. Nine status:ready issues --
+# P2, unprioritized and P0 unclaimed, a P1 claimed by alice, and five more P2s
+# claimed by alice. The P0 (#705) is placed out of number order, and the claimed
+# P1 (#706) outranks it by nothing but assignment, so a recommendation that
+# ignores either priority or ownership names the wrong issue.
+#
+# Every added issue is alice's, not mine, so is_blocked_on_you stays false and
+# all nine stay in READY. Sorted by (priority, number) the first five are
+# 705, 706, 701, 707, 708 -- so the cap's pick is checked against a list whose
+# order is neither the number order nor the JSON order.
 # ---------------------------------------------------------------------------
 cat > "$fake_bin_dir4/gh" <<'GHEOF'
 #!/usr/bin/env bash
@@ -706,7 +938,12 @@ case "$1 $2" in
   {"number":701,"title":"Ready 701","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/701","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
   {"number":702,"title":"Ready 702","labels":[{"name":"status:ready"}],"url":"https://x/702","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
   {"number":705,"title":"Ready 705 top priority","labels":[{"name":"status:ready"},{"name":"P0"}],"url":"https://x/705","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
-  {"number":706,"title":"Ready 706 claimed","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/706","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}}
+  {"number":706,"title":"Ready 706 claimed","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/706","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":707,"title":"Ready 707","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/707","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":708,"title":"Ready 708","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/708","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":709,"title":"Ready 709","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/709","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":710,"title":"Ready 710","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/710","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
+  {"number":711,"title":"Ready 711","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/711","assignees":[{"login":"alice"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}}
 ]
 JSON
     ;;
@@ -764,6 +1001,68 @@ check "'next up' does not name a status:ready issue that already has an assignee
 
 echo "$out4" | grep -qx "🗄️  3 specs pending archive → /spec-flow:archive"
 check "the archive suggestion renders with its count when specs are pending" $?
+
+# --- issue 71: the READY cap, end to end through the CLI ---
+
+# Rows are counted INSIDE the extracted READY block, never over the whole board: a ready row
+# rendered under BLOCKED ON YOU matches the same regex, and fixture 1's render holds exactly such
+# a row. The same fake PATH backs all three runs, so only the flag differs between them.
+ready_rows_in() { section_in "$1" "📋 READY" | grep -cE '^  ready +#[0-9]+'; }
+
+out4_two="$(PATH="$fake_bin_dir4:$PATH" python3 "$board" --ready-limit 2)"
+out4_all="$(PATH="$fake_bin_dir4:$PATH" python3 "$board" --ready-limit 100)"
+
+# Canary first: nine ready issues must actually reach the bucket, or every count below is
+# measuring an empty block and passing vacuously.
+if [[ "$(ready_rows_in "$out4_all")" -eq 9 ]]; then status_ready_all=0; else status_ready_all=1; fi
+check "--ready-limit 100 renders all nine ready rows (canary — a large N is the uncap)" "$status_ready_all"
+
+! echo "$out4_all" | grep -q "more ready"
+check "no withheld line renders when the limit exceeds the ready count" $?
+
+if [[ "$(ready_rows_in "$out4")" -eq 5 ]]; then status_ready_def=0; else status_ready_def=1; fi
+check "the default cap renders exactly five READY rows out of nine" "$status_ready_def"
+
+# The five highest priority, in (priority, number) order -- not the first five by number, and not
+# the JSON order. 702 is unprioritized and 709-711 are lower down the P2 run, so neither renders.
+section_in "$out4" "📋 READY" | grep -qE '^  ready +#705 ' &&
+  section_in "$out4" "📋 READY" | grep -qE '^  ready +#706 ' &&
+  section_in "$out4" "📋 READY" | grep -qE '^  ready +#701 ' &&
+  section_in "$out4" "📋 READY" | grep -qE '^  ready +#707 ' &&
+  section_in "$out4" "📋 READY" | grep -qE '^  ready +#708 '
+check "the five rendered rows are the highest-priority five (705, 706, 701, 707, 708)" $?
+
+! section_in "$out4" "📋 READY" | grep -qE '^  ready +#(702|709|710|711) '
+check "no lower-priority ready row displaces one of the five" $?
+
+section_in "$out4" "📋 READY" | tail -1 | grep -qxF "  … 4 more ready — raise --ready-limit to see the rest"
+check "the withheld line is the last line of the READY block and names the remedy" $?
+
+if [[ "$(ready_rows_in "$out4_two")" -eq 2 ]]; then status_ready_two=0; else status_ready_two=1; fi
+check "--ready-limit 2 renders exactly two READY rows" "$status_ready_two"
+
+section_in "$out4_two" "📋 READY" | grep -qF "7 more ready"
+check "the withheld count tracks an explicit --ready-limit (2 rendered, 7 withheld, 9 total)" $?
+
+# --- issue 71: a limit below 1 is a usage error, not a smaller board ---
+
+# `set -e` is not in effect here, but $? is still clobbered by the next command, so capture it on
+# the line after the assignment and nowhere later.
+usage_out="$(PATH="$fake_bin_dir4:$PATH" python3 "$board" --ready-limit 0 2>"$fake_bin_dir4/usage0.log")"
+usage_status=$?
+if [[ "$usage_status" -ne 0 && -z "$usage_out" ]]; then status_zero=0; else status_zero=1; fi
+check "--ready-limit 0 exits non-zero and prints no board" "$status_zero"
+
+grep -q "must be 1 or more" "$fake_bin_dir4/usage0.log"
+check "--ready-limit 0 reports the usage error on stderr" $?
+
+usage_out_neg="$(PATH="$fake_bin_dir4:$PATH" python3 "$board" --ready-limit -1 2>"$fake_bin_dir4/usage1.log")"
+usage_status_neg=$?
+if [[ "$usage_status_neg" -ne 0 && -z "$usage_out_neg" ]]; then status_neg=0; else status_neg=1; fi
+check "--ready-limit -1 exits non-zero and prints no board" "$status_neg"
+
+grep -q "must be 1 or more" "$fake_bin_dir4/usage1.log"
+check "--ready-limit -1 reports the usage error on stderr" $?
 
 # Note on prefetch transparency: fixture 1's blocked/needs-attention assertions match exact
 # rendered note text, and are the transparency check -- they must still pass with

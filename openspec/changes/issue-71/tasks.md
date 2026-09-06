@@ -31,14 +31,14 @@
 
 ## 6. Assertions
 
-- [ ] 6.1 Extend fixture 4 with `#707` through `#711`, all `status:ready`, `P2`, assigned to `alice` rather than `me`, so `is_blocked_on_you` stays false. This reaches 9 ready rows, of which the first five sorted are `705, 706, 701, 707, 708`.
-- [ ] 6.2 Run fixture 4 three times against the same fake PATH: default (5 rows, `4 more ready`, the withheld line is the last line of the block), `--ready-limit 2` (2 rows, `7 more ready`), and `--ready-limit 100` (9 rows, no `more ready` line). Count rows inside the block extracted by `section_in`, not over the whole board.
-- [ ] 6.3 Add two usage-error runs against the same PATH asserting non-zero exit, empty stdout and `must be 1 or more` on stderr. Capture `$?` immediately after the assignment; `set -e` is not in effect in this file.
-- [ ] 6.4 Add an in-process block asserting next up survives the cut: five assigned P0 ready rows plus an unclaimed P3 `#900`; the next-up line names 900 and `#900` is absent from the rendered rows.
-- [ ] 6.5 Add an in-process block asserting length invariance: 6 versus 506 ready rows render the same line count, with `1 more ready` and `501 more ready` present, so the invariance holds by reporting rather than by silence.
-- [ ] 6.6 Add an in-process block asserting priority order under the cap: one P0, one P1 and three P3s at `ready_limit=2` render the P0 and P1 only, with `3 more ready`.
-- [ ] 6.7 Add an in-process block asserting the boundaries: N ready rows at `ready_limit=N` render all N with no withheld line, and 4 ready rows at `ready_limit=5` render all 4 with no withheld line and no negative count.
-- [ ] 6.8 Add an in-process block asserting nothing else is capped: nine blocked-on-you plus nine in-flight rows all render, at two different limits, and no ready issue at limits 1, 5 and 500 produces no READY header and no `more ready` text.
+- [x] 6.1 Extend fixture 4 with `#707` through `#711`, all `status:ready`, `P2`, assigned to `alice` rather than `me`, so `is_blocked_on_you` stays false. This reaches 9 ready rows, of which the first five sorted are `705, 706, 701, 707, 708`.
+- [x] 6.2 Run fixture 4 three times against the same fake PATH: default (5 rows, `4 more ready`, the withheld line is the last line of the block), `--ready-limit 2` (2 rows, `7 more ready`), and `--ready-limit 100` (9 rows, no `more ready` line). Count rows inside the block extracted by `section_in`, not over the whole board.
+- [x] 6.3 Add two usage-error runs against the same PATH asserting non-zero exit, empty stdout and `must be 1 or more` on stderr. Capture `$?` immediately after the assignment; `set -e` is not in effect in this file.
+- [x] 6.4 Add an in-process block asserting next up survives the cut: five assigned P0 ready rows plus an unclaimed P3 `#900`; the next-up line names 900 and `#900` is absent from the rendered rows.
+- [x] 6.5 Add an in-process block asserting length invariance: 6 versus 506 ready rows render the same line count, with `1 more ready` and `501 more ready` present, so the invariance holds by reporting rather than by silence.
+- [x] 6.6 Add an in-process block asserting priority order under the cap: one P0, one P1 and three P3s at `ready_limit=2` render the P0 and P1 only, with `3 more ready`.
+- [x] 6.7 Add an in-process block asserting the boundaries: N ready rows at `ready_limit=N` render all N with no withheld line, and 4 ready rows at `ready_limit=5` render all 4 with no withheld line and no negative count.
+- [x] 6.8 Add an in-process block asserting nothing else is capped: nine blocked-on-you plus nine in-flight rows all render, at two different limits, and no ready issue at limits 1, 5 and 500 produces no READY header and no `more ready` text.
 
 ## 7. Prose
 

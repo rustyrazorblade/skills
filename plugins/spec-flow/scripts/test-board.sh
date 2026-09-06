@@ -9,9 +9,12 @@
 #   1  the broad behavioral fixture -- every bucket, PR/CI correlation, liveness, notes
 #   2  the concurrent comment prefetch and its per-row failure isolation
 #   3  nothing to report -- the conditional-rendering fixture (no section, no zero count)
-#   4  "next up" priority ordering and its refusal to name a claimed issue
+#   4  "next up" priority ordering, its refusal to name a claimed issue, and the READY cap
+#      through the CLI -- the default, an explicit --ready-limit, and a limit below 1
 # Plus in-process python blocks for the cases a PATH fixture can't reach cheaply: the three
-# liveness states of one green in-review PR, backlog-size line invariance, and keycap alignment.
+# liveness states of one green in-review PR, backlog-size line invariance, keycap alignment, and
+# the READY cap's own properties -- "next up" survives the cut, the board's length holds as the
+# ready queue grows, the cap takes the highest priority, and it bounds READY alone.
 set -uo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"

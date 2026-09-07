@@ -102,6 +102,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    - **Edit:** <the scope line or criterion the owner rewrote, in the owner's wording>
    - **Deletion:** <the line the owner removed>
    - **Direction:** <owner technical direction, verbatim — see below>
+   - **Dropped:** <a question the round asked with no stated default, returned unasked>
    ```
 
    **Write the file with the Write tool, never with a shell command** — the record holds the
@@ -143,10 +144,13 @@ refines. Stay in the foreground — no worktrees, no implementation.
      first is answered.
    - **Every question carries a stated recommended default**, so the owner can accept in one word.
      A question that arrives without one **is not relayed at all**, and the round is treated as not
-     having asked it. Don't supply the default yourself: the point of the default is that the agent
-     that read the code committed to an answer, and a default you invent is a line with no
-     antecedent wearing the owner's question as cover. The question comes back, with a default, in
-     the next round.
+     having asked it. **Don't supply the default yourself for a question the agent asked** — step
+     1's own two questions are yours and carry your defaults, but these aren't: the point of the
+     default here is that the agent that read the code committed to an answer, and a default you
+     invent is a line with no antecedent wearing the owner's question as cover. **Record the drop**
+     as a `**Dropped:**` entry, so the next round can see the question already came back once and
+     either supply a default this time or convert it to a stated assumption. Without that entry the
+     next round has identical inputs and returns the same defaultless question.
    - **Order dependent questions before what depends on them.**
    - **More than three candidates?** Relay the three that most change the shape of the work. The
      rest stay in that round's refinement under **Open questions / assumptions**, which the next
@@ -222,23 +226,32 @@ refines. Stay in the foreground — no worktrees, no implementation.
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-7. **Create the issue.** Put the title and the body in files first, and pass both by path. **No
-   drafted text goes into the `gh` call as a literal shell argument** — not the body, not the
-   title. **Write both files with the Write tool, never with a shell command** — a title can
-   contain `$(...)` or backticks, and an unquoted heredoc body would execute them.
-   ```bash
-   gh issue create --title "$(cat .spec-flow/groom-<slug>-title.txt)" \
-     --body-file .spec-flow/groom-<slug>-body.md \
-     --label "<P0|P1|P2|P3>" --label "status:ready"
+7. **Create the issue** from a JSON payload, so no drafted text ever becomes a shell argument.
+   Write one file — `.spec-flow/groom-<slug>-issue.json`, where `<slug>` is the kebab-case slug
+   from step 4 — holding the title, the body and the labels. **Write it with the Write tool, never
+   with a shell command** — a title can contain `$(...)` or backticks, and an unquoted heredoc body
+   would execute them.
+   ```json
+   {
+     "title": "<concise title>",
+     "body": "<the drafted body>",
+     "labels": ["<P0|P1|P2|P3>", "status:ready"]
+   }
    ```
-   `"$(cat …)"` hands `gh` the file's bytes; the shell does not re-read them, so backticks in a
-   title stay text. If the owner accepted the docs-fast-track offer at step 3, add
-   `--label "type:docs"` too. Once the issue exists, rename the refinement record to
-   `.spec-flow/groom-<N>-<slug>.md`, so the record of how the scope was reached is findable from
-   the issue number.
+   If the owner accepted the docs-fast-track offer at step 3, add `"type:docs"` to `labels`. Then
+   post it, and take the issue number from the response rather than making a second call:
+   ```bash
+   gh api --method POST "repos/{owner}/{repo}/issues" \
+     --input ".spec-flow/groom-<slug>-issue.json" --jq .number
+   ```
+   Escaping is now JSON's, which is specified, rather than the shell's quoting rules: the title and
+   body are values inside a file, `gh` reads that file itself, and the command line carries only a
+   quoted path. Once the issue exists, rename the refinement record to
+   `.spec-flow/groom-<N>-<slug>.md` with the number the call returned, so the record of how the
+   scope was reached is findable from the issue number.
 
-8. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
-   `status:ready` (plus `type:docs` if applicable):
+8. **Verify and report.** With `<N>` from step 7's response, confirm the created issue carries
+   exactly one `P?` label and `status:ready` (plus `type:docs` if applicable):
    ```bash
    gh issue view <N> --json number,title,labels
    ```

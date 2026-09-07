@@ -238,9 +238,11 @@ and don't hold it open. You can end it yourself in one word at any round; `groom
 closing pass that asks nothing and turns what's still open into stated assumptions for you to
 confirm. See `skills/groom/SKILL.md` step 4. You can also state **technical direction** at any
 round — architecture, performance, implementation constraints — and it reaches the architect
-verbatim, in the issue's own `## Technical direction` section. For a bug report, `groom` also
-attempts a read-only repro before drafting acceptance criteria, so an unconfirmed report never
-quietly becomes a settled spec — see that skill's step 2.)
+verbatim, in the issue's own `## Technical direction` section: at `activate`'s design consult, or,
+on the docs fast path where that consult is skipped, at `implement`'s on-demand architect consult.
+Wherever an architect runs on this issue at all, it gets those constraints. For a bug report,
+`groom` also attempts a read-only repro before drafting acceptance criteria, so an unconfirmed
+report never quietly becomes a settled spec — see that skill's step 2.)
 
 **Seam 2 — GitHub review + merge.** By default, the pipeline only ever pushes the issue branch and
 opens a PR — it never merges *that* PR and never pushes it to `main`. You review in GitHub,

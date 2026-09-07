@@ -160,7 +160,11 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       (not just wording), have it stop and report the specific question back to you rather than
       guessing — it should not try to reach `architect` itself.
    b. **If it reports back with an architecture question**, spawn `architect` yourself — read-only,
-      same as `activate` step 3 — with that specific question, then spawn a **fresh**
+      same as `activate` step 3 — with that specific question. **If the issue carries a
+      `## Technical direction` section, include it verbatim** in that prompt, the same way
+      `activate` step 3 does: this path skipped `activate`'s design consult, so this is the only
+      place the owner's own constraints reach an architect at all. No such section means no change
+      and no empty block. Then spawn a **fresh**
       `tdd-developer` subagent with the answer plus everything from step a's prompt to finish the
       work (spawn fresh — plain subagents can't be resumed). Architect-on-demand, not a mandatory
       gate; most `type:docs` runs never trigger it.

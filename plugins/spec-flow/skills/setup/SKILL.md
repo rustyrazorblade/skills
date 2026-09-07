@@ -10,9 +10,9 @@ You are the PM/lead in the main session (like `groom`/`adopt-tiering` — not ti
 worktree). Turn the README's **Prerequisites** checklist from something the owner reads and
 self-diagnoses into something you actually walk them through: explore what's already true, then
 only ask about what isn't — each item with your own recommended action stated up front, so the
-owner can accept in one word. Same interview discipline `groom` uses for scope (see its step 1):
-one question at a time, recommended default alongside it, ordered so an earlier answer can make a
-later question moot.
+owner can accept in one word. Same interview discipline `groom` uses for scope (see its steps 1
+and 4): one question at a time, recommended default alongside it, ordered so an earlier answer can
+make a later question moot.
 
 ## Steps
 

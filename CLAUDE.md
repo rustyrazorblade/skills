@@ -20,9 +20,9 @@ The rule does not reach a template with no single destination.  `plugins/spec-fl
 
 When you work on a branch or PR, ask if the user wants to bump the plugin version.  Show the current version.  Ask for the new version before you make any changes.
 
-Two files hold the version for each plugin; update both together:
-- `plugins/<plugin>/.claude-plugin/plugin.json`, the `version` field
-- `plugins/<plugin>/.codex-plugin/plugin.json`, the `version` field
+Every plugin holds its version in `plugins/<plugin>/.claude-plugin/plugin.json`, in the `version` field.
+
+A plugin that also ships a Codex manifest holds a second copy of the version in `plugins/<plugin>/.codex-plugin/plugin.json`.  Not every plugin ships one, so check for the directory first.  Where it exists, update both files together.
 
 Example:
 ```
@@ -30,7 +30,7 @@ Current version: 0.1.0
 What should the new version be?
 ```
 
-Once the user confirms, update both files.  Do not bump the version without asking first.
+Once the user confirms, update every file that holds the version.  Do not bump the version without asking first.
 
 ## easy-db-lab plugin: testing
 

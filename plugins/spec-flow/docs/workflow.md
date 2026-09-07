@@ -234,9 +234,16 @@ fresh `product-manager` that has read the code and asks at most three questions,
 at a time with a recommended answer stated alongside each. `groom` ends the loop, never the agent,
 and only when every acceptance criterion is testable as written, the unhappy paths are covered, and
 nothing behavioral is left for a later agent to guess at — design questions stay for the architect
-and don't hold it open. You can end it yourself in one word at any round; `groom` then runs a
-closing pass that asks nothing and turns what's still open into stated assumptions for you to
-confirm. See `skills/groom/SKILL.md` step 4. You can also state **technical direction** at any
+and don't hold it open. There is no round cap: the loop ends on that bar, on your word, or on a
+round that has nothing new left to ask. Where anything but the bar ends it, `groom` runs one
+closing pass that asks nothing and turns what's still open into stated assumptions, shown to you in
+a single screen split by provenance — anything traceable to something you said is confirmed as a
+group, while anything the agent raised itself needs its own yes or no. See
+`skills/groom/SKILL.md` step 4. Every round is written down as it happens: your answers, edits and
+deletions go **verbatim** into a **refinement record** — `.spec-flow/groom-<slug>.md` in the primary
+checkout, renamed to `groom-<N>-<slug>.md` once the issue exists. It is gitignored runtime state,
+held in a file rather than in a session that compacts, so how a scope was reached stays findable
+from the issue number months later. You can also state **technical direction** at any
 round — architecture, performance, implementation constraints — and it reaches the architect
 verbatim, in the issue's own `## Technical direction` section: at `activate`'s design consult, or,
 on the docs fast path where that consult is skipped, at `implement`'s on-demand architect consult.
@@ -941,7 +948,7 @@ plugin shipped would be wrong somewhere by construction. A repo with no test-run
 | Directory | Committed? | What it holds | Lifetime |
 |---|---|---|---|
 | `spec-flow/` | **Yes — committed** | The repo's own spec-flow configuration, including `TESTING.md`, its test and CI policy | Lives with the repo |
-| `.spec-flow/` | **No — gitignored** | Per-branch runtime state: `flagged-tests` | Dies with the branch |
+| `.spec-flow/` | **No — gitignored** | Runtime state, never source: the per-branch `flagged-tests`, and `groom`'s refinement records | Per-branch state dies with the branch |
 
 Only the **dotted** one belongs in `.gitignore`. A trailing-slash pattern with no interior slash
 matches at any depth, so an undotted `spec-flow/` entry would also swallow any nested directory of

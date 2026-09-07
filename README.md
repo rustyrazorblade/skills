@@ -225,7 +225,7 @@ yourself.
 
 | Skill | Purpose |
 |-------|---------|
-| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, testable acceptance criteria, one `P0–P3`) |
+| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, testable acceptance criteria, one `P0–P3`), refined over as many `product-manager` rounds as it takes |
 | `/spec-flow:activate <N>` | Worktree + branch → OpenSpec explore+propose → commit spec → **stop for your approval** (Seam 1) |
 | `/spec-flow:implement <N>` | After approval: open a draft PR early (keeps CI warm), run the background team (tdd-developer → 5-lens review panel → fix loop → build-engineer → docs) pushing at checkpoints, then mark the PR ready |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread |
@@ -284,6 +284,8 @@ The consuming repo must provide the two backbones, and state its own test/CI pol
 
 - **OpenSpec** — the `openspec` CLI installed and initialized in the repo
 - **GitHub** — `gh` authenticated, repo hosted on GitHub
+- **`jq`** — on `PATH`. `groom` builds its create-issue payload with it, and three of the plugin's
+  scripts parse `gh` output with it. There is no fallback if it's missing.
 - **`spec-flow/TESTING.md`** — this repo's own test and CI policy. The plugin ships no default and no
   fallback, so nothing runs until the file exists. `/spec-flow:setup` proposes one, confirms it
   with you, and opens a PR. Add **`.spec-flow/`** to `.gitignore` (per-branch runtime state) and

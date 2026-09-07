@@ -173,14 +173,24 @@ relax this.
 - **WHEN** the loop runs four rounds
 - **THEN** no Scope or Acceptance criteria line exists that has no antecedent in the record or an explicit owner confirmation
 
-### Requirement: `groom` creates the issue without interpolating the body into a shell string
+### Requirement: `groom` creates the issue without drafted text reaching a parser that can act on it
 
-`groom` SHALL pass the drafted issue body to `gh issue create` by file. It SHALL NOT interpolate the
-body into a double-quoted shell argument.
+`groom` SHALL pass the drafted issue title and body to GitHub by file, and SHALL NOT interpolate
+either into a shell argument. Where the request payload is structured, `groom` SHALL build it by
+machine from the title and body files, so that escaping is correct by construction; it SHALL NOT
+require an agent to escape the payload by hand.
 
 #### Scenario: A body citing related code
 - **WHEN** the drafted body cites related code in backticks
 - **THEN** the issue is created with that text intact and no shell command substitution occurs
+
+#### Scenario: A body containing a quote character
+- **WHEN** the drafted body contains a `"` character, or a line that resembles a payload field
+- **THEN** it is carried as text, and no additional field reaches the create-issue request
+
+#### Scenario: A multi-line body
+- **WHEN** the drafted body spans multiple lines and its sections are `##` headings
+- **THEN** the created issue carries those headings each at the start of a line
 
 ### Requirement: The agent that runs `groom` is instructed to run it as a loop
 

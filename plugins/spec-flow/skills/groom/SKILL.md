@@ -19,6 +19,10 @@ refines. Stay in the foreground — no worktrees, no implementation.
      refinement loop can't sharpen both at once.
    Ask them one at a time, each with your own recommended answer stated alongside it — a default
    they can accept in one word ("this reads like two issues to me: X, and Y for later — split it?").
+   **Write whatever the owner answers into the refinement record before you spawn round 1** (step 4
+   defines the record and its `## Before round 1` entries). The record is the only channel these
+   answers have: round 1 receives the raw idea verbatim, so an idea the owner just split in two
+   still reaches the agent whole, and nothing else in the prompt carries the correction.
    **Everything else waits for step 4.** The deep interview happens there, asked by an agent that
    has read the code, which is most of what makes a question worth asking. Don't resolve
    shape-defining ambiguity here and don't hold the refinement back for it: that's what the loop is
@@ -54,7 +58,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
    spec generated at all — while still stopping at both owner seams as normal; see **Docs fast
    path** in `docs/workflow.md`. Not sure it's docs-only, or it touches behavior at all (even
    indirectly — e.g. a config example that has to stay in sync with real defaults)? Leave it
-   unlabeled; the full pipeline is the safe default.
+   unlabeled; the full pipeline is the safe default. Record the owner's answer the same way step 1
+   records its own, under `## Before round 1` — whether this is documentation-only changes what a
+   round should ask about, and the refinement record is the only thing that carries it there.
 
 4. **Refine in rounds.** One `product-manager` pass produces whatever depth a single reading
    reaches; everything it couldn't settle becomes a guess made later, by `architect` or
@@ -78,13 +84,18 @@ refines. Stay in the foreground — no worktrees, no implementation.
 
    **The refinement record.** Keep it in a file, `.spec-flow/groom-<slug>.md` in the primary
    checkout, where `<slug>` is a short kebab-case name for the idea (`.spec-flow/` is already
-   gitignored; if this repo's isn't, add it). Not in your conversation. You run inside
-   `project-manager`'s session, which compacts; a record held in context degrades to a paraphrase,
-   and a later round would receive softened owner constraints while you still believed you had
-   passed on their exact words. Append to it as the round happens, one entry per thing the owner
-   did:
+   gitignored; if this repo's isn't, add it — and if a record with that slug already exists from
+   another idea, pick a different slug rather than writing over it). Not in your conversation. You
+   run inside `project-manager`'s session, which compacts; a record held in context degrades to a
+   paraphrase, and a later round would receive softened owner constraints while you still believed
+   you had passed on their exact words. Append to it as the round happens, one entry per thing the
+   owner did:
 
    ```markdown
+   ## Before round 1
+   - **Q:** <a step-1 or step-3 question, exactly as you asked it>
+     **A:** <the owner's answer, verbatim>
+
    ## Round 2
    - **Q:** <the question exactly as you asked it>
      **A:** <the owner's answer, verbatim>
@@ -92,6 +103,12 @@ refines. Stay in the foreground — no worktrees, no implementation.
    - **Deletion:** <the line the owner removed>
    - **Direction:** <owner technical direction, verbatim — see below>
    ```
+
+   **Write the file with the Write tool, never with a shell command** — the record holds the
+   owner's prose verbatim, which can contain `$(...)` or backticks, and an unquoted heredoc body
+   would execute them. Appending with the Write tool means writing the file out again with the new
+   entry on the end, every earlier entry copied through unchanged. If a shell append genuinely
+   can't be avoided, quote the delimiter — `<<'EOF'` — which suppresses both substitutions.
 
    Four properties make the record worth keeping:
    - **Verbatim.** Copy what the owner wrote. Don't tidy it, summarize it, or turn it into a
@@ -124,12 +141,16 @@ refines. Stay in the foreground — no worktrees, no implementation.
    **Relaying questions.** One at a time, at most three per round.
    - **One at a time** — the owner can't usefully answer a batch. Ask the second only after the
      first is answered.
-   - **Each question states your own recommended answer**, so the owner can accept in one word. A
-     question that arrives without a default doesn't go to the owner as-is: supply the default
-     yourself if you have one, otherwise drop it and treat the round as not having asked it.
+   - **Every question carries a stated recommended default**, so the owner can accept in one word.
+     A question that arrives without one **is not relayed at all**, and the round is treated as not
+     having asked it. Don't supply the default yourself: the point of the default is that the agent
+     that read the code committed to an answer, and a default you invent is a line with no
+     antecedent wearing the owner's question as cover. The question comes back, with a default, in
+     the next round.
    - **Order dependent questions before what depends on them.**
    - **More than three candidates?** Relay the three that most change the shape of the work. The
-     rest stay in the record's open questions and are available to a later round.
+     rest stay in that round's refinement under **Open questions / assumptions**, which the next
+     round's prompt carries as the previous refinement.
 
    **The loop ends** when any one of these is true:
    - the **readiness bar is met**;
@@ -147,6 +168,11 @@ refines. Stay in the foreground — no worktrees, no implementation.
    answers, plus the instruction that it asks **nothing**: it returns a refinement, and it converts
    everything still open into explicitly stated assumptions, each marked as traceable to the record
    or as the agent's own.
+
+   This is why the closing pass still runs after the no-new-questions stop, which ended the loop on
+   the grounds that a further round has the same inputs. The closing pass differs by **instruction**,
+   not by input: it asks nothing and converts what's open into marked assumptions, which is work no
+   earlier round did.
 
    **Confirming the assumptions — one screen, split by provenance.** Present the closing pass's
    assumptions to the owner in a single pass, in two groups:
@@ -172,16 +198,19 @@ refines. Stay in the foreground — no worktrees, no implementation.
    owner direction restated as an acceptance criterion, don't accept the rewording — the direction
    stands as the owner wrote it.
 
-5. **Draft the issue body** from the final refinement, with these sections:
-   - **Scope** — what's in, and explicitly what's out.
-   - **Acceptance criteria** — a checklist of observable outcomes (these become the spec's
+5. **Draft the issue body** from the final refinement. Write each section under the literal `##`
+   heading given here, exactly as spelled — downstream steps match on the heading string, so a
+   bolded line or an `###` reads to them as no section at all:
+   - `## Scope` — what's in, and explicitly what's out.
+   - `## Acceptance criteria` — a checklist of observable outcomes (these become the spec's
      scenarios later, when a spec gets generated at all — see the Docs fast path exception below —
      so make them testable).
-   - **Technical direction** — the owner's own words, verbatim, exactly as recorded. Include this
-     section only if the owner stated any; `activate` passes it to the `architect`.
-   - **Assumptions** — the closing pass's items the owner left unresolved. Include this section
+   - `## Technical direction` — the owner's own words, verbatim, exactly as recorded. Include this
+     section only if the owner stated any. `activate` step 3 matches this exact heading and passes
+     what's under it to the `architect` verbatim; anything else there reaches nobody.
+   - `## Assumptions` — the closing pass's items the owner left unresolved. Include this section
      only if there are any.
-   - **Notes / context** — links, constraints, related code (`file:line`), related issues, and —
+   - `## Notes / context` — links, constraints, related code (`file:line`), related issues, and —
      for a bug — the step-2 verification verdict (confirmed repro, or flagged unverified/couldn't
      reproduce).
    Keep it tight. A full spec usually comes later in `/spec-flow:activate` (a content-only
@@ -193,14 +222,20 @@ refines. Stay in the foreground — no worktrees, no implementation.
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-7. **Create the issue.** Write the drafted body to a file and pass it by path. Never interpolate
-   it into a double-quoted argument: the body cites related code in backticks, and the shell runs
-   backticks inside double quotes as command substitution.
+7. **Create the issue.** Put the title and the body in files first, and pass both by path. **No
+   drafted text goes into the `gh` call as a literal shell argument** — not the body, not the
+   title. **Write both files with the Write tool, never with a shell command** — a title can
+   contain `$(...)` or backticks, and an unquoted heredoc body would execute them.
    ```bash
-   gh issue create --title "<concise title>" --body-file .spec-flow/groom-<slug>-body.md \
+   gh issue create --title "$(cat .spec-flow/groom-<slug>-title.txt)" \
+     --body-file .spec-flow/groom-<slug>-body.md \
      --label "<P0|P1|P2|P3>" --label "status:ready"
    ```
-   If the owner accepted the docs-fast-track offer at step 3, add `--label "type:docs"` too.
+   `"$(cat …)"` hands `gh` the file's bytes; the shell does not re-read them, so backticks in a
+   title stay text. If the owner accepted the docs-fast-track offer at step 3, add
+   `--label "type:docs"` too. Once the issue exists, rename the refinement record to
+   `.spec-flow/groom-<N>-<slug>.md`, so the record of how the scope was reached is findable from
+   the issue number.
 
 8. **Verify and report.** Confirm the created issue carries exactly one `P?` label and
    `status:ready` (plus `type:docs` if applicable):

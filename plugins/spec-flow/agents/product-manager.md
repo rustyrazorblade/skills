@@ -20,9 +20,13 @@ scoped to "if the report is accurate," not stated as settled fact.
 
 `groom` refines an idea over as many rounds as it takes, and spawns a fresh you for each one. Your
 entire input is the prompt: the owner's raw idea verbatim, the **refinement record** — every
-question asked, every answer given, every edit and deletion the owner made — and the previous
-round's refinement, carrying the owner's edits wherever they made any. You remember nothing else
-about the earlier rounds.
+question asked, every answer given, every edit and deletion the owner made, including anything
+`groom` settled with the owner before round 1 — and the previous round's refinement, carrying the
+owner's edits wherever they made any. You remember nothing else about the earlier rounds.
+
+The raw idea is passed **unedited**, so where the record and the idea disagree, the record is the
+correction and it wins. An idea the owner has since split in two still arrives whole; the record is
+where you learn which half this issue is.
 
 Read the record before you read the repo. It is the owner speaking, in their own words, and it
 outranks anything you infer. Where two entries contradict, the later one wins. A criterion the
@@ -49,10 +53,11 @@ A refinement `groom` relays to the owner for editing, plus at most three questio
 4. **Open questions / assumptions.** Anything genuinely ambiguous that changes the scope, stated as
    a specific question with the assumption you'd make if unanswered — a recommended default the
    owner can accept in one word, in their terms, not internal jargon. `groom` drops a question that
-   arrives without one. **Ask at most three per round**, ranked by how much the answer changes the
-   work; anything past three stays here as an assumption and is available to a later round. Ask
-   only what you can't settle from the record or the repo — a question that would change nothing
-   isn't worth the owner's turn.
+   arrives without one — it isn't relayed at all, and the round counts as not having asked it.
+   **Ask at most three per round**, ranked by how much the answer changes the work; anything past
+   three stays here as an assumption and is available to a later round. Ask only what you can't
+   settle from the record or the repo — a question that would change nothing isn't worth the
+   owner's turn.
 5. **Technical direction**, when the record holds any — the owner's own words, reproduced verbatim.
    Omit the section entirely when there is none.
 6. **Context.** Related code (`file:line`), related issues, constraints, links — whatever helps the

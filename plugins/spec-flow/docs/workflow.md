@@ -229,12 +229,20 @@ way — they're conclusions to re-check as a whole, not something that makes sen
 
 (Upstream of both stops, at `groom`, the **`product-manager`
 agent** refines the raw idea into scope + testable acceptance criteria — the *what/why* — which the
-architect then designs the *how* for. `groom` itself grills shape-defining scope ambiguity — one
-question at a time, its own recommended answer stated alongside each one, dependent questions
-ordered before what depends on them — rather than drafting around it and hoping you redline the
-right things; see `skills/groom/SKILL.md` step 1. For a bug report, it also attempts a read-only
-repro before drafting acceptance criteria, so an unconfirmed report never quietly becomes a settled
-spec — see that skill's step 2.)
+architect then designs the *how* for. It does that over **rounds**, not one pass: each round is a
+fresh `product-manager` that has read the code and asks at most three questions, relayed to you one
+at a time with a recommended answer stated alongside each. `groom` ends the loop, never the agent,
+and only when every acceptance criterion is testable as written, the unhappy paths are covered, and
+nothing behavioral is left for a later agent to guess at — design questions stay for the architect
+and don't hold it open. You can end it yourself in one word at any round; `groom` then runs a
+closing pass that asks nothing and turns what's still open into stated assumptions for you to
+confirm. See `skills/groom/SKILL.md` step 4. You can also state **technical direction** at any
+round — architecture, performance, implementation constraints — and it reaches the architect
+verbatim, in the issue's own `## Technical direction` section: at `activate`'s design consult, or,
+on the docs fast path where that consult is skipped, at `implement`'s on-demand architect consult.
+Wherever an architect runs on this issue at all, it gets those constraints. For a bug report,
+`groom` also attempts a read-only repro before drafting acceptance criteria, so an unconfirmed
+report never quietly becomes a settled spec — see that skill's step 2.)
 
 **Seam 2 — GitHub review + merge.** By default, the pipeline only ever pushes the issue branch and
 opens a PR — it never merges *that* PR and never pushes it to `main`. You review in GitHub,
@@ -697,7 +705,7 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 
 | Skill | Phase | Does |
 |---|---|---|
-| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Grills shape-defining ambiguity (recommended default per question); for a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. The `product-manager` refines scope + testable acceptance criteria; one `P0–P3` + `status:ready`. |
+| `/spec-flow:groom` | foreground | Rough idea → scoped GitHub issue. Refines it over **rounds** — a fresh `product-manager` each round, at most three questions, relayed one at a time with a recommended default — until every acceptance criterion is testable as written; `groom` ends the loop, never the agent, and you can end it yourself in one word. Owner technical direction is carried verbatim to the architect. For a bug, verifies read-only before scoping it; offers `type:docs` for documentation-only work. One `P0–P3` + `status:ready`. |
 | `/spec-flow:activate` | foreground | Pick a `status:ready` issue → worktree+branch → `architect` + domain expert design it concurrently → STOP for your design choice → openspec explore+propose from your chosen design → commit spec → `status:spec-review`, then STOP again for your spec approval (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless it's structural/tech-accompanying — see **Docs fast path** above. A `type:tech-debt` issue always skips spec generation and, by default, the design-choice stop too (`architect` auto-adopts the confirmed Direction unless something's wrong) — see **Tech-debt fast path** above. |
 | `/spec-flow:implement` | background | After your approval: opens a **draft** PR (`Closes #N`) early and pushes at checkpoints so CI runs during implementation, while `issue-manager` drives tdd-developer → review panel → fix loop → build-engineer → docs polish in the worktree — by default as an **agent team** it leads, or the original `Workflow` script where agent teams aren't enabled (`SPEC_FLOW_IMPLEMENT_MODE`); then marks the PR ready and sets `status:in-review`. A `type:docs` issue instead runs one lightweight doc-writing pass (`tasks.md` if a spec exists, otherwise the issue's own acceptance criteria directly; architect on demand), skipping the panel/build/polish. A `type:tech-debt` issue still runs the full panel, in behavior-preservation mode (no spec to conform to), working from the issue's Direction instead of `tasks.md`. Invoking this skill is the explicit opt-in to that orchestration. |
 | `/spec-flow:address` | foreground-invoked | Pull your PR review comments → fix agent in worktree → push → reply per thread. |
@@ -714,8 +722,9 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 **Orchestration**
 - `project-manager` — the **central coordinator**, the agent you talk to directly. It knows the
   whole lifecycle, runs the board, tracks which issues have an `issue-manager` running (`agent:active`,
-  via `board`), decides what's next by priority + lifecycle, and **delegates** — `groom` to the
-  `product-manager` subagent, and any specific issue's `activate → implement → address → finalize`
+  via `board`), decides what's next by priority + lifecycle, and **delegates** — `groom`'s
+  refinement to a loop of `product-manager` rounds, and any specific issue's
+  `activate → implement → address → finalize`
   to that issue's `issue-manager`, launched as its own background process. It coordinates; it does not
   implement, does not drive an issue's stages inline, and only crosses your two seams when you
   explicitly instruct it to for that run (see **Overriding either seam's default**, above; neither
@@ -740,8 +749,10 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 
 **Front of pipeline (refine → design → proposal)**
 - `product-manager` — refines a rough idea into a tight problem statement, in/out scope, and
-  **testable WHEN/THEN acceptance criteria** (the *what/why*). Consulted during `/spec-flow:groom`;
-  the project-manager brings its draft back to you to edit. Owns the what/why, never the how.
+  **testable WHEN/THEN acceptance criteria** (the *what/why*). Consulted during `/spec-flow:groom`,
+  once per refinement round: the project-manager brings each round's draft back to you to edit and
+  relays that round's questions one at a time, then judges the result against the readiness bar and
+  decides whether to run another round. Owns the what/why, never the how.
 - `architect` — turns the refined idea into a **design** (approach, structure/boundaries to SOLID,
   data model, key interfaces) with **trade-offs framed as owner decisions**. Consulted during
   `/spec-flow:activate`, concurrently with a domain-expert agent if one is available, and

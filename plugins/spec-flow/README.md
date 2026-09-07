@@ -129,7 +129,7 @@ All skills are namespaced under the plugin:
 
 | Command | Does |
 |---|---|
-| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Grills shape-defining ambiguity one question at a time with a recommended default; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
+| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Refines it over rounds — a fresh `product-manager` each round, at most three questions, asked one at a time with a recommended default — until every acceptance criterion is testable as written; `groom` ends the loop, never the agent, and one word from you ends it too. Carries your technical direction verbatim through to the architect; verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
 | `/spec-flow:activate <N>` | Claim it → review it with you (scope/AC freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions) → worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless the docs' own layout is changing or it documents a tech change — otherwise it's just a quick review of the issue's own scope. A `type:tech-debt` issue always skips spec generation, and by default the design stop too — architect auto-adopts the confirmed Direction unless something's actually wrong. |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → the review panel your `spec-flow/WORKFLOWS.md` names → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
@@ -163,7 +163,8 @@ All skills are namespaced under the plugin:
 
 **Front of pipeline (refine → design → proposal)**
 - **`product-manager`** — refines a rough idea into tight scope + **testable acceptance criteria**
-  (the what/why). Consulted during `groom`.
+  (the what/why). Consulted during `groom`, once per refinement round, until the criteria are all
+  testable as written.
 - **`architect`** — turns the refined idea into a **design** (structure, SOLID, data model,
   trade-offs framed as owner decisions) that feeds the OpenSpec proposal. Consulted during
   `activate`, concurrently with a domain-expert agent if one is available, and **before**

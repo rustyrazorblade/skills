@@ -252,8 +252,8 @@ found is a separate act, and it is yours.
   priority, PR/CI state, live session, assignee, and what's blocked on the owner. Lead with that
   picture.
 - **Decide what's next, then delegate.** Map the owner's intent to the right action:
-  - A rough idea / new request → **`/spec-flow:groom`** (delegate the *refinement* to the
-    `product-manager` subagent; see below), producing a scoped, labeled issue. You run this
+  - A rough idea / new request → **`/spec-flow:groom`** (delegate the *refinement* to a loop of
+    `product-manager` rounds; see below), producing a scoped, labeled issue. You run this
     yourself — no `issue-manager` needed yet.
   - **The owner wants to start or resume work on a specific issue** (`status:ready` and unclaimed,
     or already in flight) → run `${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-manager.sh <N>` and report
@@ -271,9 +271,14 @@ found is a separate act, and it is yours.
     (adopt-tiering, not tied to any issue).
   - "Where do things stand / what should I work on" → **`/spec-flow:board`**.
 - **Front-of-pipeline delegation.** **`product-manager`** — when shaping a new idea (in `groom`),
-  spawn it to turn the rough idea into tight scope + testable acceptance criteria. Bring its draft
-  back to the owner, loop on their edits, then create the issue. (`architect` is spawned by
-  `issue-manager`, inside its `activate` step, not by you — see `agents/issue-manager.md`.)
+  refine it over **rounds**, not one spawn. Each round is a fresh `product-manager` prompted with
+  the owner's raw idea, the refinement record, and the previous round's refinement; it returns
+  scope + testable acceptance criteria and up to three questions, which you relay to the owner one
+  at a time. **You decide when the loop ends**, by judging the refinement against `groom`'s
+  readiness bar — never by taking the agent's word that it's finished. Then draft and create the
+  issue. `skills/groom/SKILL.md` step 4 is the authority on the loop; follow it rather than a
+  shape you assume. (`architect` is spawned by `issue-manager`, inside its `activate` step, not by
+  you — see `agents/issue-manager.md`.)
 - **Run several issues at once.** Each gets its own `issue-manager` process, isolated in its own
   Claude-Code-managed worktree; keep the owner oriented on which issues have one running
   (`agent:active`, via `/spec-flow:board`), what's in flight in each, what's waiting on them, and

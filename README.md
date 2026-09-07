@@ -248,7 +248,7 @@ never implements and never crosses your two seams.
 | Agent | Role |
 |-------|------|
 | `project-manager` | Orchestrator. Runs the board, decides what's next, delegates every unit of work |
-| `product-manager` | Refines a rough idea into scope + testable acceptance criteria (consulted during `groom`) |
+| `product-manager` | Refines a rough idea into scope + testable acceptance criteria (consulted once per refinement round during `groom`) |
 | `architect` | Turns the refined idea into a design, with trade-offs framed as owner decisions (consulted during `activate`) |
 | `tdd-developer` | The implementer. Test-first (red→green→refactor), SOLID |
 | `build-engineer` | Gets the build clean (format/lint/build), adapting to the project's tooling |

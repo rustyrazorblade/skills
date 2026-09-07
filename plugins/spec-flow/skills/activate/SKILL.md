@@ -218,7 +218,9 @@ qualify), and confirm the choice with the owner.
    this particular docs change needs a spec at all (see **Docs fast path** in `docs/workflow.md`);
    the doc-writing pass in `implement` can still consult `architect` on demand if it hits a real
    question about whether the documentation matches the intended design — available, just not a
-   mandatory gate here.
+   mandatory gate here. That consult carries the issue's `## Technical direction` section, if it
+   has one, exactly as this step would have (`implement` step 4b), so skipping this step doesn't
+   lose the owner's constraints.
 
    **For a `type:tech-debt` issue, this step still runs — narrowed, never skipped** (see
    **Tech-debt fast path** in `docs/workflow.md`). The issue body already carries a `## Direction`
@@ -247,6 +249,13 @@ qualify), and confirm the choice with the owner.
    domain-expert returns the domain facts behind those trade-offs. If the architect's design
    raises a specific domain question neither agent already answered, follow up with a second,
    targeted domain-expert consult before step 4. Both agents **advise**; neither makes the call.
+
+   **If the issue carries a `## Technical direction` section, include it verbatim** in the
+   architect's prompt, alongside the scope and acceptance criteria — the same shape the tech-debt
+   branch above uses for `## Direction`: *"Technical direction (stated by the owner while the issue
+   was groomed): `<the issue's Technical direction section, verbatim>`."* These are the owner's own
+   architecture, performance and implementation constraints, and the architect designs within them
+   rather than rediscovering them. No such section means no change here and no empty block.
 
    **Then spawn `design-critic` on what the architect returned**, before step 4's stop —
    **normal issues only.** Skip it on both fast paths: a `type:docs` issue has no design stop at

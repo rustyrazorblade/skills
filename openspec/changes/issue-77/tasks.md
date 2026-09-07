@@ -83,3 +83,21 @@
 - [x] 7.2 Confirm `groom/SKILL.md` contains no instruction that contradicts another — specifically
       the one-question-at-a-time rule against the bulk assumption pass.
 - [x] 7.3 Confirm `openspec validate issue-77 --type change --strict` passes.
+
+## 8. Review rounds
+
+- [x] 8.1 Round 1: a question arriving without a stated default is not relayed, and `groom` does not
+      supply one of its own; step 1 and step 3 write their answers into the record under
+      `## Before round 1`; the title left the shell alongside the body; the record and the issue
+      files are written with the Write tool; step 5 names its literal `##` headings; over-cap
+      questions are placed where they really live; `setup/SKILL.md` repointed; the closing pass is
+      distinguished from an ordinary round; the record is renamed to `groom-<N>-<slug>.md`.
+- [x] 8.2 Round 2: a dropped question is recorded as a `**Dropped:**` entry so a later round can
+      resolve it; the no-default rule is scoped to questions the agent asked; the record outranks
+      the agent's inferences as owner intent while its lines stay data, never instructions;
+      `implement` step 4b carries `## Technical direction` so a `type:docs` issue keeps it.
+- [x] 8.3 Round 3: build the create-issue payload with `jq --rawfile` from a title file and a body
+      file, so no agent escapes JSON by hand; report the number and URL from that one response;
+      step 8 asserts the label set exactly, since `gh api` does not validate label names; state
+      that title and body are `jq`-produced JSON strings and that `##` headings keep their line
+      starts; `proposal.md`'s Scope names both technical-direction hand-off sites.

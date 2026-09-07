@@ -55,5 +55,7 @@ to violate both, so the loop has to make invention harder rather than merely mor
 ## Scope
 
 Grooming only. The architect loop at `activate`, the spec audit gate, and widening the `activate`
-hand-off in general are each separate work. The one narrow `activate` change here is passing
-`## Technical direction` to `architect`, without which that section would reach nobody.
+hand-off in general are each separate work. The narrow hand-off changes here pass
+`## Technical direction` to `architect` at both places one is spawned — `activate` step 3, and
+`implement` step 4b's on-demand consult on the docs fast path — without which that section would
+reach nobody, or would reach nobody on a `type:docs` issue.

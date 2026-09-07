@@ -226,36 +226,52 @@ refines. Stay in the foreground — no worktrees, no implementation.
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-7. **Create the issue** from a JSON payload, so no drafted text ever becomes a shell argument.
-   Write one file — `.spec-flow/groom-<slug>-issue.json`, where `<slug>` is the kebab-case slug
-   from step 4 — holding the title, the body and the labels. **Write it with the Write tool, never
-   with a shell command** — a title can contain `$(...)` or backticks, and an unquoted heredoc body
-   would execute them.
-   ```json
-   {
-     "title": "<concise title>",
-     "body": "<the drafted body>",
-     "labels": ["<P0|P1|P2|P3>", "status:ready"]
-   }
-   ```
-   If the owner accepted the docs-fast-track offer at step 3, add `"type:docs"` to `labels`. Then
-   post it, and take the issue number from the response rather than making a second call:
-   ```bash
-   gh api --method POST "repos/{owner}/{repo}/issues" \
-     --input ".spec-flow/groom-<slug>-issue.json" --jq .number
-   ```
-   Escaping is now JSON's, which is specified, rather than the shell's quoting rules: the title and
-   body are values inside a file, `gh` reads that file itself, and the command line carries only a
-   quoted path. Once the issue exists, rename the refinement record to
-   `.spec-flow/groom-<N>-<slug>.md` with the number the call returned, so the record of how the
-   scope was reached is findable from the issue number.
+7. **Create the issue.** Put the title and the body in two plain files, then let a tool build the
+   request payload from them. `<slug>` is the kebab-case slug from step 4.
+   - `.spec-flow/groom-<slug>-title.txt` — the title, on one line.
+   - `.spec-flow/groom-<slug>-body.md` — step 5's drafted body exactly as it should read in the
+     issue: every line as written, every `##` heading at the start of its line.
 
-8. **Verify and report.** With `<N>` from step 7's response, confirm the created issue carries
-   exactly one `P?` label and `status:ready` (plus `type:docs` if applicable):
+   **Write both files with the Write tool, never with a shell command** — a title can contain
+   `$(...)` or backticks, and an unquoted heredoc body would execute them. Then build the payload
+   and post it:
+   ```bash
+   jq -n \
+     --rawfile title ".spec-flow/groom-<slug>-title.txt" \
+     --rawfile body  ".spec-flow/groom-<slug>-body.md" \
+     '{title: $title, body: $body, labels: ["<P0|P1|P2|P3>", "status:ready"]}' \
+     > ".spec-flow/groom-<slug>-issue.json"
+
+   gh api --method POST "repos/{owner}/{repo}/issues" \
+     --input ".spec-flow/groom-<slug>-issue.json" --jq '.number, .html_url'
+   ```
+   If the owner accepted the docs-fast-track offer at step 3, add `"type:docs"` to the labels
+   array. Title and body reach the issue as JSON string values that `jq` wrote from the files, so
+   the body's line breaks survive and each `##` heading still starts a line.
+
+   **Never write the payload by hand.** `--rawfile` reads a file as one raw string and `jq` emits
+   it already escaped, so a `"` in the body stays a quote character instead of closing the string
+   and turning the rest of the body into further payload fields — which is how a drafted line could
+   otherwise append its own `labels`, and this pipeline routes on labels. The safety here comes
+   from `jq` producing the escaping, not from JSON being a specified format: a payload you type
+   yourself is exactly as dangerous as the shell string this replaced, and the body is not purely
+   the owner's words — the refinement sources some of it from repo reading and the duplicate
+   search.
+
+   The call prints the number and the URL. Rename the refinement record to
+   `.spec-flow/groom-<N>-<slug>.md` with that number, so the record of how the scope was reached is
+   findable from the issue number.
+
+8. **Verify and report.** With `<N>` from step 7's response, confirm the issue's labels are
+   **exactly** the set you asked for — one `P?`, `status:ready`, and `type:docs` only if the owner
+   accepted the fast track:
    ```bash
    gh issue view <N> --json number,title,labels
    ```
-   Report the issue number and URL. Suggest `/spec-flow:activate <N>` when the owner wants to start it.
+   Check for strays, not only for the labels you expect. `gh issue create --label` used to refuse
+   an unknown label before sending; `gh api` does not, so a typo in the payload creates a new label
+   and succeeds. Report the issue number and the URL step 7 printed. Suggest
+   `/spec-flow:activate <N>` when the owner wants to start it.
 
 ## Rules
 

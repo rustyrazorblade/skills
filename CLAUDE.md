@@ -117,3 +117,7 @@ When you audit training material, use the official Cassandra docs to verify CQL 
 - Go: note explicitly that gocql auto-prepares.
 - Java and Python: show the explicit `session.prepare()` call.
 - Always use prepared statements with `?` placeholders.  Never use string concatenation.
+
+## Spec-Flow Project Direction - Evolution.
+
+ The problem I am trying to solve is that currently I have to switch between a bunch of issues, when all I want to do is talk to one agent, add details to issues, and mark them ready. I want to front load all the work (hence the loops in groom) and then have the agents carry out most of the work after that.  I can only do it if the agents have enough details to get it right and the reviewers too.  this is the first step in that direction.  reframe your question with this knowledge.

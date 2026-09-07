@@ -103,6 +103,13 @@ refines. Stay in the foreground — no worktrees, no implementation.
 ## Rules
 
 - Exactly one priority label. If the owner doesn't pick, recommend one and confirm before creating.
+- **Every line traces back to the owner.** A scope boundary or acceptance criterion goes in the
+  issue only if the owner said it, or you showed it to them and they kept it. Reading the code
+  tells you what a criterion *could* be; it never authorises adding one. When your repo reading
+  turns up something the owner did not raise — a config path to honour, a test harness to extend,
+  a concrete example value — name it as a proposal in the draft review and mark it as yours, so
+  they can cut it in one word. Silence is not agreement. An issue that carries rules nobody asked
+  for sends the whole pipeline off building them.
 - Don't groom the same idea twice — search open issues first (`gh issue list --search`) if it
   might already exist.
 - Acceptance criteria are the seed of the spec's `#### Scenario:` blocks (when a spec gets

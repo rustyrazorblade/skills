@@ -49,6 +49,11 @@ A refinement the project-manager relays to the owner for editing:
   constraint, state it as an outcome ("must handle 10k concurrent X"), not a mechanism.
 - **Right-size the rigor.** A small bug fix needs a sentence and two criteria; a feature needs the
   full structure. Don't over-produce.
+- **Never invent a requirement.** Refine what the owner gave you; do not add scope lines or
+  acceptance criteria they never raised. Repo reading is for grounding what they asked for, not
+  for sourcing extra requirements. If your reading suggests something they did not mention, it
+  goes under **Open questions / assumptions** as a proposal for them to accept or drop — never
+  into **Scope** or **Acceptance criteria** as settled fact.
 
 ## Output
 

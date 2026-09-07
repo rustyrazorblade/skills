@@ -1,6 +1,6 @@
 ---
 name: groom
-description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. Grills shape-defining ambiguity (one question at a time, stated recommended default) rather than just drafting around it, verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. First stage of the flow delivery workflow (see docs/workflow.md).
+description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. Refines the idea over as many rounds as it takes — each round a fresh `product-manager` that has read the code, asking at most three questions, one at a time, each with a stated recommended default — and ends the loop only when every acceptance criterion is testable as written. Verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. First stage of the flow delivery workflow (see docs/workflow.md).
 argument-hint: [rough idea — a todo, feature, or bug]
 ---
 
@@ -12,22 +12,17 @@ refines. Stay in the foreground — no worktrees, no implementation.
 
 ## Steps
 
-1. **Understand the idea — grill shape-defining ambiguity, don't just draft around it.** Read the
-   owner's description. For anything that changes the *shape* of the work (scope boundaries, which
-   of several plausible interpretations is meant, whether this is really two ideas bundled into
-   one), treat it as a short interview, not a form to fill in around:
-   - **One question at a time** — the owner can't usefully answer a batch.
-   - **State your own recommended answer alongside every question** — a default they can accept in
-     one word instead of composing an answer from scratch ("I'd scope this to X and leave Y for
-     later — sound right?", not just "what should this cover?").
-   - **Order dependent questions before the questions that depend on them.** Don't ask a detail
-     question whose relevance hinges on an earlier, still-open one.
-   - **Don't draft the issue until shape-defining ambiguity is actually resolved.** This is the one
-     place `groom` diverges from "prefer a sensible draft the owner edits," below: get confirmation
-     on what the work *is* before writing it up, not after.
-   For everything else — a detail a sensible default clearly covers, or a fact you can look up
-   yourself (existing code, other issues, prior art) — don't ask; state the default/finding in the
-   draft and let the owner redline it. Over-asking is its own failure mode.
+1. **Read the idea — ask only what round 1 can't start without.** Two things, at most:
+   - **What is this?** Only if the description is genuinely unreadable as a unit of work. A rough,
+     under-specified idea is the normal input here, not a problem to solve before proceeding.
+   - **Is this one piece of work or several?** A bundle of two ideas becomes two issues, and the
+     refinement loop can't sharpen both at once.
+   Ask them one at a time, each with your own recommended answer stated alongside it — a default
+   they can accept in one word ("this reads like two issues to me: X, and Y for later — split it?").
+   **Everything else waits for step 4.** The deep interview happens there, asked by an agent that
+   has read the code, which is most of what makes a question worth asking. Don't resolve
+   shape-defining ambiguity here and don't hold the refinement back for it: that's what the loop is
+   for, and asking here as well puts the owner through two interviews with two different bars.
 
 2. **For bug reports: verify before you draft.** If the idea describes something not working
    (symptoms, expected vs. actual behavior), don't draft acceptance criteria from an unconfirmed
@@ -61,19 +56,131 @@ refines. Stay in the foreground — no worktrees, no implementation.
    indirectly — e.g. a config example that has to stay in sync with real defaults)? Leave it
    unlabeled; the full pipeline is the safe default.
 
-4. **Delegate the refinement to the `product-manager` agent.** Spawn the `product-manager`
-   subagent with the owner's raw idea, any clarifications from step 1, and the verification verdict
-   from step 2 if this is a bug. It returns a structured refinement —
-   problem statement, in/out scope, **testable WHEN/THEN acceptance criteria**, open questions, and
-   context (`file:line`, duplicates). Bring that refinement back to the owner, loop on their edits,
-   and treat the result as the source for the issue body. (You own the *what/why*; design — the
-   *how* — comes later, from the `architect` at `/spec-flow:activate`.)
+4. **Refine in rounds.** One `product-manager` pass produces whatever depth a single reading
+   reaches; everything it couldn't settle becomes a guess made later, by `architect` or
+   `tdd-developer`, without the owner in the room. So run it as a loop. **You drive the loop and
+   you decide when it ends** — the agent never decides that for you.
 
-5. **Draft the issue body** from the refinement, with these sections:
+   **A round.** Spawn a **fresh** `product-manager` subagent. Its prompt carries three runtime
+   values and nothing else:
+   - the owner's **raw idea, verbatim** — plus the step-2 verification verdict if this is a bug;
+   - the **refinement record** in full (below);
+   - the **previous round's refinement** — the owner's edited copy wherever they edited it, not the
+     agent's original. Round 1 has none.
+
+   Don't restate the agent's mandate in the prompt; it has its own definition, and a restatement
+   there only competes with it. Send runtime values, the way `implement` does.
+
+   The round returns a refinement — problem statement, in/out scope, testable WHEN/THEN acceptance
+   criteria, open questions, context — and up to three questions. Show the refinement to the owner,
+   relay the questions (below), append everything to the record, then judge the refinement against
+   the readiness bar. Bar met → step 5. Bar unmet → run another round.
+
+   **The refinement record.** Keep it in a file, `.spec-flow/groom-<slug>.md` in the primary
+   checkout, where `<slug>` is a short kebab-case name for the idea (`.spec-flow/` is already
+   gitignored; if this repo's isn't, add it). Not in your conversation. You run inside
+   `project-manager`'s session, which compacts; a record held in context degrades to a paraphrase,
+   and a later round would receive softened owner constraints while you still believed you had
+   passed on their exact words. Append to it as the round happens, one entry per thing the owner
+   did:
+
+   ```markdown
+   ## Round 2
+   - **Q:** <the question exactly as you asked it>
+     **A:** <the owner's answer, verbatim>
+   - **Edit:** <the scope line or criterion the owner rewrote, in the owner's wording>
+   - **Deletion:** <the line the owner removed>
+   - **Direction:** <owner technical direction, verbatim — see below>
+   ```
+
+   Four properties make the record worth keeping:
+   - **Verbatim.** Copy what the owner wrote. Don't tidy it, summarise it, or turn it into a
+     criterion — that's the next round's job, in the open.
+   - **Append-only.** Never rewrite an earlier entry. Where two entries contradict, **the later
+     one wins**: an answer given in round 2 and reversed in round 4 is settled by round 4.
+   - **Every answer keeps its question.** "No" and "the second one" mean nothing on their own, and
+     a later round can't resolve the referent from the answer alone.
+   - **Edits and deletions are entries too.** An owner who deletes an acceptance criterion and says
+     nothing has said something. Record the deletion, so the next round doesn't re-add the line.
+
+   **The readiness bar — yours to apply, not the agent's.** A round is ready when all three hold:
+   - **(a)** every acceptance criterion is testable as written;
+   - **(b)** the unhappy paths are covered — errors, limits, empty or oversized input, conflicts;
+   - **(c)** no **behavioural** assumption is left for a downstream agent to guess at.
+
+   Item (c) is scoped to behaviour deliberately. **Design assumptions don't hold the loop open** —
+   data models, interfaces, algorithms, libraries all belong to `architect` at the design stop, and
+   chasing them here both duplicates that work and gives the loop no fixed point.
+
+   A round that asks no questions has not thereby met the bar, and a round that asks three has not
+   thereby failed it. Read the refinement and judge it. **A small idea meeting the bar in round 1
+   is a normal, expected outcome** — converging fast isn't a sign you applied the bar too loosely.
+
+   **Unsourced concreteness is not readiness.** A criterion that is testable *only* because it
+   names a value nobody gave — a size limit, a timeout, a retry count, a specific error code — is
+   not ready. Rewarding it would make inventing a number the cheapest route to convergence. Treat
+   that value as the next round's question, with your recommended default.
+
+   **Relaying questions.** One at a time, at most three per round.
+   - **One at a time** — the owner can't usefully answer a batch. Ask the second only after the
+     first is answered.
+   - **Each question states your own recommended answer**, so the owner can accept in one word. A
+     question that arrives without a default doesn't go to the owner as-is: supply the default
+     yourself if you have one, otherwise drop it and treat the round as not having asked it.
+   - **Order dependent questions before what depends on them.**
+   - **More than three candidates?** Relay the three that most change the shape of the work. The
+     rest stay in the record's open questions and are available to a later round.
+
+   **The loop ends** when any one of these is true:
+   - the **readiness bar is met**;
+   - the **owner ends it** — "that's enough", "just file it", or anything else that plainly means
+     stop;
+   - **a round has nothing new to ask** — every question it would ask is already answered in the
+     record. A further round has the same inputs and returns the same thing.
+
+   There's no round cap. The owner is present at every round, so a long loop is visible and one
+   word ends it.
+
+   **The closing pass.** When the loop ends for any reason *other* than the bar being met, run one
+   more round, and only one. Honour "stop" immediately — the closing pass is what you do next, not
+   another round of questions. Its prompt is the usual three values, including the owner's final
+   answers, plus the instruction that it asks **nothing**: it returns a refinement, and it converts
+   everything still open into explicitly stated assumptions, each marked as traceable to the record
+   or as the agent's own.
+
+   **Confirming the assumptions — one screen, split by provenance.** Present the closing pass's
+   assumptions to the owner in a single pass, in two groups:
+   - **Traceable to something the owner said** — confirmable in **bulk**, one answer for the group.
+     Each confirmed item becomes an ordinary Scope or Acceptance criteria line.
+   - **Never raised by the owner** — each needs its own explicit yes or no. **A bulk yes never
+     promotes one of these.** Promotion makes an agent-authored line indistinguishable from one the
+     owner wrote, and the moment of least attention is the wrong moment to grant that.
+
+   This bulk confirmation is a **deliberate, scoped exception** to the one-question-at-a-time rule
+   above, and the only one. It applies to the traceable group at the closing pass, nowhere else:
+   the loop's questions each shape the work, while these are already-stated positions being
+   confirmed as a set at the end.
+
+   Anything the owner leaves unresolved is neither promoted nor dropped — it goes into the issue's
+   own assumptions section (step 5).
+
+   **Owner technical direction.** The owner may state technical direction at any round —
+   architecture, performance characteristics, implementation guidelines, constraints. Record it
+   **verbatim**, under `**Direction:**` in the record, and carry it into the drafted issue
+   unchanged. Never reword it into a behavioural criterion, and never drop it for being design:
+   `product-manager`'s "stay out of design" rule binds the agent, not the owner. If a round returns
+   owner direction restated as an acceptance criterion, don't accept the rewording — the direction
+   stands as the owner wrote it.
+
+5. **Draft the issue body** from the final refinement, with these sections:
    - **Scope** — what's in, and explicitly what's out.
    - **Acceptance criteria** — a checklist of observable outcomes (these become the spec's
      scenarios later, when a spec gets generated at all — see the Docs fast path exception below —
      so make them testable).
+   - **Technical direction** — the owner's own words, verbatim, exactly as recorded. Include this
+     section only if the owner stated any; `activate` passes it to the `architect`.
+   - **Assumptions** — the closing pass's items the owner left unresolved. Include this section
+     only if there are any.
    - **Notes / context** — links, constraints, related code (`file:line`), related issues, and —
      for a bug — the step-2 verification verdict (confirmed repro, or flagged unverified/couldn't
      reproduce).
@@ -86,9 +193,11 @@ refines. Stay in the foreground — no worktrees, no implementation.
    `P0` (drop everything) / `P1` (high) / `P2` (normal) / `P3` (low/someday) — never zero,
    never two.
 
-7. **Create the issue:**
+7. **Create the issue.** Write the drafted body to a file and pass it by path. Never interpolate
+   it into a double-quoted argument: the body cites related code in backticks, and the shell runs
+   backticks inside double quotes as command substitution.
    ```bash
-   gh issue create --title "<concise title>" --body "<the drafted body>" \
+   gh issue create --title "<concise title>" --body-file .spec-flow/groom-<slug>-body.md \
      --label "<P0|P1|P2|P3>" --label "status:ready"
    ```
    If the owner accepted the docs-fast-track offer at step 3, add `--label "type:docs"` too.
@@ -109,7 +218,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
   turns up something the owner did not raise — a config path to honour, a test harness to extend,
   a concrete example value — name it as a proposal in the draft review and mark it as yours, so
   they can cut it in one word. Silence is not agreement. An issue that carries rules nobody asked
-  for sends the whole pipeline off building them.
+  for sends the whole pipeline off building them. **Running more rounds never relaxes this**: four
+  rounds of refinement must leave no scope line or criterion without an antecedent in the record
+  or an explicit confirmation from the owner.
 - Don't groom the same idea twice — search open issues first (`gh issue list --search`) if it
   might already exist.
 - Acceptance criteria are the seed of the spec's `#### Scenario:` blocks (when a spec gets

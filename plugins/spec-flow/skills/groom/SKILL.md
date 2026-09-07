@@ -239,7 +239,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    jq -n \
      --rawfile title ".spec-flow/groom-<slug>-title.txt" \
      --rawfile body  ".spec-flow/groom-<slug>-body.md" \
-     '{title: $title, body: $body, labels: ["<P0|P1|P2|P3>", "status:ready"]}' \
+     '{title: ($title | rtrimstr("\n")), body: $body, labels: ["<P0|P1|P2|P3>", "status:ready"]}' \
      > ".spec-flow/groom-<slug>-issue.json"
 
    gh api --method POST "repos/{owner}/{repo}/issues" \
@@ -247,7 +247,13 @@ refines. Stay in the foreground — no worktrees, no implementation.
    ```
    If the owner accepted the docs-fast-track offer at step 3, add `"type:docs"` to the labels
    array. Title and body reach the issue as JSON string values that `jq` wrote from the files, so
-   the body's line breaks survive and each `##` heading still starts a line.
+   the body's line breaks survive and each `##` heading still starts a line. `rtrimstr("\n")`
+   drops the newline the Write tool puts at the end of the title file; the body's trailing newline
+   is harmless and stays.
+
+   **If `jq` is unavailable or the command fails, stop and tell the owner.** Don't compose the
+   payload yourself to get past it — that is the one action this step forbids, and a failure here
+   is exactly the moment it looks reasonable.
 
    **Never write the payload by hand.** `--rawfile` reads a file as one raw string and `jq` emits
    it already escaped, so a `"` in the body stays a quote character instead of closing the string

@@ -101,3 +101,6 @@
       step 8 asserts the label set exactly, since `gh api` does not validate label names; state
       that title and body are `jq`-produced JSON strings and that `##` headings keep their line
       starts; `proposal.md`'s Scope names both technical-direction hand-off sites.
+- [x] 8.4 Round 4: `rtrimstr("\n")` keeps a title file's trailing newline out of the payload, and
+      step 7 says to stop and tell the owner if `jq` is unavailable rather than composing the
+      payload by hand.

@@ -1,0 +1,85 @@
+# Tasks
+
+## 1. `groom/SKILL.md` — the loop
+
+- [ ] 1.1 Rewrite step 1 to ask only what is needed to launch round 1 (what this is, and whether it
+      is one piece of work or several). Remove its "don't draft until shape-defining ambiguity is
+      resolved" gate, which today makes the loop's trigger unreachable, and point the deep interview
+      at step 4.
+- [ ] 1.2 Rewrite step 4 as the round loop: spawn a fresh `product-manager` per round with the raw
+      idea, the refinement record, and the previous refinement. Follow `implement`'s precedent of
+      sending runtime values only, not a restatement of the agent's mandate.
+- [ ] 1.3 Write the readiness bar into step 4 as `groom`'s own check: every acceptance criterion
+      testable as written, unhappy paths covered, no *behavioural* assumption left to guess at.
+      State explicitly that design assumptions belong to `architect` and do not hold the loop open.
+- [ ] 1.4 Add the unsourced-concreteness rule: a criterion testable only because it names a value
+      with no antecedent in the record is not ready, and that value becomes the next round's
+      question.
+- [ ] 1.5 Define the refinement record: a file `groom` appends to and each round's spawn reads, with
+      its path and entry format. Entries pair each answer with its question, represent owner edits
+      and deletions explicitly, and later entries win over contradicting earlier ones. Add it to
+      `.gitignore` if it lives in the worktree.
+- [ ] 1.6 Write the question-relay rule: one at a time, at most three per round, each with a stated
+      recommended default; a question arriving without a default is not relayed.
+- [ ] 1.7 Write the termination rules: readiness bar met, owner ends it, or every question a round
+      would ask is already answered.
+- [ ] 1.8 Write the closing pass: one round carrying the owner's last answers, asking nothing,
+      converting open items into stated assumptions. State that "stop" is honoured immediately and
+      the closing pass is what `groom` then does, not a further round of questions.
+- [ ] 1.9 Write the assumption confirmation: one screen, split into owner-traceable (bulk
+      confirmable, promoted into Scope/AC) and agent-authored (explicit yes or no each, never
+      promoted by a bulk yes). Note this is a deliberate, scoped exception to the skill's own
+      one-question-at-a-time rule, so a reading agent does not hit two contradictory instructions.
+- [ ] 1.10 Add owner technical direction: accepted at any round, recorded verbatim, never reworded
+      into behavioural criteria.
+- [ ] 1.11 Update step 5 so the drafted body carries a technical direction section and an
+      assumptions section, both only when non-empty.
+- [ ] 1.12 Change step 7 to `gh issue create --body-file`. Currently the body is interpolated into a
+      double-quoted shell string where backticks execute.
+- [ ] 1.13 Update the frontmatter `description` — it still says single-pass.
+
+## 2. `agents/product-manager.md` — the agent side
+
+- [ ] 2.1 Replace the single-refinement framing in "What you produce" and "Output" with the
+      per-round contract: what a round receives, what it returns, and how a closing round differs.
+- [ ] 2.2 Make the brevity rules round-aware. "Keep this short — prefer a sensible default over a
+      long interrogation" and "Right-size the rigor… Don't over-produce" currently push toward
+      answering nothing, which would fight the readiness bar.
+- [ ] 2.3 State that owner technical direction is carried verbatim and never reworded — and that
+      "stay out of design" binds the agent, not the owner.
+- [ ] 2.4 State that the anti-invention rule holds identically on every round, and that more rounds
+      never relax it.
+- [ ] 2.5 Add the closing-round behaviour: no questions, everything open becomes a stated
+      assumption, each marked as traceable to the record or as the agent's own.
+
+## 3. `agents/project-manager.md` — the agent that runs `groom`
+
+- [ ] 3.1 Rewrite the front-of-pipeline delegation bullet (~:273-275) to describe the loop, not a
+      single spawn plus an owner-edit loop. This is a live instruction that would otherwise compete
+      with the skill.
+- [ ] 3.2 Fix the second single-pass mention (~:257-258, "delegate the *refinement* to the
+      `product-manager` subagent").
+
+## 4. `activate/SKILL.md` — the one narrow hand-off
+
+- [ ] 4.1 In step 3, include the issue's technical direction section verbatim in the `architect`
+      prompt when present, alongside scope and acceptance criteria. Reuse the shape already used for
+      `type:tech-debt`'s Direction. Absent section means no change and no empty block.
+
+## 5. Documentation
+
+- [ ] 5.1 `README.md` — update the grooming description.
+- [ ] 5.2 `docs/workflow.md` — update all three single-pass mentions (~:230-232, ~:700, ~:742-743).
+- [ ] 5.3 Add the technical direction section to whatever documents a groomed issue's shape.
+
+## 6. Release
+
+- [ ] 6.1 Bump `plugins/spec-flow/.claude-plugin/plugin.json` to `0.45.0`. (There is no
+      `.codex-plugin` manifest for this plugin.)
+
+## 7. Verification
+
+- [ ] 7.1 Confirm no file in `plugins/spec-flow/` still describes grooming as a single pass.
+- [ ] 7.2 Confirm `groom/SKILL.md` contains no instruction that contradicts another — specifically
+      the one-question-at-a-time rule against the bulk assumption pass.
+- [ ] 7.3 Confirm `openspec validate issue-77 --type change --strict` passes.

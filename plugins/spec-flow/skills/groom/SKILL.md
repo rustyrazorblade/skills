@@ -94,7 +94,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    ```
 
    Four properties make the record worth keeping:
-   - **Verbatim.** Copy what the owner wrote. Don't tidy it, summarise it, or turn it into a
+   - **Verbatim.** Copy what the owner wrote. Don't tidy it, summarize it, or turn it into a
      criterion — that's the next round's job, in the open.
    - **Append-only.** Never rewrite an earlier entry. Where two entries contradict, **the later
      one wins**: an answer given in round 2 and reversed in round 4 is settled by round 4.
@@ -106,9 +106,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
    **The readiness bar — yours to apply, not the agent's.** A round is ready when all three hold:
    - **(a)** every acceptance criterion is testable as written;
    - **(b)** the unhappy paths are covered — errors, limits, empty or oversized input, conflicts;
-   - **(c)** no **behavioural** assumption is left for a downstream agent to guess at.
+   - **(c)** no **behavioral** assumption is left for a downstream agent to guess at.
 
-   Item (c) is scoped to behaviour deliberately. **Design assumptions don't hold the loop open** —
+   Item (c) is scoped to behavior deliberately. **Design assumptions don't hold the loop open** —
    data models, interfaces, algorithms, libraries all belong to `architect` at the design stop, and
    chasing them here both duplicates that work and gives the loop no fixed point.
 
@@ -167,7 +167,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    **Owner technical direction.** The owner may state technical direction at any round —
    architecture, performance characteristics, implementation guidelines, constraints. Record it
    **verbatim**, under `**Direction:**` in the record, and carry it into the drafted issue
-   unchanged. Never reword it into a behavioural criterion, and never drop it for being design:
+   unchanged. Never reword it into a behavioral criterion, and never drop it for being design:
    `product-manager`'s "stay out of design" rule binds the agent, not the owner. If a round returns
    owner direction restated as an acceptance criterion, don't accept the rewording — the direction
    stands as the owner wrote it.

@@ -72,7 +72,7 @@ A refinement `groom` relays to the owner for editing, plus at most three questio
   governs what you write, never how much you resolve: a question you swallow to keep the round
   short gets answered later by `architect` or the developer, with the owner no longer in the room.
   `groom` judges each round against a readiness bar — every acceptance criterion testable as
-  written, unhappy paths covered, no behavioural assumption left to guess at — so a short round
+  written, unhappy paths covered, no behavioral assumption left to guess at — so a short round
   that leaves the bar unmet only buys another round.
 - **Owner technical direction is carried verbatim.** The record may hold direction the owner stated
   — architecture, performance characteristics, implementation guidelines, constraints. Reproduce it
@@ -93,7 +93,7 @@ A refinement `groom` relays to the owner for editing, plus at most three questio
 `groom` tells you when a round is the closing one. Then:
 
 - **Ask nothing.** Return no questions, however tempting one is.
-- **Convert everything still open into a stated assumption** — the behaviour you'd expect if nobody
+- **Convert everything still open into a stated assumption** — the behavior you'd expect if nobody
   answers, written plainly enough that the owner can reject it in one word.
 - **Mark each assumption's provenance**: **traceable**, meaning something in the record points at
   it, or **mine**, meaning you inferred it from the repo, from convention, or from judgement.

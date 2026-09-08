@@ -112,7 +112,7 @@ setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.
 setup-cluster.sh <cluster-dir> <binary|easy-db-lab> --name "$NAME" --plan <plan.md path> [--jdk <path>] --dc dc1 --dc dc2
 ```
 
-**Verify the scaffold before continuing.** Confirm `<cluster-dir>/docs/Makefile`, `<cluster-dir>/docs/book.toml`, `<cluster-dir>/docs/SUMMARY.md`, and `<cluster-dir>/docs/plan.md` all exist. If any are missing, the wrong script ran (or scaffolding failed) — stop and fix this before executing any plan step; do not proceed on a partial workspace.
+**Verify the scaffold before continuing.** Confirm `<cluster-dir>/docs/Makefile`, `<cluster-dir>/docs/book.toml`, `<cluster-dir>/docs/SUMMARY.md`, and `<cluster-dir>/docs/plan.md` all exist. Also confirm the wrapper exists. The wrapper lives at the cluster root, `<cluster-dir>/easy-db-lab` (single DC), or per DC, `<cluster-dir>/<dc>/easy-db-lab` (multi-DC) — never in a `bin/` subdirectory of the cluster. Do NOT check `<cluster-dir>/bin/`; no `bin/` directory is created there. The `bin/easy-db-lab` path in step 66 above refers to the easy-db-lab source repo, not the cluster workspace. To locate the wrapper reliably, use `detect-cluster-layout.sh <cluster-dir>` rather than a hand-written `ls`. If any file is missing, the wrong script ran (or scaffolding failed) — stop and fix this before executing any plan step; do not proceed on a partial workspace.
 
 After scaffolding, set `$EDB` from the wrapper path(s) and use `<cluster-dir>/docs/plan.md` for all subsequent references — not the original plan file.
 

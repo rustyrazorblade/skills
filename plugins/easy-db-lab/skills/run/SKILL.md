@@ -23,7 +23,19 @@ Load `../../references/issues.md` for instructions on maintaining the issues fil
 
 ## Discover the Command Surface First
 
-After setting up `$EDB` in the Before Starting section, run:
+After setting up `$EDB` in the Before Starting section, start with the task-oriented guides, then read the flag-level reference.
+
+`$EDB help` lists task-oriented topic guides; `$EDB help <topic>` prints one. Each guide gives the intended workflow for a topic as an ordered command sequence, plus its prerequisites and gotchas — how the tool is meant to be used. Read the guide for any topic a plan step touches (for example, `stress-testing` before running load, `cassandra` before a version or config change) so your command sequence matches the intended one.
+
+```bash
+# List the available topic guides
+$EDB help
+
+# Read the guide for a topic before you act on it
+$EDB help <topic>
+```
+
+Then read the flag-level reference:
 
 ```bash
 $EDB commands

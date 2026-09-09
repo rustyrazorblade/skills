@@ -24,7 +24,7 @@ Use these to inform the new plan: incorporate steps that were added ad-hoc, avoi
 
 ## Discover Before You Plan
 
-Before asking the user anything, resolve the binary and run both discovery commands.
+Before asking the user anything, resolve the binary, read the task-oriented guides, and run the discovery commands.
 
 **Resolve the binary** — in priority order:
 1. If `--binary <path>` was passed as an argument to this skill, use that path as `$EDB`
@@ -32,6 +32,22 @@ Before asking the user anything, resolve the binary and run both discovery comma
 3. Otherwise use `easy-db-lab` as `$EDB`
 
 Use `$EDB` for all binary invocations in this skill.
+
+### Read the task-oriented guides first
+
+Before the flag-level reference, read how the tool is meant to be used. `$EDB help` lists task-oriented topic guides; `$EDB help <topic>` prints one. Each guide gives the intended workflow for a topic as an ordered command sequence, plus the prerequisites and gotchas behind it — the "how the project is meant to be used" layer that `commands` and `--help` do not carry.
+
+```bash
+# List the available topic guides (provisioning, stress-testing, kits, cassandra, ...)
+$EDB help
+
+# Read the guide for each topic the plan will touch
+$EDB help <topic>
+```
+
+Read `help <topic>` for every topic the plan involves before you design its steps. A guide's command sequence and its prerequisites (for example, "db nodes need a data disk: use an NVMe instance type or attach EBS") are exactly the constraints a plan must respect. Treat the guide as the intended shape of the workflow; use `commands` and `--help` below to pin the exact flags for each step.
+
+### The flag-level reference
 
 ```bash
 # Authoritative flag and subcommand reference

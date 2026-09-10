@@ -35,6 +35,8 @@ $EDB help
 $EDB help <topic>
 ```
 
+If `$EDB help` errors with `Unmatched argument at index 0: 'help'`, the binary predates the topic guides. Skip this step and rely on `commands` below.
+
 Then read the flag-level reference:
 
 ```bash

@@ -47,6 +47,8 @@ $EDB help <topic>
 
 Read `help <topic>` for every topic the plan involves before you design its steps. A guide's command sequence and its prerequisites (for example, "db nodes need a data disk: use an NVMe instance type or attach EBS") are exactly the constraints a plan must respect. Treat the guide as the intended shape of the workflow; use `commands` and `--help` below to pin the exact flags for each step.
 
+If `$EDB help` errors with `Unmatched argument at index 0: 'help'`, the binary predates the topic guides. Skip this step and rely on `commands` and `--help` below; the guides add context but are not required to plan.
+
 ### The flag-level reference
 
 ```bash

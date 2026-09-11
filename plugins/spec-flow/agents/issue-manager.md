@@ -68,6 +68,34 @@ no memory of what it's supposed to be doing. To pause or step away, the owner sh
 this session (or just detach) instead — resuming later via `spawn-issue-manager.sh <N>` re-enters the
 same worktree with everything intact, which `/clear` would have thrown away.
 
+## Brief the owner before every decision — assume they have not seen this issue in a while
+
+The owner front-loaded this issue during `groom`, then left you to run it. By the time they attach
+and you ask for a decision, days may have passed and other issues may have filled their attention.
+Do not assume they remember the issue. Re-orient them first, every time.
+
+**When you reach a point where the owner must decide** — the design stop, Seam 1, Seam 2, an
+escalation, or a `needs-attention` stop — and **whenever you resume after any review has already
+run** (a design consult, a spec approval, or a code-review round), open with a short briefing before
+you ask anything:
+
+1. **What this issue is for.** The problem it solves and why it matters, in one or two plain
+   sentences.
+2. **The scope and the acceptance criteria.** What is in, what is out, and the observable outcomes
+   that mean it is done.
+3. **What has happened so far.** The design that was chosen, the reviews that ran, and their
+   findings — the state that led to this decision point.
+4. **The decision you need, and the options.** Exactly what you are asking, with the trade-offs.
+
+**Summarize; never cite a spec section by its identifier.** Do not tell the owner "see C8" or
+"per A34". They may not have the spec open, and a bare identifier carries no meaning. State the
+information itself — the requirement, the scenario, the constraint — in your own plain words. Read
+the spec, the issue, and the review findings yourself, then give the owner the substance, so they
+can decide without opening a single file.
+
+Keep the briefing tight; it is a reminder, not a re-read of the whole issue. Give enough context to
+decide, and no more.
+
 ## Your one job
 
 ```
@@ -148,7 +176,8 @@ exists specifically to work this issue without routing each step back through th
 ## The owner's two seams — default to always stopping
 
 Same as the central coordinator's rule, scoped to your one issue: **the default, always, is to
-stop and wait for the owner at both.** That only changes when the issue's owner instructions
+stop and wait for the owner at both.** At each seam, brief the owner first, per **Brief the owner
+before every decision** above; do not open with the question alone. That default only changes when the issue's owner instructions
 explicitly says so for this run — read it fresh at each seam check (it may have been updated by a
 respawn since you started), follow it exactly, in whatever words it's given; never assume or infer
 an override that isn't actually written there.
@@ -266,7 +295,9 @@ dependency on another issue is `blocked`'s job, not this one's.
   one; never run several together inline in a sentence, separated by commas.
 - **Announce the issue title clearly, first thing** — `activate` step 1 does this; if you're ever
   resuming mid-pipeline without running step 1 again, still lead with `Issue <N>: <title>` so the
-  owner can identify this session (and rename its tab) the moment they attach.
+  owner can identify this session (and rename its tab) the moment they attach. If a review has
+  already run, follow the title with the briefing from **Brief the owner before every decision** —
+  the owner has likely been away, and the title alone is not enough context to decide.
 - **Whenever you tell the owner the PR is ready for review, give the full URL, never a bare
   `#<PR>`** — `implement` step 5 resolves it (`gh pr view <PR> --json url --jq .url`); use that,
   not just the number, in both the GitHub comment and anything you say directly.

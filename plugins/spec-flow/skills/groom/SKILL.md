@@ -187,7 +187,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
      owner wrote, and the moment of least attention is the wrong moment to grant that.
 
    This bulk confirmation is a **deliberate, scoped exception** to the one-question-at-a-time rule
-   above, and the only one. It applies to the traceable group at the closing pass, nowhere else:
+   above — one of the deliberate batch presentations the **Presenting to the owner** contract in
+   `docs/workflow.md` names as exempt, not a rule unique to `groom`. It applies to the traceable
+   group at the closing pass, nowhere else:
    the loop's questions each shape the work, while these are already-stated positions being
    confirmed as a set at the end.
 

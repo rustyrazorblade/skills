@@ -14,21 +14,21 @@
 
 ## 2. Fix each owner-facing presenter in place
 
-- [ ] 2.1 `agents/issue-manager.md`: reword the 0.46.0 sentence to forbid an identifier only as
+- [x] 2.1 `agents/issue-manager.md`: reword the 0.46.0 sentence to forbid an identifier only as
       subject or sole referent, allow it as a trailing tag; add the panel-finding relay rule and the
       one-at-a-time default to the relay path; reference the contract.
-- [ ] 2.2 `skills/implement/SKILL.md`: fix the fix-round and gate-failure emitting instructions so
+- [x] 2.2 `skills/implement/SKILL.md`: fix the fix-round and gate-failure emitting instructions so
       residual findings are stated in plain terms with the identifier as a trailing tag; reference
       the contract.
-- [ ] 2.3 `skills/address/SKILL.md`: fix the report path so findings are stated in plain terms;
+- [x] 2.3 `skills/address/SKILL.md`: fix the report path so findings are stated in plain terms;
       reference the contract.
-- [ ] 2.4 `skills/activate/SKILL.md`: add the missing recommended-default half to step 1 ("with a
+- [x] 2.4 `skills/activate/SKILL.md`: add the missing recommended-default half to step 1 ("with a
       recommended answer where you have one"); reference the contract.
-- [ ] 2.5 `skills/groom/SKILL.md`: reword step 4's "the only exception" line to point at the
+- [x] 2.5 `skills/groom/SKILL.md`: reword step 4's "the only exception" line to point at the
       contract's list of exempt batches.
-- [ ] 2.6 `skills/setup/SKILL.md`: reference the contract alongside its existing interview-discipline
+- [x] 2.6 `skills/setup/SKILL.md`: reference the contract alongside its existing interview-discipline
       reference.
-- [ ] 2.7 `agents/project-manager.md`: add a compliant pointer to the contract for its owner-facing
+- [x] 2.7 `agents/project-manager.md`: add a compliant pointer to the contract for its owner-facing
       presentations (board, next-decision, archive confirmations).
 
 ## 3. Verification

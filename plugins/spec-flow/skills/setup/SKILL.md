@@ -11,8 +11,10 @@ worktree). Turn the README's **Prerequisites** checklist from something the owne
 self-diagnoses into something you actually walk them through: explore what's already true, then
 only ask about what isn't — each item with your own recommended action stated up front, so the
 owner can accept in one word. Same interview discipline `groom` uses for scope (see its steps 1
-and 4): one question at a time, recommended default alongside it, ordered so an earlier answer can
-make a later question moot.
+and 4), and the **Presenting to the owner** contract in `docs/workflow.md`: one question at a time,
+recommended default alongside it, ordered so an earlier answer can
+make a later question moot. Step 1's read-only checks run as a batch, which that contract names as
+exempt from the one-at-a-time rule.
 
 ## Steps
 

@@ -434,7 +434,9 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       missing** — reachable when a lens declines over something this repo's gate does not treat as
       must-fix — **stop the loop**: another round has the same inputs and produces the same verdict,
       and a fix teammate would be handed an empty list. Take step 5's gate failure path and tell the
-      owner a lens declined on a non-blocking finding, so it needs their call. **If any implementer's report contains
+      owner a lens declined on a non-blocking finding, so it needs their call. State that finding in
+      plain terms, with the lens identifier as a trailing tag only — the **Presenting to the owner**
+      contract in `docs/workflow.md`, the same as every finding you relay. **If any implementer's report contains
       `SPEC-DEFECT:`, stop the loop immediately** — the approved spec is what's wrong, more rounds
       cannot fix it (the one change that would resolve the finding is the one GUARDRAILS forbids),
       and only the owner can change it. Take step 5's gate failure path with that report as the
@@ -568,7 +570,11 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    `agent:active` and `status:in-progress` as they are, and stop. **If a PR exists**, also leave it
    a draft and write the residual findings into its body. **If none exists** — a fast-path run that
    halted before its PR was ever opened, which is exactly what question 4 catches — put the
-   residual findings in that issue comment instead; it is the only place they can land. Never mark a red or unapproved PR ready, and never
+   residual findings in that issue comment instead; it is the only place they can land. Wherever
+   they land, state each residual finding in plain terms, with the lens identifier as a trailing tag
+   only, never as the finding's sole referent — the **Presenting to the owner** contract in
+   `docs/workflow.md`. The residual list itself is a whole-artifact review, which that contract
+   names as exempt from the one-at-a-time rule; write it as one block. Never mark a red or unapproved PR ready, and never
    merge one, whatever `merge-on-green` or the issue's owner instructions say. Those authorize
    crossing Seam 2 on a *finished* run; they do not authorize skipping the panel.
 

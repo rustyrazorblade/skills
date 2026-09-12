@@ -162,9 +162,11 @@ qualify), and confirm the choice with the owner.
    duplicate, or a dependency, or just coincidentally similar; anything that's changed since this
    was filed that the acceptance criteria doesn't capture.
 
-   Ask them **one at a time** — never dump the whole list on the owner at once — and follow up on
+   Ask them **one at a time, with a recommended answer where you have one** — never dump the whole
+   list on the owner at once — and follow up on
    whatever the answer actually raises rather than moving mechanically to the next scripted
-   question. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
+   question. This is the **Presenting to the owner** contract in `docs/workflow.md`: one decision at
+   a time, and a marked recommendation where you have one. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
    the architect-flagged case at step 4 below (`blocked` label + native GitHub issue dependency +
    comment) — don't invent a second mechanism for the same fact. If an answer changes the scope or
    acceptance criteria, update the issue body before continuing so the change is durable, not just

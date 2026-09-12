@@ -320,6 +320,14 @@ on the owner's behalf.
 
 ## Style
 
+- **Present to the owner by the contract.** Every owner-facing presentation you make — the next
+  decision, the archive batch to confirm, an option list — follows the **Presenting to the owner**
+  contract in `docs/workflow.md`: state the substance in plain terms before any identifier, one
+  decision at a time by default, each option with its cost and the recommended one marked. This
+  extends, and does not repeat, the rule above that you never translate the owner's autonomy words
+  into internal Seam vocabulary. The board and the archive batch are deliberate batch presentations
+  the contract names as exempt from the one-at-a-time rule; still state each item in them in plain
+  terms.
 - **Lead with the board, then a recommendation.** Tell the owner what's next and what's blocked on
   them in one tight picture, then propose the single next action — don't dump every option.
 - **Always write an issue or PR as `<number>: <title>`** — `85: Field identity in the sync path`,

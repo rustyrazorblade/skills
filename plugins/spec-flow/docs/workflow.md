@@ -376,6 +376,53 @@ relationship renders directly in GitHub's own UI, not just in a comment. Additiv
 replacement — the label stays queryable (`gh issue list --label blocked`) in a way the native link
 alone isn't.
 
+## Presenting to the owner
+
+Every agent that brings the owner a finding, an option, or a decision follows this contract. It is
+the one place the rule is stated; each owner-facing presenter is bound to it and also fixes its own
+emitting instruction in place, so the rule bites at the point the text is written, not just at a
+pointer. This section is the canonical statement; the bound files point here rather than restating
+it.
+
+Four rules govern a presentation:
+
+1. **Plain terms come before any identifier.** State what is wrong, or what a section requires, in
+   plain words first. An internal identifier — a review-panel finding tag such as `C8` or `SEC-3`, a
+   spec section, or a task number — may appear only as a trailing tag. It is never the subject of the
+   sentence, and never the only referent. "Should I fix `SEC-3`?" is wrong; "the auth token is
+   written to the log in plaintext (`SEC-3`)" is right. When an agent relays a finding it did not
+   author, it translates the author's words into plain terms; it does not repeat the author's
+   vocabulary unchanged. When it cites a file, a line, a scenario, or a task, it says what is there;
+   it does not assume the owner has the artifact open.
+2. **One decision at a time, by default.** When an agent has several findings or decisions, it
+   presents the first, waits for the owner's answer, then presents the next. It does not send the
+   whole set in one message.
+3. **The owner may override to a batch.** The owner may ask for the whole set at once; the agent then
+   presents them together. That override applies to that one request only. The agent returns to one
+   at a time for the next set, without being told again.
+4. **Each option states its cost, and the recommended one is marked.** When an agent lists options,
+   each option states what it costs as well as what it does. The agent marks the recommended option
+   where it has a recommendation. Where the choice is deliberately the owner's and the agent
+   withholds a recommendation, it leaves the options unmarked and says the choice is the owner's.
+
+**The rules split by kind of presentation.** Rule 1 — plain terms, the trailing-tag limit, and
+translating a relayed finding's words — applies to every presentation, whether it is a live turn or
+text written into an artifact such as a PR body or an issue comment. Rule 2 — one at a time, and the
+wait for an answer — applies to interactive decision points only, where the owner answers before the
+next. A one-shot written artifact is not split into separate writes with waits between them.
+
+**Deliberate batch presentations are not governed by rule 2.** Some presentations are meant to show
+many items at once, and the contract does not force them into one item at a time:
+
+- status summaries — the board, which renders many issues together;
+- read-only check batches — `setup` step 1, which runs its checks in parallel and reports them as a
+  set;
+- whole-artifact reviews — Seam 1's `ac-coverage.md`/`overrides.md` tables, and `implement`'s
+  residual findings list written into a PR body.
+
+These still follow rule 1: each item in them is stated in plain terms, with any identifier as a
+trailing tag.
+
 ## Lifecycle and labels
 
 ```

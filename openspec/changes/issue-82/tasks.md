@@ -2,13 +2,13 @@
 
 ## 1. The canonical contract
 
-- [ ] 1.1 Add a "Presenting to the owner" section to `docs/workflow.md` with the four rules: plain
+- [x] 1.1 Add a "Presenting to the owner" section to `docs/workflow.md` with the four rules: plain
       terms before any identifier; one decision at a time by default; the owner may override to a
       batch; every option states its cost and marks the recommended one where one exists.
-- [ ] 1.2 In that section, split the rules by kind: plain terms and translate-the-words apply to
+- [x] 1.2 In that section, split the rules by kind: plain terms and translate-the-words apply to
       every presentation including PR bodies and comments; one-at-a-time and its wait apply to
       interactive decision points.
-- [ ] 1.3 In that section, name the deliberate batch presentations the contract does not govern:
+- [x] 1.3 In that section, name the deliberate batch presentations the contract does not govern:
       status summaries (the board), read-only check batches (`setup` step 1), whole-artifact reviews
       (Seam 1 coverage tables, `implement`'s residual findings list).
 

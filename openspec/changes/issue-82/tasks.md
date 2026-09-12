@@ -33,8 +33,8 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Write `verification.md` with a worked before/after example per acceptance criterion.
-- [ ] 3.2 Write the coverage checklist mapping each acceptance criterion to the file and line that
+- [x] 3.1 Write `verification.md` with a worked before/after example per acceptance criterion.
+- [x] 3.2 Write the coverage checklist mapping each acceptance criterion to the file and line that
       satisfies it.
-- [ ] 3.3 Scan every bound file and confirm no instruction tells an agent to present the owner a bare
+- [x] 3.3 Scan every bound file and confirm no instruction tells an agent to present the owner a bare
       identifier as a referent.

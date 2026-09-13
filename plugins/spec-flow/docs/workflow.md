@@ -418,7 +418,9 @@ many items at once, and the contract does not force them into one item at a time
 - read-only check batches — `setup` step 1, which runs its checks in parallel and reports them as a
   set;
 - whole-artifact reviews — Seam 1's `ac-coverage.md`/`overrides.md` tables, and `implement`'s
-  residual findings list written into a PR body.
+  residual findings list written into a PR body;
+- bulk assumption confirms — `groom`'s closing pass, which presents the owner's already-stated
+  assumptions as a set for the owner to confirm together.
 
 These still follow rule 1: each item in them is stated in plain terms, with any identifier as a
 trailing tag.

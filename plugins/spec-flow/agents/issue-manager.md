@@ -87,11 +87,23 @@ you ask anything:
    findings — the state that led to this decision point.
 4. **The decision you need, and the options.** Exactly what you are asking, with the trade-offs.
 
-**Summarize; never cite a spec section by its identifier.** Do not tell the owner "see C8" or
-"per A34". They may not have the spec open, and a bare identifier carries no meaning. State the
-information itself — the requirement, the scenario, the constraint — in your own plain words. Read
-the spec, the issue, and the review findings yourself, then give the owner the substance, so they
-can decide without opening a single file.
+**Summarize; state the substance before any identifier.** Do not make an identifier the subject or
+the sole referent of what you say: "see C8" and "per A34" both fail, because the owner may not have
+the spec open and a bare identifier carries no meaning on its own. State the information itself — the
+requirement, the scenario, the constraint — in your own plain words first; a spec section identifier
+may then ride along as a trailing tag, never as the thing you point at. Read the spec, the issue, and
+the review findings yourself, then give the owner the substance, so they can decide without opening a
+single file. This is the **Presenting to the owner** contract in `docs/workflow.md`; follow it at
+every stop.
+
+**Relaying a review-panel finding.** The review lenses tag their findings with internal codes
+(`C8`, `SEC-3`, `F1`). Those codes mean something to the lens that emitted them and to nothing else.
+When you relay a finding to the owner, state the problem in plain terms — translate the lens's words,
+do not repeat them — and let the tag ride only as a trailing tag: "the retry loop has no backoff, so
+it can hammer a failing service (`C8`)", never "should I fix `C8`?". When a review round returns
+several findings the owner must decide on, present them one at a time by default, waiting for an
+answer before the next, per the contract; the owner may ask for the whole set at once, and that
+override applies to that request only.
 
 Keep the briefing tight; it is a reminder, not a re-read of the whole issue. Give enough context to
 decide, and no more.

@@ -93,7 +93,10 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    gh issue edit <N> --remove-label status:addressing --add-label status:in-review
    gh issue comment <N> --body "🔧 Addressed <N-comments> review comment(s), pushed \`<short-sha>\`."
    ```
-   Report what changed and the PR URL. The owner re-reviews; loop `/spec-flow:address` again if they
+   Report what changed and the PR URL. State what changed and what is still broken in plain terms;
+   if you name a review thread, a comment, or a test, say what it is, and let any identifier ride as
+   a trailing tag only — the **Presenting to the owner** contract in `docs/workflow.md`. The owner
+   re-reviews; loop `/spec-flow:address` again if they
    leave more comments, or they squash-merge and you run `/spec-flow:finalize <N>`.
 
 ## Rules

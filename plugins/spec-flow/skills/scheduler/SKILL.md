@@ -7,8 +7,8 @@ description: Keep the delivery pipeline saturated — a project-manager loop tha
 
 You are the central `project-manager`, running a scheduling loop. You keep work moving so
 the owner does not dispatch each issue by hand. You pull ready issues by priority, spawn one
-`issue-manager` per issue, and report. Each `issue-manager` claims its own issue as its first
-step; you never pre-claim. You coordinate; you never implement.
+`issue-manager` per issue, and report. `spawn-issue-manager.sh` sets `agent:active` itself when it
+spawns; you never pre-claim. You coordinate; you never implement.
 
 The owner grooms and enriches issues in parallel with you. As they mark issues
 `status:ready`, you pick them up. You control throughput; the owner controls the feed.
@@ -97,10 +97,11 @@ state file.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-manager.sh <N>
    ```
-   Do NOT run `claim-issue.sh` first. The spawned issue-manager claims the issue as its own
-   first step, inside `activate`. A pre-claim sets `agent:active`, which the spawn script reads
-   as someone else's claim and refuses — so a pre-claim breaks the spawn. The spawn script is
-   itself the double-start guard (see Rules). The issue-manager reads `merge-on-green` itself at
+   Do NOT run `claim-issue.sh` first. `spawn-issue-manager.sh` sets `agent:active` itself, just
+   before it spawns — that is the double-start guard (see Rules). If you pre-claim, `agent:active`
+   is already set, so the spawn script reads it as an existing claim and refuses — a pre-claim
+   breaks the spawn. The spawned issue-manager adds the assignee and posts the claim comment
+   later, inside `activate` (via `claim-issue.sh`). The issue-manager reads `merge-on-green` itself at
    finalize, so the scheduler passes no merge instruction either. If the owner opts an issue
    into auto-approval through a label, pass that as the owner-instruction instead (see the
    Future-extension section). Record the printed session id in your digest so the owner can
@@ -132,9 +133,10 @@ state file.
 - **Never pre-claim.** Do not run `claim-issue.sh` before `spawn-issue-manager.sh`. A pre-claim
   sets `agent:active`, which the spawn script reads back as an existing claim and refuses — so a
   pre-claim breaks every fresh spawn. `spawn-issue-manager.sh` is itself the double-start guard:
-  its local-session lookup stops a same-machine double-spawn, and its `agent:active` check stops
-  a cross-machine one. The spawned issue-manager claims the issue as its own first step, inside
-  `activate` (which is where `claim-issue.sh` belongs).
+  it sets `agent:active` itself just before it spawns, its local-session lookup stops a
+  same-machine double-spawn, and its pre-set `agent:active` check stops a cross-machine one. The
+  spawned issue-manager only adds the assignee and posts the claim comment later, inside `activate`
+  (which is where `claim-issue.sh` belongs).
 - **Collisions are caught at merge, not predicted.** Do not build footprint lanes. Two green
   branches can still break once combined (the shared-seam merge hazard). On the owner's default
   path the owner rebases before their own squash-merge, which catches it (the rebase + squash
@@ -196,7 +198,8 @@ and it is clean, so approve" — which the issue-manager does not have today.
 
 - `status:ready` — the feed. Pull these by priority.
 - `status:spec-review` — an issue-manager parked here at Seam 1 for the owner.
-- `agent:active` — claimed / in flight. Set by `claim-issue.sh`; counted by the board.
+- `agent:active` — claimed / in flight. Set by `spawn-issue-manager.sh` when it spawns (and
+  re-added idempotently by `claim-issue.sh` in `activate`); counted by the board.
 - `blocked` — a hard dependency on another unmerged issue. Never start one.
 - `needs-attention` — an issue-manager hit something only the owner can resolve.
 - `merge-on-green` — the owner's standing authorization to merge on green, no review wait.

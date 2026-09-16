@@ -645,8 +645,9 @@ throughput. On each tick it reads `board` and first re-drives any in-flight issu
 died (a `🔴 STALLED` or `🟡 claimed` row) by re-running `spawn-issue-manager.sh`. It then counts the
 `🔧 IN FLIGHT (agents / CI)` bucket and fills the free slots up to a cap of **3** in flight. It takes
 the highest-priority `status:ready` issue that is not `blocked` and not already claimed, then spawns
-its `issue-manager`. It does not pre-claim: the spawned `issue-manager` claims the issue as its own
-first step, and `spawn-issue-manager.sh` is itself the double-start guard. It reports what it
+its `issue-manager`. It does not pre-claim: `spawn-issue-manager.sh` sets `agent:active` itself when
+it spawns, which is the double-start guard; the spawned `issue-manager` only adds the assignee and
+the claim comment later, inside `activate`. It reports what it
 scheduled, what it recovered, what parked, and what is on you.
 
 It is **session-driven, not cron** (see **Substrate and constraints** below). A tick is one cycle. You

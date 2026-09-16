@@ -43,7 +43,9 @@ state file.
   auto-advance for any class of issue; the owner opts individual issues into auto-approval
   through labels (see Rules and the Future-extension section).
 - **Merge** = honor the `merge-on-green` label; otherwise the issue-manager holds for the owner.
-- **Collisions** = no footprint lanes; the mandatory rebase-before-merge is the guard (see Rules).
+- **Collisions** = no footprint lanes. The owner's manual merge is rebased by the owner; the
+  `merge-on-green` auto-merge path is not rebased today, so it carries a real gap at concurrency
+  (see Rules).
 
 ## Steps (one tick)
 
@@ -51,8 +53,13 @@ state file.
    whole join — in-flight issues (`agent:active` + live sessions), CI rollups, `blocked`
    state, `needs-attention`, and the priority-sorted `status:ready` queue:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/board.py
+   ${CLAUDE_PLUGIN_ROOT}/scripts/board.py --ready-limit 100
    ```
+   Pass `--ready-limit 100`. The board renders only the top 5 `📋 READY` rows by default, so if
+   the 5 highest-priority ready issues are all `blocked`, the default view would hide every
+   unblocked candidate behind them and the scheduler would stall with slots free. A high limit
+   shows the whole queue, so step 3 always sees an unblocked candidate if one exists.
+
    The IN FLIGHT bucket counts every issue past `status:ready`, whether or not a live session
    backs it — so a crashed issue-manager still counts. Do not compute free slots yet; run the
    recovery pass (step 2) first, so a dead session does not hold a slot forever.
@@ -129,14 +136,22 @@ state file.
   a cross-machine one. The spawned issue-manager claims the issue as its own first step, inside
   `activate` (which is where `claim-issue.sh` belongs).
 - **Collisions are caught at merge, not predicted.** Do not build footprint lanes. Two green
-  branches can still break once combined (the shared-seam merge hazard); the mandatory
-  `git fetch` → rebase → re-verify before every push and merge is the guard, and it already
-  lives in `implement` and `finalize`. Do not restate or reimplement it here.
-- **Shared test backend.** If issue-managers run the full local suite concurrently against
-  one shared backend, that step must be serialized at the verify layer — an OS-level file
-  lease (`flock`), which releases automatically if the holder dies. This belongs to the
-  verify step in `implement`, not to the scheduler. Do not serialize it with a GitHub label:
-  a label has no atomic test-and-set and a crashed holder would deadlock every verify.
+  branches can still break once combined (the shared-seam merge hazard). On the owner's default
+  path the owner rebases before their own squash-merge, which catches it (the rebase + squash
+  merge convention in `docs/workflow.md`). The `merge-on-green` auto-merge path in `implement` does NOT rebase and
+  re-verify before it merges today — it goes straight from a green required-checks watch to the
+  squash-merge. So running the scheduler with `merge-on-green` at concurrency can merge a stale
+  branch and break the default branch. This is a real gap this churn mode surfaces, not a guard
+  already in place. Closing it — a `git fetch` → rebase → re-verify step before the auto-merge —
+  is follow-up work in `implement`, not the scheduler. Until it lands, prefer the owner's manual
+  merge for concurrent work.
+- **Shared test backend (note for future work, not yet built).** If issue-managers run the full
+  local suite concurrently against one shared backend, that step needs serialization at the
+  verify layer — an OS-level file lease (`flock`), which releases automatically if the holder
+  dies. No such serialization exists in `implement` today; this is a design note, not a guard in
+  place. It belongs in `implement`'s verify step when built, not in the scheduler. Do not
+  serialize it with a GitHub label: a label has no atomic test-and-set, and a crashed holder
+  would deadlock every verify.
 - **Always pair a number with a description** in every report — `#85 (field identity)`,
   never a bare `#85`. Put each issue/PR on its own line, prefixed with `-`.
 - **Read state through `board.py`.** Do not re-issue raw `gh` queries; the board is the

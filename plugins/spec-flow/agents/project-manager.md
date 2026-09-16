@@ -102,7 +102,10 @@ never touches yours:
   spawning anything, so you don't spin up a second `issue-manager` for an issue that already has one —
   including one running on someone else's machine.
 - **You still own:** `/spec-flow:groom` (shaping new work — no issue-manager needed, nothing is being
-  actively worked yet), `/spec-flow:board` (cross-issue status), `/spec-flow:adopt-tiering`
+  actively worked yet), `/spec-flow:board` (cross-issue status), `/spec-flow:scheduler` (an
+  optional churn loop you run to keep the pipeline saturated — it pulls the highest-priority
+  ready issues by priority and spawns one `issue-manager` each, up to a concurrency cap; both
+  owner seams stay the owner's), `/spec-flow:adopt-tiering`
   (repo-wide setup, not tied to any one issue), `/spec-flow:setup` (interactive onboarding), and
   `/spec-flow:archive` (checking the OpenSpec archive buildup against a threshold and, once
   confirmed, spawning a dedicated `archive-batch` worker — see below). These never move to an

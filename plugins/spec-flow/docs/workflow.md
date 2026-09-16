@@ -634,6 +634,40 @@ branch explicitly, on its own schedule (tied to the issue merging, not to sessio
 **Prerequisites** in the README) so these checkouts never show up as untracked files in your
 primary checkout.
 
+## Scheduler
+
+`project-manager` normally dispatches one issue at a time: you pick it, and it launches that issue's
+`issue-manager`. `/spec-flow:scheduler` is the optional churn mode. It keeps the pipeline saturated so
+you do not dispatch each issue by hand.
+
+You groom and mark issues `status:ready`; the scheduler pulls them. You control the feed; it controls
+throughput. On each tick it reads `board` and first re-drives any in-flight issue whose session has
+died (a `🔴 STALLED` or `🟡 claimed` row) by re-running `spawn-issue-manager.sh`. It then counts the
+`🔧 IN FLIGHT (agents / CI)` bucket and fills the free slots up to a cap of **3** in flight. It takes
+the highest-priority `status:ready` issue that is not `blocked` and not already claimed, then spawns
+its `issue-manager`. It does not pre-claim: `spawn-issue-manager.sh` sets `agent:active` itself when
+it spawns, which is the double-start guard; the spawned `issue-manager` only adds the assignee and
+the claim comment later, inside `activate`. It reports what it
+scheduled, what it recovered, what parked, and what is on you.
+
+It is **session-driven, not cron** (see **Substrate and constraints** below). A tick is one cycle. You
+drive ticks two ways: re-invoke `/spec-flow:scheduler` by hand, or wrap it in `/loop` (for example,
+`/loop 10m /spec-flow:scheduler`). Work pauses when the session closes. The scheduler keeps no local
+state; each tick rebuilds the world from labels, PRs, and live sessions through `board.py`.
+
+**The two seams stay yours.** The scheduler changes only *dispatch*, never approval. It spawns each
+`issue-manager` with the default, so it holds for you at both seams — data-model work included —
+exactly as if you had dispatched the issue yourself; it honors `merge-on-green` at finalize. The
+scheduler mandates no auto-advance for any class of issue. You still attach to each `issue-manager`
+to resolve its seams.
+
+**Future direction — an opt-in `agent-approve` mode.** The plan is a per-issue opt-in where an agent
+reviewer stands in for you at both seams, so the scheduler can burn through issues with less of your
+time. That mode is **not built yet**. When it is, it plugs into the same channel the scheduler already
+uses: the free-text owner-instruction argument to `spawn-issue-manager.sh`, which the `issue-manager`
+re-reads fresh at each seam. Data-model work will always stop for you even then, and green CI will stay
+required before any merge. Until it ships, the seams are yours.
+
 ## Bulk spec archiving
 
 `finalize`'s OpenSpec archive is pure bookkeeping — no code, nothing to review — and doing it
@@ -768,6 +802,7 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
 | `/spec-flow:sync-ci` | foreground-invoked | Pull the branch's latest CI failures into `.spec-flow/flagged-tests` so the local loop guards them for the rest of the branch. Invoked by you when you notice CI go red, or by `issue-manager` itself — `implement` step 5 and `address` step 4 each do one bounded check of the run tied to the push they just made and self-invoke this if it's already red; never a standing poll loop. Exits cleanly, doing nothing, where the repo's policy says CI is not a test gate. See **Test policy** below. |
 | `/spec-flow:finalize` | foreground | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, removes its worktree. Never merges the feature PR, and never touches the OpenSpec archive — that's `project-manager`'s job, batched — see **Bulk spec archiving** above. |
 | `/spec-flow:board` | foreground | Status across all in-flight issues, derived from labels + PR state; highlights what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
+| `/spec-flow:scheduler` | foreground / `/loop` | Optional churn mode for `project-manager`: pull the highest-priority `status:ready` issue and spawn an `issue-manager` (which claims it), up to 3 in flight. Changes dispatch only — spawns with the default, so it holds both seams for you (data-model included) and honors `merge-on-green` at finalize; it mandates no auto-advance. Session-driven; drive it by hand or via `/loop`. See **Scheduler** above. |
 | `/spec-flow:archive` | foreground-invoked | Count the pending un-archived specs against a threshold (default 5, overridable); once confirmed with you, spawns a dedicated `archive-batch` worker to sync+archive them all in one pass and land one PR — see **Bulk spec archiving** above. |
 | `/tech-debt` (dev-skills) | foreground-invoked | Repo-wide structural audit: a parallel team of review agents finds SOLID/composability, duplication, and unnecessary-layering issues, ranks the 10 most impactful, drops anything already an open issue, and walks you through the rest one at a time — you decide per finding whether it becomes a `type:tech-debt` issue, which then takes the **Tech-debt fast path** above through `activate`/`implement`. If `dev-skills` is installed, `project-manager` recommends running the audit itself once a week or every 20 merged PRs, whichever comes first — never automatic. See **Tech-debt review cadence** above. |
 | `/spec-flow:adopt-tiering` | setup (one-time) | Split a repo's existing suite into a fast unit tier and a slow integration tier (classify by evidence → present → separate structurally → wire CI) and open a PR. Only for a repo whose own policy chooses that split; not an assumption the pipeline makes. Run once per repo; not tied to an issue. See **Test policy** below. |

@@ -1,6 +1,6 @@
 ---
 name: scheduler
-description: Keep the delivery pipeline saturated — a project-manager loop that pulls the highest-priority ready issue, claims it, and spawns an issue-manager to drive it, up to a concurrency cap. It parks data-model work at the design seam, honors the merge-on-green label, and reports every schedule and stall to the owner. Use when the owner wants issues flowing continuously with minimal per-issue dispatch. Part of the flow delivery workflow (see docs/workflow.md).
+description: Keep the delivery pipeline saturated — a project-manager loop that pulls the highest-priority ready issue, claims it, and spawns an issue-manager to drive it, up to a concurrency cap. Both owner seams stay the owner's; the issue-manager holds at both by default, honors the merge-on-green label, and the scheduler reports every schedule and stall to the owner. Use when the owner wants issues flowing continuously with minimal per-issue dispatch. Part of the flow delivery workflow (see docs/workflow.md).
 ---
 
 # scheduler — keep issues flowing
@@ -31,7 +31,10 @@ state file.
 - **Feed** = `status:ready`. The owner marks issues ready; you pull them. No extra gate.
 - **Order** = strict priority. Highest `P0 > P1 > P2 > P3` first. Ties break by lowest number.
 - **Concurrency** = at most 3 issue-managers in flight.
-- **Seam handling** = park data-model work at Seam 1; auto-advance the rest (see step 3).
+- **Seam handling** = both seams stay the owner's. The issue-manager holds at both by
+  default — exactly as if the owner dispatched the issue. The scheduler mandates no
+  auto-advance for any class of issue; the owner opts individual issues into auto-approval
+  through labels (see Rules and the Future-extension section).
 - **Merge** = honor the `merge-on-green` label; otherwise the issue-manager holds for the owner.
 - **Collisions** = no footprint lanes; the mandatory rebase-before-merge is the guard (see Rules).
 
@@ -48,25 +51,31 @@ state file.
    and end the tick.
 
 2. **Pick the next candidate.** From the board's `status:ready` queue, in strict-priority
-   order, take the highest-priority issue that is NOT `blocked`, NOT already claimed
-   (`agent:active`), and groomed (has scope + acceptance criteria). The board already drops
-   blocked issues from "next up"; do not start one. Fill one free slot per candidate, up to
-   the free-slot count.
+   order, take the highest-priority issue that is NOT already claimed (`agent:active`) and
+   NOT `blocked`. `status:ready` is the whole gate; the owner sets it in `groom` only after
+   the readiness bar is met, so it already implies scope and acceptance criteria. Check the
+   `blocked` marker yourself, on each candidate row: the board renders a `🔒 BLOCKED` marker
+   on a blocked row, but it does not drop an unclaimed blocked issue from the `📋 READY`
+   bucket, so a blocked row can still appear as a candidate. Skip any row that carries the
+   marker. Fill one free slot per candidate, up to the free-slot count.
 
-3. **Claim it, then spawn — with the data-model policy as the standing instruction.** Claim
-   FIRST, so two ticks (or two schedulers) cannot both grab the same issue — the claim is
-   the single point that marks it in flight:
+3. **Claim it, then spawn — with the default seam policy.** Claim FIRST, so two ticks (or
+   two schedulers) cannot both grab the same issue — the claim is the single point that
+   marks it in flight:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/claim-issue.sh <N>
    ```
-   Then spawn the issue-manager, passing the data-model gate as its owner-instruction. The
-   classification happens where the design exists — inside the issue-manager, after
-   `activate` produces the spec — not here before it:
+   Then spawn the issue-manager with no owner-instruction, so its default applies: it holds
+   for the owner at both seams, exactly as if the owner dispatched the issue by hand. The
+   scheduler adds no seam instruction of its own; it does not mandate auto-advance for any
+   class of issue.
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-manager.sh <N> \
-     "After activate, judge whether this change touches the data model as CLAUDE.md defines it — schema, storage layout, identity, encoding, field/column types, key or index semantics, or edge/relationship storage. If it does, OR you are unsure, STOP at Seam 1 for owner approval (the default). Only if it is clearly NOT a data-model change, proceed past Seam 1 to implement without waiting. Always stop for the owner's merge unless the issue carries merge-on-green."
+   ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-issue-manager.sh <N>
    ```
-   Record the printed session id in your digest so the owner can attach.
+   The issue-manager reads `merge-on-green` itself at finalize, so the scheduler passes no
+   merge instruction either. If the owner opts an issue into auto-approval through a label,
+   pass that as the owner-instruction instead (see the Future-extension section). Record the
+   printed session id in your digest so the owner can attach.
 
 4. **Report (the attention digest).** Tell the owner, in one message:
    - what you scheduled this tick — each issue with its priority and its issue-manager session;
@@ -79,9 +88,11 @@ state file.
 
 ## Rules
 
-- **Never decide the data model.** Data-model work always stops at the owner's design seam.
-  The gate is conservative by construction: unsure means stop. A false negative auto-builds
-  an unapproved data-model change — the one failure this skill must never cause.
+- **Never auto-advance any seam.** The scheduler spawns with the default; every issue holds
+  at both seams for the owner. Data-model work is safe by that same default, so the scheduler
+  needs no data-model classification of its own. Auto-approval is only ever a per-issue,
+  owner-set opt-in (see the Future-extension section); even then, data-model work always stops
+  for the owner and green CI stays required before any merge.
 - **Never auto-merge an ungated issue.** Only `merge-on-green` issues merge without the
   owner, and that is the issue-manager's action at finalize, not yours. Never enable GitHub
   auto-merge — it merges immediately, which is never wanted.
@@ -111,9 +122,9 @@ half-scheduled issue is a normal, claimed, in-flight issue that its issue-manage
 
 ## Future extension: an opt-in agent-approval mode (NOT built yet)
 
-Today you change dispatch only. Both seams stay the owner's: you park data-model work at Seam 1,
-honor `merge-on-green`, and otherwise the issue-manager holds for the owner. The owner still attaches
-to each issue-manager to resolve its seams.
+Today you change dispatch only. Both seams stay the owner's: the issue-manager holds at both by
+default — data-model work included — and honors `merge-on-green` at finalize. The owner still
+attaches to each issue-manager to resolve its seams.
 
 The planned direction is a per-issue opt-in — an `agent-approve` label — where an agent reviewer
 stands in for the owner at both seams, so you can burn through issues with less of the owner's time.
@@ -123,8 +134,9 @@ exists; it needs no new plumbing:
 - **The signal** is a label, read fresh like `merge-on-green` — visible, revocable, batch-settable
   at groom time.
 - **The channel** is the free-text owner-instruction argument you already pass to
-  `spawn-issue-manager.sh`. For an `agent-approve` issue you would compose a different instruction —
-  "have an agent reviewer approve each seam" — instead of the default below.
+  `spawn-issue-manager.sh`. For an `agent-approve` issue you would compose a seam instruction —
+  "have an agent reviewer approve each seam" — instead of spawning with no instruction, as step 3
+  does today.
 - **The Seam 1 evidence** already exists: `activate` writes `ac-coverage.md` and `overrides.md`,
   with an "every row must resolve" rule. A Seam 1 agent check reads those tables.
 

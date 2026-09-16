@@ -641,10 +641,13 @@ primary checkout.
 you do not dispatch each issue by hand.
 
 You groom and mark issues `status:ready`; the scheduler pulls them. You control the feed; it controls
-throughput. On each tick it reads `board`, counts the `🔧 IN FLIGHT (agents / CI)` bucket, and fills
-the free slots up to a cap of **3** in flight. It takes the highest-priority `status:ready` issue that
-is groomed, not `blocked`, and not already claimed; claims it with `claim-issue.sh` (the double-start
-guard); then spawns its `issue-manager`. It reports what it scheduled, what parked, and what is on you.
+throughput. On each tick it reads `board` and first re-drives any in-flight issue whose session has
+died (a `🔴 STALLED` or `🟡 claimed` row) by re-running `spawn-issue-manager.sh`. It then counts the
+`🔧 IN FLIGHT (agents / CI)` bucket and fills the free slots up to a cap of **3** in flight. It takes
+the highest-priority `status:ready` issue that is not `blocked` and not already claimed, then spawns
+its `issue-manager`. It does not pre-claim: the spawned `issue-manager` claims the issue as its own
+first step, and `spawn-issue-manager.sh` is itself the double-start guard. It reports what it
+scheduled, what it recovered, what parked, and what is on you.
 
 It is **session-driven, not cron** (see **Substrate and constraints** below). A tick is one cycle. You
 drive ticks two ways: re-invoke `/spec-flow:scheduler` by hand, or wrap it in `/loop` (for example,

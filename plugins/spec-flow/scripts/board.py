@@ -11,11 +11,17 @@ placeholder line. Three categories grow without limit, and each one is bounded h
 backlog and the epic list report as counts in the summary line rather than as rows, and the READY
 bucket renders at most `--ready-limit` rows and reports the rest as a count. The board's rendered
 length therefore tracks neither the size of the backlog nor the size of the ready queue.
-`prefetch_notes()` fetches blocked/needs-attention comment notes concurrently instead of
-one-by-one inside `build_rows()`. Stdlib only, shells out to `gh`/`git`/`claude`.
+`prefetch_notes()` fetches the `blocked` label's reason and needs-attention comment notes
+concurrently instead of one-by-one inside `build_rows()`. Stdlib only, shells out to
+`gh`/`git`/`claude`.
 
-THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked on you",
-"stalled", "claimed", what "next up" recommends, epic exclusion and PR/CI correlation. Each rule is
+An issue is blocked when it has an OPEN native blocker (GitHub's `blockedBy`, an issue-to-issue
+dependency) or carries the `blocked` label, which is only for blockers that are not issues. A
+closed native blocker releases the issue by itself. A blocked issue never renders in READY or as
+"next up", and the Blocked section lists what blocks it.
+
+THIS FILE IS THE AUTHORITY on the classification rules — what counts as "blocked", "blocked on
+you", "stalled", "claimed", what "next up" recommends, epic exclusion and PR/CI correlation. Each rule is
 stated in a comment beside the code that implements it. skills/board/SKILL.md covers how to invoke
 this and what to do with the output; it deliberately does not restate the rules, so the two cannot
 drift apart.
@@ -23,7 +29,6 @@ drift apart.
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -82,9 +87,11 @@ PR_LIMIT = 200
 
 
 def fetch_issues():
+    # No default: a failed issue fetch raises, and main() fails the board. An empty board reads as
+    # a clean repo, which is worse than no board. An old gh without `blockedBy` fails here too.
     return gh_json(["issue", "list", "--state", "open", "--json",
-                     "number,title,labels,url,assignees,subIssuesSummary",
-                     "--limit", str(ISSUE_LIMIT)], default=[])
+                     "number,title,labels,url,assignees,subIssuesSummary,blockedBy",
+                     "--limit", str(ISSUE_LIMIT)])
 
 
 def fetch_prs():
@@ -143,11 +150,19 @@ def last_comment_matching(number, prefix=None):
     return candidates[-1] if candidates else None
 
 
+BLOCKED_REASON_PREFIX = "Blocked by:"
+
+
 def prefetch_notes(issues):
     blocked_numbers = [i["number"] for i in issues if "blocked" in label_names(i)]
     attention_numbers = [i["number"] for i in issues if "needs-attention" in label_names(i)]
     with ThreadPoolExecutor(max_workers=4) as pool:
-        blocked_futures = {n: pool.submit(last_comment_matching, n, "⛔ Blocked on") for n in blocked_numbers}
+        # Label carriers only: an issue blocked only by a native link has no reason comment to
+        # fetch. The prefix is exact and case-sensitive, and only `blocked-dependency.sh
+        # add-external` writes it, so the last one is the current reason. `add`'s own
+        # `⛔ Blocked on #M` comments never match, so a later `add` cannot replace it.
+        blocked_futures = {n: pool.submit(last_comment_matching, n, BLOCKED_REASON_PREFIX)
+                           for n in blocked_numbers}
         # Must filter by prefix. Without one this returns the last comment of ANY kind, and
         # the pipeline posts several after an attention request, so the row shows an
         # unrelated line. issue-manager posts the request with this prefix; see
@@ -221,6 +236,14 @@ def priority_of(issue):
     return None
 
 
+def open_blockers(issue):
+    # gh returns `blockedBy` as {"nodes": [...], "totalCount": N}, not a list, and may omit it or
+    # send an explicit null; either means no native blockers. Only OPEN nodes block. A node in
+    # another repo renders from its own number and title, the same as one in this repo.
+    nodes = (issue.get("blockedBy") or {}).get("nodes") or []
+    return [(b["number"], b.get("title", "")) for b in nodes if b.get("state") == "OPEN"]
+
+
 def priority_key(priority):
     return PRIORITY_ORDER.index(priority) if priority in PRIORITY_ORDER else len(PRIORITY_ORDER)
 
@@ -263,12 +286,17 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
             "mine": me is not None and assignee == me,
             "is_epic": is_epic,
             "agent_active": "agent:active" in labels,
-            "blocked": "blocked" in labels,
+            "blockers": open_blockers(issue),
+            "blocked_label": "blocked" in labels,
             "needs_attention": "needs-attention" in labels,
             "pr_number": pr["number"] if pr else None,
             "pr_url": pr["url"] if pr else None,
             "ci": ci_status(pr.get("statusCheckRollup")) if pr else None,
         }
+        # Blocked by either route: an OPEN native blocker, or the `blocked` label, which is only for
+        # blockers that are not issues. A native blocker that closed, completed or not planned,
+        # releases the issue by itself; nothing has to remove a label.
+        row["blocked"] = bool(row["blockers"]) or row["blocked_label"]
         # Boundary-safe prefix match (exact "issue-manager-<n>", or "issue-manager-<n>-" followed by the
         # slug) so issue #4 can never match a live "issue-manager-42-..." session -- a bare
         # startswith("issue-manager-4") would.
@@ -287,7 +315,7 @@ def build_rows(issues, prs, me, sessions, blocked_reason_fn, needs_attention_not
                 attach_id = max(matches, key=lambda m: m[1])[0]
         row["attach_id"] = attach_id
 
-        if row["blocked"]:
+        if row["blocked_label"]:
             row["blocked_note"] = blocked_reason_fn(n) or "see issue comments"
         if row["needs_attention"]:
             row["attention_note"] = needs_attention_note_fn(n) or "see issue comments"
@@ -320,6 +348,9 @@ def liveness_marker(row):
     return " 🟢 active"
 
 
+BLOCKED_MARKER = "🔒 BLOCKED"
+
+
 def render_row(row):
     bits = [f"{row['status'] or '(no status)':13} #{row['number']:<5} {keycap(row['priority'])} {row['title']}"]
     bits.append(f"@{row['assignee']}" if row["assignee"] else "(unclaimed)")
@@ -331,8 +362,9 @@ def render_row(row):
         bits.append(marker)
     if row["attach_id"]:
         bits.append(f"(attach: claude agents — select {row['attach_id']})")
+    # Bare marker: what blocks the issue is listed once, in the Blocked section.
     if row["blocked"]:
-        bits.append(f"🔒 BLOCKED on {row['blocked_note']}")
+        bits.append(BLOCKED_MARKER)
     if row["needs_attention"]:
         bits.append(f"🆘 NEEDS ATTENTION — {row['attention_note']}")
     return "  " + "  ".join(b for b in bits if b)
@@ -452,17 +484,27 @@ def render_stalled(stalled):
         out.append("")
         out.append("🔴 Stalled (yours, no agent:active):")
         for r in stalled:
-            out.append(f"  - {describe(r)} → {SPAWN_SCRIPT} {r['number']}")
+            # A blocked issue can still be stalled, but spawning for it starts work that cannot
+            # proceed, so its command carries the marker. project-manager asks the owner first.
+            marker = f"  {BLOCKED_MARKER}" if r["blocked"] else ""
+            out.append(f"  - {describe(r)} → {SPAWN_SCRIPT} {r['number']}{marker}")
     return out
 
 
+# The issue on one line, then one indented line per blocker: each open native blocker as
+# `<number>: <title>`, then the label's reason when the label is set. Closed native blockers are
+# not listed.
 def render_blocked(blocked_rows):
     out = []
     if blocked_rows:
         out.append("")
         out.append("🔒 Blocked:")
         for r in blocked_rows:
-            out.append(f"  - {describe(r)} — {r['blocked_note']}")
+            out.append(f"  - {describe(r)}")
+            for number, title in r["blockers"]:
+                out.append(f"    - {number}: {title}")
+            if r["blocked_label"]:
+                out.append(f"    - ⛔ {BLOCKED_REASON_PREFIX} {r['blocked_note']}")
     return out
 
 
@@ -506,8 +548,12 @@ def render_board(rows, me, archive_pending, ready_limit=DEFAULT_READY_LIMIT):
     # The number is the row's identity, so the set answers the same question directly.
     blocked_numbers = {r["number"] for r in blocked_on_you}
 
+    # A blocked issue is never offered as ready work, so it leaves READY and, with it, "next up".
+    # IN FLIGHT and BLOCKED ON YOU keep it: work under way, or waiting on the owner, is still
+    # reported, with the bare marker on its row.
     ready_rows = [r for r in staged
-                  if r["status"] == "ready" and r["number"] not in blocked_numbers]
+                  if r["status"] == "ready" and r["number"] not in blocked_numbers
+                  and not r["blocked"]]
     # Includes spec-review too -- someone ELSE's spec-review issue is neither "blocked on you"
     # (not yours) nor ready/backlog, so without this it would silently vanish from the board
     # entirely instead of showing "for visibility" as the spec requires.
@@ -581,7 +627,11 @@ def main():
         sessions_f = pool.submit(fetch_sessions)
         archive_f = pool.submit(fetch_archive_pending)
         me = args.user or fetch_me()
-        issues, prs, sessions, archive_pending = issues_f.result(), prs_f.result(), sessions_f.result(), archive_f.result()
+        prs, sessions, archive_pending = prs_f.result(), sessions_f.result(), archive_f.result()
+        try:
+            issues = issues_f.result()
+        except subprocess.CalledProcessError as e:
+            fail(f"'gh issue list' failed: {(e.stderr or '').strip()}")
 
     warn_if_truncated(issues, prs)
 
@@ -592,11 +642,12 @@ def main():
     blocked_bodies, attention_bodies = prefetch_notes(issues)
 
     def blocked_reason_fn(n):
+        # The reason is the text after the prefix on the comment's first line; render_blocked
+        # puts the prefix back, so a failed fetch and a real reason render the same way.
         body = blocked_bodies.get(n)
         if not body:
             return None
-        m = re.match(r"^(⛔ Blocked on #\d+[^\n]*)", body)
-        return m.group(1) if m else body.splitlines()[0]
+        return body.splitlines()[0][len(BLOCKED_REASON_PREFIX):].strip() or None
 
     def needs_attention_note_fn(n):
         body = attention_bodies.get(n)

@@ -40,20 +40,20 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 4. `board.py`: implementation
 
-- [ ] 4.1 `fetch_issues()`: add `blockedBy` to the field list and drop `default=[]`; in `main()`,
+- [x] 4.1 `fetch_issues()`: add `blockedBy` to the field list and drop `default=[]`; in `main()`,
       catch the issue-fetch failure and `fail()` with gh's stderr.
-- [ ] 4.2 `build_rows()`: set `blockers` (open native nodes as `(number, title)`), `blocked_label`,
+- [x] 4.2 `build_rows()`: set `blockers` (open native nodes as `(number, title)`), `blocked_label`,
       and `blocked = bool(blockers) or blocked_label`; treat a missing or null `blockedBy` as empty.
-- [ ] 4.3 `prefetch_notes()`: fetch only for `blocked_label` carriers, with the prefix `Blocked by:`;
+- [x] 4.3 `prefetch_notes()`: fetch only for `blocked_label` carriers, with the prefix `Blocked by:`;
       replace the `⛔ Blocked on #` reason regex with the first line of the matched comment.
-- [ ] 4.4 `render_blocked()`: the issue on one line, then `- <number>: <title>` per open native
+- [x] 4.4 `render_blocked()`: the issue on one line, then `- <number>: <title>` per open native
       blocker, then `- ⛔ Blocked by: <reason>` or `- ⛔ Blocked by: see issue comments`.
-- [ ] 4.5 `render_row()`: bare `🔒 BLOCKED`; `render_stalled()`: mark a blocked row's spawn command
+- [x] 4.5 `render_row()`: bare `🔒 BLOCKED`; `render_stalled()`: mark a blocked row's spawn command
       `🔒 BLOCKED`.
-- [ ] 4.6 `render_board()`: exclude blocked rows from `ready_rows`; leave IN FLIGHT and BLOCKED ON
+- [x] 4.6 `render_board()`: exclude blocked rows from `ready_rows`; leave IN FLIGHT and BLOCKED ON
       YOU membership unchanged.
-- [ ] 4.7 Update the module docstring and comments that describe "blocked" as label-only.
-- [ ] 4.8 Run `test-board.sh`; every check passes.
+- [x] 4.7 Update the module docstring and comments that describe "blocked" as label-only.
+- [x] 4.8 Run `test-board.sh`; every check passes.
 
 ## 5. `blocked-dependency.sh`: tests first
 

@@ -241,26 +241,31 @@ Two places catch this, at different points, and each has a **written** next step
   Splitting off the behavior change (option c) here means it becomes its own **new**, separately
   groomed issue — never silently folded into this one's scope after the fact.
 
-## A hard dependency found outside `activate` — `blocked`
+## A hard dependency found outside `activate`
 
-`activate`'s design step is the usual place a hard dependency surfaces, but not the only one: a
-`tdd-developer` can hit one mid-`implement`, and a review round can surface one during `address`.
-The mechanics are the same wherever you are — label, comment and GitHub's native `blocked_by` link,
-applied as one unit:
+`activate`'s design step is the usual place a blocker surfaces, but not the only one: a `tdd-developer` can hit one mid-`implement`, and a review round can surface one during `address`.  The mechanics are the same wherever you are.  There are two kinds of blocker, and each has its own command.
+
+**A dependency on another issue** is GitHub's native `blocked_by` link, with a comment.  Never set the `blocked` label for it:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add <N> <M> "<one-line reason>"
 ```
 
-Then tell the owner and let them decide whether to proceed anyway; `blocked` is informational, not
-a hard stop you enforce yourself. Once `#<M>` actually lands, clear it as one unit too:
+**An external blocker, something that is not an issue** (a PR in another project, a third party), is the `blocked` label, with a `Blocked by: <reason>` comment:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear <N> <M>
+${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add-external <N> "<one-line reason>"
 ```
 
-Never hand-roll the label or the link separately — they drift apart, and a native link left behind
-renders the issue blocked in GitHub's UI long after the label is gone.
+**A wait on a person** goes one of two ways.  Use `add-external` for a third party that no owner action can unblock.  Use `needs-attention` (below) for anything the owner must act on.
+
+Then tell the owner and let them decide whether to proceed anyway.  A blocker is informational, not a hard stop you enforce yourself.  Nothing needs clearing when a blocking issue closes: the native link releases the issue on the board by itself.  `blocked-dependency.sh clear <N> <M>` is only for removing a link that should not be there, and it leaves the label alone.  When an external blocker goes away, remove the label:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear-external <N>
+```
+
+Never hand-roll the label, the link or the comment yourself.  The script writes the exact comment prefixes the board reads.
 
 ## Stuck outside a defined seam — `needs-attention`
 
@@ -274,7 +279,7 @@ a loop:
 1. Post a comment on the issue naming **exactly** what you're stuck on and what you need from the
    owner to proceed — specific enough that they can act on it without attaching first. Start its
    first line with `🆘 Needs attention:` — the board finds this comment by that prefix, exactly as
-   it finds a `blocked` reason by `⛔ Blocked on #`, and without it the board shows whatever
+   it finds a `blocked` label's reason by `Blocked by:`, and without it the board shows whatever
    unrelated comment the pipeline posted most recently.
 2. Add the `needs-attention` label (`gh issue edit <N> --add-label needs-attention`).
 3. Stop and wait, the same as at either seam — this is a real stop, not a heads-up you keep working
@@ -282,8 +287,7 @@ a loop:
 
 Once the owner resolves it (in a reply, a comment, or after you attach), remove the label and post
 a follow-up comment confirming what changed before resuming
-(`gh issue edit <N> --remove-label needs-attention`). Never combine this with `blocked` — a hard
-dependency on another issue is `blocked`'s job, not this one's.
+(`gh issue edit <N> --remove-label needs-attention`).  Never use this for a blocker: a dependency on another issue is a native link, and a third party that no owner action can unblock is `add-external`.  `needs-attention` is for anything the owner must act on.
 
 ## Rules
 

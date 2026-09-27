@@ -367,14 +367,9 @@ form it took) and Seam 2 (review/merge) still apply exactly as normal either way
 only ever skips machinery that doesn't apply to a docs-only change, never an owner stop. See
 `skills/activate/SKILL.md` steps 3 and 5 and `skills/implement/SKILL.md` step 4 for the mechanics.
 
-**Hard dependencies use GitHub's native issue-dependencies API, alongside the `blocked` label.**
-When `activate` step 4 finds a hard dependency on another unmerged issue, it sets `blocked` (what
-`board` filters on) **and** creates a native `blocked_by` link (`gh api
-repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by`, keyed on the blocking issue's numeric
-database id, not its repo-scoped number — confirmed live against this plugin's own repo) so the
-relationship renders directly in GitHub's own UI, not just in a comment. Additive, not a
-replacement — the label stays queryable (`gh issue list --label blocked`) in a way the native link
-alone isn't.
+**A dependency on another issue is a native link, and only that.**  When `activate` step 4, or any later stage, finds a hard dependency on another unmerged issue, it creates a native `blocked_by` link with `blocked-dependency.sh add` (`gh api repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by`, keyed on the blocking issue's numeric database id, not its repo-scoped number).  It does not set the `blocked` label.  The link renders in GitHub's own UI, and `board` reads it: the issue shows as blocked while the blocking issue is open, and is released by itself when that issue closes.  No agent has to clear anything when a blocker lands.
+
+**The `blocked` label is only for a blocker that is not an issue**, such as a PR in another project or a third party.  `blocked-dependency.sh add-external` sets the label and posts a `Blocked by: <reason>` comment, and `clear-external` removes the label.  See **Coordination signals** below for when to use it and when to use `needs-attention` instead.
 
 ## Presenting to the owner
 
@@ -445,8 +440,8 @@ Fixed label vocabulary (bootstrapped once with `bin/bootstrap-labels.sh`):
 | | `status:in-review` | PR open; awaiting your GitHub review (Seam 2). |
 | | `status:addressing` | Resolving your review comments. |
 | Coordination | `agent:active` | An `issue-manager` is currently claimed/running on this issue — see **Coordination signals** below. |
-| | `blocked` | `issue-manager` identified a hard dependency on another unmerged issue (see the issue's comments for which one and why; also expressed as a native GitHub issue dependency, see **The two human seams** above). |
-| | `needs-attention` | `issue-manager` hit something outside the two defined owner seams that only you can resolve — an ambiguous call, a conflict it can't cleanly reconcile, a repeated failure — and is waiting (see the issue's comments for what). Distinct from `blocked`, which is specifically a hard dependency on another issue. See **Coordination signals** below. |
+| | `blocked` | Blocked by something that is not an issue, such as a PR in another project or a third party. The reason is the last `Blocked by:` comment. A dependency on another issue is a native GitHub issue dependency, never this label. See **Coordination signals** below. |
+| | `needs-attention` | `issue-manager` hit something outside the two defined owner seams that only you can resolve — an ambiguous call, a conflict it can't cleanly reconcile, a repeated failure — and is waiting (see the issue's comments for what). Distinct from `blocked`, which is for a third party that no owner action can unblock. See **Coordination signals** below. |
 | Fast path | `type:docs` | Documentation-only — `activate`/`implement` always skip the architect consult, design-choice stop, and review panel, and skip spec generation too unless the docs' own layout is changing or it documents a tech change (see **Docs fast path** above). Offered by `groom`, never inferred silently. |
 | | `type:tech-debt` | Structural, behavior-preserving fix filed by `/tech-debt` (dev-skills) (SOLID, duplication, or layering). `activate` always skips OpenSpec generation, and by default skips the owner design-choice wait too — auto-adopting the Direction confirmed when filed, unless a hard dependency, a material deviation, or an actual behavior change turns up. `implement` still runs the full review panel in behavior-preservation mode — never combine with `type:docs` (see **Tech-debt fast path** below). |
 | Autonomy | `merge-on-green` | Merge this PR automatically once required CI checks pass — no owner review wait. Set directly by the owner (GitHub or `project-manager`), any time; `implement` checks it fresh, no worktree file involved. See **The two human seams** above. |
@@ -518,27 +513,33 @@ reflects the local machine's session registry, and says nothing about another de
   (the `implement` default) posts these at full granularity since `issue-manager` is directly driving
   each step; workflow mode is coarser — only before and after, since the script itself has no
   per-step hook back out to a comment.
-- **`blocked`** — added alongside a comment naming the specific blocking issue and why, whenever
-  `issue-manager` identifies a hard dependency on another unmerged issue (most likely during
-  `activate`'s design step, but not only then), **and** a native GitHub issue dependency (see **The
-  two human seams** above) — the label is what's queryable/bootstrapped like every other label in
-  the fixed vocabulary; the native link is what actually renders in GitHub's UI. Both removed, with
-  a follow-up comment, once the dependency clears. A single fixed label, not one per blocking issue
-  — the detail lives in the comment (and the native link itself), keeping the label vocabulary
-  fixed rather than growing per-issue. The label, the comment and the native link are applied and
-  cleared together by `scripts/blocked-dependency.sh` (`add` / `clear`), so any stage can mark a
-  dependency it discovers — not just `activate`, which used to be the only place the mechanics
-  existed. `finalize` runs its `sweep` on close, which removes the label and every native link
-  without needing to know the blocking issue.
+- **Blocked** — an issue is blocked when it has an OPEN native blocker or carries the `blocked` label, and only then.  `scripts/board.py` is the authority on this rule.  Each kind of blocker has its own record and its own commands in `scripts/blocked-dependency.sh`, so any stage can record one it discovers, not just `activate`:
+  - **A dependency on another issue** is a native GitHub `blocked_by` link, with a `⛔ Blocked on #M — <reason>` comment (`add`).  It never sets the `blocked` label.  A closed blocker, whether completed or not planned, releases the issue by itself, so nothing has to be cleared when a blocker lands.  `clear` only removes a link that should not be there, in this repo, and leaves the label alone.
+  - **A blocker that is not an issue** is the `blocked` label, with a `Blocked by: <reason>` comment (`add-external`).  The board shows the last such comment as the reason.  `clear-external` removes the label and posts `✅ Unblocked`.
+  - **A wait on a person** uses `add-external` when it is a third party that no owner action can unblock.  Anything the owner must act on is `needs-attention` instead (below).
+
+  `finalize` runs `sweep` on close, which removes the label and every native link without needing to know the blocking issue.
+
+  On the board, a blocked issue never renders in READY and is never "next up".  IN FLIGHT and BLOCKED ON YOU still show it, with a bare `🔒 BLOCKED` marker on its row, and the Stalled section marks its spawn command `🔒 BLOCKED`.  The details are in the 🔒 Blocked section only: the issue on one line, then one indented line per blocker.
+
+  ```
+  🔒 Blocked:
+    - 42: Add the export endpoint
+      - 40: Settle the export schema
+      - ⛔ Blocked by: waiting on the upstream client release
+  ```
+
+  Each open native blocker is `- <number>: <title>`, with no repo name even when it is in another repo; a closed one is not listed.  The label line is `- ⛔ Blocked by: <reason>`, or `- ⛔ Blocked by: see issue comments` when no `Blocked by:` comment can be read.
 - **`needs-attention`** — added alongside a comment naming exactly what's needed, whenever
   `issue-manager` is genuinely stuck on something with no defined next step of its own: not one of **The
   two human seams** (those are scheduled stops, already surfaced their own way — spec approval,
-  review + merge) and not a hard dependency on another issue (that's `blocked`, above). Covers the
+  review + merge) and not a blocker (a native link for another issue, or `add-external` for a
+  third party that no owner action can unblock, above). It is for anything the owner must act on. Covers the
   ad hoc case — an ambiguous call the issue's owner instructions doesn't resolve, a conflict it
   can't reconcile on its own, a failure that repeats past the point retrying makes sense — where
   guessing would be worse than waiting. `issue-manager` stops and waits once it's set, the same as at
   either seam. Its comment's first line is prefixed `🆘 Needs attention:` — the board finds the
-  reason by that prefix, exactly as it finds a `blocked` reason by `⛔ Blocked on #`. Removed, with
+  reason by that prefix, exactly as it finds a `blocked` label's reason by `Blocked by:`. Removed, with
   a follow-up comment, once the owner resolves it and work resumes; `finalize` also sweeps it, so a
   problem the owner resolved out of band can't leave the marker on a closed issue.
 

@@ -5,12 +5,21 @@
 # running sessions themselves via `claude agents` (an interactive picker — select the session by
 # name/id from the list; there is no direct "attach by id" command), not a tab/window opened
 # automatically on every spawn.
+#
+# Layout, top to bottom: argument parsing; the session-registry helpers; `preflight`, which holds
+# every check made before anything is changed, in the order they run; the two launch paths
+# (`respawn_session` and `spawn_fresh_session`); and the final state check. `main`, at the bottom,
+# calls them in that order. test-spawn-issue-manager.sh pins every exit path and the check order.
 set -euo pipefail
 
 usage() {
   echo "usage: spawn-issue-manager.sh <issue-number> [owner-instructions] [--backlog-overlap-file <path>]" >&2
   exit 2
 }
+
+# ---------------------------------------------------------------------------
+# Arguments
+# ---------------------------------------------------------------------------
 
 # owner-instructions is free text, not a flag/enum: issue-manager is itself an LLM reading its own
 # spawn prompt, so it just follows whatever's said there the same way it follows every other line
@@ -40,124 +49,50 @@ issue=""
 owner_instructions=""
 backlog_overlap_file=""
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    # An EMPTY value is rejected, not treated as "no flag": a caller passing the flag believes the
-    # search already happened, and the usual way it comes out empty is an unset variable in the
-    # caller's own command (`--backlog-overlap-file "$path"`). Silently spawning shortlist-less
-    # there would hide a failed search behind a successful-looking spawn.
-    --backlog-overlap-file)
-      [[ $# -ge 2 && -n "$2" ]] || usage   # flag given with no value, or an empty one
-      backlog_overlap_file="$2"
-      shift 2
-      ;;
-    --backlog-overlap-file=*)
-      backlog_overlap_file="${1#*=}"
-      [[ -n "$backlog_overlap_file" ]] || usage
-      shift
-      ;;
-    -*) usage ;;
-    *)
-      if [[ -z "$issue" ]]; then
-        issue="$1"
-      elif [[ -z "$owner_instructions" ]]; then
-        owner_instructions="$1"
-      else
-        usage   # more than two positional args
-      fi
-      shift
-      ;;
-  esac
-done
-[[ -n "$issue" ]] || usage
-# Fail loud rather than silently spawning with no shortlist: a caller that passed the flag believes
-# the search already happened, and a silent drop would send issue-manager down the fallback path to redo
-# it — the exact cost this whole mechanism exists to avoid, hidden behind a successful-looking spawn.
-if [[ -n "$backlog_overlap_file" && ! -r "$backlog_overlap_file" ]]; then
-  echo "spawn-issue-manager: --backlog-overlap-file '${backlog_overlap_file}' is not readable" >&2
-  exit 2
-fi
-[[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh unvalidated
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      # An EMPTY value is rejected, not treated as "no flag": a caller passing the flag believes the
+      # search already happened, and the usual way it comes out empty is an unset variable in the
+      # caller's own command (`--backlog-overlap-file "$path"`). Silently spawning shortlist-less
+      # there would hide a failed search behind a successful-looking spawn.
+      --backlog-overlap-file)
+        [[ $# -ge 2 && -n "$2" ]] || usage   # flag given with no value, or an empty one
+        backlog_overlap_file="$2"
+        shift 2
+        ;;
+      --backlog-overlap-file=*)
+        backlog_overlap_file="${1#*=}"
+        [[ -n "$backlog_overlap_file" ]] || usage
+        shift
+        ;;
+      -*) usage ;;
+      *)
+        if [[ -z "$issue" ]]; then
+          issue="$1"
+        elif [[ -z "$owner_instructions" ]]; then
+          owner_instructions="$1"
+        else
+          usage   # more than two positional args
+        fi
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$issue" ]] || usage
+  # Fail loud rather than silently spawning with no shortlist: a caller that passed the flag believes
+  # the search already happened, and a silent drop would send issue-manager down the fallback path to redo
+  # it — the exact cost this whole mechanism exists to avoid, hidden behind a successful-looking spawn.
+  if [[ -n "$backlog_overlap_file" && ! -r "$backlog_overlap_file" ]]; then
+    echo "spawn-issue-manager: --backlog-overlap-file '${backlog_overlap_file}' is not readable" >&2
+    exit 2
+  fi
+  [[ "$issue" =~ ^[0-9]+$ ]] || usage   # never let a stray flag/string reach gh unvalidated
+}
 
-for bin in claude jq gh git; do
-  command -v "$bin" >/dev/null 2>&1 || {
-    echo "spawn-issue-manager: '$bin' is required but not on PATH." >&2
-    echo "If you can't install it (jq in particular): don't run this script — an agent can replicate" >&2
-    echo "its logic directly (claude agents --json --all / gh issue view --json labels / claude respawn" >&2
-    echo "or claude --bg), reading the JSON as text instead of piping it through jq. See project-manager.md." >&2
-    exit 1
-  }
-done
-
-# Refuse a parent/epic issue outright, before anything else — GitHub's native sub-issues make an
-# issue's own scope purely a rollup of its children; there's nothing coherent to activate/spec
-# against it directly. Confirmed by real use (2026-08-06): without this check, a broad parent
-# issue got claimed and spawned into its own worktree anyway. Check here, before the worktree,
-# before agent:active, before anything — this is the earliest point that can catch it.
-# subIssuesSummary/subIssues require a reasonably current gh (confirmed present on 2.97.0) — an
-# older gh reports "Unknown JSON field" here, which the message below already relays verbatim.
-issue_view_err=$(mktemp)
-if ! issue_view_json=$(gh issue view "$issue" --json title,subIssuesSummary 2>"$issue_view_err"); then
-  echo "spawn-issue-manager: 'gh issue view' failed while checking #${issue} for sub-issues." >&2
-  echo "gh said: $(cat "$issue_view_err")" >&2
-  echo "(If gh is complaining about an unknown field 'subIssuesSummary', it's too old — upgrade gh.)" >&2
-  rm -f "$issue_view_err"
-  exit 1
-fi
-rm -f "$issue_view_err"
-issue_title=$(jq -r '.title' <<<"$issue_view_json")
-sub_issue_total=$(jq -r '.subIssuesSummary.total // 0' <<<"$issue_view_json")
-if [[ "$sub_issue_total" -gt 0 ]]; then
-  echo "spawn-issue-manager: #${issue} (\"${issue_title}\") has ${sub_issue_total} sub-issue(s) — it's a" >&2
-  echo "parent/epic, not directly workable. Pick one of its sub-issues instead:" >&2
-  # Redirect order matters: >&2 first dups stdout to the CURRENT stderr target, then 2>/dev/null
-  # only silences a second, later failure — swapped, it would silence stdout too and print nothing.
-  gh issue view "$issue" --json subIssues --jq \
-    '.subIssues.nodes[] | "  #\(.number) (\(.state)) \(.title)"' >&2 2>/dev/null || true
-  exit 1
-fi
-
-# Every session-name lookup below is scoped to THIS repo via REPO_ROOT — "issue-manager-<N>" is only
-# unique within one repo (GitHub issue numbers are per-repo), but `claude agents --json --all`
-# returns every session on the machine, unscoped. On a machine running spec-flow in more than one
-# repo, a same-numbered issue in a different repo would otherwise match by name alone — either a
-# false "already running" refusal, or worse, silently respawning the WRONG repo's session. This
-# script already assumes "cwd inside the target repo" (every gh call already relies on it), so
-# resolving the root here just makes that assumption explicit and checkable. Specifically the
-# PRIMARY checkout, not an existing worktree — run from inside `.claude/worktrees/issue-<N>` and
-# `--show-toplevel` returns that worktree's own root instead, so a genuine same-repo session
-# would fail to match (fails toward "no local record" → the GitHub-label fallback path, not a
-# silent wrong-repo respawn — but respawn recovery would be missed). project-manager, the normal
-# caller, always runs from the primary checkout.
-git_root_err=$(mktemp)
-if ! REPO_ROOT=$(git rev-parse --show-toplevel 2>"$git_root_err"); then
-  echo "spawn-issue-manager: couldn't resolve the repo root ('git rev-parse --show-toplevel' failed)." >&2
-  echo "git said: $(cat "$git_root_err")" >&2
-  echo "Run this from inside the target repo's primary checkout." >&2
-  rm -f "$git_root_err"
-  exit 1
-fi
-rm -f "$git_root_err"
-
-# A slug from the issue title makes the session identifiable at a glance in `claude agents` (the
-# owner's own complaint: several "issue-manager-N" tabs open at once, no way to tell which is which
-# without attaching to each). The slug is NOT the lookup key, though — the issue title can change
-# on GitHub between spawns, so an exact-name match against a freshly-recomputed slug would miss a
-# session spawned under an earlier title and duplicate it. `name_prefix` (below) is the stable
-# identity; `name` is only ever used for a FRESH spawn's own --name.
-slug=$(printf '%s' "$issue_title" \
-  | tr '[:upper:]' '[:lower:]' \
-  | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
-  | cut -c1-40 \
-  | sed -E 's/-+$//')
-name_prefix="issue-manager-${issue}"
-name="${name_prefix}${slug:+-$slug}"
-# MIGRATION: this agent was renamed from `issue-pm` to `issue-manager`. Sessions registered before
-# the rename still carry the old prefix, and a session is the ONLY way back into its own worktree
-# (see the respawn reasoning below) -- so a lookup that recognised only the new name would strand
-# every in-flight issue in an empty fresh worktree. Both prefixes are matched until no
-# `issue-pm-*` session remains, then this and its uses can go.
-legacy_name_prefix="issue-pm-${issue}"
+# ---------------------------------------------------------------------------
+# Session registry and owner-instruction helpers
+# ---------------------------------------------------------------------------
 
 # Owner instructions travel as an issue COMMENT, not a file in the worktree. A worktree file is
 # lost the moment the worktree is recreated, is unreachable from any other machine, and is invisible
@@ -185,7 +120,7 @@ post_instructions() {
 }
 
 lookup_session_id() {
-  # $1 = session name, $2 = repo root to scope the match to (see the REPO_ROOT comment above) —
+  # $1 = session name, $2 = repo root to scope the match to (see resolve_repo_root) —
   # cwd == root covers a stopped session whose registry entry reverted to the primary checkout;
   # cwd under root/ covers one still isolated in (or relocating into) its worktree, wherever
   # Claude Code actually places that — this never hardcodes ".claude/worktrees/" itself.
@@ -255,6 +190,103 @@ retry_until_worktree_cwd() {
   return 2
 }
 
+# ---------------------------------------------------------------------------
+# Preflight: every check made before anything is changed, in the order it runs
+# ---------------------------------------------------------------------------
+
+require_tools() {
+  local bin
+  for bin in claude jq gh git; do
+    command -v "$bin" >/dev/null 2>&1 || {
+      echo "spawn-issue-manager: '$bin' is required but not on PATH." >&2
+      echo "If you can't install it (jq in particular): don't run this script — an agent can replicate" >&2
+      echo "its logic directly (claude agents --json --all / gh issue view --json labels / claude respawn" >&2
+      echo "or claude --bg), reading the JSON as text instead of piping it through jq. See project-manager.md." >&2
+      exit 1
+    }
+  done
+}
+
+# Refuse a parent/epic issue outright, before anything else — GitHub's native sub-issues make an
+# issue's own scope purely a rollup of its children; there's nothing coherent to activate/spec
+# against it directly. Confirmed by real use (2026-08-06): without this check, a broad parent
+# issue got claimed and spawned into its own worktree anyway. Check here, before the worktree,
+# before agent:active, before anything — this is the earliest point that can catch it.
+# subIssuesSummary/subIssues require a reasonably current gh (confirmed present on 2.97.0) — an
+# older gh reports "Unknown JSON field" here, which the message below already relays verbatim.
+# Sets issue_title, which the session name and the final report both use.
+refuse_parent_issue() {
+  local issue_view_err issue_view_json sub_issue_total
+  issue_view_err=$(mktemp)
+  if ! issue_view_json=$(gh issue view "$issue" --json title,subIssuesSummary 2>"$issue_view_err"); then
+    echo "spawn-issue-manager: 'gh issue view' failed while checking #${issue} for sub-issues." >&2
+    echo "gh said: $(cat "$issue_view_err")" >&2
+    echo "(If gh is complaining about an unknown field 'subIssuesSummary', it's too old — upgrade gh.)" >&2
+    rm -f "$issue_view_err"
+    exit 1
+  fi
+  rm -f "$issue_view_err"
+  issue_title=$(jq -r '.title' <<<"$issue_view_json")
+  sub_issue_total=$(jq -r '.subIssuesSummary.total // 0' <<<"$issue_view_json")
+  if [[ "$sub_issue_total" -gt 0 ]]; then
+    echo "spawn-issue-manager: #${issue} (\"${issue_title}\") has ${sub_issue_total} sub-issue(s) — it's a" >&2
+    echo "parent/epic, not directly workable. Pick one of its sub-issues instead:" >&2
+    # Redirect order matters: >&2 first dups stdout to the CURRENT stderr target, then 2>/dev/null
+    # only silences a second, later failure — swapped, it would silence stdout too and print nothing.
+    gh issue view "$issue" --json subIssues --jq \
+      '.subIssues.nodes[] | "  #\(.number) (\(.state)) \(.title)"' >&2 2>/dev/null || true
+    exit 1
+  fi
+}
+
+# Every session-name lookup below is scoped to THIS repo via REPO_ROOT — "issue-manager-<N>" is only
+# unique within one repo (GitHub issue numbers are per-repo), but `claude agents --json --all`
+# returns every session on the machine, unscoped. On a machine running spec-flow in more than one
+# repo, a same-numbered issue in a different repo would otherwise match by name alone — either a
+# false "already running" refusal, or worse, silently respawning the WRONG repo's session. This
+# script already assumes "cwd inside the target repo" (every gh call already relies on it), so
+# resolving the root here just makes that assumption explicit and checkable. Specifically the
+# PRIMARY checkout, not an existing worktree — run from inside `.claude/worktrees/issue-<N>` and
+# `--show-toplevel` returns that worktree's own root instead, so a genuine same-repo session
+# would fail to match (fails toward "no local record" → the GitHub-label fallback path, not a
+# silent wrong-repo respawn — but respawn recovery would be missed). project-manager, the normal
+# caller, always runs from the primary checkout.
+resolve_repo_root() {
+  local git_root_err
+  git_root_err=$(mktemp)
+  if ! REPO_ROOT=$(git rev-parse --show-toplevel 2>"$git_root_err"); then
+    echo "spawn-issue-manager: couldn't resolve the repo root ('git rev-parse --show-toplevel' failed)." >&2
+    echo "git said: $(cat "$git_root_err")" >&2
+    echo "Run this from inside the target repo's primary checkout." >&2
+    rm -f "$git_root_err"
+    exit 1
+  fi
+  rm -f "$git_root_err"
+}
+
+# A slug from the issue title makes the session identifiable at a glance in `claude agents` (the
+# owner's own complaint: several "issue-manager-N" tabs open at once, no way to tell which is which
+# without attaching to each). The slug is NOT the lookup key, though — the issue title can change
+# on GitHub between spawns, so an exact-name match against a freshly-recomputed slug would miss a
+# session spawned under an earlier title and duplicate it. `name_prefix` (below) is the stable
+# identity; `name` is only ever used for a FRESH spawn's own --name.
+derive_session_names() {
+  local slug
+  slug=$(printf '%s' "$issue_title" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+    | cut -c1-40 \
+    | sed -E 's/-+$//')
+  name_prefix="issue-manager-${issue}"
+  name="${name_prefix}${slug:+-$slug}"
+  # MIGRATION: this agent was renamed from `issue-pm` to `issue-manager`. Sessions registered before
+  # the rename still carry the old prefix, and a session is the ONLY way back into its own worktree
+  # (see the respawn reasoning below) -- so a lookup that recognised only the new name would strand
+  # every in-flight issue in an empty fresh worktree. Both prefixes are matched until no
+  # `issue-pm-*` session remains, then this and its uses can go.
+  legacy_name_prefix="issue-pm-${issue}"
+}
+
 # Local session lookup FIRST, and --all (not just live ones): a background session's worktree is
 # tied to that SESSION, not to the issue, so a crashed/stopped issue-manager can only be put back in
 # its own worktree (branch, uncommitted work, everything) by `claude respawn <id>` — a fresh
@@ -270,81 +302,85 @@ retry_until_worktree_cwd() {
 # `claude` fails (jq exits 0 on empty input), and `set -e` kills the script at that line — a later
 # PIPESTATUS check is unreachable (confirmed: `v=$(false | cat); echo reached` never prints). Temp
 # file instead, so `claude`'s exit status gets its own plain `if !` check.
-claude_agents_out=$(mktemp)
-if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
-  rm -f "$claude_agents_out"
-  echo "spawn-issue-manager: 'claude agents --json --all' failed — can't check for an existing session." >&2
-  exit 1
-fi
-# Scoped to REPO_ROOT (see its own comment above) — otherwise a same-numbered issue-manager session
-# from a different repo on this machine would match by name alone. `.cwd // ""` and `.name // ""`
-# guard a registry entry with a missing/null field: bare `startswith()` on null aborts jq
-# (confirmed by test) rather than just not matching, which would kill this script under `set -e`.
-# Both fields need the guard — a null `.name` was observed in the live registry (2026-08-27),
-# aborting this query with exit 5 and blocking every spawn on that machine.
-# Match on $name_prefix, not the freshly-computed $name: a session spawned under an earlier issue
-# title carries that title's OLD slug in its registered .name forever (respawn never renames it),
-# so an exact match against today's slug would miss it. Boundary-safe prefix match (exact
-# "issue-manager-<N>", or "issue-manager-<N>-" followed by anything) so issue #4 can never match a
-# registered "issue-manager-42-..." — a bare startswith("issue-manager-4") would.
-existing_json=$(jq -c --arg p "$name_prefix" --arg lp "$legacy_name_prefix" --arg root "$REPO_ROOT" \
-  '[.[] | select(.name == $p or ((.name // "") | startswith($p + "-"))
-                 or .name == $lp or ((.name // "") | startswith($lp + "-"))) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
-  "$claude_agents_out")
-rm -f "$claude_agents_out"
-existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
-existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
-# The actual registered name for THIS existing session — may carry an older slug than $name if
-# the issue's title changed since it was spawned; every message about the existing/respawned
-# session below uses this, never the freshly-computed $name (which would be wrong on respawn).
-existing_name=$(jq -r '.name // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
-
-if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
-  # The registry's own `state` can go stale — confirmed by real-world observation (2026-08-04):
-  # a session whose process had already exited (its pid recycled into Claude Code's own
-  # background-worker pool) still reported state:"working" long after. `claude logs <id>` is a
-  # cheap, independent probe: exits 0 for a genuinely live session, exits 1 ("job not found — it
-  # may have already exited") for one that's actually gone — confirmed by test. This can only
-  # ever ADD a way to unstick a stale "already running" block, never remove the existing
-  # protection: if `claude logs` also reports success on some stale case this probe doesn't catch,
-  # behavior is unchanged from before (refuse, as it already did). Only fall through — to the
-  # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
-  # `claude logs` positively says the process is gone.
-  if claude logs "$existing_id" > /dev/null 2>&1; then
-    # Instructions given for a session that is already running are now deliverable, which they
-    # were not when they lived in a worktree file: a comment can be posted under a live session
-    # safely, and the session picks it up at its next seam check without being interrupted. This is
-    # the main thing the move to comments buys.
-    if [[ -n "$owner_instructions" ]]; then
-      post_instructions "$issue" "$owner_instructions" \
-        && echo "spawn-issue-manager: posted owner instructions to #${issue} — ${existing_name} reads them at its next seam check." >&2
-    fi
-    echo "already running: ${existing_name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
-    # `claude logs` reads a log FILE, so a crash that leaves the log behind reports success for a
-    # dead session and this refusal repeats on every run. Name the escape, or the only way out is
-    # to already know it: attaching to a session that is not there tells you nothing.
-    echo "If attaching shows nothing is there, the record is stale from a crash — clear it with" >&2
-    echo "'claude rm ${existing_id}' and re-run this script." >&2
+# Sets existing_id, existing_state and existing_name, each empty when there is no such session.
+find_existing_session() {
+  local claude_agents_out existing_json
+  claude_agents_out=$(mktemp)
+  if ! claude agents --json --all >"$claude_agents_out" 2>/dev/null; then
+    rm -f "$claude_agents_out"
+    echo "spawn-issue-manager: 'claude agents --json --all' failed — can't check for an existing session." >&2
     exit 1
   fi
-  echo "spawn-issue-manager: ${existing_name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
-  echo "'claude logs' says it's gone — stale entry. Proceeding as if it's not live." >&2
-fi
+  # Scoped to REPO_ROOT (see resolve_repo_root) — otherwise a same-numbered issue-manager session
+  # from a different repo on this machine would match by name alone. `.cwd // ""` and `.name // ""`
+  # guard a registry entry with a missing/null field: bare `startswith()` on null aborts jq
+  # (confirmed by test) rather than just not matching, which would kill this script under `set -e`.
+  # Both fields need the guard — a null `.name` was observed in the live registry (2026-08-27),
+  # aborting this query with exit 5 and blocking every spawn on that machine.
+  # Match on $name_prefix, not the freshly-computed $name: a session spawned under an earlier issue
+  # title carries that title's OLD slug in its registered .name forever (respawn never renames it),
+  # so an exact match against today's slug would miss it. Boundary-safe prefix match (exact
+  # "issue-manager-<N>", or "issue-manager-<N>-" followed by anything) so issue #4 can never match a
+  # registered "issue-manager-42-..." — a bare startswith("issue-manager-4") would.
+  existing_json=$(jq -c --arg p "$name_prefix" --arg lp "$legacy_name_prefix" --arg root "$REPO_ROOT" \
+    '[.[] | select(.name == $p or ((.name // "") | startswith($p + "-"))
+                   or .name == $lp or ((.name // "") | startswith($lp + "-"))) | select((.cwd // "") == $root or ((.cwd // "") | startswith($root + "/")))] | sort_by(.startedAt) | last // empty' \
+    "$claude_agents_out")
+  rm -f "$claude_agents_out"
+  existing_id=$(jq -r '.id // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+  existing_state=$(jq -r '.state // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+  # The actual registered name for THIS existing session — may carry an older slug than $name if
+  # the issue's title changed since it was spawned; every message about the existing/respawned
+  # session below uses this, never the freshly-computed $name (which would be wrong on respawn).
+  existing_name=$(jq -r '.name // empty' <<<"${existing_json:-null}" 2>/dev/null || true)
+}
 
-if [[ -n "$existing_id" ]]; then
-  # We have a past session for this issue on THIS machine, not currently live (done/failed/
-  # stopped) — respawn it rather than starting fresh, so it lands back in its own worktree with
-  # its branch/uncommitted work intact instead of an empty one branched from main.
-  #
-  # If agent:active is already set, it's most likely OUR OWN prior claim from before the crash —
-  # but it could also mean a different machine has since spawned a live session for this same
-  # issue (e.g. after a human cleared a stale label and someone else raced in). Not fully
-  # distinguishable without a real distributed lock, but the assignee is a cheap, meaningful
-  # signal: if it's someone else, don't respawn on top of their claim.
+refuse_live_session() {
+  if [[ -n "$existing_id" && ( "$existing_state" == "working" || "$existing_state" == "blocked" ) ]]; then
+    # The registry's own `state` can go stale — confirmed by real-world observation (2026-08-04):
+    # a session whose process had already exited (its pid recycled into Claude Code's own
+    # background-worker pool) still reported state:"working" long after. `claude logs <id>` is a
+    # cheap, independent probe: exits 0 for a genuinely live session, exits 1 ("job not found — it
+    # may have already exited") for one that's actually gone — confirmed by test. This can only
+    # ever ADD a way to unstick a stale "already running" block, never remove the existing
+    # protection: if `claude logs` also reports success on some stale case this probe doesn't catch,
+    # behavior is unchanged from before (refuse, as it already did). Only fall through — to the
+    # respawn path below, which re-verifies isolation for real via its own worktree-cwd poll — when
+    # `claude logs` positively says the process is gone.
+    if claude logs "$existing_id" > /dev/null 2>&1; then
+      # Instructions given for a session that is already running are now deliverable, which they
+      # were not when they lived in a worktree file: a comment can be posted under a live session
+      # safely, and the session picks it up at its next seam check without being interrupted. This is
+      # the main thing the move to comments buys.
+      if [[ -n "$owner_instructions" ]]; then
+        post_instructions "$issue" "$owner_instructions" \
+          && echo "spawn-issue-manager: posted owner instructions to #${issue} — ${existing_name} reads them at its next seam check." >&2
+      fi
+      echo "already running: ${existing_name} ${existing_id} (attach: claude agents — select ${existing_id})" >&2
+      # `claude logs` reads a log FILE, so a crash that leaves the log behind reports success for a
+      # dead session and this refusal repeats on every run. Name the escape, or the only way out is
+      # to already know it: attaching to a session that is not there tells you nothing.
+      echo "If attaching shows nothing is there, the record is stale from a crash — clear it with" >&2
+      echo "'claude rm ${existing_id}' and re-run this script." >&2
+      exit 1
+    fi
+    echo "spawn-issue-manager: ${existing_name} (${existing_id}) shows state=${existing_state} in the registry, but" >&2
+    echo "'claude logs' says it's gone — stale entry. Proceeding as if it's not live." >&2
+  fi
+}
+
+# We have a past session for this issue on THIS machine, not currently live (done/failed/
+# stopped). If agent:active is already set, it's most likely OUR OWN prior claim from before the
+# crash — but it could also mean a different machine has since spawned a live session for this same
+# issue (e.g. after a human cleared a stale label and someone else raced in). Not fully
+# distinguishable without a real distributed lock, but the assignee is a cheap, meaningful
+# signal: if it's someone else, don't respawn on top of their claim.
+check_respawn_claim() {
+  local active_label me assignees other
   active_label=$(gh issue view "$issue" --json labels \
     --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null) || true
-  # Every `gh` call below is fail-open (|| true) — we already have local evidence this respawn is
-  # ours, unlike the fresh-spawn path below, which has nothing local to fall back on and fails
+  # Every `gh` call here is fail-open (|| true) — we already have local evidence this respawn is
+  # ours, unlike the fresh-spawn path, which has nothing local to fall back on and fails
   # closed instead. Check ALL assignees (not just assignees[0]), consistent with the fresh-spawn
   # path and activate's own guard, so a multi-assigned issue where you're listed second doesn't
   # false-refuse. `// empty`, not a sentinel like "unknown": an unassigned issue (this session
@@ -362,7 +398,84 @@ if [[ -n "$existing_id" ]]; then
       exit 1
     fi
   fi
+}
 
+# No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
+# an issue-manager running on someone else's machine (or yours, on a different one) is invisible to
+# the local lookup, but not to this one. This is what actually makes it safe for two
+# developers to work the same repo without duplicating an issue-manager.
+check_fresh_claim() {
+  local active_label assignee me assignees other
+  if ! active_label=$(gh issue view "$issue" --json labels \
+    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null); then
+    echo "spawn-issue-manager: 'gh issue view' failed — can't verify whether #${issue} is already" >&2
+    echo "active. Nothing local backs a fresh spawn, so refusing rather than guessing; check" >&2
+    echo "'gh auth status' and your network, then retry." >&2
+    exit 1
+  fi
+  if [[ -n "$active_label" ]]; then
+    # Purely informational (folded into the message below, then exiting regardless) — a `gh`
+    # hiccup here should degrade to "unknown", not produce a different, more confusing failure
+    # than the "already active" message this branch is already committed to reporting.
+    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null) || assignee="unknown"
+    echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-manager may be running on another machine, or this one hasn't set the label yet. Not spawning a duplicate." >&2
+    exit 1
+  fi
+
+  # Even without the label, the issue itself might already be assigned to someone else on
+  # GitHub. Spawning anyway would plant agent:active on an issue this session has no business
+  # working — activate's own multi-user guard would stop the spawned session, but nothing would
+  # ever clear the label it left behind.
+  if ! me=$(gh api user --jq .login 2>/dev/null); then
+    echo "spawn-issue-manager: couldn't verify your GitHub identity ('gh api user' failed) — check" >&2
+    echo "'gh auth status'. Refusing to spawn without being able to check the assignee: this is a" >&2
+    echo "new spawn (unlike a respawn, nothing local backs the claim yet)." >&2
+    exit 1
+  fi
+  # Fail loud, matching the `me=` check just above: this is the fresh-spawn path, nothing local
+  # backs the claim yet, so a `gh` failure here must not silently fall through to spawning. Check
+  # ALL assignees (not just assignees[0]) — consistent with activate's own multi-assignee guard;
+  # a real `jq --arg` here is fine (this is plain jq on a string, not routed through gh's --jq,
+  # which is the flag that doesn't support --arg passthrough).
+  if ! assignees=$(gh issue view "$issue" --json assignees --jq '[.assignees[].login]' 2>/dev/null); then
+    echo "spawn-issue-manager: couldn't check #${issue}'s assignees ('gh issue view' failed) — check" >&2
+    echo "'gh auth status'. Refusing to spawn without being able to verify it isn't someone else's." >&2
+    exit 1
+  fi
+  if [[ "$assignees" != "[]" ]] && ! jq -e --arg me "$me" 'any(.[]; . == $me)' <<<"$assignees" >/dev/null 2>&1; then
+    other=$(jq -r '.[0] // "someone else"' <<<"$assignees")
+    echo "issue #${issue} is already assigned to ${other} (not you) — not spawning; that's their claim." >&2
+    exit 1
+  fi
+}
+
+# Every check that can refuse the spawn, in the order it runs. Nothing before this function
+# returns changes GitHub or the session registry, with one exception: a refusal for a session that
+# is already live posts the owner's instructions to it first, since that is the only way they reach
+# it. The claim checks differ by path: a respawn has local evidence the claim is ours and fails
+# open, while a fresh spawn has none and fails closed.
+preflight() {
+  require_tools
+  refuse_parent_issue
+  resolve_repo_root
+  derive_session_names
+  find_existing_session
+  refuse_live_session
+  if [[ -n "$existing_id" ]]; then
+    check_respawn_claim
+  else
+    check_fresh_claim
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Launch
+# ---------------------------------------------------------------------------
+
+# Respawn the past session rather than starting fresh, so it lands back in its own worktree with
+# its branch/uncommitted work intact instead of an empty one branched from main.
+respawn_session() {
+  local cwd_rc respawned_cwd
   echo "resuming: ${existing_name} was ${existing_state} — respawning ${existing_id} in its existing worktree" >&2
   claude respawn "$existing_id" > /dev/null
   session_id="$existing_id"
@@ -452,53 +565,10 @@ if [[ -n "$existing_id" ]]; then
       echo "spawn-issue-manager: updated .spec-flow/backlog-overlap for ${existing_name} (${session_id})." >&2
     fi
   fi
-else
-  # No local record at all. GitHub's agent:active label is the cross-machine, cross-user signal —
-  # an issue-manager running on someone else's machine (or yours, on a different one) is invisible to
-  # the local lookup above, but not to this one. This is what actually makes it safe for two
-  # developers to work the same repo without duplicating an issue-manager.
-  if ! active_label=$(gh issue view "$issue" --json labels \
-    --jq '.labels[] | select(.name == "agent:active") | .name' 2>/dev/null); then
-    echo "spawn-issue-manager: 'gh issue view' failed — can't verify whether #${issue} is already" >&2
-    echo "active. Nothing local backs a fresh spawn, so refusing rather than guessing; check" >&2
-    echo "'gh auth status' and your network, then retry." >&2
-    exit 1
-  fi
-  if [[ -n "$active_label" ]]; then
-    # Purely informational (folded into the message below, then exiting regardless) — a `gh`
-    # hiccup here should degrade to "unknown", not produce a different, more confusing failure
-    # than the "already active" message this branch is already committed to reporting.
-    assignee=$(gh issue view "$issue" --json assignees --jq '.assignees[0].login // "unknown"' 2>/dev/null) || assignee="unknown"
-    echo "already active: issue #${issue} carries agent:active (assignee: ${assignee}) — an issue-manager may be running on another machine, or this one hasn't set the label yet. Not spawning a duplicate." >&2
-    exit 1
-  fi
+}
 
-  # Even without the label, the issue itself might already be assigned to someone else on
-  # GitHub. Spawning anyway would plant agent:active on an issue this session has no business
-  # working — activate's own multi-user guard would stop the spawned session, but nothing would
-  # ever clear the label it left behind.
-  if ! me=$(gh api user --jq .login 2>/dev/null); then
-    echo "spawn-issue-manager: couldn't verify your GitHub identity ('gh api user' failed) — check" >&2
-    echo "'gh auth status'. Refusing to spawn without being able to check the assignee: this is a" >&2
-    echo "new spawn (unlike a respawn, nothing local backs the claim yet)." >&2
-    exit 1
-  fi
-  # Fail loud, matching the `me=` check just above: this is the fresh-spawn path, nothing local
-  # backs the claim yet, so a `gh` failure here must not silently fall through to spawning. Check
-  # ALL assignees (not just assignees[0]) — consistent with activate's own multi-assignee guard;
-  # a real `jq --arg` here is fine (this is plain jq on a string, not routed through gh's --jq,
-  # which is the flag that doesn't support --arg passthrough).
-  if ! assignees=$(gh issue view "$issue" --json assignees --jq '[.assignees[].login]' 2>/dev/null); then
-    echo "spawn-issue-manager: couldn't check #${issue}'s assignees ('gh issue view' failed) — check" >&2
-    echo "'gh auth status'. Refusing to spawn without being able to verify it isn't someone else's." >&2
-    exit 1
-  fi
-  if [[ "$assignees" != "[]" ]] && ! jq -e --arg me "$me" 'any(.[]; . == $me)' <<<"$assignees" >/dev/null 2>&1; then
-    other=$(jq -r '.[0] // "someone else"' <<<"$assignees")
-    echo "issue #${issue} is already assigned to ${other} (not you) — not spawning; that's their claim." >&2
-    exit 1
-  fi
-
+spawn_fresh_session() {
+  local overlap_clause instructions_clause persist_clause
   # Build the shortlist temp file BEFORE claiming the label. Under `set -e` a failing `cat` here
   # (the source vanished after the readability guard, a permission change, an I/O error) aborts the
   # script — and if the label were already set, that abort would strand `agent:active` on an issue
@@ -608,34 +678,51 @@ else
     exit 1
   fi
   final_name="$name"
-fi
+}
 
-# Same class as the temp-file fix above (a claude|jq pipe assignment can die under set -e via
-# pipefail, even though jq's own exit code alone wouldn't cause it) — but here the session is
-# ALREADY LIVE (spawned or respawned successfully above), so a transient failure warns and
+# ---------------------------------------------------------------------------
+# Final state
+# ---------------------------------------------------------------------------
+
+# Same class as the temp-file fix in find_existing_session (a claude|jq pipe assignment can die
+# under set -e via pipefail, even though jq's own exit code alone wouldn't cause it) — but here the
+# session is ALREADY LIVE (spawned or respawned successfully), so a transient failure warns and
 # continues instead of dying: exiting now would report failure for a launch that actually worked.
-state_out=$(mktemp)
-if claude agents --json --all >"$state_out" 2>/dev/null; then
-  state=$(jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state' "$state_out")
-else
-  state=""
-  echo "spawn-issue-manager: warning — couldn't confirm final state ('claude agents --json --all' failed); ${final_name} (${session_id}) is running regardless." >&2
-fi
-rm -f "$state_out"
-if [[ "$state" == "failed" ]]; then
-  # A confirmed "failed" state IS a positive answer, so clearing the label here is correct --
-  # unlike the empty-session-id path above, which cannot tell a failure from a lagging registry.
-  # The session is confirmed dead, so nothing will ever copy the overlap temp file: clean it up.
-  # (The empty-session-id path above deliberately does NOT, since a live session may still read it.)
-  [[ -n "${overlap_tmp:-}" ]] && rm -f "$overlap_tmp"
-  gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
-  echo "spawn-issue-manager: ${final_name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
-  exit 1
-fi
+confirm_final_state() {
+  local state_out state
+  state_out=$(mktemp)
+  if claude agents --json --all >"$state_out" 2>/dev/null; then
+    state=$(jq -r --arg id "$session_id" '.[] | select(.id == $id) | .state' "$state_out")
+  else
+    state=""
+    echo "spawn-issue-manager: warning — couldn't confirm final state ('claude agents --json --all' failed); ${final_name} (${session_id}) is running regardless." >&2
+  fi
+  rm -f "$state_out"
+  if [[ "$state" == "failed" ]]; then
+    # A confirmed "failed" state IS a positive answer, so clearing the label here is correct --
+    # unlike the empty-session-id path above, which cannot tell a failure from a lagging registry.
+    # The session is confirmed dead, so nothing will ever copy the overlap temp file: clean it up.
+    # (The empty-session-id path above deliberately does NOT, since a live session may still read it.)
+    [[ -n "${overlap_tmp:-}" ]] && rm -f "$overlap_tmp"
+    gh issue edit "$issue" --remove-label agent:active 2>/dev/null || true
+    echo "spawn-issue-manager: ${final_name} (${session_id}) is failed — check 'claude logs ${session_id}'" >&2
+    exit 1
+  fi
+}
 
-attach_cmd="claude agents — select ${session_id}"
+main() {
+  parse_args "$@"
+  preflight
+  if [[ -n "$existing_id" ]]; then
+    respawn_session
+  else
+    spawn_fresh_session
+  fi
+  confirm_final_state
+  # issue_title was resolved by the sub-issue check in preflight (both fresh-spawn and respawn
+  # paths run it), so it's available here for free — surfacing it lets whoever reads this line (a
+  # human, or project-manager relaying it) identify the session/tab without attaching first.
+  echo "${final_name} ${session_id} (\"${issue_title}\") — attach: claude agents — select ${session_id}"
+}
 
-# issue_title was resolved by the sub-issue check above (both fresh-spawn and respawn paths run
-# it), so it's available here for free — surfacing it lets whoever reads this line (a human, or
-# project-manager relaying it) identify the session/tab without attaching first.
-echo "${final_name} ${session_id} (\"${issue_title}\") — attach: ${attach_cmd}"
+main "$@"

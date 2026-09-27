@@ -35,7 +35,8 @@ label "status:addressing"  --color e99695 --description "Resolving owner review 
 
 # Cross-machine, cross-user coordination — not derivable from any one machine's local session state.
 label "agent:active"     --color 0e8a16 --description "An issue-manager is currently claimed/running on this issue"
-label "blocked"          --color b60205 --description "issue-manager identified a hard dependency on another unmerged issue"
+# A dependency on another issue is a native blocked_by link, never this label; see blocked-dependency.sh.
+label "blocked"          --color b60205 --description "Blocked by something that is not an issue"
 label "needs-attention"  --color e11d21 --description "issue-manager hit something only the owner can resolve — see issue comments"
 
 # Fast-path trigger — set by groom, read by activate/implement to skip the architect consult,

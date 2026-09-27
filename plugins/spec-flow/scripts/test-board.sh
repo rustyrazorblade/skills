@@ -5,12 +5,17 @@
 # "next up") rather than relying on live GitHub state. Exits non-zero if any assertion
 # fails. macOS bash 3.2 compatible (no associative arrays, no mapfile).
 #
-# Four fixtures, each with a job:
+# Six fixtures, each with a job:
 #   1  the broad behavioral fixture -- every bucket, PR/CI correlation, liveness, notes
 #   2  the concurrent comment prefetch and its per-row failure isolation
 #   3  nothing to report -- the conditional-rendering fixture (no section, no zero count)
 #   4  "next up" priority ordering, its refusal to name a claimed issue, and the READY cap
 #      through the CLI -- the default, an explicit --ready-limit, and a limit below 1
+#   5  "blocked" derivation -- open native blockers from `blockedBy`, the `blocked` label and its
+#      `Blocked by:` reason, and where a blocked issue does and does not render
+#   6  a failing `gh issue list` -- gh's error, a non-zero exit, and no board
+# Every fake gh fails an issue list that does not request `blockedBy`, so a board that stops
+# asking for it fails every fixture rather than silently rendering nothing as blocked.
 # Plus in-process python blocks for the cases a PATH fixture can't reach cheaply: the three
 # liveness states of one green in-review PR, backlog-size line invariance, keycap alignment, and
 # the READY cap's own properties -- "next up" survives the cut, the board's length holds as the
@@ -41,7 +46,9 @@ fake_bin_dir="$(mktemp -d)"
 fake_bin_dir2="$(mktemp -d)"
 fake_bin_dir3="$(mktemp -d)"
 fake_bin_dir4="$(mktemp -d)"
-trap 'rm -rf "$fake_bin_dir" "$fake_bin_dir2" "$fake_bin_dir3" "$fake_bin_dir4"' EXIT
+fake_bin_dir5="$(mktemp -d)"
+fake_bin_dir6="$(mktemp -d)"
+trap 'rm -rf "$fake_bin_dir" "$fake_bin_dir2" "$fake_bin_dir3" "$fake_bin_dir4" "$fake_bin_dir5" "$fake_bin_dir6"' EXIT
 
 # ---------------------------------------------------------------------------
 # Fixture 1: 12 issues covering every branch --
@@ -66,6 +73,7 @@ cat > "$fake_bin_dir/gh" <<'GHEOF'
 #!/usr/bin/env bash
 case "$1 $2" in
   "issue list")
+    [[ "$*" == *blockedBy* ]] || { echo "fake gh: the issue list must request blockedBy" >&2; exit 1; }
     cat <<'JSON'
 [
   {"number":10,"title":"Spec review item","labels":[{"name":"status:spec-review"},{"name":"P1"}],"url":"https://x/10","assignees":[{"login":"me"}],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
@@ -98,7 +106,7 @@ JSON
     ;;
   "issue view")
     case "$3" in
-      15) echo '{"comments":[{"body":"some earlier note"},{"body":"⛔ Blocked on #99 — waiting on infra work."}]}' ;;
+      15) echo '{"comments":[{"body":"some earlier note"},{"body":"Blocked by: waiting on infra work."}]}' ;;
       16) echo '{"comments":[{"body":"first pass"},{"body":"🆘 Needs attention: ambiguous requirement, need owner input."},{"body":"📚 Docs polished."}]}' ;;
       *) echo '{"comments":[]}' ;;
     esac
@@ -158,9 +166,6 @@ check "in-progress issue with no agent:active is marked STALLED" $?
 ! echo "$out" | grep -q "#20 .*BLOCKED ON YOU\|#20 .*READY"
 check "epic never appears in READY/BLOCKED ON YOU" $?
 
-echo "$out" | sed -n '/🔒 Blocked:/,$p' | grep -q "^  - 15: Blocked item — ⛔ Blocked on #99 — waiting on infra work.$"
-check "blocked reason comes from the matching ⛔-prefixed comment, not just 'see issue comments'" $?
-
 echo "$out" | grep -q "NEEDS ATTENTION — 🆘 Needs attention: ambiguous requirement, need owner input."
 check "needs-attention note comes from the matching 🆘-prefixed comment, not a later unrelated one" $?
 
@@ -215,6 +220,31 @@ section_in() {
 section() { section_in "$out" "$1"; }
 blocked_section() { section "⛳ BLOCKED ON YOU"; }
 ready_section()   { section "📋 READY"; }
+
+# One issue's entry in the 🔒 Blocked section: its own line, then its indented blocker lines, up to
+# the next issue. Compared whole, so a blocker line that is missing, extra, or out of order fails.
+blocked_entry() { # render number
+  section_in "$1" "🔒 Blocked:" | awk -v n="$2" '
+    /^  - / { inside = (index($0, "  - " n ": ") == 1) }
+    inside  { print }
+  '
+}
+entry_is() { # render number expected
+  [[ "$(blocked_entry "$1" "$2")" == "$3" ]]
+}
+
+entry_is "$out" 15 "  - 15: Blocked item
+    - ⛔ Blocked by: waiting on infra work."
+check "the label line comes from the matching 'Blocked by:' comment, not just 'see issue comments'" $?
+
+section "🔧 IN FLIGHT" | grep -q "#15 .*  🔒 BLOCKED$"
+check "a blocked in-flight row carries the bare 🔒 BLOCKED marker" $?
+
+! section "🔧 IN FLIGHT" | grep "#15 " | grep -q "infra work\|BLOCKED on"
+check "a blocked in-flight row carries no blocker reason" $?
+
+! echo "$out" | grep "spawn-issue-manager.sh 12" | grep -q "🔒"
+check "an unblocked stalled issue's spawn command carries no 🔒 BLOCKED marker" $?
 
 blocked_section | grep -q "#18"
 check "activate's design-choice stop shows under BLOCKED ON YOU, not as a plain ready item" $?
@@ -293,16 +323,26 @@ check "no row renders a literal P0/P1/P2/P3 in its priority column" $?
 # ---------------------------------------------------------------------------
 # In-process render tests: the cases a PATH fixture can't reach cheaply.
 # ---------------------------------------------------------------------------
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
+
+# The one shared prelude for every in-process block: it loads board.py as `board` and defines the
+# `row(**kw)` factory. board_py runs the python on its stdin after this prelude, so each block
+# stays its own process and reports under its own check().
+board_prelude='import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
 board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
 def row(**kw):
     base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
                 is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
+                blocked=False, blockers=[], blocked_label=False,
+                needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
+'
+board_py() {
+  { printf '%s\n' "$board_prelude"; cat; } | python3 - "$script_dir"
+}
+
+board_py <<'PYEOF'
 
 def next_up_lines(rendered):
     lines = rendered.splitlines()
@@ -332,16 +372,7 @@ for agent_active, attach_id, marker in ((True, "sess-1", "🟢 active"),
 PYEOF
 check "'next up' never recommends merging a green in-review PR, in any of the three liveness states" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # The property the caps could only approximate: the board's rendered length does not vary with the
 # size of the backlog. Same state twice, differing only in how many ungroomed issues exist.
@@ -375,16 +406,7 @@ assert not any(l.startswith("  - 16:") for l in lines), f"'next up' named the ow
 PYEOF
 check "backlog size does not change the board's length, and BLOCKED ON YOU reports without recommending" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 assert [board.keycap(p) for p in ("P0", "P1", "P2", "P3")] == ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 assert board.keycap(None) == board.keycap("P9") == "  ", "an unknown priority must render the blank"
@@ -409,16 +431,7 @@ PYEOF
 check "priority renders as a keycap, and a prioritized row stays aligned with an unprioritized one" $?
 
 # Separate block so a failure below reports under its own name, not the render checks'.
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # An unknown status: label must land in a visible bucket, not vanish from the board entirely.
 out2 = board.render_board([row(number=99, status="in-progres", mine=False, assignee="alice")], "me", 0)
@@ -472,16 +485,7 @@ check "unknown status label is rendered, CI states map correctly, null labels do
 # cannot reach cheaply. One block per property, each with its own check(), so a
 # failure reports under its own name rather than the whole cap's.
 # ---------------------------------------------------------------------------
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -515,16 +519,7 @@ assert not any("#900" in line for line in rendered), \
 PYEOF
 check "'next up' still names a ready issue the cap withheld" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -559,16 +554,7 @@ assert "1 more readys" not in six, f"a single withheld row read as plural:\n{six
 PYEOF
 check "the board's length holds at 6 and at 506 ready issues, each reporting its own withheld count" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -601,16 +587,7 @@ assert "3 more ready" in out, f"wrong withheld count at ready_limit=2 over five 
 PYEOF
 check "the cap renders the highest-priority rows, not the first N given" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -646,16 +623,7 @@ assert "more ready" not in out, f"a withheld line rendered below the cap:\n{out}
 PYEOF
 check "at and below the cap every ready row renders, with no withheld line and no negative count" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -708,6 +676,7 @@ cat > "$fake_bin_dir2/gh" <<'GHEOF'
 log_dir="$(cd "$(dirname "$0")" && pwd)"
 case "$1 $2" in
   "issue list")
+    [[ "$*" == *blockedBy* ]] || { echo "fake gh: the issue list must request blockedBy" >&2; exit 1; }
     cat <<'JSON'
 [
   {"number":201,"title":"Backlog 201","labels":[],"url":"https://x/201","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
@@ -742,10 +711,10 @@ JSON
   "issue view")
     echo "$3" >> "$log_dir/issue_view_calls.log"
     case "$3" in
-      401) echo '{"comments":[{"body":"note"},{"body":"⛔ Blocked on #77 — waiting on review."}]}' ;;
+      401) echo '{"comments":[{"body":"note"},{"body":"Blocked by: waiting on review."}]}' ;;
       402) exit 1 ;;
       403) echo '{"comments":[{"body":"first"},{"body":"🆘 Needs attention: needs input on design choice."}]}' ;;
-      404) echo '{"comments":[{"body":"first"},{"body":"⛔ Blocked on #88 — waiting on data."}]}' ;;
+      404) echo '{"comments":[{"body":"first"},{"body":"Blocked by: waiting on data."}]}' ;;
       405) echo 'not valid json{' ;;
       *) echo '{"comments":[]}' ;;
     esac
@@ -797,13 +766,16 @@ check "'next up' renders nothing when no unclaimed ready issue exists, even with
 ! echo "$out2" | grep -q "pending archive"
 check "no archive line renders when nothing is pending archive" $?
 
-echo "$out2" | grep -q "401.*BLOCKED on ⛔ Blocked on #77 — waiting on review."
+entry_is "$out2" 401 "  - 401: Blocked ok
+    - ⛔ Blocked by: waiting on review."
 check "prefetch: a successful blocked-note fetch renders normally, attached to its own row" $?
 
-echo "$out2" | grep -q "402.*see issue comments"
+entry_is "$out2" 402 "  - 402: Blocked process failure
+    - ⛔ Blocked by: see issue comments"
 check "prefetch: a failed gh issue view (process error) falls back to 'see issue comments'" $?
 
-echo "$out2" | grep -q "405.*see issue comments"
+entry_is "$out2" 405 "  - 405: Blocked malformed json
+    - ⛔ Blocked by: see issue comments"
 check "prefetch: a malformed-JSON gh issue view response falls back to 'see issue comments'" $?
 
 grep -q "^board: warning:.*402" "$err2_log"
@@ -818,7 +790,8 @@ check "prefetch: no stderr warning is printed for the successful fetch (issue #4
 echo "$out2" | grep -q "403.*NEEDS ATTENTION — 🆘 Needs attention: needs input on design choice."
 check "prefetch: a successful needs-attention fetch renders normally, attached to its own row" $?
 
-echo "$out2" | grep -q "404.*BLOCKED on ⛔ Blocked on #88 — waiting on data."
+entry_is "$out2" 404 "  - 404: Dual label
+    - ⛔ Blocked by: waiting on data."
 check "prefetch: a dual-labeled (blocked + needs-attention) issue's blocked note renders" $?
 
 echo "$out2" | grep -q "404.*NEEDS ATTENTION"
@@ -845,6 +818,7 @@ cat > "$fake_bin_dir3/gh" <<'GHEOF'
 #!/usr/bin/env bash
 case "$1 $2" in
   "issue list")
+    [[ "$*" == *blockedBy* ]] || { echo "fake gh: the issue list must request blockedBy" >&2; exit 1; }
     cat <<'JSON'
 [
   {"number":501,"title":"Backlog 501","labels":[],"url":"https://x/501","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
@@ -936,6 +910,7 @@ cat > "$fake_bin_dir4/gh" <<'GHEOF'
 #!/usr/bin/env bash
 case "$1 $2" in
   "issue list")
+    [[ "$*" == *blockedBy* ]] || { echo "fake gh: the issue list must request blockedBy" >&2; exit 1; }
     cat <<'JSON'
 [
   {"number":701,"title":"Ready 701","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/701","assignees":[],"subIssuesSummary":{"completed":0,"percentCompleted":0,"total":0},"subIssues":{"nodes":[]}},
@@ -1066,6 +1041,221 @@ check "--ready-limit -1 exits non-zero and prints no board" "$status_neg"
 
 grep -q "must be 1 or more" "$fake_bin_dir4/usage1.log"
 check "--ready-limit -1 reports the usage error on stderr" $?
+
+# ---------------------------------------------------------------------------
+# Fixture 5: "blocked" derivation. `blockedBy` uses gh's real {"nodes": [...], "totalCount": N}
+# shape. An issue is blocked by an OPEN native blocker or by the `blocked` label, and only then.
+#   #501 ready, unclaimed, P0, one open native blocker   -> Blocked; not READY, not "next up"
+#   #502 in-progress, mine, two open + one closed blocker -> Blocked (open ones only), IN FLIGHT
+#   #503 ready, native blocker closed as completed        -> released: READY, not Blocked
+#   #504 ready, native blocker closed as not planned      -> released: READY, not Blocked
+#   #505 spec-review, mine, label, two `Blocked by:`       -> Blocked (newest reason), BLOCKED ON YOU
+#   #506 ready, unclaimed, P1, no blockedBy key at all    -> READY, and the "next up" pick
+#   #507 in-progress, mine, no agent:active, label + open native blocker, an `add-external`
+#        comment then a later `add` comment               -> Blocked (both kinds), stalled + marked
+#   #508 in-progress, alice's, label, only older `⛔ Blocked on` comments
+#                                                          -> Blocked, "see issue comments"
+#   #509 ready, alice's, open native blocker in another repo -> Blocked, no repo name
+#   #510 ready, unclaimed, blockedBy null                  -> READY, not Blocked
+# ---------------------------------------------------------------------------
+cat > "$fake_bin_dir5/gh" <<'GHEOF'
+#!/usr/bin/env bash
+log_dir="$(cd "$(dirname "$0")" && pwd)"
+case "$1 $2" in
+  "issue list")
+    [[ "$*" == *blockedBy* ]] || { echo "fake gh: the issue list must request blockedBy" >&2; exit 1; }
+    cat <<'JSON'
+[
+  {"number":501,"title":"Ready but natively blocked","labels":[{"name":"status:ready"},{"name":"P0"}],"url":"https://x/501","assignees":[],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":900,"title":"Upstream fix","state":"OPEN"}],"totalCount":1}},
+  {"number":502,"title":"Several blockers","labels":[{"name":"status:in-progress"},{"name":"P1"},{"name":"agent:active"}],"url":"https://x/502","assignees":[{"login":"me"}],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":901,"title":"Blocker A","state":"OPEN"},{"number":902,"title":"Blocker B","state":"OPEN"},{"number":903,"title":"Done blocker","state":"CLOSED","stateReason":"COMPLETED"}],"totalCount":3}},
+  {"number":503,"title":"Blocker completed","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/503","assignees":[],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":904,"title":"Landed blocker","state":"CLOSED","stateReason":"COMPLETED"}],"totalCount":1}},
+  {"number":504,"title":"Blocker not planned","labels":[{"name":"status:ready"},{"name":"P3"}],"url":"https://x/504","assignees":[],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":905,"title":"Dropped blocker","state":"CLOSED","stateReason":"NOT_PLANNED"}],"totalCount":1}},
+  {"number":505,"title":"External wait","labels":[{"name":"status:spec-review"},{"name":"P1"},{"name":"blocked"}],"url":"https://x/505","assignees":[{"login":"me"}],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[],"totalCount":0}},
+  {"number":506,"title":"Ready and free","labels":[{"name":"status:ready"},{"name":"P1"}],"url":"https://x/506","assignees":[],"subIssuesSummary":{"total":0}},
+  {"number":507,"title":"Both kinds","labels":[{"name":"status:in-progress"},{"name":"P2"},{"name":"blocked"}],"url":"https://x/507","assignees":[{"login":"me"}],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":906,"title":"API work","state":"OPEN"}],"totalCount":1}},
+  {"number":508,"title":"Old-style label","labels":[{"name":"status:in-progress"},{"name":"P2"},{"name":"blocked"},{"name":"agent:active"}],"url":"https://x/508","assignees":[{"login":"alice"}],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[],"totalCount":0}},
+  {"number":509,"title":"Cross-repo wait","labels":[{"name":"status:ready"},{"name":"P2"}],"url":"https://x/509","assignees":[{"login":"alice"}],"subIssuesSummary":{"total":0},"blockedBy":{"nodes":[{"number":77,"title":"Other repo issue","state":"OPEN","repository":{"nameWithOwner":"other/repo"}}],"totalCount":1}},
+  {"number":510,"title":"Null blockedBy","labels":[{"name":"status:ready"},{"name":"P3"}],"url":"https://x/510","assignees":[],"subIssuesSummary":{"total":0},"blockedBy":null}
+]
+JSON
+    ;;
+  "pr list")
+    echo "[]"
+    ;;
+  "api user")
+    echo "me"
+    ;;
+  "repo view")
+    echo "main"
+    ;;
+  "issue view")
+    echo "$3" >> "$log_dir/issue_view_calls.log"
+    case "$3" in
+      505) echo '{"comments":[{"body":"Blocked by: old vendor reason"},{"body":"Blocked by: waiting on vendor contract\nmore detail on a second line"}]}' ;;
+      507) echo '{"comments":[{"body":"Blocked by: waiting on upstream PR"},{"body":"⛔ Blocked on #906 — needs the API"}]}' ;;
+      508) echo '{"comments":[{"body":"⛔ Blocked on #12 — old style"},{"body":"⛔ Blocked on: something else"},{"body":"blocked by: lower case is not the form"}]}' ;;
+      *) echo '{"comments":[]}' ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_bin_dir5/gh"
+
+cat > "$fake_bin_dir5/git" <<'GITEOF'
+#!/usr/bin/env bash
+exit 1
+GITEOF
+chmod +x "$fake_bin_dir5/git"
+
+cat > "$fake_bin_dir5/claude" <<'CLAUDEEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "agents" ]]; then
+  echo '[]'
+  exit 0
+fi
+exit 1
+CLAUDEEOF
+chmod +x "$fake_bin_dir5/claude"
+
+out5="$(PATH="$fake_bin_dir5:$PATH" python3 "$board")"
+status5=$?
+check "fixture 5: board.py exits 0, with a missing and a null blockedBy among the issues" "$status5"
+
+echo "$out5"
+echo "---"
+
+echo "$out5" | grep -qxF "(2 agent:active · 6 blocked)"
+check "the summary's blocked count covers native blockers and the label alike" $?
+
+entry_is "$out5" 501 "  - 501: Ready but natively blocked
+    - 900: Upstream fix"
+check "an open native blocker blocks the issue, listed as <number>: <title>" $?
+
+entry_is "$out5" 502 "  - 502: Several blockers
+    - 901: Blocker A
+    - 902: Blocker B"
+check "several open native blockers each get their own line, and the closed one is not listed" $?
+
+! section_in "$out5" "🔒 Blocked:" | grep -qE "^  - (503|504|506|510): "
+check "a closed blocker (completed or not planned), a missing blockedBy, and a null one do not block" $?
+
+section_in "$out5" "📋 READY" | grep -q "#503 " && section_in "$out5" "📋 READY" | grep -q "#504 "
+check "an issue whose blockers all closed is released back to READY" $?
+
+section_in "$out5" "📋 READY" | grep -q "#510 " && section_in "$out5" "📋 READY" | grep -q "#506 "
+check "an issue with a missing or null blockedBy renders in READY" $?
+
+entry_is "$out5" 505 "  - 505: External wait
+    - ⛔ Blocked by: waiting on vendor contract"
+check "the label line is the first line of the newest 'Blocked by:' comment" $?
+
+entry_is "$out5" 507 "  - 507: Both kinds
+    - 906: API work
+    - ⛔ Blocked by: waiting on upstream PR"
+check "both kinds: native blocker lines, then the label line; a later 'add' comment does not replace the reason" $?
+
+entry_is "$out5" 508 "  - 508: Old-style label
+    - ⛔ Blocked by: see issue comments"
+check "the label with only older '⛔ Blocked on' comments still blocks, with 'see issue comments'" $?
+
+entry_is "$out5" 509 "  - 509: Cross-repo wait
+    - 77: Other repo issue"
+check "a cross-repo native blocker renders as <number>: <title>" $?
+
+! echo "$out5" | grep -q "other/repo"
+check "a cross-repo native blocker renders with no repo name" $?
+
+! section_in "$out5" "📋 READY" | grep -qE "#(501|509) "
+check "a blocked ready issue does not render in READY" $?
+
+echo "$out5" | sed -n '/Next up — activate:/,$p' | grep -q "^  - 506: Ready and free → /spec-flow:activate 506$"
+check "'next up' falls through a blocked P0 to the next unclaimed ready issue" $?
+
+! echo "$out5" | grep -q "activate 501"
+check "'next up' never names a blocked issue" $?
+
+section_in "$out5" "🔧 IN FLIGHT" | grep -q "#502 .*  🔒 BLOCKED$"
+check "a blocked in-flight issue stays in IN FLIGHT with the bare marker" $?
+
+! section_in "$out5" "🔧 IN FLIGHT" | grep "#502 " | grep -q "901\|Blocker A\|BLOCKED on"
+check "a blocked in-flight row carries no blocker number, title or reason" $?
+
+section_in "$out5" "⛳ BLOCKED ON YOU" | grep -q "#505 .*  🔒 BLOCKED$"
+check "a blocked issue waiting on the owner stays in BLOCKED ON YOU with the bare marker" $?
+
+! section_in "$out5" "⛳ BLOCKED ON YOU" | grep "#505 " | grep -q "vendor\|BLOCKED on"
+check "a blocked row waiting on the owner carries no blocker reason" $?
+
+echo "$out5" | grep -q "^  - 507: Both kinds → .*spawn-issue-manager.sh 507  🔒 BLOCKED$"
+check "a blocked stalled issue's spawn command is marked 🔒 BLOCKED" $?
+
+calls5="$(sort "$fake_bin_dir5/issue_view_calls.log" | tr '\n' ' ')"
+expect_calls5=0
+[[ "$calls5" == "505 507 508 " ]] || expect_calls5=1
+check "only label carriers fetch comments, once each; a native-only blocked issue fetches none" "$expect_calls5"
+
+# ---------------------------------------------------------------------------
+# Fixture 6: `gh issue list` fails. An empty board would read as a clean repo, so the board
+# prints gh's error and exits non-zero instead.
+# ---------------------------------------------------------------------------
+cat > "$fake_bin_dir6/gh" <<'GHEOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "issue list")
+    echo "Unknown JSON field: \"blockedBy\"" >&2
+    exit 1
+    ;;
+  "pr list")
+    echo "[]"
+    ;;
+  "api user")
+    echo "me"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$fake_bin_dir6/gh"
+cp "$fake_bin_dir5/git" "$fake_bin_dir5/claude" "$fake_bin_dir6/"
+
+out6="$(PATH="$fake_bin_dir6:$PATH" python3 "$board" 2>"$fake_bin_dir6/stderr.log")"
+status6=$?
+[[ "$status6" -ne 0 ]]
+check "a failing gh issue list exits non-zero" $?
+
+[[ -z "$out6" ]]
+check "a failing gh issue list prints no board on stdout" $?
+
+grep -qF 'Unknown JSON field: "blockedBy"' "$fake_bin_dir6/stderr.log"
+check "a failing gh issue list relays gh's error on stderr" $?
+
+# In-process: the "blocked" cases that need an exact board rather than a fixture.
+board_py <<'PYEOF'
+# One issue blocked only by a native link, one only by the label: the count covers both routes.
+rows = [row(number=1, status="in-progress", blocked=True, blockers=[(9, "Native")]),
+        row(number=2, status="in-progress", blocked=True, blocked_label=True, blocked_note="r")]
+out = board.render_board(rows, "me", 0)
+assert "(2 blocked)" in out, f"summary did not count both kinds:\n{out}"
+
+# Every unclaimed ready issue is blocked: no "next up" line at all.
+rows = [row(number=3, status="ready", assignee=None, mine=False, blocked=True, blockers=[(9, "N")]),
+        row(number=4, status="ready", assignee=None, mine=False, blocked=True, blocked_label=True,
+            blocked_note="r")]
+out = board.render_board(rows, "me", 0)
+assert "Next up" not in out, f"'next up' named a blocked issue:\n{out}"
+
+# The only unclaimed ready issue past the cap is blocked: it is not recommended either.
+rows = [row(number=800 + i, status="ready", priority="P0") for i in range(5)]
+rows.append(row(number=900, status="ready", priority="P3", assignee=None, mine=False,
+                blocked=True, blockers=[(9, "N")]))
+out = board.render_board(rows, "me", 0)
+assert "Next up" not in out, f"'next up' named a blocked withheld issue:\n{out}"
+PYEOF
+check "the summary counts both kinds, and 'next up' names no blocked issue, withheld or not" $?
 
 # Note on prefetch transparency: fixture 1's blocked/needs-attention assertions match exact
 # rendered note text, and are the transparency check -- they must still pass with

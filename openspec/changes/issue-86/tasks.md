@@ -109,5 +109,5 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 9. Final check
 
-- [ ] 9.1 Run `test-board.sh`, `test-blocked-dependency.sh` and `test-spawn-issue-manager.sh` under
+- [x] 9.1 Run `test-board.sh`, `test-blocked-dependency.sh` and `test-spawn-issue-manager.sh` under
       `/bin/bash` (3.2); all exit 0.

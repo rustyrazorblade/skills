@@ -9,10 +9,10 @@ associative arrays, no `mapfile`, no GNU-only flags.
       fake `claude` on PATH that record each call and return scripted results. Cover every existing
       exit path (exit code and message) and the order of the pre-spawn checks.
 - [x] 1.2 Run it against the unmodified script; it must pass before any edit to the script.
-- [ ] 1.3 Refactor `scripts/spawn-issue-manager.sh` into clearly named parts, with every pre-spawn
+- [x] 1.3 Refactor `scripts/spawn-issue-manager.sh` into clearly named parts, with every pre-spawn
       check in one preflight function called in the existing order. Change no exit code, message,
       or check order.
-- [ ] 1.4 Re-run `test-spawn-issue-manager.sh`; it must pass unchanged.
+- [x] 1.4 Re-run `test-spawn-issue-manager.sh`; it must pass unchanged.
 
 ## 2. `test-board.sh`: consolidate the row helper
 

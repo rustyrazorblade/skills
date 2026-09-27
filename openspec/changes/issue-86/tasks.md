@@ -89,22 +89,22 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 8. Text updates
 
-- [ ] 8.1 `bin/bootstrap-labels.sh`: set the `blocked` description to
+- [x] 8.1 `bin/bootstrap-labels.sh`: set the `blocked` description to
       `Blocked by something that is not an issue`.
-- [ ] 8.2 `skills/activate/SKILL.md`: step 4 records an issue dependency with `add` (native link
+- [x] 8.2 `skills/activate/SKILL.md`: step 4 records an issue dependency with `add` (native link
       only) and an external blocker, found by the architect or confirmed by the owner, with
       `add-external`; the "auto mode never skips past" rule covers both kinds.
-- [ ] 8.3 `agents/issue-manager.md`: the hard-dependency-outside-`activate` section uses `add` for an
+- [x] 8.3 `agents/issue-manager.md`: the hard-dependency-outside-`activate` section uses `add` for an
       issue and `add-external` for an external blocker; state the `add-external` / `needs-attention`
       rule for a wait on a person; remove the "hard dependency on another issue" definition of
       `blocked`.
-- [ ] 8.4 `docs/workflow.md`: the label is only for blockers that are not issues; issue dependencies
+- [x] 8.4 `docs/workflow.md`: the label is only for blockers that are not issues; issue dependencies
       are a native link; the `add-external` / `needs-attention` rule; remove the "hard dependency on
       another issue" definition; describe the new Blocked row and markers.
-- [ ] 8.5 `skills/finalize/SKILL.md`, `skills/setup/SKILL.md`, `agents/project-manager.md`,
+- [x] 8.5 `skills/finalize/SKILL.md`, `skills/setup/SKILL.md`, `agents/project-manager.md`,
       `README.md`: describe the label as only for blockers that are not issues. Leave `finalize`'s
       `sweep` call as it is.
-- [ ] 8.6 Search every listed file for an instruction to set `blocked` for an issue dependency or to
+- [x] 8.6 Search every listed file for an instruction to set `blocked` for an issue dependency or to
       call `clear` when a blocker lands; remove any found.
 
 ## 9. Final check

@@ -28,6 +28,8 @@ exempt from the one-at-a-time rule.
      `bin/bootstrap-labels.sh` creates (`P0`-`P3`, `status:ready`, `status:spec-review`,
      `status:in-progress`, `status:in-review`, `status:addressing`, `agent:active`, `blocked`,
      `needs-attention`, `type:docs`, `merge-on-green`, `type:tech-debt`, `tech-debt-review`).
+     `blocked` is only for a blocker that is not an issue; a dependency on another issue is a
+     native GitHub issue dependency, with no label.
    - **Agent teams**: read `.claude/settings.json` in this repo (if it exists) for
      `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
    - **Seam visualization**: read `.claude/settings.json` for `env.SPEC_FLOW_SEAM_VIEW`, and

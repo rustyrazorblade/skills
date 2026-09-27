@@ -1,6 +1,6 @@
 ---
 name: activate
-description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per the issue's own owner-instruction comment; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Marks a hard architect-flagged dependency with both the `blocked` label and a native GitHub issue dependency.
+description: Activate a groomed GitHub issue for development — claim it, review it with the owner (scope/acceptance-criteria freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions), run architect + domain-expert design concurrently then stress-test the result with design-critic, stop for the owner's design choice before generating anything, then OpenSpec explore+propose and stop again for spec approval (Seam 1). Second stage of the flow delivery workflow (see docs/workflow.md). Both stops auto-approvable per the issue's own owner-instruction comment; never implements itself regardless. A `type:docs` issue always skips the design stop; a content-only one (the common case) also skips spec generation, going straight to a lightweight scope + acceptance-criteria review at Seam 1 instead (see docs/workflow.md's Docs fast path). A `type:tech-debt` issue always skips OpenSpec generation and, by default, the owner design-choice wait too — architect still runs but auto-adopts the Direction already confirmed when the issue was filed, stopping only for a hard dependency, a material deviation, or if the fix can't be done behavior-preserving — then goes to the same lightweight Seam 1 review (see docs/workflow.md's Tech-debt fast path). Records a hard dependency on another issue as a native GitHub issue dependency only, and a blocker that is not an issue with the `blocked` label.
 argument-hint: [issue number — omit to take the highest-priority status:ready issue]
 ---
 
@@ -167,8 +167,8 @@ qualify), and confirm the choice with the owner.
    whatever the answer actually raises rather than moving mechanically to the next scripted
    question. This is the **Presenting to the owner** contract in `docs/workflow.md`: one decision at
    a time, and a marked recommendation where you have one. If the owner confirms a backlog hit is a genuine hard dependency, handle it exactly like
-   the architect-flagged case at step 4 below (`blocked` label + native GitHub issue dependency +
-   comment) — don't invent a second mechanism for the same fact. If an answer changes the scope or
+   the architect-flagged case at step 4 below (native GitHub issue dependency + comment, via
+   `blocked-dependency.sh add`; no `blocked` label) — don't invent a second mechanism for the same fact. If an answer changes the scope or
    acceptance criteria, update the issue body before continuing so the change is durable, not just
    live in this conversation:
    ```bash
@@ -286,9 +286,7 @@ qualify), and confirm the choice with the owner.
    **For a `type:tech-debt` issue, auto-adopt by default — don't wait for the owner** unless one of
    three specific problems fires, each of which stops exactly like the hard-dependency case below
    always has:
-   - **Architect flagged a hard dependency** on another unmerged issue — handled identically to the
-     normal case further down this step (label, comment, native link, stop for the owner). Never
-     skipped, tech-debt or not.
+   - **Architect flagged a blocker**: a hard dependency on another unmerged issue, or an external blocker that is not an issue.  Handled identically to the normal case further down this step: `add` for an issue (native link and comment, no label), `add-external` for an external blocker (label and comment), then stop for the owner.  Never skipped, tech-debt or not.
    - **Architect reports a material deviation** from the issue's confirmed Direction (the code moved
      enough that the original shape no longer fits, or the "corrected" shape from step 3 changes
      what the fix actually does, not just where it touches).
@@ -346,28 +344,26 @@ qualify), and confirm the choice with the owner.
    every item, exactly as the architect recommended it, in the auto-approval comment instead, for
    the owner to triage once they're back.**
 
-   **If the architect's design surfaces a hard dependency on another, unmerged issue** (this one
-   genuinely can't land first, not just "would be cleaner after"), say so to the owner here, then
-   mark it on GitHub so it's visible without you — both the `blocked` label (queryable, what
-   `board` filters on) and GitHub's **native issue dependency** (renders directly in the GitHub UI,
-   which the label alone doesn't — the two are additive, not a replacement for each other):
-   ```bash
-   # Label, comment and native blocked_by link, applied as one unit. Any stage can call this --
-   # a dependency found during implement or address uses the same command.
-   ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add <N> <M> "<one-line reason>"
-   ```
-   Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands) —
-   `blocked` is informational, not a hard stop you enforce yourself. Once the dependency actually
-   clears, remove the label, remove the native link, and post a follow-up comment:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh clear <N> <M>
-   ```
-   **This is the one thing auto mode never
-   skips past:** a hard dependency is a factual blocker the architect determined, not a stylistic
-   decision — label it, comment, and stop for the owner regardless of what
-   the issue's owner instructions says for this run.
+   **If the architect's design surfaces a blocker, or the owner confirms one, record it.**  A blocker means this issue genuinely cannot land first, not that it would be cleaner after.  There are two kinds, and each has its own command.  Say so to the owner here, then record it on GitHub so it is visible without you.
 
-   **Absent a hard dependency, and only if the issue's owner instructions (read fresh at this
+   - **A hard dependency on another, unmerged issue.**  Record it as GitHub's native issue dependency only.  Do not set the `blocked` label for it.  The native link renders in the GitHub UI, and `board` reads it: the issue shows as blocked while the blocking issue is open, and is released by itself when that issue closes.
+     ```bash
+     # Native blocked_by link plus a comment. Any stage can call this --
+     # a dependency found during implement or address uses the same command.
+     ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add <N> <M> "<one-line reason>"
+     ```
+   - **An external blocker: something that is not an issue**, such as a PR in another project or a third party that no owner action can unblock.  Record it with the `blocked` label and a reason:
+     ```bash
+     # The blocked label plus a `Blocked by: <reason>` comment, which board shows as the reason.
+     ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh add-external <N> "<one-line reason>"
+     ```
+     If the wait is on something the owner can act on, it is not an external blocker: use `needs-attention` instead (see `agents/issue-manager.md`).
+
+   Keep going if the owner wants to proceed anyway (e.g. spec now, implement once `#<M>` lands).  A blocker is informational, not a hard stop you enforce yourself.  Nothing needs clearing when a blocking issue closes: the native link releases the issue by itself.  `blocked-dependency.sh clear <N> <M>` is only for removing a link that should not be there.  When an external blocker goes away, remove the label with `blocked-dependency.sh clear-external <N>`.
+
+   **This is the one thing auto mode never skips past, for either kind of blocker:** a blocker is a factual finding, not a stylistic decision.  Record it with the matching command, and stop for the owner regardless of what the issue's owner instructions say for this run.
+
+   **Absent a blocker of either kind, and only if the issue's owner instructions (read fresh at this
    point) explicitly says to auto-approve the design for this run**, skip the wait instead of
    pausing: take the architect's recommended option, and post a comment naming what was chosen and
    why, alongside the debt-item list above:

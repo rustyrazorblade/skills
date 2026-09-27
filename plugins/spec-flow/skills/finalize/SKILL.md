@@ -63,8 +63,9 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    # Removing a label the issue doesn't carry is a no-op returning 0 (verified), so naming all
    # seven in one call is safe. A transient auth/network failure is not: the `|| true` swallows it
    # and NONE of the seven come off. Read the result back before trusting it.
-   # The `blocked` label has a native GitHub blocked_by link behind it. Removing the label alone
-   # leaves the closed issue rendered as blocked in GitHub's own UI, indefinitely.
+   # Two kinds of blocker: the `blocked` label, only for a blocker that is not an issue, and a
+   # native GitHub blocked_by link for a dependency on another issue. sweep removes both, so the
+   # closed issue is not rendered as blocked in GitHub's own UI.
    ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-dependency.sh sweep <N>
    gh issue view <N> --json labels --jq '[.labels[].name] | map(select(
      . == "agent:active" or . == "blocked" or . == "merge-on-green"

@@ -56,6 +56,7 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   ```bash
   bash bin/bootstrap-labels.sh   # cwd inside the target repo; gh authenticated
   ```
+  `blocked` is only for a blocker that is not an issue, such as a PR in another project.  A dependency on another issue is a native GitHub issue dependency, with no label, and the board releases the issue by itself when its blocker closes.
 - **Built-in skills** — `/code-review` and `/security-review` are used by two of the review
   lenses (they degrade to an inline pass if unavailable).
 - **Agent teams (optional, default mode)** — `/spec-flow:implement` defaults to running its

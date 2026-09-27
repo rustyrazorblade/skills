@@ -293,8 +293,11 @@ check "no row renders a literal P0/P1/P2/P3 in its priority column" $?
 # ---------------------------------------------------------------------------
 # In-process render tests: the cases a PATH fixture can't reach cheaply.
 # ---------------------------------------------------------------------------
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
+
+# The one shared prelude for every in-process block: it loads board.py as `board` and defines the
+# `row(**kw)` factory. board_py runs the python on its stdin after this prelude, so each block
+# stays its own process and reports under its own check().
+board_prelude='import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
 board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
 
@@ -303,6 +306,12 @@ def row(**kw):
                 is_epic=False, agent_active=False,
                 blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
     base.update(kw); return base
+'
+board_py() {
+  { printf '%s\n' "$board_prelude"; cat; } | python3 - "$script_dir"
+}
+
+board_py <<'PYEOF'
 
 def next_up_lines(rendered):
     lines = rendered.splitlines()
@@ -332,16 +341,7 @@ for agent_active, attach_id, marker in ((True, "sess-1", "🟢 active"),
 PYEOF
 check "'next up' never recommends merging a green in-review PR, in any of the three liveness states" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # The property the caps could only approximate: the board's rendered length does not vary with the
 # size of the backlog. Same state twice, differing only in how many ungroomed issues exist.
@@ -375,16 +375,7 @@ assert not any(l.startswith("  - 16:") for l in lines), f"'next up' named the ow
 PYEOF
 check "backlog size does not change the board's length, and BLOCKED ON YOU reports without recommending" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 assert [board.keycap(p) for p in ("P0", "P1", "P2", "P3")] == ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 assert board.keycap(None) == board.keycap("P9") == "  ", "an unknown priority must render the blank"
@@ -409,16 +400,7 @@ PYEOF
 check "priority renders as a keycap, and a prioritized row stays aligned with an unprioritized one" $?
 
 # Separate block so a failure below reports under its own name, not the render checks'.
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # An unknown status: label must land in a visible bucket, not vanish from the board entirely.
 out2 = board.render_board([row(number=99, status="in-progres", mine=False, assignee="alice")], "me", 0)
@@ -472,16 +454,7 @@ check "unknown status label is rendered, CI states map correctly, null labels do
 # cannot reach cheaply. One block per property, each with its own check(), so a
 # failure reports under its own name rather than the whole cap's.
 # ---------------------------------------------------------------------------
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -515,16 +488,7 @@ assert not any("#900" in line for line in rendered), \
 PYEOF
 check "'next up' still names a ready issue the cap withheld" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -559,16 +523,7 @@ assert "1 more readys" not in six, f"a single withheld row read as plural:\n{six
 PYEOF
 check "the board's length holds at 6 and at 506 ready issues, each reporting its own withheld count" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -601,16 +556,7 @@ assert "3 more ready" in out, f"wrong withheld count at ready_limit=2 over five 
 PYEOF
 check "the cap renders the highest-priority rows, not the first N given" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.
@@ -646,16 +592,7 @@ assert "more ready" not in out, f"a withheld line rendered below the cap:\n{out}
 PYEOF
 check "at and below the cap every ready row renders, with no withheld line and no negative count" $?
 
-python3 - "$script_dir" <<'PYEOF'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("board", pathlib.Path(sys.argv[1]) / "board.py")
-board = importlib.util.module_from_spec(spec); spec.loader.exec_module(board)
-
-def row(**kw):
-    base = dict(number=1, title="t", url="u", status=None, priority="P1", assignee="me", mine=True,
-                is_epic=False, agent_active=False,
-                blocked=False, needs_attention=False, ci=None, pr_number=None, attach_id=None)
-    base.update(kw); return base
+board_py <<'PYEOF'
 
 # Rows inside ONE block, never over the whole board: a ready row rendered under BLOCKED ON YOU
 # carries the same status column, so a whole-board scan counts it under two headers.

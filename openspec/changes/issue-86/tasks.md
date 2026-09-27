@@ -16,9 +16,9 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 2. `test-board.sh`: consolidate the row helper
 
-- [ ] 2.1 Move the ~9 copies of the `row(**kw)` helper in `scripts/test-board.sh` to one shared
+- [x] 2.1 Move the ~9 copies of the `row(**kw)` helper in `scripts/test-board.sh` to one shared
       definition, and point every check at it. Change no fixture and no assertion in this task.
-- [ ] 2.2 Run `test-board.sh`; every existing check must pass.
+- [x] 2.2 Run `test-board.sh`; every existing check must pass.
 
 ## 3. `board.py`: tests first
 

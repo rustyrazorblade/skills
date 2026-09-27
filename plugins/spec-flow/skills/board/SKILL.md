@@ -52,7 +52,7 @@ whole queue. A value below 1 is a usage error.
 
 ## Extending the board
 
-The classification rules (what counts as "blocked on you", "stalled", "claimed", the "next up"
+The classification rules (what counts as "blocked", "blocked on you", "stalled", "claimed", the "next up"
 ladder, epic exclusion, PR/CI correlation) live in `scripts/board.py` itself, not here. That file
 is the single authority: each rule is stated in a comment beside the code implementing it. This
 page covers invocation and output only, and deliberately does not restate any rule — read the

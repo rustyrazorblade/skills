@@ -68,17 +68,17 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 6. `blocked-dependency.sh`: implementation
 
-- [ ] 6.1 Rewrite `add`: list existing links, POST only when M is absent, post
+- [x] 6.1 Rewrite `add`: list existing links, POST only when M is absent, post
       `⛔ Blocked on #M — <reason>`, no label; report partial failures as designed.
-- [ ] 6.2 Add `add-external`: label, then `Blocked by: <reason>`; report partial failures.
-- [ ] 6.3 Rewrite `clear`: find the link to M in this repo, DELETE it, post the removal comment; no
+- [x] 6.2 Add `add-external`: label, then `Blocked by: <reason>`; report partial failures.
+- [x] 6.3 Rewrite `clear`: find the link to M in this repo, DELETE it, post the removal comment; no
       label change; exit 0 with no comment when absent; exit 1 saying the link is still there on a
       failed list or delete.
-- [ ] 6.4 Add `clear-external`: exact label match, remove it, post `✅ Unblocked`; exit 0 with no
+- [x] 6.4 Add `clear-external`: exact label match, remove it, post `✅ Unblocked`; exit 0 with no
       comment when absent; exit 1 saying the board will keep showing it blocked on failure.
-- [ ] 6.5 Leave `sweep` unchanged; update `usage()` to list all five subcommands; update the header
+- [x] 6.5 Leave `sweep` unchanged; update `usage()` to list all five subcommands; update the header
       comment to the new premise.
-- [ ] 6.6 Run `test-blocked-dependency.sh`; every check passes.
+- [x] 6.6 Run `test-blocked-dependency.sh`; every check passes.
 
 ## 7. Spawn check in `agents/project-manager.md`
 

@@ -57,14 +57,14 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 5. `blocked-dependency.sh`: tests first
 
-- [ ] 5.1 Write `scripts/test-blocked-dependency.sh`: a fake `gh` on PATH that records each call and
+- [x] 5.1 Write `scripts/test-blocked-dependency.sh`: a fake `gh` on PATH that records each call and
       returns scripted results. One check per criterion: `add` (new link, existing link, link
       failure, comment failure, no label); `add-external` (label and comment, newer reason, partial
       failure); `clear` (link removed with the removal comment that does not say landed and leaves
       the label, no link in this repo, same number in another repo, delete failure); `clear-external`
       (labeled, unlabeled, substring-only label, removal failure); `sweep` (same calls as today);
       usage (missing and non-numeric arguments, unknown subcommand, all five listed, exit 2).
-- [ ] 5.2 Run it; the new-behavior checks fail against the current script.
+- [x] 5.2 Run it; the new-behavior checks fail against the current script.
 
 ## 6. `blocked-dependency.sh`: implementation
 

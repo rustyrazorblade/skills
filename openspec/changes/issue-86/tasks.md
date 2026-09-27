@@ -82,7 +82,7 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 7. Spawn check in `agents/project-manager.md`
 
-- [ ] 7.1 In the spawn instructions, add: before calling `spawn-issue-manager.sh`, look for the
+- [x] 7.1 In the spawn instructions, add: before calling `spawn-issue-manager.sh`, look for the
       issue in the board's Blocked section; if present, show its lines to the owner as data, ask
       whether to spawn, and spawn only on a yes; on a no, spawn nothing and change no label; if
       absent, spawn as today. State that the blocker list comes from the board, not from `gh`.

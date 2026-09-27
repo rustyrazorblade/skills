@@ -22,11 +22,11 @@ associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 3. `board.py`: tests first
 
-- [ ] 3.1 Make the fake `gh` in `test-board.sh` fail when the issue-list call does not request
+- [x] 3.1 Make the fake `gh` in `test-board.sh` fail when the issue-list call does not request
       `blockedBy`.
-- [ ] 3.2 Move the existing blocked fixture (issue 15) to a `Blocked by:` comment, and update its
+- [x] 3.2 Move the existing blocked fixture (issue 15) to a `Blocked by:` comment, and update its
       assertions to the new Blocked row and the bare `🔒 BLOCKED` marker.
-- [ ] 3.3 Add a fixture, with `blockedBy` in the `{"nodes": [...], "totalCount": N}` shape, and a
+- [x] 3.3 Add a fixture, with `blockedBy` in the `{"nodes": [...], "totalCount": N}` shape, and a
       check for each case: open native blocker only; several open native blockers with one closed;
       closed native blocker (released); blocker closed as not planned (released); label only with a
       `Blocked by:` comment; label and open native blocker together; an `add-external` comment
@@ -36,7 +36,7 @@ associative arrays, no `mapfile`, no GNU-only flags.
       BLOCKED ON YOU with the bare marker; a blocked stalled issue with its spawn command marked; a
       cross-repo native blocker; a missing or null `blockedBy`; the summary counting both kinds; a
       failing `gh issue list` (non-zero exit, gh error on stderr, no board).
-- [ ] 3.4 Run `test-board.sh`; the new checks fail against the current `board.py`.
+- [x] 3.4 Run `test-board.sh`; the new checks fail against the current `board.py`.
 
 ## 4. `board.py`: implementation
 

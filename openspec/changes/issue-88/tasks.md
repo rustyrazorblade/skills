@@ -4,13 +4,13 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 1. Before you start
 
-- [ ] 1.1 Check whether `openspec/specs/owner-presentation/spec.md` exists (repo root).  If issue 82's change was archived, rewrite this change's `owner-presentation` delta: move the requirements it supersedes (listed in `overrides.md`) to `## MODIFIED Requirements` or `## REMOVED Requirements`, then run `openspec validate issue-88 --type change --strict --json`.  Do the same for `idea-refinement` if issue 77's change was archived.
+- [ ] 1.1 Check whether `openspec/specs/owner-presentation/spec.md` exists (repo root).  If issue 82's change was archived, rewrite this change's `owner-presentation` delta: move the requirements it supersedes (listed in `overrides.md`) to `## MODIFIED Requirements` or `## REMOVED Requirements`, then run `openspec validate issue-88 --type change --strict --json`.  If issue 77's change was archived (`openspec/specs/idea-refinement/spec.md` exists), add an `idea-refinement` delta to this change: MODIFIED "A round's questions reach the owner one at a time" without the three-per-round clause and without the "more candidate questions than the cap" scenario, and MODIFIED "Assumptions are confirmed in one pass, split by provenance" without the bulk confirm (both listed in `overrides.md`).
 - [ ] 1.2 Read the committed `**Owner answer:**` line on every `overrides.md` entry, and apply any redirect before any other task.
 
 ## 2. `scripts/issue-body.sh` and its test
 
-- [ ] 2.1 Write `scripts/test-issue-body.sh` first: a fake `gh` on `PATH` that records every call and serves the body, `lastEditedAt`, and `userContentEdits` from state files, in the pattern of `scripts/test-blocked-dependency.sh`.  Cover: `get` on a present and an absent section; `replace` and `append`; an absent section added at the end; a `## ` heading inside a ```` ``` ```` fence and inside a `~~~` fence; a duplicate target heading; a content file with a `## ` heading; a moved `lastEditedAt`; a lost edit in the window; a failed confirm, retried once; `$(...)` and backticks in the body and the content; bad arguments exit 2.
-- [ ] 2.2 Write `scripts/issue-body.sh`: `get`, `replace`, `append`; one fence-aware parser; `lastEditedAt` pre-check; `userContentEdits` post-check; section confirm with one retry; `mktemp` under `$TMPDIR`, `--body-file`, and a cleanup trap.  `set -euo pipefail`.
+- [ ] 2.1 Write `scripts/test-issue-body.sh` first: a fake `gh` on `PATH` that records every call and serves the body, `lastEditedAt`, and `userContentEdits` from state files, in the pattern of `scripts/test-blocked-dependency.sh`.  Cover: `get` on a present and an absent section; `replace` and `append`; `replace` and `append` on an absent section, each exiting non-zero with an error that names the missing section and the issue, and making no `gh issue edit` call; a target heading present only inside a fence, treated as absent; a `## ` heading inside a ```` ``` ```` fence and inside a `~~~` fence; a duplicate target heading; a content file with a `## ` heading; a moved `lastEditedAt`; a lost edit in the window; a failed confirm, retried once; `$(...)` and backticks in the body and the content; bad arguments exit 2.
+- [ ] 2.2 Write `scripts/issue-body.sh`: `get`, `replace`, `append`; one fence-aware parser; `replace` and `append` stop with an error naming the missing section, and write nothing, when the target section is absent; `lastEditedAt` pre-check; `userContentEdits` post-check; section confirm with one retry; `mktemp` under `$TMPDIR`, `--body-file`, and a cleanup trap.  `set -euo pipefail`.
 - [ ] 2.3 On a scratch issue, confirm that two body edits in quick succession show as two `userContentEdits` entries, so the post-check can tell them apart.  Record the result in a comment at the top of the script.
 - [ ] 2.4 Run both under macOS `/bin/bash` (3.2): no associative arrays, no `mapfile`, no GNU-only flags.
 
@@ -36,7 +36,8 @@ All paths are under `plugins/spec-flow/` unless stated.
 - [ ] 5.1 `agents/issue-manager.md`: pointer to the format; briefing timing ("each time you return to the session, or after a review has run") and same-turn layout; remove the batch override from the relay paragraph; add the two narrow no-bodies exceptions (a hit whose title is not enough, and the issue being folded in); the `needs-attention` comment asks one question in the format; written questions on the issue thread.
 - [ ] 5.2 `agents/project-manager.md`: pointer next to its `<number>: <title>` rule; the board and archive text stop calling themselves batch exceptions; the archive confirm is one question.
 - [ ] 5.3 `agents/product-manager.md`: each drafted question follows the format.
-- [ ] 5.4 `agents/architect.md`: each drafted question and option list follows the format.
+- [ ] 5.4 `agents/product-manager.md`: remove the per-round question limit.  The description's "up to three questions" becomes "the questions it cannot settle"; "What a round returns" drops "plus at most three questions"; the open-questions item replaces "Ask at most three per round ... anything past three stays here as an assumption and is available to a later round" with: return every question you cannot settle from the record or the repo, ranked by how much the answer changes the work, each with a recommended default.
+- [ ] 5.5 `agents/architect.md`: each drafted question and option list follows the format.
 
 ## 6. Skills
 
@@ -45,19 +46,21 @@ All paths are under `plugins/spec-flow/` unless stated.
 - [ ] 6.3 `skills/activate/SKILL.md` step 5: the tech-debt list becomes a `🧭 Adjacent specified behavior` comment; `overrides.md` entries get stable `###` headings and an `**Owner answer:**` line once answered.
 - [ ] 6.4 `skills/activate/SKILL.md` step 7: the per-entry Seam 1 flow; the redirect and one regeneration; `.spec-flow/seam1-last-shown-sha` written after the final approve question; auto-approve records "accept as written"; a hard conflict stops; the tech-debt render reads the comment with the body fallback; the options block follows the format; update the skill's description and intro text about "up to five" questions.
 - [ ] 6.5 `skills/groom/SKILL.md`: ask each closing-pass assumption in its own message with a recommendation; remove the bulk-confirm exception.
-- [ ] 6.6 `skills/setup/SKILL.md`: show check results as information; ask each item in its own message; remove the batch exemption text.
-- [ ] 6.7 `skills/address/SKILL.md`: pointer; each finding needing a decision is its own question on the issue.
-- [ ] 6.8 `skills/implement/SKILL.md`: every PR-body write (step 2b, step 4c, the failure path, step 5) starts with `close-on-merge.sh closes <N>` and goes through `--body-file`; stop if `closes` fails; PR bodies carry information only plus "Questions about this PR are on the issue."; each unresolved finding is its own question; pass `alsoCloses` to the workflow; read the adjacent-behavior comment with the body fallback.
-- [ ] 6.9 `skills/implement/implement.workflow.js`: required `alsoCloses` with validation; the tech-debt PR body starts with `Closes #<issue>` and one `Closes #M` per entry; the tech-debt prompt reads the `🧭 Adjacent specified behavior` comment with the body fallback.
-- [ ] 6.10 `skills/finalize/SKILL.md` step 2: run `close-on-merge.sh close-merged <N> <PR>` before step 3; retry once; on a second failure, stop with the worktree kept and name the open issue and the surviving labels.
+- [ ] 6.6 `skills/groom/SKILL.md`: remove the per-round question limit.  The description drops "asking at most three questions"; step 4's "and up to three questions" becomes "and its questions"; "Relaying questions. One at a time, at most three per round." becomes one at a time, every question the round returns, listed first as bullets; delete the "More than three candidates?" bullet; reword "a round that asks three has not thereby failed it" so it names no number.  Keep the no-default drop rule and its `**Dropped:**` entry.
+- [ ] 6.7 `skills/setup/SKILL.md`: show check results as information; ask each item in its own message; remove the batch exemption text.
+- [ ] 6.8 `skills/address/SKILL.md`: pointer; each finding needing a decision is its own question on the issue.
+- [ ] 6.9 `skills/implement/SKILL.md`: every PR-body write (step 2b, step 4c, the failure path, step 5) starts with `close-on-merge.sh closes <N>` and goes through `--body-file`; stop if `closes` fails; PR bodies carry information only plus "Questions about this PR are on the issue."; each unresolved finding is its own question; pass `alsoCloses` to the workflow; read the adjacent-behavior comment with the body fallback.
+- [ ] 6.10 `skills/implement/implement.workflow.js`: required `alsoCloses` with validation; the tech-debt PR body starts with `Closes #<issue>` and one `Closes #M` per entry; the tech-debt prompt reads the `🧭 Adjacent specified behavior` comment with the body fallback.
+- [ ] 6.11 `skills/finalize/SKILL.md` step 2: run `close-on-merge.sh close-merged <N> <PR>` before step 3; retry once; on a second failure, stop with the worktree kept and name the open issue and the surviving labels.
 
 ## 7. Checks
 
 - [ ] 7.1 Search the plugin for any text that allows several questions in one message or a batch override.  None may remain.
-- [ ] 7.2 Search the plugin outside `docs/workflow.md` for a copy of the four-part format.  None may remain.
-- [ ] 7.3 Search the plugin for `gh issue edit` with `--body` on an existing issue outside `scripts/issue-body.sh`.  None may remain.
-- [ ] 7.4 Walk every acceptance criterion in `ac-coverage.md` against the edited files.
-- [ ] 7.5 Run `scripts/test-issue-body.sh`, `scripts/test-close-on-merge.sh`, and `scripts/test-blocked-dependency.sh`.
+- [ ] 7.2 Search the plugin for a hard-coded question limit ("at most three", "up to three questions", "up to five", "per round" next to a number).  None may remain.
+- [ ] 7.3 Search the plugin outside `docs/workflow.md` for a copy of the four-part format.  None may remain.
+- [ ] 7.4 Search the plugin for `gh issue edit` with `--body` on an existing issue outside `scripts/issue-body.sh`.  None may remain.
+- [ ] 7.5 Walk every acceptance criterion in `ac-coverage.md` against the edited files.
+- [ ] 7.6 Run `scripts/test-issue-body.sh`, `scripts/test-close-on-merge.sh`, and `scripts/test-blocked-dependency.sh`.
 
 ## 8. Version
 

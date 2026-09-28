@@ -54,7 +54,7 @@ The spec is split four ways.  Each capability has one reason to change.
 5. **The pre-send check**, word for word: "Could the owner answer this after switching tabs, with no other context, and without opening a file or a link?"  If not, the agent rewrites the question.
 6. **The process-vocabulary ban.**  No overlap, dependency link, seam, fast path, lens, or stop in a question, unless the same sentence says in plain words what it does.
 7. **One question per message, no exceptions.**  Anything that needs the owner's decision is its own message.  A list may be shown only when nothing in it needs an answer.  When an agent has several questions, it lists them all first as bullets, for context, then asks them one per message.  This covers each unresolved fix-loop finding, each Seam 1 override or conflict, each `groom` assumption, each design choice, and each debt item.
-8. **No hard-coded limit** on the number of questions.  The owner may run a conversation as long as they want.
+8. **No hard-coded limit** on the number of questions.  The owner may run a conversation as long as they want.  This removes the five-question cap in `activate` step 1 and the three-questions-per-round limit in `groom` and `product-manager` (Seam 1 redirect).
 9. **One worked example**: the 928/971 question, rewritten to the format.
 
 Removed from the issue 82 text: rule 3 (the owner may override to a batch), rule 4's escape for withholding a recommendation, the "rules split by kind of presentation" paragraph, and the "Deliberate batch presentations" list.  Showing information stays allowed: the board, a rendered spec, `setup`'s check results, a residual-findings list in a PR body.  None of these may carry a question.
@@ -82,6 +82,15 @@ The briefing is its own block, not part of each question.  It is sent each time 
 - `.spec-flow/seam1-last-shown-sha` is written only after the final approve question is asked.  A resumed session with pending entries asks the next pending entry, not the whole render.
 - Under auto-approve, the agent answers each entry "accept as written" and commits that answer.  A hard conflict still always stops for the owner.
 
+### `groom` refinement rounds: no per-round limit
+
+At Seam 1 the owner removed issue 77's three-questions-per-round limit: "Remove it."  No hard-coded limit remains anywhere.
+
+- `agents/product-manager.md` returns every question it cannot settle from the refinement record or the repo, ranked by how much the answer changes the work, each with a recommended default.  It no longer parks the fourth and later questions as assumptions for a later round.  The description, the "What a round returns" line, and the open-questions item lose "at most three".
+- `skills/groom/SKILL.md` relays every question a round returns: listed first as bullets, then one per message, in ranked order.  The "More than three candidates?" rule is deleted, and the description drops "asking at most three questions".
+- Unchanged: one question per message; a question without a recommended default is not relayed and is recorded as `**Dropped:**`; the loop has no round cap; `groom`, not the agent, decides when the loop ends.
+- This replaces issue 77's per-round size in `idea-refinement`, which is not archived yet.  `overrides.md` records the conflict and the archive order.
+
 ### `activate` step 1: backlog hits
 
 - For each hit M, before asking, the agent runs one `gh issue view <M> --json createdAt,author,state,labels` and puts those facts in the question.  If the title is not enough to say why M exists, it reads M's full text.  It reads no other backlog issue in full.  This is the first narrow exception to the no-bodies rule in `agents/issue-manager.md`.
@@ -99,12 +108,14 @@ The briefing is its own block, not part of each question.  It is sent each time 
 
 ```
 issue-body.sh get     <N> <heading>          # stdout: the section's content; exit 1 if absent
-issue-body.sh replace <N> <heading> <file>   # replace the section's content; add it at the end if absent
-issue-body.sh append  <N> <heading> <file>   # append lines to the section; add it at the end if absent
+issue-body.sh replace <N> <heading> <file>   # replace the section's content; error, no write, if absent
+issue-body.sh append  <N> <heading> <file>   # append lines to the section; error, no write, if absent
 ```
 
+- **A missing section.**  When the body has no `## <heading>` outside a fence, `replace` and `append` exit non-zero with an error that names the missing section and the issue, and change nothing.  They never add the section.  The calling stage stops and tells the owner.  A heading that appears only inside a fence counts as absent.  (Seam 1 redirect; replaces "add it at the end of the body".)
+
 - **Parsing.**  One shared parser.  A line that starts with `## ` is a heading only outside a ```` ``` ```` or `~~~` fence.  A section runs from its heading to the next heading outside a fence, or to the end.  `###` lines belong to the section.  The target matches `## <heading>` exactly.
-- **Errors that change nothing:** a duplicate target heading (the message names the issue and the heading); a content file that holds a `## ` heading outside a fence.
+- **Errors that change nothing:** a missing target section (the message names the section and the issue); a duplicate target heading (the message names the issue and the heading); a content file that holds a `## ` heading outside a fence.
 - **Pre-check.**  The script reads the body and GraphQL `lastEditedAt` together.  Just before the write it reads `lastEditedAt` again.  If it moved, it re-reads the body and re-applies its one-section change to the new body.
 - **Post-check.**  After the write, it reads `userContentEdits` and the body.  If any edit other than its own landed between its read and its write, it prints each lost version's timestamp and editor and exits non-zero.  It does not retry, because a retry could overwrite the other edit again.  The stage stops and tells the owner; the old text is recoverable from GitHub's edit history.
 - **Confirm.**  If no other edit landed, it confirms its section holds the new content and every other section is still there.  If not, it retries once, then errors.
@@ -156,12 +167,12 @@ Every temp file step 1 writes goes under `$TMPDIR` via `mktemp`: the shortlist, 
 
 ### Choices made while writing the spec
 
-These are small choices the decisions did not state.  The owner can redirect any of them at Seam 1.
+These are small choices the decisions did not state.  The owner answered each one at Seam 1.
 
-- Only record comments authored by the authenticated `gh` user count.  A public repo lets anyone comment, and a stranger's `🔗 Closes on merge` comment must not close issues.
-- `append` and `replace` add the section at the end of the body when it is absent.
-- A tech-debt reader falls back to the old body section when no `🧭 Adjacent specified behavior` comment exists.
-- A needs-attention question's first line is `🆘 Needs attention: Question k of n: <the decision>`.
+- Only record comments authored by the authenticated `gh` user count.  A public repo lets anyone comment, and a stranger's `🔗 Closes on merge` comment must not close issues.  **Owner answer: confirmed.**
+- ~~`append` and `replace` add the section at the end of the body when it is absent.~~  **Owner answer: changed (redirect).**  `issue-body.sh` stops with an error that names the missing section, and changes nothing.
+- A tech-debt reader falls back to the old body section when no `🧭 Adjacent specified behavior` comment exists.  **Owner answer: confirmed.**
+- A needs-attention question's first line is `🆘 Needs attention: Question k of n: <the decision>`.  **Owner answer: confirmed.**
 
 ## GitHub facts verified
 
@@ -322,11 +333,37 @@ Each entry is one option presented at the design stop.  "Owner override" marks a
 - **Every temp file under `$TMPDIR` via `mktemp`; scripts clean up on exit; the fold-in draft deleted after posting (chosen).**
 - **Files in the checkout.**  Rejected: step 1 may run before isolation, so a file could land in the primary checkout.
 
+### Seam 1 redirect: the per-round question limit in `groom`
+
+- **Remove the limit; `product-manager` returns every question it cannot settle and `groom` relays all of them, one per message (chosen; owner redirect).**  The owner: "Remove it."  This follows Q14: no hard-coded limit anywhere.
+- **Keep three questions per round (the spec as first written).**  Rejected by the owner.  The loop already runs as many rounds as needed, but a fixed size is still a hard-coded limit, and it pushes the fourth and later questions into assumptions until a later round.
+
+### Seam 1 redirect: `issue-body.sh` on a missing section
+
+- **Stop with an error that names the missing section, and change nothing (chosen; owner redirect).**
+- **Add the section at the end of the body (the spec writer's choice).**  Rejected by the owner.  A missing section means the body is not shaped as the stage expects, and adding one silently changes the issue's structure without the owner seeing it.
+
+### S2: whose `🔗 Closes on merge` comments count
+
+- **Only comments by the `gh` user the pipeline runs as (chosen; confirmed at Seam 1).**
+- **Comments from anyone with write access to the repo.**  Rejected: it needs a permission lookup per commenter, and a collaborator's hand-typed marker comment would close issues without the pipeline having asked the owner.
+
+### S4: where a tech-debt reader finds the adjacent-behavior list
+
+- **The newest `🧭 Adjacent specified behavior` comment, falling back to the old body section when no comment exists (chosen; confirmed at Seam 1).**
+- **Read only the comment.**  Rejected: an issue activated before this change has only the body section, so its list would be silently lost to the review panel.
+
+### S5: the first line of a needs-attention question
+
+- **`🆘 Needs attention: Question k of n: <the decision>` (chosen; confirmed at Seam 1).**
+- **`🆘 Needs attention: <the decision> (question k of n)`, decision first, number after.**  Rejected: the position in the series is easy to miss at the end of a long line, and lines no longer line up across a series.
+- **`🆘 Needs attention: <the decision>`, decision only.**  Rejected: the owner cannot tell from the board or the thread how many questions remain or which one is open.
+
 ## Risks / Trade-offs
 
 - **Title injection.**  Titles are written only by the scripts, through temp files and `--body-file`.  M's body is data when it is read for fold-in.
 - **The no-bodies rule.**  Exactly two narrow exceptions are added, each for one named issue.
 - **A search for M's PR finds this PR too.**  Accepted; the close option warns when M is in progress.
 - **Blast radius.**  About 13 prompt files, one required JS argument, two new scripts with tests, no label, board, or schema change.
-- **Issue 82's requirements.**  Several of them contradict this change and are not archived yet.  `overrides.md` lists each one; task 1.1 handles the archive order.
+- **Issue 82's and issue 77's requirements.**  Several of them contradict this change and are not archived yet.  `overrides.md` lists each one; task 1.1 handles the archive order.
 - **Many more messages.**  One question per message makes a long session longer.  The owner chose this explicitly.

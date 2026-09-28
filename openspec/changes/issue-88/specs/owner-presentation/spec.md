@@ -172,11 +172,30 @@ Each entry in `overrides.md` SHALL have a stable heading and, once answered, a c
 - **THEN** Seam 1 stops for the owner on that entry
 
 ### Requirement: No hard-coded limit on questions
-No skill or agent SHALL cap the number of questions an agent may ask the owner in a conversation.  The five-question cap in `activate` step 1 SHALL be removed.
+No skill or agent SHALL cap the number of questions an agent may ask the owner in a conversation, in a stage, or in a round.  The five-question cap in `activate` step 1 SHALL be removed.  The "at most three questions per round" limit in `skills/groom/SKILL.md` and `agents/product-manager.md` SHALL be removed, including from each file's description.
 
 #### Scenario: Step 1 has seven questions
 - **WHEN** `activate` step 1 has seven questions for the owner
 - **THEN** it lists all seven and asks each one in turn
+
+#### Scenario: A reader searches for a question limit
+- **WHEN** a reader searches `skills/groom/SKILL.md`, `agents/product-manager.md`, `skills/activate/SKILL.md`, and the rest of the plugin for a number that caps how many questions reach the owner
+- **THEN** none exists, including "at most three per round", "up to three questions", and "up to five"
+
+### Requirement: A refinement round relays every question it returns, with no per-round limit
+`product-manager` SHALL return every question a round cannot settle from the refinement record or the repo, ranked by how much the answer changes the work, each with a recommended default.  It SHALL NOT hold a question back to meet a per-round size.  `groom` SHALL relay every question the round returns, one per message, after listing them all as bullets.  It SHALL NOT drop or defer a question because of how many the round returned.  The rule that a question arriving without a recommended default is not relayed stays in force.
+
+#### Scenario: A round returns five questions
+- **WHEN** a `product-manager` round returns five questions, each with a recommended default
+- **THEN** `groom` lists all five as bullets, then asks each one in its own message, in the ranked order, and asks the next only after the owner answers
+
+#### Scenario: A round has more open items than three
+- **WHEN** a round finds six open items it cannot settle from the record or the repo
+- **THEN** it returns all six as questions, and none is moved to a later round or turned into an assumption because of a per-round size
+
+#### Scenario: A question without a default in a large round
+- **WHEN** a round returns four questions and one has no recommended default
+- **THEN** `groom` relays the other three, and records the fourth as dropped
 
 ### Requirement: The briefing comes first, in the same turn as the first question
 When the owner returns to the session, or after a review has run, the agent SHALL send, in one turn: the briefing and the bullet list of upcoming questions, then a horizontal rule, then the first question.  Later questions in the same series SHALL carry no briefing.  Each question SHALL still carry the format's parts 2 and 3.

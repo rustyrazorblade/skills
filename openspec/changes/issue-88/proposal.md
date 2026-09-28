@@ -23,7 +23,7 @@ All paths are under `plugins/spec-flow/`.
 - Removed: rule 3 (the owner may override to a batch), rule 4's escape for withholding a recommendation, the "rules split by kind" paragraph, and the list of deliberate batch presentations.
 - The briefing: in the same turn, the briefing and the bullet list of questions come first, then a horizontal rule, then the first question.  Later questions in the series carry no briefing.
 - Written questions live only on the issue thread, as comments: "Question k of n", all n listed, only question k asked, and the line "Reply here; the next question follows when the session resumes."  A needs-attention series uses the `🆘 Needs attention:` prefix.  A PR body carries information only, plus "Questions about this PR are on the issue."  The next question goes where the owner answered.  A reply is confirmed with "✅ Question k answered: …".  No polling.
-- No hard-coded limit on the number of questions.
+- No hard-coded limit on the number of questions: the five-question cap in `activate` step 1 and the three-questions-per-round limit in `groom` and `product-manager` are both removed.
 - Naming gets one sentence: a PR that also carries `Closes #M` is found by a search for issue M's PR too.
 - A new rule: no stage edits an existing issue body by hand; it uses `scripts/issue-body.sh`.  Creating a new issue is not an edit.  The body changes only for requirement changes.
 
@@ -34,12 +34,13 @@ Each file below points to the contract at the place it asks the owner something,
 - `agents/issue-manager.md`: pointer; the briefing rule reworded ("each time you return to the session, or after a review has run", and the same-turn layout); the relay paragraph loses the batch override; the no-bodies rule gets two narrow exceptions (a backlog hit whose title is not enough, and the issue being folded in); the `needs-attention` comment asks one question.
 - `agents/project-manager.md`: pointer next to its `<number>: <title>` rule; the board and archive text no longer call themselves batch exceptions; the archive confirm is one question.
 - `agents/product-manager.md` and `agents/architect.md`: each drafted question or option list follows the format.
+- `agents/product-manager.md`: a round returns every question it cannot settle from the record or the repo; the "at most three per round" limit is removed from the description, the return format, and the open-questions rule.
 - `skills/activate/SKILL.md`:
   - Step 1: the five-question cap is removed; the backlog-hit question is rewritten (below); the scope rewrite goes through `issue-body.sh`; all temp files go under `$TMPDIR` via `mktemp`.
   - Step 4: each design choice and each debt item is its own message.
   - Step 5: the tech-debt adjacent-behavior list becomes a `🧭 Adjacent specified behavior` comment.
   - Step 7: the per-override Seam 1 flow (below); the "Your options" block follows the format.
-- `skills/groom/SKILL.md`: each closing-pass assumption is asked in its own message with a recommendation; the bulk-confirm exception is removed.
+- `skills/groom/SKILL.md`: each closing-pass assumption is asked in its own message with a recommendation; the bulk-confirm exception is removed; every question a round returns is relayed, one at a time, with no per-round limit (the "at most three per round" rule and the "More than three candidates?" rule are removed, and the description drops "asking at most three questions").
 - `skills/setup/SKILL.md`: the check results are shown as information; each item needing an answer is asked in its own message; the batch exemption is removed.
 - `skills/address/SKILL.md` and `skills/implement/SKILL.md`: pointers; each unresolved fix-loop finding that needs a decision is its own question on the issue; the PR body holds findings as information only.
 - `skills/implement/SKILL.md` and `skills/implement/implement.workflow.js`: read the adjacent-behavior comment; every PR-body write starts with the `closes` block.
@@ -62,7 +63,7 @@ Each file below points to the contract at the place it asks the owner something,
 
 **New script: `scripts/issue-body.sh`**
 
-- Subcommands `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`, each on one `## ` section.
+- Subcommands `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`, each on one `## ` section.  When the target section is absent, `replace` and `append` stop with an error that names the missing section, and change nothing.
 - Fence-aware parsing: a `## ` line is a heading only outside ```` ``` ```` and `~~~` fences.  A duplicate target heading is an error that names the issue and changes nothing.
 - Records GraphQL `lastEditedAt` at read.  Re-checks it just before the write and re-reads if it moved.
 - After the write, reads `userContentEdits`.  If any other edit landed between the read and the write, it prints the lost version's timestamp and editor and exits non-zero.  It confirms its section landed and no section was lost; it retries once, then errors.
@@ -98,7 +99,7 @@ Each file below points to the contract at the place it asks the owner something,
 
 ### Extended Capabilities
 
-- `owner-presentation`: added by issue 82's change, which is not archived yet.  This change adds requirements to it.  See `overrides.md` for the requirements of issue 82 that this change supersedes.
+- `owner-presentation`: added by issue 82's change, which is not archived yet.  This change adds requirements to it.  See `overrides.md` for the requirements of issue 82 that this change supersedes.  It also carries the requirements that replace two of issue 77's `idea-refinement` rules, the bulk assumption confirm and the three-questions-per-round limit; issue 77's change is not archived yet either.
 
 ## Impact
 

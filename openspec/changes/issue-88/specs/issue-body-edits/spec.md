@@ -35,7 +35,7 @@ A stage SHALL change an existing issue body only for a requirement change: the `
 - **THEN** the readers use the body section
 
 ### Requirement: `issue-body.sh` edits one named section
-`scripts/issue-body.sh` SHALL provide `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`.  Each SHALL act on the one section headed `## <heading>`.  `get` SHALL print the section's content and exit 1 when the section is absent.  `replace` SHALL replace the section's content.  `append` SHALL add the file's lines to the end of the section.  When the section is absent, `replace` and `append` SHALL add it at the end of the body.  No other section SHALL change.
+`scripts/issue-body.sh` SHALL provide `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`.  Each SHALL act on the one section headed `## <heading>`.  `get` SHALL print the section's content and exit 1 when the section is absent.  `replace` SHALL replace the section's content.  `append` SHALL add the file's lines to the end of the section.  No other section SHALL change.
 
 #### Scenario: Replacing the scope
 - **WHEN** `replace 88 "Scope" <file>` runs
@@ -45,9 +45,20 @@ A stage SHALL change an existing issue body only for a requirement change: the `
 - **WHEN** `append 88 "Acceptance criteria" <file>` runs
 - **THEN** the file's lines follow the section's existing lines, and nothing else changes
 
-#### Scenario: An absent section
+### Requirement: A missing target section is an error that changes nothing
+When the body has no `## <heading>` section outside a fence, `replace` and `append` SHALL exit non-zero with an error that names the missing section and the issue, and SHALL NOT write the body.  They SHALL NOT add the section.  The calling stage SHALL stop and tell the owner which section is missing.
+
+#### Scenario: append on an absent section
 - **WHEN** `append 88 "Assumptions" <file>` runs and the body has no `## Assumptions` section
-- **THEN** a `## Assumptions` section holding the file's lines is added at the end
+- **THEN** the script exits non-zero, the error names `## Assumptions` and issue 88, and no `gh issue edit` call is made
+
+#### Scenario: replace on an absent section
+- **WHEN** `replace 88 "Scope" <file>` runs and the body has no `## Scope` section
+- **THEN** the script exits non-zero, the error names `## Scope` and issue 88, and the body is unchanged
+
+#### Scenario: The only match is inside a code fence
+- **WHEN** `replace 88 "Scope" <file>` runs and the body's only `## Scope` line is inside a fenced block
+- **THEN** the section counts as absent, the script exits non-zero naming `## Scope`, and the body is unchanged
 
 ### Requirement: Section parsing is fence-aware and refuses a duplicate heading
 A line that starts with `## ` SHALL count as a heading only outside a ```` ``` ```` or `~~~` fence.  A section SHALL run from its heading to the next heading outside a fence, or to the end of the body.  A duplicate target heading SHALL be an error that names the issue and the heading and changes nothing.  A content file that holds a `## ` heading outside a fence SHALL be an error that changes nothing.

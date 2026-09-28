@@ -1,6 +1,6 @@
 # Acceptance-criteria coverage: issue 88
 
-Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from section 6 of the architect's design.  **Critic 1** is a finding from the first `design-critic` pass; its raw text is not in the change files, so each row names the finding through the owner decision that resolved it.  **Critic 2** is a finding from the second pass, in `.spec-flow/design-decisions.md`.
+Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from section 6 of the architect's design.  **Critic 1** is a finding from the first `design-critic` pass; its raw text is not in the change files, so each row names the finding through the owner decision that resolved it.  **Critic 2** is a finding from the second pass, in `.spec-flow/design-decisions.md`.  **Seam 1** is an owner answer at spec review (S2–S5 and the two redirects in `.spec-flow/design-decisions.md` and `.spec-flow/seam1-feedback.md`).
 
 | Source | Requirement | Covering scenario(s) | Status |
 |--------|-------------|----------------------|--------|
@@ -54,3 +54,8 @@ Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from sec
 | Critic 2 | 8: `close-on-merge.sh check` undefined; the body rule also catches issue creators | `issue-body-edits: groom creates an issue` (`check` is dropped, per C8) | ✅ Covered |
 | Critic 2 | 9: `close-merged` leaves `blocked`, `merge-on-green`, and native links on M | `issue-closure: GitHub left M open`; `issue-closure: A label survives` | ✅ Covered |
 | Critic 2 | 10: step 1 temp files land in the checkout before isolation | `backlog-overlap: Step 1 before isolation`; `backlog-overlap: The fold-in draft is written` | ✅ Covered |
+| Seam 1 | Redirect: no per-round question limit in `groom` or `product-manager`; no hard-coded limit anywhere | `owner-presentation: A round returns five questions`; `owner-presentation: A round has more open items than three`; `owner-presentation: A question without a default in a large round`; `owner-presentation: A reader searches for a question limit` | ✅ Covered |
+| Seam 1 | Redirect: `issue-body.sh` stops with an error naming the missing section and changes nothing | `issue-body-edits: append on an absent section`; `issue-body-edits: replace on an absent section`; `issue-body-edits: The only match is inside a code fence` | ✅ Covered |
+| Seam 1 | S2: only record comments by the pipeline's `gh` user count | `issue-closure: A stranger's comment` | ✅ Covered |
+| Seam 1 | S4: the adjacent-behavior reader falls back to the old body section | `issue-body-edits: An issue activated before this change` | ✅ Covered |
+| Seam 1 | S5: needs-attention first line `🆘 Needs attention: Question k of n: <the decision>` | `owner-presentation: A needs-attention series`; `owner-presentation: implement stops on a failed gate` | ✅ Covered |

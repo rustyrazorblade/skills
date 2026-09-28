@@ -241,22 +241,33 @@ case "$cmd" in
 
   withdraw)
     m="$2"
+    # Safe to re-run after a partial failure. The withdrawal comment on N, the link, and the note
+    # on M are each checked and done only if still due. The link belongs to this record only while
+    # the record is active or M's newest note still says it closes with N; otherwise it may be a
+    # blocking link the owner chose, and it is left alone.
     records="$(active_records "$n")" || die "couldn't read #${n}'s comments. Nothing was withdrawn."
-    if ! is_active "$records" "$m"; then
+    note="$(note_state "$m" "$n")" || die "couldn't read #${m}'s comments. Nothing was withdrawn."
+    active=no
+    if is_active "$records" "$m"; then active=yes; fi
+    if [[ "$active" == no && "$note" != on ]]; then
       echo "close-on-merge: #${n} has no active record for #${m}; nothing to withdraw."
       exit 0
     fi
     n_title="$(title_of "$n")" || die "couldn't read issue #${n}'s title. Nothing was withdrawn."
-    printf '%s%s\n' "$WITHDRAWN" "$m" | comment "$n" \
-      || die "couldn't post the withdrawal on #${n}. Nothing was withdrawn."
+    if [[ "$active" == yes ]]; then
+      printf '%s%s\n' "$WITHDRAWN" "$m" | comment "$n" \
+        || die "couldn't post the withdrawal on #${n}. Nothing was withdrawn."
+    fi
     if ! bid="$(link_id "$m" "$n")"; then
-      die "the record is withdrawn on #${n}, but #${m}'s blocked_by links could not be read. Remove the link with: blocked-dependency.sh clear ${m} ${n}"
+      die "the record is withdrawn on #${n}, but #${m}'s blocked_by links could not be read. Re-run withdraw."
     fi
     if [[ -n "$bid" ]] && ! gh api "repos/{owner}/{repo}/issues/${m}/dependencies/blocked_by/${bid}" -X DELETE > /dev/null 2> "$tmp/err"; then
-      die "the record is withdrawn on #${n}, but the link was not removed ($(cat "$tmp/err")). Remove it with: blocked-dependency.sh clear ${m} ${n}"
+      die "the record is withdrawn on #${n}, but the link from #${m} to #${n} was not removed ($(cat "$tmp/err")). Re-run withdraw."
     fi
-    printf 'No longer closes with %s: %s.\n' "$n" "$n_title" | comment "$m" \
-      || die "the record is withdrawn and the link removed, but the note on #${m} was not posted."
+    if [[ "$note" == on ]]; then
+      printf 'No longer closes with %s: %s.\n' "$n" "$n_title" | comment "$m" \
+        || die "the record is withdrawn and the link removed, but the note on #${m} was not posted. Re-run withdraw."
+    fi
     echo "close-on-merge: #${m} no longer closes with #${n} (withdrawn, link removed, note)."
     ;;
 
@@ -283,22 +294,32 @@ case "$cmd" in
         continue
       fi
       if [[ "$m_state" == OPEN ]]; then
-        if gh issue close "$m" > /dev/null 2> "$tmp/err"; then
-          printf 'Closed because PR #%s for %s: %s merged.\n' "$pr" "$n" "$n_title" | comment "$m" \
-            || echo "close-on-merge: warning: #${m} is closed, but its closing comment was not posted." >&2
-        else
-          failed="${failed}  #${m}: still open; the close failed ($(cat "$tmp/err")).
+        # A failed close leaves M exactly as it was: its labels and its link to N still say it
+        # waits on N, which is true while it is open.
+        if ! gh issue close "$m" > /dev/null 2> "$tmp/err"; then
+          failed="${failed}  #${m}: still open; the close failed ($(cat "$tmp/err")). Its labels and links are untouched.
 "
+          continue
         fi
+        printf 'Closed because PR #%s for %s: %s merged.\n' "$pr" "$n" "$n_title" | comment "$m" \
+          || echo "close-on-merge: warning: #${m} is closed, but its closing comment was not posted." >&2
       fi
 
       # Clean M exactly as finalize cleans N. agent:active is never removed: another session may
-      # own M.
-      labels="$(gh issue view "$m" --json labels --jq '.labels[].name' 2> "$tmp/err")" || labels=""
+      # own M. A removal's error is kept, to explain the label if it survives.
+      rm_errors=""
+      if ! labels="$(gh issue view "$m" --json labels --jq '.labels[].name' 2> "$tmp/err")"; then
+        failed="${failed}  #${m}: couldn't read its labels ($(cat "$tmp/err")), so none were removed.
+"
+        labels=""
+      fi
       for l in $labels; do
         case "$l" in
           status:* | needs-attention | blocked | merge-on-green)
-            gh issue edit "$m" --remove-label "$l" > /dev/null 2>&1 || true
+            if ! gh issue edit "$m" --remove-label "$l" > /dev/null 2> "$tmp/err"; then
+              rm_errors="${rm_errors}${l} $(tr '\n' ' ' < "$tmp/err")
+"
+            fi
             ;;
           agent:active)
             echo "close-on-merge: #${m} carries agent:active; left in place, because another session may own it."
@@ -307,6 +328,17 @@ case "$cmd" in
       done
       "$BASH" "$script_dir/blocked-dependency.sh" sweep "$m" \
         || echo "close-on-merge: warning: sweeping #${m}'s blocked_by links failed." >&2
+      # sweep exits 0 even when a DELETE fails, so read the links back.
+      if ! left="$(gh api "repos/{owner}/{repo}/issues/${m}/dependencies/blocked_by" --paginate \
+                     --jq '.[].number' 2> "$tmp/err")"; then
+        failed="${failed}  #${m}: couldn't read its blocked_by links back ($(cat "$tmp/err")).
+"
+      else
+        for b in $left; do
+          failed="${failed}  #${m}: still blocked by #${b}; the sweep did not remove that link.
+"
+        done
+      fi
 
       if ! after="$(gh issue view "$m" --json state,labels --jq '.state, (.labels[].name)' 2> "$tmp/err")"; then
         failed="${failed}  #${m}: couldn't read its labels back ($(cat "$tmp/err")).
@@ -315,9 +347,14 @@ case "$cmd" in
       fi
       for l in $after; do
         case "$l" in
-          OPEN | CLOSED) ;;
+          CLOSED) ;;
+          OPEN)
+            failed="${failed}  #${m}: still open after the close.
+"
+            ;;
           status:* | needs-attention | blocked | merge-on-green)
-            failed="${failed}  #${m}: the label ${l} survived its removal.
+            why="$(printf '%s' "$rm_errors" | awk -v l="$l" '$1 == l { $1 = ""; sub(/^ /, ""); print; exit }')"
+            failed="${failed}  #${m}: the label ${l} survived its removal${why:+ (gh said: ${why})}.
 "
             ;;
         esac

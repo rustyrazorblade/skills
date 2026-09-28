@@ -82,4 +82,5 @@ to a dedicated background worker, the same way you delegate an issue to `issue-m
   bookkeeping lane.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
   prefix — never a bare number, and never several run together inline in a sentence. The batch
-  confirmation list in step 4 follows this format too.
+  confirmation list in step 4 follows this format too.  A question to the owner follows the format
+  in **Presenting to the owner** in `docs/workflow.md`.

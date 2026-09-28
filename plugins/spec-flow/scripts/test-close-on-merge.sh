@@ -59,8 +59,9 @@ mkdir -p "$fakes"
 #   sticky_X         labels, one per line, that survive a removal
 #   pr_P.json        {"state"} for PR P
 #   viewer           the authenticated login
-# A fail_<name> file makes that one call fail; fail_post holds GitHub's error text. Every call is
-# appended to calls, and each posted comment to posted as "#X: <body>".
+# A fail_<name> file makes that one call fail, and its contents, when any, are the error text:
+# fail_close_X and fail_view_X fail only for issue X, and fail_labels_X only X's `--json labels`
+# read. Every call is appended to calls, and each posted comment to posted as "#X: <body>".
 cat > "$fakes/gh" <<'GHEOF'
 #!/bin/bash
 st="$FAKE_STATE"
@@ -142,6 +143,7 @@ x="$3"
 case "$1 $2" in
   "issue view")
     failing "view_$x"
+    [ "$5" = labels ] && failing "labels_$x"
     need_issue "$x"
     emit "$(cat "$st/issue_$x.json")"
     ;;
@@ -157,6 +159,7 @@ case "$1 $2" in
     ;;
   "issue close")
     failing close
+    failing "close_$x"
     f="$st/issue_$x.json"
     jq '.state = "CLOSED"' "$f" > "$f.new"
     mv "$f.new" "$f"
@@ -353,6 +356,45 @@ run_com withdraw 971 928
 expect_eq "withdraw, nothing recorded: exits 0" 0 "$rc"
 expect_eq "withdraw, nothing recorded: posts nothing" "" "$posted"
 
+standard
+link 928 971
+run_com withdraw 971 928
+expect_eq "withdraw, a link with no record or note: exits 0" 0 "$rc"
+expect_eq "withdraw, a link with no record or note: leaves a link it does not own" "971" "$(links_of 928)"
+
+standard
+run_com record 971 928
+set_st fail_delete "gh: HTTP 502"
+run_com withdraw 971 928
+expect_eq "withdraw, the link removal fails: exits non-zero" 1 "$rc"
+expect_contains "withdraw, the link removal fails: says to re-run" "$err" "Re-run withdraw"
+expect_contains "withdraw, the link removal fails: prints GitHub's error" "$err" "HTTP 502"
+expect_eq "withdraw, the link removal fails: the link is still there" "971" "$(links_of 928)"
+expect_eq "withdraw, the link removal fails: the withdrawal is on 971" 2 "$(posted_on 971)"
+expect_eq "withdraw, the link removal fails: no note on 928 yet" 1 "$(posted_on 928)"
+rm "$st/fail_delete"
+run_com withdraw 971 928
+expect_eq "withdraw, re-run: exits 0" 0 "$rc"
+expect_eq "withdraw, re-run: removes the link" "" "$(links_of 928)"
+expect_eq "withdraw, re-run: posts no second withdrawal on 971" 2 "$(posted_on 971)"
+expect_contains "withdraw, re-run: posts the note on 928" "$posted" "#928: No longer closes with 971: Rework the thing."
+run_com withdraw 971 928
+expect_eq "withdraw, a third run: exits 0" 0 "$rc"
+expect_eq "withdraw, a third run: posts nothing more" 2 "$(posted_on 928)"
+
+standard
+set_st fail_comment "gh: HTTP 500"
+run_com record 971 928
+expect_eq "record, the comment fails: exits non-zero" 1 "$rc"
+expect_contains "record, the comment fails: says to re-run" "$err" "Re-run record"
+expect_eq "record, the comment fails: the link is set" "971" "$(links_of 928)"
+expect_eq "record, the comment fails: no note on 928" 0 "$(posted_on 928)"
+rm "$st/fail_comment"
+run_com record 971 928
+expect_eq "record, re-run after a failed comment: exits 0" 0 "$rc"
+expect_eq "record, re-run after a failed comment: one link" "971" "$(links_of 928)"
+expect_eq "record, re-run after a failed comment: the note lands" 1 "$(posted_on 928)"
+
 # ---------------------------------------------------------------------------
 # The record: replay order, and only the gh user's comments count.
 # ---------------------------------------------------------------------------
@@ -461,10 +503,81 @@ expect_not_contains "close-merged, PR not merged: closes nothing" "$calls" "gh i
 expect_eq "close-merged, PR not merged: posts nothing" "" "$posted"
 
 merged_setup
-set_st fail_close
+issue 928 OPEN "Old duplicate of the thing" "status:ready" "P2"
+set_st fail_close "gh: HTTP 502"
 run_com close-merged 971 42
 expect_eq "close-merged, the close fails: exits non-zero" 1 "$rc"
-expect_contains "close-merged, the close fails: says 928 is still open" "$err" "928"
+expect_contains "close-merged, the close fails: says 928 is still open" "$err" "#928: still open"
+expect_contains "close-merged, the close fails: prints GitHub's error" "$err" "HTTP 502"
+expect_not_contains "close-merged, the close fails: removes no label from 928" "$calls" "--remove-label"
+expect_not_contains "close-merged, the close fails: sweeps nothing on 928" "$calls" "issues/928/dependencies"
+expect_eq "close-merged, the close fails: 928 keeps its labels" "status:ready,P2" "$(labels_of 928)"
+expect_eq "close-merged, the close fails: 928 keeps its link" "971" "$(links_of 928)"
+expect_eq "close-merged, the close fails: posts nothing on 928" 0 "$(posted_on 928)"
+
+two_setup() {
+  standard
+  issue 930 OPEN "Another one" "status:ready"
+  run_com record 971 928
+  run_com record 971 930
+  : > "$st/calls"
+  : > "$st/posted"
+  echo '{"state":"MERGED"}' > "$st/pr_42.json"
+}
+
+two_setup
+run_com close-merged 971 42
+expect_eq "close-merged, two records: exits 0" 0 "$rc"
+expect_eq "close-merged, two records: closes 928" "CLOSED" "$(state_of 928)"
+expect_eq "close-merged, two records: closes 930" "CLOSED" "$(state_of 930)"
+expect_eq "close-merged, two records: comments on 928" 1 "$(posted_on 928)"
+expect_eq "close-merged, two records: comments on 930" 1 "$(posted_on 930)"
+expect_contains "close-merged, two records: prints success" "$out" "closed and clean"
+
+two_setup
+set_st fail_close_928 "gh: HTTP 502"
+run_com close-merged 971 42
+expect_eq "close-merged, the first close fails: exits non-zero" 1 "$rc"
+expect_contains "close-merged, the first close fails: names 928" "$err" "#928: still open"
+expect_not_contains "close-merged, the first close fails: does not name 930" "$err" "#930"
+expect_eq "close-merged, the first close fails: 928 stays open" "OPEN" "$(state_of 928)"
+expect_eq "close-merged, the first close fails: 930 is closed" "CLOSED" "$(state_of 930)"
+expect_eq "close-merged, the first close fails: 930 is cleaned" "" "$(labels_of 930)"
+expect_eq "close-merged, the first close fails: 930 is swept" "" "$(links_of 930)"
+expect_eq "close-merged, the first close fails: 930 gets its comment" 1 "$(posted_on 930)"
+expect_not_contains "close-merged, the first close fails: prints no success line" "$out" "closed and clean"
+
+two_setup
+set_st fail_view_928 "gh: HTTP 503"
+run_com close-merged 971 42
+expect_eq "close-merged, 928 unreadable: exits non-zero" 1 "$rc"
+expect_contains "close-merged, 928 unreadable: says it could not read 928" "$err" "#928: couldn't read it"
+expect_contains "close-merged, 928 unreadable: prints GitHub's error" "$err" "HTTP 503"
+expect_eq "close-merged, 928 unreadable: continues and closes 930" "CLOSED" "$(state_of 930)"
+expect_eq "close-merged, 928 unreadable: 928 is untouched" "OPEN" "$(state_of 928)"
+
+merged_setup
+issue 928 OPEN "Old duplicate of the thing" "status:ready"
+set_st fail_labels_928 "gh: HTTP 504"
+run_com close-merged 971 42
+expect_eq "close-merged, labels unreadable: exits non-zero" 1 "$rc"
+expect_contains "close-merged, labels unreadable: says so" "$err" "couldn't read its labels"
+expect_contains "close-merged, labels unreadable: prints GitHub's error" "$err" "HTTP 504"
+
+merged_setup
+issue 928 OPEN "Old duplicate of the thing" "status:ready"
+set_st fail_remove_label "gh: HTTP 403 forbidden"
+run_com close-merged 971 42
+expect_eq "close-merged, a removal fails: exits non-zero" 1 "$rc"
+expect_contains "close-merged, a removal fails: names the surviving label" "$err" "status:ready survived"
+expect_contains "close-merged, a removal fails: includes GitHub's error" "$err" "HTTP 403 forbidden"
+
+merged_setup
+set_st fail_delete "gh: HTTP 500"
+run_com close-merged 971 42
+expect_eq "close-merged, a link survives the sweep: exits non-zero" 1 "$rc"
+expect_contains "close-merged, a link survives the sweep: names the link" "$err" "#928: still blocked by #971"
+expect_not_contains "close-merged, a link survives the sweep: prints no success line" "$out" "closed and clean"
 
 merged_setup
 set_st fail_comments

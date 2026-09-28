@@ -408,6 +408,15 @@ expect_contains "append, content with a ## heading: says why" "$err" "## Notes"
 expect_eq "append, content with a ## heading: makes no edit" 0 "$(edit_calls)"
 
 reset_state "$BODY"
+run_ib append 88 "Scope" "$(content '- in: more
+```
+## the fence never closes')"
+expect_eq "append, content ending inside an open fence: exits non-zero" 1 "$rc"
+expect_contains "append, content ending inside an open fence: says why" "$err" "open code fence"
+expect_contains "append, content ending inside an open fence: says nothing was written" "$err" "Nothing was written"
+expect_eq "append, content ending inside an open fence: makes no edit" 0 "$(edit_calls)"
+
+reset_state "$BODY"
 run_ib append 88 "Scope" "$(content '```
 ## fenced in the content
 ```')"
@@ -452,6 +461,8 @@ expect_eq "moved lastEditedAt: writes once" 1 "$(edit_calls)"
 expect_contains "moved lastEditedAt: keeps the owner's edit" "$(written 1)" "the owner added this line"
 expect_contains "moved lastEditedAt: applies its own change to the new body" "$(written 1)" "only the new thing"
 expect_not_contains "moved lastEditedAt: drops the old scope" "$(written 1)" "the other thing"
+expect_contains "moved lastEditedAt: says it re-read and re-applied" "$err" "re-read"
+expect_contains "moved lastEditedAt: names both timestamps" "$err" "2026-02-01T00:00:00Z -> 2026-03-01T00:00:00Z"
 
 # ---------------------------------------------------------------------------
 # The userContentEdits post-check: an edit that lands inside the window is lost.
@@ -496,6 +507,29 @@ run_ib replace 88 "Scope" "$(content '- in: only the new thing')"
 expect_eq "failed confirm twice: exits non-zero" 1 "$rc"
 expect_eq "failed confirm twice: writes exactly twice" 2 "$(edit_calls)"
 expect_contains "failed confirm twice: names the section" "$err" "## Scope"
+expect_contains "failed confirm twice: says which check failed" "$err" "section content differs"
+
+# The read-back loses another section: the confirm names the heading check.
+reset_state "$BODY"
+printf '%s' '## Problem
+
+Something is wrong.
+
+## Scope
+
+- in: only the new thing
+
+## Acceptance criteria
+
+- WHEN a THEN b
+- WHEN c THEN d' > "$st/post_body"
+set_st drop_edit_1
+set_st drop_edit_2
+cp "$st/post_body" "$st/pre_gql_4.body"
+cp "$st/post_body" "$st/pre_gql_5.body"
+run_ib replace 88 "Scope" "$(content '- in: only the new thing')"
+expect_eq "read-back missing a section: exits non-zero" 1 "$rc"
+expect_contains "read-back missing a section: says the heading list differs" "$err" "heading list differs"
 expect_eq "failed confirm twice: leaves no temp file behind" 0 "$(tmp_left)"
 
 # ---------------------------------------------------------------------------

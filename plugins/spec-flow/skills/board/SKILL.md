@@ -46,7 +46,8 @@ whole queue. A value below 1 is a usage error.
   verbatim and stop — don't silently fall back to querying GitHub yourself to paper over it.
 - Every issue/PR in your own added commentary (step 2) is written as `<number>: <title>` —
   `85: Field identity in the sync path`, never a bare `85`. Put each one on its own line, prefixed
-  with `-`, even when there is only one; never run several together inline in a sentence.
+  with `-`, even when there is only one; never run several together inline in a sentence.  A
+  question to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.
   (Workflow convention; see `docs/workflow.md`.) The script's own aligned bucket rows are the
   documented exception — print them as-is, never reformat them into this shape.
 

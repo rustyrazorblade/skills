@@ -137,4 +137,5 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
   live instead (step 3).
 - Always write an issue or PR as `<number>: <title>` — `85: Field identity in the sync path`,
   never a bare number. Put each one on its own line, prefixed with `-`, even when there is only
-  one; never run several together inline in a sentence, separated by commas.
+  one; never run several together inline in a sentence, separated by commas.  A question to the
+  owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

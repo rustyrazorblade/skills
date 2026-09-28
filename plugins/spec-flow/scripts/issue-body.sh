@@ -71,7 +71,8 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/issue-body.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
 # The one parser. Prints "<line number><TAB><heading text>" for each `## ` heading outside a fence,
-# then "END<TAB><line count>". A fence opens with three or more backticks or tildes, indented at
+# then "FENCE<TAB><char>" when the text ends inside a fence that never closed, then
+# "END<TAB><line count>". A fence opens with three or more backticks or tildes, indented at
 # most three spaces, and closes with a run of the same character at least as long and nothing after
 # it. A trailing CR is ignored, so a body saved by the web editor with CRLF still parses.
 # shellcheck disable=SC2016 # awk's $0 and $1, not the shell's
@@ -108,7 +109,10 @@ function marker(line,   s, i, n) {
     print NR "\t" text
   }
 }
-END { print "END\t" NR }
+END {
+  if (in_fence) print "FENCE\t" f_char
+  print "END\t" NR
+}
 '
 
 parse() { awk "$PARSER" "$1"; }
@@ -119,6 +123,7 @@ locate() {
   local n text
   sec_count=0 sec_start=0 sec_end=0 total=0
   while IFS=$'\t' read -r n text; do
+    [[ "$n" != FENCE ]] || continue
     if [[ "$n" == END ]]; then
       total="$text"
       continue
@@ -210,7 +215,7 @@ section_of() {
   slice "$1" $((sec_start + 1)) "$sec_end" | trim
 }
 
-headings_of() { parse "$1" | awk -F '\t' '$1 != "END" { print $2 }'; }
+headings_of() { parse "$1" | awk -F '\t' '$1 != "END" && $1 != "FENCE" { print $2 }'; }
 
 writes=0
 write_body() {
@@ -254,12 +259,21 @@ post_check() {
     return 1
   fi
 
-  section_of "$tmp/new" > "$tmp/want" || return 2
-  section_of "$tmp/after" > "$tmp/got" || return 2
-  cmp -s "$tmp/want" "$tmp/got" || return 2
+  section_of "$tmp/new" > "$tmp/want" || { confirm_why="the written body has no single target section"; return 2; }
+  if ! section_of "$tmp/after" > "$tmp/got"; then
+    confirm_why="the read-back has the '## ${heading}' section missing or doubled"
+    return 2
+  fi
+  if ! cmp -s "$tmp/want" "$tmp/got"; then
+    confirm_why="the read-back section content differs from what was written"
+    return 2
+  fi
   headings_of "$tmp/new" > "$tmp/want_headings"
   headings_of "$tmp/after" > "$tmp/got_headings"
-  cmp -s "$tmp/want_headings" "$tmp/got_headings" || return 2
+  if ! cmp -s "$tmp/want_headings" "$tmp/got_headings"; then
+    confirm_why="the read-back heading list differs: another section is missing or changed"
+    return 2
+  fi
   return 0
 }
 
@@ -277,6 +291,10 @@ bad_heading="$(headings_of "$content" | head -1)"
 if [[ -n "$bad_heading" ]]; then
   die "the content file holds its own '## ${bad_heading}' heading, which would split the section. Nothing was written."
 fi
+# A fence left open would swallow every later heading in the body into this section.
+if parse "$content" | grep -q '^FENCE'; then
+  die "the content file ends inside an open code fence, which would swallow the sections after it. Nothing was written."
+fi
 
 build_new "$tmp/body"
 
@@ -286,6 +304,7 @@ if ! stamp="$(gh api graphql "${ISSUE_ARGS[@]}" -f query="$Q_STAMP" \
   die "couldn't re-check issue #${issue} before writing: $(cat "$tmp/err"). Nothing was written."
 fi
 if [[ "$stamp" != "$read_le" ]]; then
+  echo "issue-body: issue #${issue}'s body changed while this script ran (lastEditedAt ${read_le:-never} -> ${stamp:-never}); re-read it and re-applied the change to the new body." >&2
   read_issue
   build_new "$tmp/body"
 fi
@@ -307,7 +326,7 @@ for attempt in 1 2; do
     1) exit 1 ;;
   esac
   if [[ $attempt -eq 1 ]]; then
-    echo "issue-body: the read-back of issue #${issue} does not hold the new '## ${heading}' section yet; writing once more." >&2
+    echo "issue-body: the read-back of issue #${issue} failed its check for '## ${heading}': ${confirm_why}; writing once more." >&2
   fi
 done
-die "after two writes, issue #${issue}'s '## ${heading}' section still does not read back as written, or another section is missing. Check the issue by hand."
+die "after two writes, issue #${issue}'s '## ${heading}' section still fails its read-back check: ${confirm_why}. Check the issue by hand."

@@ -110,8 +110,9 @@ A refinement `groom` relays to the owner for editing, plus its questions:
   answers, written plainly enough that the owner can reject it in one word.
 - **Mark each assumption's provenance**: **traceable**, meaning something in the record points at
   it, or **mine**, meaning you inferred it from the repo, from convention, or from judgement.
-  `groom` confirms the traceable ones in bulk and asks about yours one at a time, so a wrong mark
-  is the one mistake here that reaches the issue unnoticed. When in doubt, mark it **mine**.
+  `groom` asks about every assumption in its own message, with a recommendation, and never
+  promotes a **mine** assumption without the owner's explicit yes, so a wrong mark is the one
+  mistake here that can weaken that check unnoticed. When in doubt, mark it **mine**.
 
 ## Output
 

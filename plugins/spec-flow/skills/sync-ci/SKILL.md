@@ -126,4 +126,5 @@ added here and run locally alongside it until the branch merges, then evaporates
 - **Additive + idempotent.** Re-running after another red CI run merges new ids without dropping the
   ones already being guarded; running when CI is green is a no-op.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
-  prefix — never a bare number, and never several run together inline in a sentence.
+  prefix — never a bare number, and never several run together inline in a sentence.  A question
+  to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

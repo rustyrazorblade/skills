@@ -65,7 +65,9 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
    an otherwise fully autonomous run — the commit, the PR, and the merge all proceed on their own
    once `project-manager` has confirmed the batch, no further owner check-in for those; a content
    conflict needs a human judgment call instead. Work it out with the owner, **interactively, right
-   here** — the same way `issue-manager` waits at a seam, not a stop-and-exit:
+   here** — the same way `issue-manager` waits at a seam, not a stop-and-exit.  Ask about each
+   conflict as its own question, in the format in **Presenting to the owner** in
+   `docs/workflow.md`:
 
    1. **Post a comment on every issue involved in the conflict** — a durable trail even if the
       owner isn't watching this session right now, with a pointer to attach:

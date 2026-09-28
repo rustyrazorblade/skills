@@ -55,12 +55,12 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 7. Checks
 
-- [ ] 7.1 Search the plugin for any text that allows several questions in one message or a batch override.  None may remain.
-- [ ] 7.2 Search the plugin for a hard-coded question limit ("at most three", "up to three questions", "up to five", "per round" next to a number).  None may remain.
-- [ ] 7.3 Search the plugin outside `docs/workflow.md` for a copy of the four-part format.  None may remain.
-- [ ] 7.4 Search the plugin for `gh issue edit` with `--body` on an existing issue outside `scripts/issue-body.sh`.  None may remain.
-- [ ] 7.5 Walk every acceptance criterion in `ac-coverage.md` against the edited files.
-- [ ] 7.6 Run `scripts/test-issue-body.sh`, `scripts/test-close-on-merge.sh`, and `scripts/test-blocked-dependency.sh`.
+- [x] 7.1 Search the plugin for any text that allows several questions in one message or a batch override.  None may remain.
+- [x] 7.2 Search the plugin for a hard-coded question limit ("at most three", "up to three questions", "up to five", "per round" next to a number).  None may remain.
+- [x] 7.3 Search the plugin outside `docs/workflow.md` for a copy of the four-part format.  None may remain.
+- [x] 7.4 Search the plugin for `gh issue edit` with `--body` on an existing issue outside `scripts/issue-body.sh`.  None may remain.
+- [x] 7.5 Walk every acceptance criterion in `ac-coverage.md` against the edited files.
+- [x] 7.6 Run `scripts/test-issue-body.sh`, `scripts/test-close-on-merge.sh`, and `scripts/test-blocked-dependency.sh`.
 
 ## 8. Version
 

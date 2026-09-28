@@ -23,13 +23,13 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 4. `docs/workflow.md`
 
-- [ ] 4.1 Rewrite **Presenting to the owner**: keep rule 1; add the `<number>: <title>` citation rule; add the four-part question format with the per-option and per-item rules; the coverage list; the pre-send check word for word; the process-vocabulary ban with its terms; one question per message with the bullet list first; information lists only when nothing needs an answer; no hard-coded limit; the briefing layout; written questions on the issue thread; the 928/971 worked example.
-- [ ] 4.2 Remove rule 3, rule 4's escape, the "rules split by kind" paragraph, and the "Deliberate batch presentations" list.
-- [ ] 4.3 In the `needs-attention` bullet, point to the format and state the `🆘 Needs attention: Question k of n: <decision>` first line and that the label stays until the last answer.
-- [ ] 4.4 Add the issue-body rule: "No stage edits an existing issue body by hand; it uses issue-body.sh.  Creating a new issue is not an edit."  State that the body changes only for requirement changes.
-- [ ] 4.5 Add the Naming sentence about `Closes #M`.
-- [ ] 4.6 Update the Tech-debt fast path text to the `🧭 Adjacent specified behavior` comment.
-- [ ] 4.7 Point the backlog shortlist text to the format.
+- [x] 4.1 Rewrite **Presenting to the owner**: keep rule 1; add the `<number>: <title>` citation rule; add the four-part question format with the per-option and per-item rules; the coverage list; the pre-send check word for word; the process-vocabulary ban with its terms; one question per message with the bullet list first; information lists only when nothing needs an answer; no hard-coded limit; the briefing layout; written questions on the issue thread; the 928/971 worked example.
+- [x] 4.2 Remove rule 3, rule 4's escape, the "rules split by kind" paragraph, and the "Deliberate batch presentations" list.
+- [x] 4.3 In the `needs-attention` bullet, point to the format and state the `🆘 Needs attention: Question k of n: <decision>` first line and that the label stays until the last answer.
+- [x] 4.4 Add the issue-body rule: "No stage edits an existing issue body by hand; it uses issue-body.sh.  Creating a new issue is not an edit."  State that the body changes only for requirement changes.
+- [x] 4.5 Add the Naming sentence about `Closes #M`.
+- [x] 4.6 Update the Tech-debt fast path text to the `🧭 Adjacent specified behavior` comment.
+- [x] 4.7 Point the backlog shortlist text to the format.
 
 ## 5. Agents
 

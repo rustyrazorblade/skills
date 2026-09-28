@@ -17,9 +17,9 @@ All paths are under `plugins/spec-flow/` unless stated.
 ## 3. `scripts/close-on-merge.sh` and its test
 
 - [ ] 3.1 Verify GitHub's `blocked_by` loop behavior on scratch issues: link A blocked by B, then try B blocked by A, and a three-issue chain.  Record whether GitHub refuses a loop.  If it does not, `record` walks N's `blocked_by` chain itself.
-- [ ] 3.2 Write `scripts/test-close-on-merge.sh` first, fake `gh` on `PATH`.  Cover: `record` (first run, repeated run, M closed, M missing, M equal to N, GitHub refusing the link, a loop per task 3.1); `withdraw`; replay order of record and withdrawn comments; a record comment by another user ignored; `closes` with zero, one, and two records, and with a comment read failure; `close-merged` for a merged PR with M open, M closed, M carrying `agent:active`, a surviving label, and a PR that is not merged; a title with `$(...)` and backticks; bad arguments exit 2.
-- [ ] 3.3 Write `scripts/close-on-merge.sh`: `record`, `withdraw`, `closes`, `close-merged`.  `record` sets the link before any comment.  `close-merged` removes `status:*`, `needs-attention`, `blocked`, `merge-on-green`, runs `blocked-dependency.sh sweep <M>`, reports `agent:active`, and reads the labels back.  Titles are fetched by the script and written through `mktemp` files under `$TMPDIR` with `--body-file`.  `set -euo pipefail`.
-- [ ] 3.4 Run both under macOS `/bin/bash` (3.2).
+- [x] 3.2 Write `scripts/test-close-on-merge.sh` first, fake `gh` on `PATH`.  Cover: `record` (first run, repeated run, M closed, M missing, M equal to N, GitHub refusing the link, a loop per task 3.1); `withdraw`; replay order of record and withdrawn comments; a record comment by another user ignored; `closes` with zero, one, and two records, and with a comment read failure; `close-merged` for a merged PR with M open, M closed, M carrying `agent:active`, a surviving label, and a PR that is not merged; a title with `$(...)` and backticks; bad arguments exit 2.
+- [x] 3.3 Write `scripts/close-on-merge.sh`: `record`, `withdraw`, `closes`, `close-merged`.  `record` sets the link before any comment.  `close-merged` removes `status:*`, `needs-attention`, `blocked`, `merge-on-green`, runs `blocked-dependency.sh sweep <M>`, reports `agent:active`, and reads the labels back.  Titles are fetched by the script and written through `mktemp` files under `$TMPDIR` with `--body-file`.  `set -euo pipefail`.
+- [x] 3.4 Run both under macOS `/bin/bash` (3.2).
 
 ## 4. `docs/workflow.md`
 

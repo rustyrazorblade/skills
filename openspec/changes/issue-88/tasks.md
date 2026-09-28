@@ -52,6 +52,7 @@ All paths are under `plugins/spec-flow/` unless stated.
 - [x] 6.9 `skills/implement/SKILL.md`: every PR-body write (step 2b, step 4c, the failure path, step 5) starts with `close-on-merge.sh closes <N>` and goes through `--body-file`; stop if `closes` fails; PR bodies carry information only plus "Questions about this PR are on the issue."; each unresolved finding is its own question; pass `alsoCloses` to the workflow; read the adjacent-behavior comment with the body fallback.
 - [x] 6.10 `skills/implement/implement.workflow.js`: required `alsoCloses` with validation; the tech-debt PR body starts with `Closes #<issue>` and one `Closes #M` per entry; the tech-debt prompt reads the `🧭 Adjacent specified behavior` comment with the body fallback.
 - [x] 6.11 `skills/finalize/SKILL.md` step 2: run `close-on-merge.sh close-merged <N> <PR>` before step 3; retry once; on a second failure, stop with the worktree kept and name the open issue and the surviving labels.
+- [x] 6.12 `docs/workflow.md` question format: a live question uses the menu picker (`AskUserQuestion`), one question per call, the recommended option first with a label ending "(Recommended)", and plain text in the same format when the picker cannot hold the options; written questions are unaffected.  Added by the owner during implementation.
 
 ## 7. Checks
 

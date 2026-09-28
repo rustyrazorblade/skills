@@ -47,8 +47,9 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   to bare `gh` commands with no `--repo`/account override, so whichever account is active is the
   one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.
 - **`jq`** — installed and on `PATH`. `/spec-flow:groom` builds its create-issue payload with
-  `jq -n --rawfile`, and `scripts/claim-issue.sh`, `scripts/spawn-issue-manager.sh` and
-  `scripts/spawn-archive-batch.sh` parse `gh` output with it. There is no fallback: `groom` stops
+  `jq -n --rawfile`, and `scripts/claim-issue.sh`, `scripts/spawn-issue-manager.sh`,
+  `scripts/spawn-archive-batch.sh`, `scripts/issue-body.sh` and `scripts/close-on-merge.sh` parse
+  `gh` output with it. There is no fallback: `groom` stops
   and tells you rather than composing the payload by hand, because hand-composed JSON is the
   escaping bug the `jq` step exists to remove.
 - **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` +

@@ -27,9 +27,9 @@
 #   4. Otherwise it confirms that its section holds the new content and that every other section is
 #      still there. If not, it writes once more, then exits 1 if the read-back still fails.
 #
-# Task 2.3 of issue 88: whether GitHub records two body edits in quick succession as two
-# `userContentEdits` entries is NOT yet verified on a live issue. Step 3 relies on it. Record the
-# result here once it is checked on a scratch issue.
+# Task 2.3 of issue 88, verified on live scratch issue 91 on 2026-09-28: two body edits one second
+# apart show as two separate `userContentEdits` entries (totalCount 3 with the original), each with
+# its own editedAt and editor. Step 3 relies on this.
 #
 # Every write goes through a mktemp file under $TMPDIR and `gh issue edit --body-file`. Nothing read
 # from GitHub is placed in argv. A trap removes the temp files on exit.

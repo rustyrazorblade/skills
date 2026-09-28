@@ -4,19 +4,19 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 1. Before you start
 
-- [ ] 1.1 Check whether `openspec/specs/owner-presentation/spec.md` exists (repo root).  If issue 82's change was archived, rewrite this change's `owner-presentation` delta: move the requirements it supersedes (listed in `overrides.md`) to `## MODIFIED Requirements` or `## REMOVED Requirements`, then run `openspec validate issue-88 --type change --strict --json`.  If issue 77's change was archived (`openspec/specs/idea-refinement/spec.md` exists), add an `idea-refinement` delta to this change: MODIFIED "A round's questions reach the owner one at a time" without the three-per-round clause and without the "more candidate questions than the cap" scenario, and MODIFIED "Assumptions are confirmed in one pass, split by provenance" without the bulk confirm (both listed in `overrides.md`).
+- [x] 1.1 Check whether `openspec/specs/owner-presentation/spec.md` exists (repo root).  If issue 82's change was archived, rewrite this change's `owner-presentation` delta: move the requirements it supersedes (listed in `overrides.md`) to `## MODIFIED Requirements` or `## REMOVED Requirements`, then run `openspec validate issue-88 --type change --strict --json`.  If issue 77's change was archived (`openspec/specs/idea-refinement/spec.md` exists), add an `idea-refinement` delta to this change: MODIFIED "A round's questions reach the owner one at a time" without the three-per-round clause and without the "more candidate questions than the cap" scenario, and MODIFIED "Assumptions are confirmed in one pass, split by provenance" without the bulk confirm (both listed in `overrides.md`).
 - [x] 1.2 Read the committed `**Owner answer:**` line on every `overrides.md` entry, and apply any redirect before any other task.
 
 ## 2. `scripts/issue-body.sh` and its test
 
 - [x] 2.1 Write `scripts/test-issue-body.sh` first: a fake `gh` on `PATH` that records every call and serves the body, `lastEditedAt`, and `userContentEdits` from state files, in the pattern of `scripts/test-blocked-dependency.sh`.  Cover: `get` on a present and an absent section; `replace` and `append`; `replace` and `append` on an absent section, each exiting non-zero with an error that names the missing section and the issue, and making no `gh issue edit` call; a target heading present only inside a fence, treated as absent; a `## ` heading inside a ```` ``` ```` fence and inside a `~~~` fence; a duplicate target heading; a content file with a `## ` heading; a moved `lastEditedAt`; a lost edit in the window; a failed confirm, retried once; `$(...)` and backticks in the body and the content; bad arguments exit 2.
 - [x] 2.2 Write `scripts/issue-body.sh`: `get`, `replace`, `append`; one fence-aware parser; `replace` and `append` stop with an error naming the missing section, and write nothing, when the target section is absent; `lastEditedAt` pre-check; `userContentEdits` post-check; section confirm with one retry; `mktemp` under `$TMPDIR`, `--body-file`, and a cleanup trap.  `set -euo pipefail`.
-- [ ] 2.3 On a scratch issue, confirm that two body edits in quick succession show as two `userContentEdits` entries, so the post-check can tell them apart.  Record the result in a comment at the top of the script.
+- [x] 2.3 On a scratch issue, confirm that two body edits in quick succession show as two `userContentEdits` entries, so the post-check can tell them apart.  Record the result in a comment at the top of the script.
 - [x] 2.4 Run both under macOS `/bin/bash` (3.2): no associative arrays, no `mapfile`, no GNU-only flags.
 
 ## 3. `scripts/close-on-merge.sh` and its test
 
-- [ ] 3.1 Verify GitHub's `blocked_by` loop behavior on scratch issues: link A blocked by B, then try B blocked by A, and a three-issue chain.  Record whether GitHub refuses a loop.  If it does not, `record` walks N's `blocked_by` chain itself.
+- [x] 3.1 Verify GitHub's `blocked_by` loop behavior on scratch issues: link A blocked by B, then try B blocked by A, and a three-issue chain.  Record whether GitHub refuses a loop.  If it does not, `record` walks N's `blocked_by` chain itself.
 - [x] 3.2 Write `scripts/test-close-on-merge.sh` first, fake `gh` on `PATH`.  Cover: `record` (first run, repeated run, M closed, M missing, M equal to N, GitHub refusing the link, a loop per task 3.1); `withdraw`; replay order of record and withdrawn comments; a record comment by another user ignored; `closes` with zero, one, and two records, and with a comment read failure; `close-merged` for a merged PR with M open, M closed, M carrying `agent:active`, a surviving label, and a PR that is not merged; a title with `$(...)` and backticks; bad arguments exit 2.
 - [x] 3.3 Write `scripts/close-on-merge.sh`: `record`, `withdraw`, `closes`, `close-merged`.  `record` sets the link before any comment.  `close-merged` removes `status:*`, `needs-attention`, `blocked`, `merge-on-green`, runs `blocked-dependency.sh sweep <M>`, reports `agent:active`, and reads the labels back.  Titles are fetched by the script and written through `mktemp` files under `$TMPDIR` with `--body-file`.  `set -euo pipefail`.
 - [x] 3.4 Run both under macOS `/bin/bash` (3.2).
@@ -65,4 +65,4 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 8. Version
 
-- [ ] 8.1 Ask the owner whether to bump the plugin version.  The current version is 0.49.0 in `.claude-plugin/plugin.json`.  No `.codex-plugin/plugin.json` exists.  Ask for the new version before changing anything.
+- [x] 8.1 Ask the owner whether to bump the plugin version.  The current version is 0.49.0 in `.claude-plugin/plugin.json`.  No `.codex-plugin/plugin.json` exists.  Ask for the new version before changing anything.

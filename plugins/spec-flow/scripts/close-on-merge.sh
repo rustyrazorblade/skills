@@ -18,9 +18,12 @@
 #
 # The "M blocked by N" link keeps M off the board's ready list until N closes. record sets it
 # before it posts anything. If GitHub refuses the link, a loop included, record posts nothing.
-# record also walks N's own blocked_by chain first and refuses when M is on it, so a loop is caught
-# whether or not GitHub refuses one. Task 3.1 of issue 88: GitHub's own behavior for a blocked_by
-# loop is NOT yet verified on live issues.
+# record also walks N's own blocked_by chain first and refuses when M is on it.
+#
+# Task 3.1 of issue 88, verified on live scratch issues 91-93 on 2026-09-28: GitHub refuses a direct
+# two-issue loop with HTTP 422 ("this dependency would create a cycle where the target is already
+# blocked by the source"). GitHub accepts a three-issue loop 91 -> 92 -> 93 -> 91. The chain walk is
+# therefore required, not a fallback.
 #
 # Titles are fetched here and written through mktemp files under $TMPDIR with --body-file, never
 # through argv. A trap removes the temp files on exit.
@@ -138,7 +141,8 @@ blockers_of() {
 }
 
 # Returns 0 when issue $2 is on issue $1's blocked_by chain, 1 when not, 2 when a link list cannot
-# be read.
+# be read. GitHub accepts a loop of three or more issues (task 3.1), so this walk is the only guard
+# against one.
 chain_reaches() {
   local start="$1" target="$2" repo queue seen x b bs
   repo="$(repo_url)" || return 2

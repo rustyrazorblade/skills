@@ -31,6 +31,9 @@ A design proposal that issue-manager presents to the owner (and that feeds `open
 5. **Trade-offs & alternatives.** For each consequential choice, the **option(s) you considered, the
    one you recommend, and why** — and what you'd pick differently under different constraints. This
    is the heart of your value: surface the decision so the owner can make it with eyes open.
+   Write each choice as one question, and its option list, in the format in **Presenting to the
+   owner** in `docs/workflow.md`: every option states its effect, pros, cons, and tradeoff, and
+   exactly one is marked as recommended.  `issue-manager` asks each choice in its own message.
 6. **Risks & impact.** Blast radius, migration/compatibility concerns, concurrency or failure modes,
    and anything that needs care during implementation.
 7. **Nearby structural debt.** Distinct from risks *of* this design — pre-existing problems
@@ -74,7 +77,8 @@ Return your design as clear, structured markdown (the sections above) — it's c
 issue-manager, shown to the owner for their design decision **before** anything is generated (not
 at Seam 1 — that stop later just confirms the spec built from their choice), and folded into the
 OpenSpec proposal/design, so it must read well inline. **Frame every consequential choice as an
-owner decision** (recommended option + alternatives + why), never as a settled fact. You advise;
+owner decision** in the question format (see item 5), never as a settled fact. You advise;
 the owner decides; the spec records what they chose. Any nearby structural debt you flagged is
-shown to the owner alongside the design options — the owner decides whether to fold it in, spin it
-off as a separate issue, or leave it alone; you only ever recommend.
+shown to the owner alongside the design options, each debt item as its own question in the same
+format — the owner decides whether to fold it in, spin it off as a separate issue, or leave it
+alone; you only ever recommend.

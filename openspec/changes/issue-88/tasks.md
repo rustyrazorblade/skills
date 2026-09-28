@@ -33,11 +33,11 @@ All paths are under `plugins/spec-flow/` unless stated.
 
 ## 5. Agents
 
-- [ ] 5.1 `agents/issue-manager.md`: pointer to the format; briefing timing ("each time you return to the session, or after a review has run") and same-turn layout; remove the batch override from the relay paragraph; add the two narrow no-bodies exceptions (a hit whose title is not enough, and the issue being folded in); the `needs-attention` comment asks one question in the format; written questions on the issue thread.
-- [ ] 5.2 `agents/project-manager.md`: pointer next to its `<number>: <title>` rule; the board and archive text stop calling themselves batch exceptions; the archive confirm is one question.
-- [ ] 5.3 `agents/product-manager.md`: each drafted question follows the format.
-- [ ] 5.4 `agents/product-manager.md`: remove the per-round question limit.  The description's "up to three questions" becomes "the questions it cannot settle"; "What a round returns" drops "plus at most three questions"; the open-questions item replaces "Ask at most three per round ... anything past three stays here as an assumption and is available to a later round" with: return every question you cannot settle from the record or the repo, ranked by how much the answer changes the work, each with a recommended default.
-- [ ] 5.5 `agents/architect.md`: each drafted question and option list follows the format.
+- [x] 5.1 `agents/issue-manager.md`: pointer to the format; briefing timing ("each time you return to the session, or after a review has run") and same-turn layout; remove the batch override from the relay paragraph; add the two narrow no-bodies exceptions (a hit whose title is not enough, and the issue being folded in); the `needs-attention` comment asks one question in the format; written questions on the issue thread.
+- [x] 5.2 `agents/project-manager.md`: pointer next to its `<number>: <title>` rule; the board and archive text stop calling themselves batch exceptions; the archive confirm is one question.
+- [x] 5.3 `agents/product-manager.md`: each drafted question follows the format.
+- [x] 5.4 `agents/product-manager.md`: remove the per-round question limit.  The description's "up to three questions" becomes "the questions it cannot settle"; "What a round returns" drops "plus at most three questions"; the open-questions item replaces "Ask at most three per round ... anything past three stays here as an assumption and is available to a later round" with: return every question you cannot settle from the record or the repo, ranked by how much the answer changes the work, each with a recommended default.
+- [x] 5.5 `agents/architect.md`: each drafted question and option list follows the format.
 
 ## 6. Skills
 

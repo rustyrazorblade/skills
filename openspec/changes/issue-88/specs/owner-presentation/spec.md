@@ -27,6 +27,25 @@ When a question lists options, each option SHALL state its concrete effect, its 
 - **WHEN** an agent presents options for a choice it considers the owner's preference
 - **THEN** it still marks exactly one option as recommended
 
+### Requirement: A live question uses the menu picker, with the recommended option first
+When an agent asks the owner a question live in the session, it SHALL ask it with the menu picker (the `AskUserQuestion` tool), one question per call.  The recommended option SHALL be listed first, and its label SHALL end with "(Recommended)", so the owner can press Enter to choose it.  The question text SHALL carry the decision and why it comes up now.  Each option's description SHALL carry its effect, pros, cons, and tradeoff.  When the picker cannot hold the question, because it has more options than the picker allows, the agent SHALL ask it in plain text in the same format.  A written question, on an issue or a PR, is not affected.
+
+#### Scenario: A live question with a recommendation
+- **WHEN** an agent asks the owner a question live in the session
+- **THEN** it calls the menu picker with that one question, the recommended option first with a label ending "(Recommended)", and each option's description stating its effect, pros, cons, and tradeoff
+
+#### Scenario: The owner presses Enter
+- **WHEN** the picker is shown and the owner presses Enter without moving the selection
+- **THEN** the recommended option is chosen
+
+#### Scenario: Too many options for the picker
+- **WHEN** a live question has more options than the picker can hold
+- **THEN** the agent asks it in plain text, in the same format, with exactly one option marked as recommended
+
+#### Scenario: A written question
+- **WHEN** an agent posts a question as an issue comment
+- **THEN** the picker rule does not apply, and the comment follows the written-question rules
+
 ### Requirement: A referenced issue or PR is described, not just named
 When a question names an issue or a PR, it SHALL give `<number>: <title>`, the filing date, the author, and one line on why the item exists.  When the agent created the item in this session, the question SHALL say so.
 

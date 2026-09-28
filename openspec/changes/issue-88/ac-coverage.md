@@ -59,3 +59,4 @@ Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from sec
 | Seam 1 | S2: only record comments by the pipeline's `gh` user count | `issue-closure: A stranger's comment` | ✅ Covered |
 | Seam 1 | S4: the adjacent-behavior reader falls back to the old body section | `issue-body-edits: An issue activated before this change` | ✅ Covered |
 | Seam 1 | S5: needs-attention first line `🆘 Needs attention: Question k of n: <the decision>` | `owner-presentation: A needs-attention series`; `owner-presentation: implement stops on a failed gate` | ✅ Covered |
+| AC | A live question uses the menu picker, recommended option first, so Enter picks it (added by the owner during implementation) | `owner-presentation: A live question with a recommendation`; `owner-presentation: The owner presses Enter`; `owner-presentation: Too many options for the picker`; `owner-presentation: A written question` | ✅ Covered |

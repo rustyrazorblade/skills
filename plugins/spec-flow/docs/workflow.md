@@ -408,6 +408,15 @@ The format covers every question to the owner:
 - questions written into PR bodies (a PR body now holds none; see **Written questions** below);
 - `needs-attention` comments.
 
+**A live question uses the menu picker.**  When the agent asks the owner a question live in the session, it asks it with the menu picker (the `AskUserQuestion` tool), one question per call:
+
+- The question text carries the decision and why it comes up now.
+- Each option's description carries its effect, pros, cons, and tradeoff.
+- The recommended option is listed first, and its label ends with "(Recommended)", so the owner can press Enter to choose it.
+- If the question has more options than the picker allows, the agent asks it in plain text instead, in the same format, with exactly one option marked as recommended.
+
+A written question, in an issue comment or a PR body, does not use the picker; it follows **Written questions** below.
+
 **The pre-send check.**  Before it sends a question, the agent asks: "Could the owner answer this after switching tabs, with no other context, and without opening a file or a link?"  If the answer is no, the agent rewrites the question before it sends it.
 
 **No process vocabulary.**  A question does not use these terms unless the same sentence says in plain words what the term does: overlap, dependency link, seam, fast path, lens, stop.  "Record a dependency link to 928" is wrong; "mark 928 as unable to land before this issue" is right.

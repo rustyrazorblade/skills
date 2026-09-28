@@ -61,7 +61,7 @@ mkdir -p "$fakes"
 #   viewer           the authenticated login
 # A fail_<name> file makes that one call fail, and its contents, when any, are the error text:
 # fail_close_X and fail_view_X fail only for issue X, and fail_labels_X only X's `--json labels`
-# read. Every call is appended to calls, and each posted comment to posted as "#X: <body>".
+# read. A sticky_state_X file makes X's close report success while X stays open. Every call is appended to calls, and each posted comment to posted as "#X: <body>".
 cat > "$fakes/gh" <<'GHEOF'
 #!/bin/bash
 st="$FAKE_STATE"
@@ -149,6 +149,7 @@ case "$1 $2" in
     ;;
   "issue comment")
     failing comment
+    failing "comment_$x"
     need_issue "$x"
     [ -n "$body_file" ] || { echo "fake gh: issue comment without --body-file: $*" >&2; exit 1; }
     f="$st/comments_$x.json"
@@ -160,6 +161,7 @@ case "$1 $2" in
   "issue close")
     failing close
     failing "close_$x"
+    [ -e "$st/sticky_state_$x" ] && exit 0
     f="$st/issue_$x.json"
     jq '.state = "CLOSED"' "$f" > "$f.new"
     mv "$f.new" "$f"
@@ -378,9 +380,30 @@ expect_eq "withdraw, re-run: exits 0" 0 "$rc"
 expect_eq "withdraw, re-run: removes the link" "" "$(links_of 928)"
 expect_eq "withdraw, re-run: posts no second withdrawal on 971" 2 "$(posted_on 971)"
 expect_contains "withdraw, re-run: posts the note on 928" "$posted" "#928: No longer closes with 971: Rework the thing."
+expect_contains "withdraw, re-run: the success line names only the steps it ran" "$out" "(link removed, note)"
 run_com withdraw 971 928
 expect_eq "withdraw, a third run: exits 0" 0 "$rc"
 expect_eq "withdraw, a third run: posts nothing more" 2 "$(posted_on 928)"
+
+standard
+run_com record 971 928
+run_com withdraw 971 928
+expect_contains "withdraw: the success line names all three steps" "$out" "(withdrawn, link removed, note)"
+
+standard
+run_com record 971 928
+set_st fail_comment_928 "gh: HTTP 500"
+run_com withdraw 971 928
+expect_eq "withdraw, the note fails: exits non-zero" 1 "$rc"
+expect_eq "withdraw, the note fails: the link is gone" "" "$(links_of 928)"
+rm "$st/fail_comment_928"
+run_com withdraw 971 928
+expect_eq "withdraw, re-run for the note only: exits 0" 0 "$rc"
+expect_eq "withdraw, re-run for the note only: posts no second withdrawal on 971" 2 "$(posted_on 971)"
+expect_eq "withdraw, re-run for the note only: posts the note on 928" 2 "$(posted_on 928)"
+expect_contains "withdraw, re-run for the note only: the success line says note only" "$out" "(note)"
+expect_not_contains "withdraw, re-run for the note only: does not claim a withdrawal" "$out" "withdrawn,"
+expect_not_contains "withdraw, re-run for the note only: does not claim a link removal" "$out" "link removed"
 
 standard
 set_st fail_comment "gh: HTTP 500"
@@ -514,6 +537,18 @@ expect_not_contains "close-merged, the close fails: sweeps nothing on 928" "$cal
 expect_eq "close-merged, the close fails: 928 keeps its labels" "status:ready,P2" "$(labels_of 928)"
 expect_eq "close-merged, the close fails: 928 keeps its link" "971" "$(links_of 928)"
 expect_eq "close-merged, the close fails: posts nothing on 928" 0 "$(posted_on 928)"
+
+merged_setup
+issue 928 OPEN "Old duplicate of the thing" "status:ready" "P2"
+set_st sticky_state_928
+run_com close-merged 971 42
+expect_eq "close-merged, the close reports success but 928 stays open: exits non-zero" 1 "$rc"
+expect_contains "close-merged, the close reports success but 928 stays open: says so" "$err" "#928: still open after the close"
+expect_not_contains "close-merged, the close reports success but 928 stays open: removes no label" "$calls" "--remove-label"
+expect_not_contains "close-merged, the close reports success but 928 stays open: sweeps nothing" "$calls" "issues/928/dependencies"
+expect_eq "close-merged, the close reports success but 928 stays open: 928 keeps its labels" "status:ready,P2" "$(labels_of 928)"
+expect_eq "close-merged, the close reports success but 928 stays open: 928 keeps its link" "971" "$(links_of 928)"
+expect_eq "close-merged, the close reports success but 928 stays open: posts nothing on 928" 0 "$(posted_on 928)"
 
 two_setup() {
   standard

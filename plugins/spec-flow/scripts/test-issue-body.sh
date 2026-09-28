@@ -508,6 +508,7 @@ expect_eq "failed confirm twice: exits non-zero" 1 "$rc"
 expect_eq "failed confirm twice: writes exactly twice" 2 "$(edit_calls)"
 expect_contains "failed confirm twice: names the section" "$err" "## Scope"
 expect_contains "failed confirm twice: says which check failed" "$err" "section content differs"
+expect_eq "failed confirm twice: leaves no temp file behind" 0 "$(tmp_left)"
 
 # The read-back loses another section: the confirm names the heading check.
 reset_state "$BODY"
@@ -530,7 +531,7 @@ cp "$st/post_body" "$st/pre_gql_5.body"
 run_ib replace 88 "Scope" "$(content '- in: only the new thing')"
 expect_eq "read-back missing a section: exits non-zero" 1 "$rc"
 expect_contains "read-back missing a section: says the heading list differs" "$err" "heading list differs"
-expect_eq "failed confirm twice: leaves no temp file behind" 0 "$(tmp_left)"
+expect_eq "read-back missing a section: leaves no temp file behind" 0 "$(tmp_left)"
 
 # ---------------------------------------------------------------------------
 # Shell characters in the body and the content reach GitHub unchanged.

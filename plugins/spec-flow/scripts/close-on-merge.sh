@@ -254,21 +254,27 @@ case "$cmd" in
       exit 0
     fi
     n_title="$(title_of "$n")" || die "couldn't read issue #${n}'s title. Nothing was withdrawn."
+    done_steps=""   # the steps this call ran, for the success line
     if [[ "$active" == yes ]]; then
       printf '%s%s\n' "$WITHDRAWN" "$m" | comment "$n" \
         || die "couldn't post the withdrawal on #${n}. Nothing was withdrawn."
+      done_steps="withdrawn"
     fi
     if ! bid="$(link_id "$m" "$n")"; then
       die "the record is withdrawn on #${n}, but #${m}'s blocked_by links could not be read. Re-run withdraw."
     fi
-    if [[ -n "$bid" ]] && ! gh api "repos/{owner}/{repo}/issues/${m}/dependencies/blocked_by/${bid}" -X DELETE > /dev/null 2> "$tmp/err"; then
-      die "the record is withdrawn on #${n}, but the link from #${m} to #${n} was not removed ($(cat "$tmp/err")). Re-run withdraw."
+    if [[ -n "$bid" ]]; then
+      if ! gh api "repos/{owner}/{repo}/issues/${m}/dependencies/blocked_by/${bid}" -X DELETE > /dev/null 2> "$tmp/err"; then
+        die "the record is withdrawn on #${n}, but the link from #${m} to #${n} was not removed ($(cat "$tmp/err")). Re-run withdraw."
+      fi
+      done_steps="${done_steps:+$done_steps, }link removed"
     fi
     if [[ "$note" == on ]]; then
       printf 'No longer closes with %s: %s.\n' "$n" "$n_title" | comment "$m" \
         || die "the record is withdrawn and the link removed, but the note on #${m} was not posted. Re-run withdraw."
+      done_steps="${done_steps:+$done_steps, }note"
     fi
-    echo "close-on-merge: #${m} no longer closes with #${n} (withdrawn, link removed, note)."
+    echo "close-on-merge: #${m} no longer closes with #${n} (${done_steps:-nothing left to do})."
     ;;
 
   closes)
@@ -298,6 +304,12 @@ case "$cmd" in
         # waits on N, which is true while it is open.
         if ! gh issue close "$m" > /dev/null 2> "$tmp/err"; then
           failed="${failed}  #${m}: still open; the close failed ($(cat "$tmp/err")). Its labels and links are untouched.
+"
+          continue
+        fi
+        # A close that reports success is not trusted until M reads back closed.
+        if ! m_state="$(gh issue view "$m" --json state --jq .state 2> "$tmp/err")" || [[ "$m_state" != CLOSED ]]; then
+          failed="${failed}  #${m}: still open after the close${m_state:+ (state ${m_state})}. Its labels and links are untouched.
 "
           continue
         fi

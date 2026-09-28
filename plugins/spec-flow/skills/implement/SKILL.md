@@ -92,17 +92,33 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    git -C <worktree> push -u origin "$BR"
    PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
    if [ -z "$PR" ]; then
-     gh pr create --draft --head "$BR" --base "$DEFAULT_BR" \
-       --title "<issue title>" \
-       --body "Closes #<N>
-
-   Draft — implementation in progress. Tests run per this repo's own policy; see spec-flow/TESTING.md."
-     PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
-     gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
+     BODY=$(mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX")
+     if ! ${CLAUDE_PLUGIN_ROOT}/scripts/close-on-merge.sh closes <N> > "$BODY"; then
+       rm -f "$BODY"
+       echo "STOP: close-on-merge.sh closes <N> failed; no PR body written."
+     else
+       printf '\nDraft — implementation in progress. Tests run per the repo policy in spec-flow/TESTING.md.\n\nQuestions about this PR are on the issue.\n' >> "$BODY"
+       gh pr create --draft --head "$BR" --base "$DEFAULT_BR" \
+         --title "<issue title>" --body-file "$BODY"
+       rm -f "$BODY"
+       PR=$(gh pr list --head "$BR" --json number --jq '.[0].number // empty')
+       gh issue comment <N> --body "🚀 Draft PR #$PR opened — implementation starting."
+     fi
    fi
    echo "DEFAULT_BR=$DEFAULT_BR"
    echo "PR=$PR"
    ```
+
+   **Every PR-body write in this skill starts with the output of `close-on-merge.sh closes <N>`**
+   — this draft, step 4c's docs path, the gate's failure path, and step 5's rewrite at ready, plus
+   the tech-debt draft `implement.workflow.js` opens.  It prints `Closes #<N>`, then one
+   `Closes #<M>` line for each issue the owner chose at `activate` to close when this PR merges.
+   The record lives on the issue, so a choice made in an earlier session still reaches this PR.
+   Always write the body to a `mktemp` file and pass it with `--body-file`.  **If `closes` exits
+   non-zero, stop and tell the owner; never write a PR body without its closing lines.**  A PR
+   body carries information only, and ends with the line "Questions about this PR are on the
+   issue."  A question for the owner goes on the issue, never in the PR body (see **Written
+   questions** in `docs/workflow.md`).
    Steps 4/5 use `<DEFAULT_BR>` and `<PR>` as the literal values printed here, never as shell
    variables — variables don't survive separate Bash calls, and the `Workflow` tool's JSON `args`
    isn't shell-interpolated. Resolve `$DEFAULT_BR` from the repo, never assume `main`: it must
@@ -215,8 +231,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
      file."*
    - **`off`** → no BREAKER SENTENCE at all. Append nothing.
 
-   In Team mode a stopped teammate messages you mid-run: surface it to the owner, let them choose
-   continue or revert, then respawn a fresh `tdd-developer` with their decision. **In Workflow mode
+   In Team mode a stopped teammate messages you mid-run: ask the owner, as one question in the
+   format in **Presenting to the owner** in `docs/workflow.md`, whether to continue or revert, then respawn a fresh `tdd-developer` with their decision. **In Workflow mode
    you append nothing** — you pass `BREAKER_PARAM` in the script's `args` and the script composes
    its own equivalent sentences, worded for a script that cannot pause: they ask the agent to
    prefix its summary with the token `BREAKER-STOP:`, and on seeing it the script returns
@@ -303,10 +319,13 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       instead of one comment at the very end.
 
       **`CHANGE_PARAM = "none — type:tech-debt fast path"`:** there is no `tasks.md` — work directly
-      from the issue's own body instead (`gh issue view <N> --json title,body`): its `## Direction`
-      is the shape of the fix, its `## Acceptance criteria` states the behavior-preservation bar
-      explicitly, and its `## Adjacent specified behavior (must be preserved)` section (if present)
-      names existing `openspec/specs/**` requirements this surface touches — don't contradict them.
+      from the issue's own body instead (`gh issue view <N> --json title,body,comments`): its
+      `## Direction` is the shape of the fix, its `## Acceptance criteria` states the
+      behavior-preservation bar explicitly, and the newest issue comment whose first line is
+      `🧭 Adjacent specified behavior` names existing `openspec/specs/**` requirements this surface
+      touches — don't contradict them.  An issue activated before that comment existed has the list
+      in its body's `## Adjacent specified behavior (must be preserved)` section instead; use that
+      only when no such comment exists.
       Implement exactly that Direction, test-first wherever you touch anything non-trivial. **This
       is behavior-preserving** — append this explicit instruction on top of the TEST INSTRUCTION:
       *"If achieving the Direction cleanly would require changing any observable behavior (a public
@@ -433,10 +452,11 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
       straight back to step b, nothing to fix yet. **Not approved, `mustFix` empty AND no lens
       missing** — reachable when a lens declines over something this repo's gate does not treat as
       must-fix — **stop the loop**: another round has the same inputs and produces the same verdict,
-      and a fix teammate would be handed an empty list. Take step 5's gate failure path and tell the
-      owner a lens declined on a non-blocking finding, so it needs their call. State that finding in
-      plain terms, with the lens identifier as a trailing tag only — the **Presenting to the owner**
-      contract in `docs/workflow.md`, the same as every finding you relay. **If any implementer's report contains
+      and a fix teammate would be handed an empty list. Take step 5's gate failure path and ask the
+      owner about that finding as one question, in the format in **Presenting to the owner** in
+      `docs/workflow.md`: a lens declined on a non-blocking finding, so it needs their call. State
+      the finding in plain terms, with the lens identifier as a trailing tag only, the same as every
+      finding you relay. **If any implementer's report contains
       `SPEC-DEFECT:`, stop the loop immediately** — the approved spec is what's wrong, more rounds
       cannot fix it (the one change that would resolve the finding is the one GUARDRAILS forbids),
       and only the owner can change it. Take step 5's gate failure path with that report as the
@@ -500,6 +520,7 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
        "buildSystem": "auto",
        "breaker":  "<BREAKER_PARAM — \"ask\" (default) or \"revert\" on the tech-debt path; \"off\" on the normal path>",
        "testInstruction": "<the TEST INSTRUCTION — step 3's stdout, pasted verbatim, on one line>",
+       "alsoCloses": [<each M from `close-on-merge.sh closes <N>`'s output after its first line, as a number; [] when it printed only `Closes #<N>`>],
        "panel": [
          {"label": "spec",             "agentType": "reviewer"},
          {"label": "code-review",      "agentType": "code-reviewer"},
@@ -520,6 +541,12 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    files, so it throws rather than substituting a panel of its own — the same contract as
    `testInstruction`, and for the same reason. This is what stops Workflow mode and Team mode
    holding two copies of the policy that drift apart.
+
+   `alsoCloses` is **required** on every path, an empty array included: run
+   `close-on-merge.sh closes <N>` first, and pass every `Closes #<M>` line after the first as the
+   number `M`. If `closes` exits non-zero, stop and tell the owner rather than invoking the script.
+   The script opens the tech-debt draft PR itself, and its body must carry the same closing lines as
+   every other PR-body write; the script throws if the argument is missing or malformed.
 
    `testInstruction` is **required**. The script cannot read files or the environment, so this is
    the only way the repo's policy reaches Workflow mode, and the script throws rather than
@@ -565,16 +592,21 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    enforces the same rule at the point where the answer exists.)
 
    **If any answer is no, do not run the commands below.** Instead: add `needs-attention`
-   (`gh issue edit <N> --add-label needs-attention`) with a comment naming exactly what is
-   unresolved — first line prefixed `🆘 Needs attention:`, per `agents/issue-manager.md` — keep
-   `agent:active` and `status:in-progress` as they are, and stop. **If a PR exists**, also leave it
-   a draft and write the residual findings into its body. **If none exists** — a fast-path run that
-   halted before its PR was ever opened, which is exactly what question 4 catches — put the
-   residual findings in that issue comment instead; it is the only place they can land. Wherever
-   they land, state each residual finding in plain terms, with the lens identifier as a trailing tag
-   only, never as the finding's sole referent — the **Presenting to the owner** contract in
-   `docs/workflow.md`. The residual list itself is a whole-artifact review, which that contract
-   names as exempt from the one-at-a-time rule; write it as one block. Never mark a red or unapproved PR ready, and never
+   (`gh issue edit <N> --add-label needs-attention`), keep `agent:active` and
+   `status:in-progress` as they are, and stop. Each unresolved finding that needs the owner's
+   decision is its own question on the issue, in the format in **Presenting to the owner** in
+   `docs/workflow.md`: post the first as a comment whose first line is `🆘 Needs attention:
+   Question 1 of n: <the decision, in one plain sentence>`, listing all n and asking only the
+   first, per `agents/issue-manager.md`; each later question gets its own comment once the
+   previous one is answered, and the label stays until the last answer. **If a PR exists**, also
+   leave it a draft and rewrite its body with the residual findings as information: the body
+   starts with `close-on-merge.sh closes <N>`'s output and goes through `--body-file`, exactly as
+   in step 2, and ends with "Questions about this PR are on the issue." **If none exists** — a
+   fast-path run that halted before its PR was ever opened, which is exactly what question 4
+   catches — list the residual findings as information in the first question comment instead; it
+   is the only place they can land. Wherever they land, state each residual finding in plain
+   terms, with the lens identifier as a trailing tag only, never as the finding's sole referent.
+   A residual list is information and asks nothing. Never mark a red or unapproved PR ready, and never
    merge one, whatever `merge-on-green` or the issue's owner instructions say. Those authorize
    crossing Seam 2 on a *finished* run; they do not authorize skipping the panel.
 
@@ -613,13 +645,25 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
    residual findings in its body, `needs-attention`, keep `agent:active` and
    `status:in-progress`). Do not run the commands below. "Proceed either way" would mark a red PR
    ready, which the gate forbids.
+   First build the body.  Run `close-on-merge.sh closes <N>` into a `mktemp` file; if it exits
+   non-zero, stop and tell the owner, and do not run the commands below.  Then write the whole
+   body back to that file with the Write tool, never through a shell string: the closing lines
+   exactly as `closes` printed them, first, then the rest below.
+   ```bash
+   BODY=$(mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX")
+   ${CLAUDE_PLUGIN_ROOT}/scripts/close-on-merge.sh closes <N> > "$BODY" || echo "STOP: closes failed"
+   ```
+   After the closing lines, the body holds:
+   - the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in
+     Workflow mode), INCLUDING one line quoting tests_detail — the exact commands that ran — and
+     nothing about tiers, CI, or what was deliberately not run;
+   - if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one, as
+     information — these never blocked approval but the owner should still see them at Seam 2;
+   - the line "Questions about this PR are on the issue."
    ```bash
    gh pr ready <PR>                                        # un-draft — ready for your review (Seam 2)
-   gh pr edit <PR> --body "Closes #<N>
-
-   <the review_summary from step 4 (tracked yourself in Team mode, or the script's return value in Workflow mode), INCLUDING one line quoting tests_detail — the exact commands that ran — and nothing about tiers, CI, or what was deliberately not run>
-
-   <if non_blocking_findings is non-empty, a 'Surfaced, non-blocking' section listing each one — these never blocked approval but the owner should still see them at Seam 2>"
+   gh pr edit <PR> --body-file "$BODY"
+   rm -f "$BODY"
    gh issue edit <N> --remove-label status:in-progress --add-label status:in-review
    gh pr view <PR> --json url --jq .url
    ```
@@ -721,4 +765,5 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
   complete answer.
 - All code work happens in the worktree; this session only orchestrates, pushes, and manages the PR.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
-  prefix — never a bare number, and never several run together inline in a sentence.
+  prefix — never a bare number, and never several run together inline in a sentence.  A question
+  to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

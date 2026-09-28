@@ -1,6 +1,6 @@
 ---
 name: groom
-description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. Refines the idea over as many rounds as it takes — each round a fresh `product-manager` that has read the code, asking at most three questions, one at a time, each with a stated recommended default — and ends the loop only when every acceptance criterion is testable as written. Verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. First stage of the flow delivery workflow (see docs/workflow.md).
+description: Turn a rough idea into a scoped, labeled GitHub issue ready for the delivery pipeline. Use when the owner wants to capture a todo, feature, or bug as a real backlog item with scope, acceptance criteria, and a priority. Refines the idea over as many rounds as it takes — each round a fresh `product-manager` that has read the code, whose questions are asked one per message, each with a stated recommended default — and ends the loop only when every acceptance criterion is testable as written. Verifies bug reports read-only before scoping them, and offers a type:docs fast-track label for documentation-only work. First stage of the flow delivery workflow (see docs/workflow.md).
 argument-hint: [rough idea — a todo, feature, or bug]
 ---
 
@@ -17,8 +17,9 @@ refines. Stay in the foreground — no worktrees, no implementation.
      under-specified idea is the normal input here, not a problem to solve before proceeding.
    - **Is this one piece of work or several?** A bundle of two ideas becomes two issues, and the
      refinement loop can't sharpen both at once.
-   Ask them one at a time, each with your own recommended answer stated alongside it — a default
-   they can accept in one word ("this reads like two issues to me: X, and Y for later — split it?").
+   Ask them one per message, in the format in **Presenting to the owner** in `docs/workflow.md`,
+   each with your own recommended answer stated alongside it — a default they can accept in one
+   word ("this reads like two issues to me: X, and Y for later — split it?").
    **Write whatever the owner answers into the refinement record before you spawn round 1** (step 4
    defines the record and its `## Before round 1` entries). The record is the only channel these
    answers have: round 1 receives the raw idea verbatim, so an idea the owner just split in two
@@ -78,7 +79,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    there only competes with it. Send runtime values, the way `implement` does.
 
    The round returns a refinement — problem statement, in/out scope, testable WHEN/THEN acceptance
-   criteria, open questions, context — and up to three questions. Show the refinement to the owner,
+   criteria, open questions, context — and its questions. Show the refinement to the owner,
    relay the questions (below), append everything to the record, then judge the refinement against
    the readiness bar. Bar met → step 5. Bar unmet → run another round.
 
@@ -130,7 +131,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
    data models, interfaces, algorithms, libraries all belong to `architect` at the design stop, and
    chasing them here both duplicates that work and gives the loop no fixed point.
 
-   A round that asks no questions has not thereby met the bar, and a round that asks three has not
+   A round that asks no questions has not thereby met the bar, and a round that asks many has not
    thereby failed it. Read the refinement and judge it. **A small idea meeting the bar in round 1
    is a normal, expected outcome** — converging fast isn't a sign you applied the bar too loosely.
 
@@ -139,8 +140,11 @@ refines. Stay in the foreground — no worktrees, no implementation.
    not ready. Rewarding it would make inventing a number the cheapest route to convergence. Treat
    that value as the next round's question, with your recommended default.
 
-   **Relaying questions.** One at a time, at most three per round.
-   - **One at a time** — the owner can't usefully answer a batch. Ask the second only after the
+   **Relaying questions.** One at a time: every question the round returns, listed first as
+   bullets, then asked one per message, in the round's ranked order, in the format in
+   **Presenting to the owner** in `docs/workflow.md`.  There is no per-round limit; never drop or
+   defer a question because of how many the round returned.
+   - **One per message** — the owner can't usefully answer a batch. Ask the second only after the
      first is answered.
    - **Every question carries a stated recommended default**, so the owner can accept in one word.
      A question that arrives without one **is not relayed at all**, and the round is treated as not
@@ -152,9 +156,6 @@ refines. Stay in the foreground — no worktrees, no implementation.
      either supply a default this time or convert it to a stated assumption. Without that entry the
      next round has identical inputs and returns the same defaultless question.
    - **Order dependent questions before what depends on them.**
-   - **More than three candidates?** Relay the three that most change the shape of the work. The
-     rest stay in that round's refinement under **Open questions / assumptions**, which the next
-     round's prompt carries as the previous refinement.
 
    **The loop ends** when any one of these is true:
    - the **readiness bar is met**;
@@ -178,20 +179,15 @@ refines. Stay in the foreground — no worktrees, no implementation.
    not by input: it asks nothing and converts what's open into marked assumptions, which is work no
    earlier round did.
 
-   **Confirming the assumptions — one screen, split by provenance.** Present the closing pass's
-   assumptions to the owner in a single pass, in two groups:
-   - **Traceable to something the owner said** — confirmable in **bulk**, one answer for the group.
-     Each confirmed item becomes an ordinary Scope or Acceptance criteria line.
-   - **Never raised by the owner** — each needs its own explicit yes or no. **A bulk yes never
-     promotes one of these.** Promotion makes an agent-authored line indistinguishable from one the
-     owner wrote, and the moment of least attention is the wrong moment to grant that.
-
-   This bulk confirmation is a **deliberate, scoped exception** to the one-question-at-a-time rule
-   above — one of the deliberate batch presentations the **Presenting to the owner** contract in
-   `docs/workflow.md` names as exempt, not a rule unique to `groom`. It applies to the traceable
-   group at the closing pass, nowhere else:
-   the loop's questions each shape the work, while these are already-stated positions being
-   confirmed as a set at the end.
+   **Confirming the assumptions — one per message, split by provenance.** List all of the closing
+   pass's assumptions as bullets first, marked by provenance, then ask about each one in its own
+   message, each with a recommendation, in the format in **Presenting to the owner** in
+   `docs/workflow.md`.  There is no bulk confirm:
+   - **Traceable to something the owner said** — a confirmed item becomes an ordinary Scope or
+     Acceptance criteria line.
+   - **Never raised by the owner** — needs its own explicit yes. Never promote one without it.
+     Promotion makes an agent-authored line indistinguishable from one the owner wrote, and the
+     moment of least attention is the wrong moment to grant that.
 
    Anything the owner leaves unresolved is neither promoted nor dropped — it goes into the issue's
    own assumptions section (step 5).
@@ -302,6 +298,7 @@ refines. Stay in the foreground — no worktrees, no implementation.
   derived from the title), so the title only has to be a good title, not double as a slug source.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
   prefix — the owner does not track raw numbers. Never run several together inline in a sentence.
+  A question to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.
 - **Bug verification (step 2) is read-only, always.** No worktree, no file writes, no commits —
   run existing commands/tests and observe; if verifying would require changing anything, that's
   past `groom`'s scope, not a reason to skip verification (fall back to "not practically verifiable

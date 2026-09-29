@@ -2,7 +2,7 @@
 
 This change has two halves.  Most of it edits instruction prose: the owner-question contract in `docs/workflow.md` and the prompt files that point to it.  The rest is code: two new bash scripts, their tests, and one new required argument on `implement.workflow.js`.
 
-The design was settled at `activate`: one `architect` pass, two `design-critic` passes, and the owner's answers at the design stop.  The architect's proposal is in `.spec-flow/architect-design.md`.  The owner's answers are in `.spec-flow/design-decisions.md` and in the `🧭 Design decided` comment on the issue.  Where the owner chose differently from the architect, the owner's choice is the design below.  The architect's recommendation then appears only under **Alternatives Considered**, marked as an owner override.  Some later answers supersede earlier ones; the design applies the latest.
+The design was settled at `activate`: one `architect` pass, two `design-critic` passes, and the owner's answers at the design stop.  The architect's proposal and the owner's answers were written to `.spec-flow/architect-design.md` and `.spec-flow/design-decisions.md`.  Those files are session-local and gitignored.  The durable record is the `🧭 Design decided` comment on issue 88.  Where the owner chose differently from the architect, the owner's choice is the design below.  The architect's recommendation then appears only under **Alternatives Considered**, marked as an owner override.  Some later answers supersede earlier ones; the design applies the latest.
 
 No domain expert was consulted, so this document has no Domain Facts section.
 

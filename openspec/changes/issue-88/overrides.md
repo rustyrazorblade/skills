@@ -10,7 +10,7 @@ This change modifies or removes baseline requirements in two capabilities: `owne
 
 **This change:** Removed — no replacement.  Every question is its own message, and the owner is never offered a batch ("One question per message, with no exceptions").
 
-**Owner answer:** Remove it.  "I don't ever want a fucking batch."
+**Owner answer:** Remove it; the owner never wants a batch.
 
 ### Override: owner-presentation, "Decisions are presented one at a time by default"
 

@@ -66,6 +66,8 @@ A refinement `groom` relays to the owner for editing, plus its questions:
    the round small.  A question that would change nothing isn't worth the owner's turn.
    Write each question in the format in **Presenting to the owner** in `docs/workflow.md`, so it
    reaches the owner complete and `groom` can relay it unchanged.
+   Before you return, merge questions that ask the same decision into one question.  `groom` is a plain relay and never merges them.
+   You never ask the owner anything live; you return your questions, and `groom` relays them.
 5. **Technical direction**, when the record holds any — the owner's own words, reproduced verbatim.
    Omit the section entirely when there is none.
 6. **Context.** Related code (`file:line`), related issues, constraints, links — whatever helps the

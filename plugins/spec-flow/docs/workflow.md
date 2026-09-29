@@ -405,7 +405,6 @@ The format covers every question to the owner:
 
 - live questions in the session;
 - questions written into issue comments;
-- questions written into PR bodies (a PR body now holds none; see **Written questions** below);
 - `needs-attention` comments.
 
 **A live question uses the menu picker.**  When the agent asks the owner a question live in the session, it asks it with the menu picker (the `AskUserQuestion` tool), one question per call:
@@ -413,17 +412,17 @@ The format covers every question to the owner:
 - The question text carries the decision and why it comes up now.
 - Each option's description carries its effect, pros, cons, and tradeoff.
 - The recommended option is listed first, and its label ends with "(Recommended)", so the owner can press Enter to choose it.
-- If the question has more options than the picker allows, the agent asks it in plain text instead, in the same format, with exactly one option marked as recommended.
+- If the question has more than four options (the picker takes 2 to 4), the agent asks it in plain text instead, in the same format, with exactly one option marked as recommended.
 
 A written question, in an issue comment or a PR body, does not use the picker; it follows **Written questions** below.
 
 **The pre-send check.**  Before it sends a question, the agent asks: "Could the owner answer this after switching tabs, with no other context, and without opening a file or a link?"  If the answer is no, the agent rewrites the question before it sends it.
 
-**No process vocabulary.**  A question does not use these terms unless the same sentence says in plain words what the term does: overlap, dependency link, seam, fast path, lens, stop.  "Record a dependency link to 928" is wrong; "mark 928 as unable to land before this issue" is right.
+**No process vocabulary.**  A question does not use these terms unless the same sentence says in plain words what the term does: overlap, dependency link, seam, fast path, lens, stop.  "Record a dependency link to 928: Retry a failed export once" is wrong; "mark 928 as unable to land before this issue" is right.
 
 ### One question per message
 
-An agent puts at most one question to the owner in a message, live or written.  There are no exceptions, and the owner is never offered a batch.  Anything that needs the owner's decision is its own message: each unresolved fix-loop finding, each Seam 1 override or conflict, each `groom` assumption, each design choice, and each debt item.
+An agent puts at most one question to the owner in a message, live or written.  There are no exceptions, and the owner is never offered a batch (a list with no question in it is not a batch).  Anything that needs the owner's decision is its own message: each unresolved fix-loop finding, each Seam 1 override or conflict, each `groom` assumption, each design choice, and each debt item.
 
 When an agent has several questions, it first lists them all as bullets, for context.  Then it asks them one per message, and asks the next only after the owner answers.
 
@@ -444,7 +443,7 @@ Written questions live only on the issue thread, as comments:
 - A PR body carries information only, plus the line "Questions about this PR are on the issue."
 - The next question goes where the owner answered.  A reply in the session gets the next question in the session.  A reply on GitHub is picked up when the `issue-manager` next runs, because the owner attached or sent a message.  No agent polls for replies.
 - An **owner reply** is a comment whose author login is the authenticated `gh` user (`gh api user --jq .login`), the account the pipeline runs as.  A reply by any other author is never an answer, whatever it says: anyone can comment on a public repo, and a stranger's "Approve" must not cross a seam.  The agent ignores it, and names it in the next session briefing ("a comment by <login> on question k was not taken as an answer") without acting on it.
-- The newest owner reply after question k is the answer to question k.  The agent confirms it with a comment "✅ Question k answered: <the answer in one line>".  Then it posts question k+1 as a new comment, and also asks it in the session.  An unclear reply gets one confirm question before the agent records anything.
+- The newest owner reply after question k is the answer to question k.  The agent confirms it with a comment "✅ Question k answered: <the answer in one line>".  When the answer came on GitHub, it posts question k+1 as a new comment and also asks it in the session.  An unclear reply gets one confirm question before the agent records anything.
 
 ### Worked example
 
@@ -453,7 +452,7 @@ The backlog question that started this contract read "Is 928 related, a duplicat
 > **Should 928 close by itself when the PR for 971 merges?**
 >
 > - 971: Rework the export pipeline.  This is the issue being started now.  You filed it on 2026-05-02.  It rebuilds the export path end to end.
-> - 928: Retry a failed export once.  You filed it on 2026-04-11, three weeks ago.  It is open and ready, nobody is working on it, and it has no PR.  It exists because a failed export was dropped with no retry.
+> - 928: Retry a failed export once.  You filed it on 2026-04-11, three weeks before 971.  It is open and ready, nobody is working on it, and it has no PR.  It exists because a failed export was dropped with no retry.
 >
 > Why now: 971's new export path retries every failed export, so it does all of 928's work.  The answer changes 971's scope, so it is needed before the design starts.
 >
@@ -737,7 +736,7 @@ even then only ever *recommends* a separate issue, never files one itself. `/tec
 the deliberate, repo-wide counterpart: a team of review agents reads the whole codebase (or a scoped
 path) for nothing else — SOLID/composability, code duplication, unnecessary layering — ranks the 10
 most impactful findings, drops anything that duplicates an already-open issue, and walks you through
-what's left **one at a time, full context each time** — you decide per finding whether it's worth a
+what's left **one at a time, full context each time** (see **Presenting to the owner** above) — you decide per finding whether it's worth a
 `type:tech-debt` issue. Same shape as every other owner-facing decision in this pipeline: the agents
 surface candidates, they never file anything on their own.
 

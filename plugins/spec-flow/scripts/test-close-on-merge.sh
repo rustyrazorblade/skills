@@ -510,6 +510,19 @@ expect_eq "close-merged, agent:active: leaves it in place" "agent:active" "$(lab
 expect_not_contains "close-merged, agent:active: never removes it" "$calls" "--remove-label agent:active"
 
 merged_setup
+issue 928 OPEN "Old duplicate of the thing" "status:needs review" "P2"
+run_com close-merged 971 42
+expect_eq "close-merged, a label with a space: exits 0" 0 "$rc"
+expect_eq "close-merged, a label with a space: removes it whole" "P2" "$(labels_of 928)"
+
+merged_setup
+issue 928 OPEN "Old duplicate of the thing" "status:needs review"
+printf 'status:needs review\n' > "$st/sticky_928"
+run_com close-merged 971 42
+expect_eq "close-merged, a label with a space survives: exits non-zero" 1 "$rc"
+expect_contains "close-merged, a label with a space survives: names it whole" "$err" "the label status:needs review survived"
+
+merged_setup
 issue 928 OPEN "Old duplicate of the thing" "status:ready"
 printf 'status:ready\n' > "$st/sticky_928"
 run_com close-merged 971 42

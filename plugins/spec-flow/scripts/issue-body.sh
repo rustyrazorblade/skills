@@ -8,9 +8,14 @@
 #   replace <issue> <heading> <file>   replace the section's content with the file's lines
 #   append  <issue> <heading> <file>   add the file's lines to the end of the section
 #
+# append adds no blank line before the content, so it suits list items: a paragraph appended
+# after a list joins the list's last item.
+#
 # <heading> is the text after `## `, for example "Acceptance criteria". A section runs from its
 # heading to the next `## ` heading, or to the end of the body. A `## ` line counts as a heading
-# only outside a ``` or ~~~ fence, so `###` lines and fenced examples belong to the section.
+# only outside a ``` or ~~~ fence, so `###` lines and fenced examples belong to the section. Only
+# the `## text` form matches: a tab after `##` is not a heading, and a closing `##` is kept as
+# part of the heading text.
 #
 # replace and append change nothing, and exit 1, when:
 #   - the body has no such section outside a fence (they never add one);
@@ -24,12 +29,14 @@
 #   3. After it writes, it reads `userContentEdits`. If any edit other than its own landed after its
 #      read, it prints each such edit's timestamp and editor and exits 1. It does not retry: a retry
 #      could overwrite the other edit again. The old text is in the issue's edit history on GitHub.
+#      The check compares timestamps with `editedAt > read time`, and GitHub's timestamps have
+#      one-second resolution. So another edit that lands in the same second as the read is missed.
 #   4. Otherwise it confirms that its section holds the new content and that every other section is
 #      still there. If not, it writes once more, then exits 1 if the read-back still fails.
 #
-# Task 2.3 of issue 88, verified on live scratch issue 91 on 2026-09-28: two body edits one second
-# apart show as two separate `userContentEdits` entries (totalCount 3 with the original), each with
-# its own editedAt and editor. Step 3 relies on this.
+# Verified on live scratch issue 91 on 2026-09-28: two body edits one second apart show as two
+# separate `userContentEdits` entries (totalCount 3 with the original), each with its own editedAt
+# and editor. Step 3 relies on this.
 #
 # Every write goes through a mktemp file under $TMPDIR and `gh issue edit --body-file`. Nothing read
 # from GitHub is placed in argv. A trap removes the temp files on exit.
@@ -56,7 +63,8 @@ case "$cmd" in
   get) [[ $# -eq 2 ]] || usage ;;
   replace | append)
     [[ $# -eq 3 ]] || usage
-    [[ -f "$3" && -r "$3" ]] || usage
+    [[ -f "$3" ]] || usage
+    [[ -r "$3" ]] || die "can't read content file $3"
     ;;
   *) usage ;;
 esac

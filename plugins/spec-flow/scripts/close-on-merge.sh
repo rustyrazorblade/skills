@@ -20,10 +20,10 @@
 # before it posts anything. If GitHub refuses the link, a loop included, record posts nothing.
 # record also walks N's own blocked_by chain first and refuses when M is on it.
 #
-# Task 3.1 of issue 88, verified on live scratch issues 91-93 on 2026-09-28: GitHub refuses a direct
-# two-issue loop with HTTP 422 ("this dependency would create a cycle where the target is already
-# blocked by the source"). GitHub accepts a three-issue loop 91 -> 92 -> 93 -> 91. The chain walk is
-# therefore required, not a fallback.
+# Verified on live scratch issues 91-93 on 2026-09-28: GitHub refuses a direct two-issue loop with
+# HTTP 422 ("this dependency would create a cycle where the target is already blocked by the
+# source"). GitHub accepts a three-issue loop 91 -> 92 -> 93 -> 91. The chain walk is therefore
+# required, not a fallback.
 #
 # Titles are fetched here and written through mktemp files under $TMPDIR with --body-file, never
 # through argv. A trap removes the temp files on exit.
@@ -200,7 +200,7 @@ note_state() {
 case "$cmd" in
   record)
     m="$2"
-    if ! m_facts="$(gh issue view "$m" --json state,title --jq .state 2> "$tmp/err")"; then
+    if ! m_facts="$(gh issue view "$m" --json state --jq .state 2> "$tmp/err")"; then
       die "couldn't read issue #${m} ($(cat "$tmp/err")). Nothing was linked or posted."
     fi
     [[ "$m_facts" == OPEN ]] || die "issue #${m} is ${m_facts}, not open. Nothing was linked or posted."
@@ -322,18 +322,19 @@ case "$cmd" in
       fi
 
       # Clean M exactly as finalize cleans N. agent:active is never removed: another session may
-      # own M. A removal's error is kept, to explain the label if it survives.
+      # own M. A removal's error is kept after a tab, to explain the label if it survives. A label
+      # may hold a space, so the loops below read one label per line.
       rm_errors=""
       if ! labels="$(gh issue view "$m" --json labels --jq '.labels[].name' 2> "$tmp/err")"; then
         failed="${failed}  #${m}: couldn't read its labels ($(cat "$tmp/err")), so none were removed.
 "
         labels=""
       fi
-      for l in $labels; do
+      while IFS= read -r l; do
         case "$l" in
           status:* | needs-attention | blocked | merge-on-green)
-            if ! gh issue edit "$m" --remove-label "$l" > /dev/null 2> "$tmp/err"; then
-              rm_errors="${rm_errors}${l} $(tr '\n' ' ' < "$tmp/err")
+            if ! gh issue edit "$m" --remove-label "$l" < /dev/null > /dev/null 2> "$tmp/err"; then
+              rm_errors="${rm_errors}${l}"$'\t'"$(tr '\n' ' ' < "$tmp/err")
 "
             fi
             ;;
@@ -341,7 +342,7 @@ case "$cmd" in
             echo "close-on-merge: #${m} carries agent:active; left in place, because another session may own it."
             ;;
         esac
-      done
+      done <<< "$labels"
       "$BASH" "$script_dir/blocked-dependency.sh" sweep "$m" \
         || echo "close-on-merge: warning: sweeping #${m}'s blocked_by links failed." >&2
       # sweep exits 0 even when a DELETE fails, so read the links back.
@@ -361,7 +362,7 @@ case "$cmd" in
 "
         continue
       fi
-      for l in $after; do
+      while IFS= read -r l; do
         case "$l" in
           CLOSED) ;;
           OPEN)
@@ -369,12 +370,12 @@ case "$cmd" in
 "
             ;;
           status:* | needs-attention | blocked | merge-on-green)
-            why="$(printf '%s' "$rm_errors" | awk -v l="$l" '$1 == l { $1 = ""; sub(/^ /, ""); print; exit }')"
+            why="$(printf '%s' "$rm_errors" | awk -F '\t' -v l="$l" '$1 == l { print $2; exit }')"
             failed="${failed}  #${m}: the label ${l} survived its removal${why:+ (gh said: ${why})}.
 "
             ;;
         esac
-      done
+      done <<< "$after"
     done
     if [[ -n "$failed" ]]; then
       echo "close-on-merge: PR #${pr} merged, but not every recorded issue is closed and clean:" >&2

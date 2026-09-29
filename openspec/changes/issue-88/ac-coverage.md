@@ -1,6 +1,6 @@
 # Acceptance-criteria coverage: issue 88
 
-Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from section 6 of the architect's design.  **Critic 1** is a finding from the first `design-critic` pass; its raw text is not in the change files, so each row names the finding through the owner decision that resolved it.  **Critic 2** is a finding from the second pass, in `.spec-flow/design-decisions.md`.  **Seam 1** is an owner answer at spec review (S2–S5 and the two redirects in `.spec-flow/design-decisions.md` and `.spec-flow/seam1-feedback.md`).
+Sources: **AC** is an acceptance criterion from the issue.  **Risk** is from section 6 of the architect's design.  **Critic 1** is a finding from the first `design-critic` pass; its raw text is not in the change files, so each row names the finding through the owner decision that resolved it.  **Critic 2** is a finding from the second pass, in `.spec-flow/design-decisions.md`.  **Seam 1** is an owner answer at spec review (S2–S5 and the two redirects in `.spec-flow/design-decisions.md` and `.spec-flow/seam1-feedback.md`).  The `.spec-flow/` files are session-local and gitignored.  The durable record is the `🧭 Design decided` comment on issue 88.
 
 | Source | Requirement | Covering scenario(s) | Status |
 |--------|-------------|----------------------|--------|

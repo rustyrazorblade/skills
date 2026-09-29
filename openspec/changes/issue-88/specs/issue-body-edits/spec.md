@@ -35,7 +35,7 @@ A stage SHALL change an existing issue body only for a requirement change: the `
 - **THEN** the readers use the body section
 
 ### Requirement: `issue-body.sh` edits one named section
-`scripts/issue-body.sh` SHALL provide `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`.  Each SHALL act on the one section headed `## <heading>`.  `get` SHALL print the section's content and exit 1 when the section is absent.  `replace` SHALL replace the section's content.  `append` SHALL add the file's lines to the end of the section.  No other section SHALL change.
+`scripts/issue-body.sh` SHALL provide `get <N> <heading>`, `replace <N> <heading> <file>`, and `append <N> <heading> <file>`.  Each SHALL act on the one section headed `## <heading>`.  `get` SHALL print the section's content and exit 1 when the section is absent.  `replace` SHALL replace the section's content.  `append` SHALL add the file's lines to the end of the section, with no blank line added before them, which suits list items.  No other section SHALL change.
 
 #### Scenario: Replacing the scope
 - **WHEN** `replace 88 "Scope" <file>` runs

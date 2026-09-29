@@ -266,6 +266,15 @@ Something is wrong.
 See above.
 More notes.' "$(written 1)"
 
+# append adds no blank line before the content, so a paragraph joins the section's last list item.
+reset_state "$BODY"
+run_ib append 88 "Scope" "$(content 'A new paragraph.')"
+expect_eq "append: exits 0 for a paragraph" 0 "$rc"
+expect_contains "append: adds no blank line before the content" "$(written 1)" '- out: the other thing
+A new paragraph.
+
+## Acceptance criteria'
+
 # ---------------------------------------------------------------------------
 # A missing section: an error that names it and the issue, and no write.
 # ---------------------------------------------------------------------------
@@ -588,6 +597,16 @@ usage_case "replace, missing file" replace 88 "Scope" "$tmp_root/no-such-file"
 printf 'x\n' > "$tmp_root/some-content"
 usage_case "append, non-numeric issue" append eighty "Scope" "$tmp_root/some-content"
 usage_case "append, extra argument" append 88 "Scope" "$tmp_root/some-content" extra
+
+# An unreadable content file is its own error, not a usage error.
+printf 'x\n' > "$tmp_root/unreadable-content"
+chmod 000 "$tmp_root/unreadable-content"
+reset_state "$BODY"
+run_ib append 88 "Scope" "$tmp_root/unreadable-content"
+expect_eq "unreadable content file: exits 1" 1 "$rc"
+expect_contains "unreadable content file: names the file" "$err" "can't read content file $tmp_root/unreadable-content"
+expect_eq "unreadable content file: calls nothing" "" "$calls"
+chmod 600 "$tmp_root/unreadable-content"
 
 echo ""
 echo "----------------------------------------"

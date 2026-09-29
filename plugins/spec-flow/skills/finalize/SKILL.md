@@ -1,6 +1,6 @@
 ---
 name: finalize
-description: Finalize a merged issue — close the GitHub issue, remove its lifecycle/coordination labels, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs once the FEATURE PR has merged — by the owner's squash-merge by default, or by `implement` itself if the `merge-on-green` label was set or this run's the issue's owner instructions said to auto-merge. Does NOT touch the OpenSpec archive — that's `project-manager`'s job, done in bulk across several issues at once via `/spec-flow:archive`, once enough have piled up. This skill never merges the feature PR and never opens a PR of its own.
+description: Finalize a merged issue — close the GitHub issue, remove its lifecycle/coordination labels, close and clean any issue recorded to close with it, and remove the issue's git worktree. Final stage of the flow delivery workflow (see docs/workflow.md). Runs once the FEATURE PR has merged — by the owner's squash-merge by default, or by `implement` itself if the `merge-on-green` label was set or this run's the issue's owner instructions said to auto-merge. Does NOT touch the OpenSpec archive — that's `project-manager`'s job, done in bulk across several issues at once via `/spec-flow:archive`, once enough have piled up. This skill never merges the feature PR and never opens a PR of its own.
 argument-hint: [issue number, with its PR already squash-merged]
 ---
 
@@ -79,8 +79,22 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    future `spawn-issue-manager.sh` on that number refuse, and step 3 removes the working directory
    `gh issue` needs to infer the repo, so you cannot come back and retry afterwards.
 
+   **Then close what GitHub left open.**  The owner may have chosen, at `activate`, to close other
+   issues when this PR merges.  GitHub closes them from the PR body's `Closes #M` lines, but not
+   always.  Close and clean each one, with `<PR>` the merged PR number from step 1:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/close-on-merge.sh close-merged <N> <PR>
+   ```
+   It acts only for a merged PR.  For each recorded issue it closes it if it is still open, never
+   reopens one already closed, removes the same lifecycle labels as above, sweeps its blocked_by
+   links, and reads its labels back.  It reports `agent:active` on a recorded issue and leaves it
+   in place, because another session may own that issue.  It prints nothing to close when there
+   are no records.  **If it exits non-zero, run it once more.  If it fails again, STOP before
+   step 3, keep the worktree, and tell the owner which recorded issue is still open and which
+   labels remain**, from what it printed — the same stop rule as a surviving label on this issue.
+
 3. **Remove your own worktree and branch — hand off to a script that only acts once verified
-   safe.** Only run this once step 2's read-back came back empty. **Before running it, note whether this issue had an OpenSpec change** —
+   safe.** Only run this once step 2's read-back came back empty and `close-merged` exited 0. **Before running it, note whether this issue had an OpenSpec change** —
    `[[ -d "openspec/changes/issue-<N>" ]]` — for step 4's report; the worktree (and anywhere you
    could still run that check) is gone once this script finishes:
    ```bash
@@ -93,7 +107,9 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
    `git worktree remove --force --force`. **Safe to re-run**: if already removed, it detects the
    main checkout and exits cleanly.
 
-4. **Report.** Confirm: issue closed, labels verified clear, worktree removed. Report the label
+4. **Report.** Confirm: issue closed, labels verified clear, every recorded issue closed and
+   clean (name each one as `<number>: <title>`, and any `agent:active` it reported), worktree
+   removed. Report the label
    sweep from step 2's read-back, not from the edit command's exit status. If step 3's check found
    `openspec/changes/issue-<N>`, note it's still sitting on the default branch, unarchived, until
    `project-manager` runs a bulk archive
@@ -119,4 +135,5 @@ branch with `git rev-parse --abbrev-ref HEAD` rather than assuming a name.
 - **Safe to re-run at any step.** Step 2 only closes/comments/relabels what isn't already done;
   step 3's script only removes what still exists.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
-  prefix — never a bare number, and never several run together inline in a sentence.
+  prefix — never a bare number, and never several run together inline in a sentence.  A question
+  to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

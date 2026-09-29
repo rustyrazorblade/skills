@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, the repo's own spec-flow/TESTING.md test and CI policy (proposed, confirmed with the owner, then landed on a branch as a PR — the one outward action this skill takes), and CI test-tiering state. Explores what's already true first, then walks through only what's still missing, one item at a time with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
+description: Interactively bring a repo onto spec-flow's Prerequisites — OpenSpec init, gh auth, the label vocabulary, the agent-teams env var, the seam-visualization preference, the refactor circuit breaker, the .gitignore entries, the repo's own spec-flow/TESTING.md test and CI policy (proposed, confirmed with the owner, then landed on a branch as a PR — the one outward action this skill takes), and CI test-tiering state. Explores what's already true first, shows the check results as information, then asks about each item still missing in its own message, with a recommended default. Run once per repo, before relying on the rest of the pipeline; safe to re-run any time (skips whatever's already satisfied). See docs/workflow.md.
 argument-hint: [optional notes; run from inside the target repo]
 ---
 
@@ -11,10 +11,10 @@ worktree). Turn the README's **Prerequisites** checklist from something the owne
 self-diagnoses into something you actually walk them through: explore what's already true, then
 only ask about what isn't — each item with your own recommended action stated up front, so the
 owner can accept in one word. Same interview discipline `groom` uses for scope (see its steps 1
-and 4), and the **Presenting to the owner** contract in `docs/workflow.md`: one question at a time,
-recommended default alongside it, ordered so an earlier answer can
-make a later question moot. Step 1's read-only checks run as a batch, which that contract names as
-exempt from the one-at-a-time rule.
+and 4), and the **Presenting to the owner** contract in `docs/workflow.md`: one question per
+message, in its question format, recommended default alongside it, ordered so an earlier answer
+can make a later question moot.  Step 1's read-only checks run in parallel, and their results are
+shown as information: they ask nothing, so they may be shown together.
 
 ## Steps
 
@@ -61,8 +61,11 @@ exempt from the one-at-a-time rule.
    - **Default agent wiring**: read `.claude/settings.json` for an `agent` field already pointing
      at `spec-flow:project-manager` or similar.
 
-2. **Walk through only what's missing, one item at a time — recommended default first, skip
-   anything step 1 already confirmed.** For each:
+2. **Walk through only what's missing, one item per message — recommended default first, skip
+   anything step 1 already confirmed.** Show step 1's results first, as information.  Then list
+   every item that needs an answer as bullets, and ask about each one in its own message, in the
+   format in **Presenting to the owner** in `docs/workflow.md`; ask the next only after the owner
+   answers.  For each:
    - **OpenSpec not initialized** → tell the owner precisely what's missing (CLI not installed, or
      installed but no `openspec/` here) and point them at OpenSpec's own install/init docs — don't
      guess at exact init flags for a tool this skill doesn't own.
@@ -246,8 +249,10 @@ exempt from the one-at-a-time rule.
 - **Explore before asking — never ask about something step 1 already answered.** The entire point
   is collapsing a self-service checklist into "here's what's actually missing," not restating the
   whole README as a question set.
-- **One question at a time, recommended default stated up front**, same convention as `groom`'s
-  step 1 — never a batch of "here are five things, pick your answers."
+- **One question per message, recommended default stated up front**, in the format in
+  **Presenting to the owner** in `docs/workflow.md`, same convention as `groom`'s step 1 — never a
+  batch of "here are five things, pick your answers."  The check results are information and ask
+  nothing.
 - **Mechanical, low-risk items (labels, gitignore) get a confident recommended default and act on
   a one-word yes.** Genuine preferences (agent teams, default-agent wiring) get the same
   recommended-default treatment but are flagged as real choices, not just confirmations.

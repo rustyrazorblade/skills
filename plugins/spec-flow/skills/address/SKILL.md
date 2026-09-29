@@ -95,7 +95,13 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
    ```
    Report what changed and the PR URL. State what changed and what is still broken in plain terms;
    if you name a review thread, a comment, or a test, say what it is, and let any identifier ride as
-   a trailing tag only — the **Presenting to the owner** contract in `docs/workflow.md`. The owner
+   a trailing tag only — the **Presenting to the owner** contract in `docs/workflow.md`.
+
+   **A finding the fix round could not resolve without the owner** is a question, not a note.
+   List every such finding as bullets first, then ask about each one in its own message, in the
+   format in **Presenting to the owner** in `docs/workflow.md`.  When the owner is not in the
+   session, ask on the issue, one question per comment ("Question k of n"), never in the PR body
+   or a review-thread reply; the PR body carries information only.  The owner
    re-reviews; loop `/spec-flow:address` again if they
    leave more comments, or they squash-merge and you run `/spec-flow:finalize <N>`.
 
@@ -105,4 +111,5 @@ by branch name: `gh pr list --search "Closes #<N> in:body" --json number,headRef
 - Tolerate the zero-new-comments case gracefully.
 - Reply to the actual review threads so the owner sees resolution in context, not just a force-push.
 - When you cite an issue or PR, always write it as `<number>: <title>`, on its own line with a `-`
-  prefix — never a bare number, and never several run together inline in a sentence.
+  prefix — never a bare number, and never several run together inline in a sentence.  A question
+  to the owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

@@ -32,6 +32,8 @@ below).
 See [`docs/workflow.md`](docs/workflow.md) for the full design (the two seams, lifecycle/labels,
 the naming/correlators, and the review panel).
 
+Every agent asks you questions one per message, with a recommended option.  See **Presenting to the owner** in [`docs/workflow.md`](docs/workflow.md) for the format.
+
 ## Prerequisites (in the consuming repo)
 
 **Fastest path: run `/spec-flow:setup`** once you've installed the plugin — it explores which of
@@ -45,10 +47,11 @@ recommended default, instead of you self-diagnosing this list by hand. The list 
   both github.com and a GitHub Enterprise host), make sure the one active by default (`gh auth
   status`) is the right one for this repo — every skill and `scripts/spawn-issue-manager.sh` shell out
   to bare `gh` commands with no `--repo`/account override, so whichever account is active is the
-  one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.
+  one they act as. Fix with `gh auth switch` or `GH_HOST` if it's picking the wrong one.  The pipeline assumes the active `gh` account is the owner's own; under a shared bot account, the owner's replies and close-on-merge records never count.
 - **`jq`** — installed and on `PATH`. `/spec-flow:groom` builds its create-issue payload with
-  `jq -n --rawfile`, and `scripts/claim-issue.sh`, `scripts/spawn-issue-manager.sh` and
-  `scripts/spawn-archive-batch.sh` parse `gh` output with it. There is no fallback: `groom` stops
+  `jq -n --rawfile`, and `scripts/claim-issue.sh`, `scripts/spawn-issue-manager.sh`,
+  `scripts/spawn-archive-batch.sh`, `scripts/issue-body.sh` and `scripts/close-on-merge.sh` parse
+  `gh` output with it. There is no fallback: `groom` stops
   and tells you rather than composing the payload by hand, because hand-composed JSON is the
   escaping bug the `jq` step exists to remove.
 - **Labels** — run the bootstrap once to create the `P0–P3` + `status:*` +
@@ -135,13 +138,13 @@ All skills are namespaced under the plugin:
 
 | Command | Does |
 |---|---|
-| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Refines it over rounds — a fresh `product-manager` each round, at most three questions, asked one at a time with a recommended default — until every acceptance criterion is testable as written; `groom` ends the loop, never the agent, and one word from you ends it too. State **technical direction** at any round — architecture, performance, implementation constraints — and it lands verbatim in the issue's own `## Technical direction` section and reaches the architect unchanged. Verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
-| `/spec-flow:activate <N>` | Claim it → review it with you (scope/AC freshness + backlog overlap, up to 5 issue-specific questions, skippable via owner-instructions) → worktree + branch → architect + domain expert design it concurrently → **stop for your design choice** → OpenSpec explore+propose from your choice → commit spec → **stop for your approval** (Seam 1). A `type:docs` issue always skips the design stop, and skips spec generation too unless the docs' own layout is changing or it documents a tech change — otherwise it's just a quick review of the issue's own scope. A `type:tech-debt` issue always skips spec generation, and by default the design stop too — architect auto-adopts the confirmed Direction unless something's actually wrong. |
+| `/spec-flow:groom` | Rough idea → scoped, labeled GitHub issue (scope, acceptance criteria, one `P0–P3`). Refines it over rounds — a fresh `product-manager` each round, every question it cannot settle, asked one per message with a recommended default — until every acceptance criterion is testable as written; `groom` ends the loop, never the agent, and one word from you ends it too. State **technical direction** at any round — architecture, performance, implementation constraints — and it lands verbatim in the issue's own `## Technical direction` section and reaches the architect unchanged. Verifies bug reports read-only before scoping them; offers `type:docs` to fast-track documentation-only work. |
+| `/spec-flow:activate <N>` | Claim it, review it with you, design it, **stop for your design choice**, then generate the spec and **stop for your approval** (Seam 1).  See **The two human seams** in [`docs/workflow.md`](docs/workflow.md) for the backlog review, a duplicate that closes when this PR merges, and the `type:docs` and `type:tech-debt` fast paths. |
 | `/spec-flow:implement <N>` | After approval: background team (tdd-developer → the review panel your `spec-flow/WORKFLOWS.md` names → fix loop → build-engineer → docs) → push branch → open PR. A `type:docs` issue instead runs one lightweight doc-writing pass, architect available on demand. A `type:tech-debt` issue still gets the full panel, in behavior-preservation mode (no spec to conform to). |
 | `/spec-flow:address <N>` | Pull your PR review comments → fix in the worktree → push → reply per thread. |
 | `/spec-flow:sync-ci <N>` | CI went red → pull the failing test ids into the branch's local flagged set so the fast loop guards them too. Runs when you notice CI go red, or when `issue-manager` notices itself (a single check tied to its own push, not a poll loop) — either way the fix confirms the flagged test locally before pushing again. |
 | `/spec-flow:board` | One view of every in-flight issue: stage, priority, PR/CI state, what's next, what's blocked on you, and how many specs are pending the next `/spec-flow:archive`. |
-| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, then removes the worktree. Never opens a PR; never touches the OpenSpec archive — that's `project-manager`'s job, batched. |
+| `/spec-flow:finalize <N>` | Once the feature PR has merged (your squash-merge by default, or `implement`'s own auto-merge if instructed): closes the issue, closes and cleans any issue recorded to close with it, then removes the worktree. Never opens a PR; never touches the OpenSpec archive — that's `project-manager`'s job, batched. |
 | `/spec-flow:archive` | Counts un-archived OpenSpec changes against a threshold (default 5, overridable) and, once you confirm the batch, spawns a dedicated background worker to sync+archive them all and land one PR. Not automatic — you (or project-manager noticing the buildup) trigger it. |
 | `/tech-debt` | Lives in `dev-skills`, not spec-flow. A parallel team of review agents audits the codebase for SOLID/composability, duplication, and unnecessary layering, ranks the 10 most impactful findings (skipping anything already an open issue), and walks you through them one at a time — you decide per finding whether to file it. If `dev-skills` is installed, `project-manager` recommends running it weekly or every 20 merged PRs, whichever comes first; never automatic. |
 | `/spec-flow:adopt-tiering` | One-time, repo-wide, and only where the repo's own policy chooses that split: separate an existing suite into a fast unit tier and a slow integration tier, and wire CI to the `spec-flow-failures` artifact contract. Not an assumption the pipeline makes — a repo whose policy points elsewhere never needs this. |

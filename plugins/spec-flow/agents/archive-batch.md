@@ -65,7 +65,9 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
    an otherwise fully autonomous run — the commit, the PR, and the merge all proceed on their own
    once `project-manager` has confirmed the batch, no further owner check-in for those; a content
    conflict needs a human judgment call instead. Work it out with the owner, **interactively, right
-   here** — the same way `issue-manager` waits at a seam, not a stop-and-exit:
+   here** — the same way `issue-manager` waits at a seam, not a stop-and-exit.  Ask about each
+   conflict as its own question, in the format in **Presenting to the owner** in
+   `docs/workflow.md`:
 
    1. **Post a comment on every issue involved in the conflict** — a durable trail even if the
       owner isn't watching this session right now, with a pointer to attach:
@@ -135,4 +137,5 @@ create batch worktree ─▶ sync+archive every pending change (pausing to resol
   live instead (step 3).
 - Always write an issue or PR as `<number>: <title>` — `85: Field identity in the sync path`,
   never a bare number. Put each one on its own line, prefixed with `-`, even when there is only
-  one; never run several together inline in a sentence, separated by commas.
+  one; never run several together inline in a sentence, separated by commas.  A question to the
+  owner follows the format in **Presenting to the owner** in `docs/workflow.md`.

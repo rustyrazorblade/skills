@@ -130,7 +130,9 @@ you notice and confirm, a dedicated background process does the actual work.
   don't run `/spec-flow:archive`'s spawn step over a count that hasn't been reached and wasn't
   overridden.
 - **At or above threshold (or overridden) → always confirm the specific batch with the owner
-  before spawning anything.** List which issues, one per line, as `- <number>: <title>`. This mirrors the
+  before spawning anything.** Ask it as one question, in the format in **Presenting to the owner**
+  in `docs/workflow.md`: the decision is whether to archive these now, and the issues it holds are
+  listed one per line, as `- <number>: <title>`, as the question's referenced items. This mirrors the
   owner's two seams in spirit even though it isn't one of them structurally — landing a real PR is
   still real, and the owner should see what's in it before it's built.
 - **Once confirmed, delegate — don't do the archiving yourself.** Run
@@ -276,8 +278,8 @@ found is a separate act, and it is yours.
 - **Front-of-pipeline delegation.** **`product-manager`** — when shaping a new idea (in `groom`),
   refine it over **rounds**, not one spawn. Each round is a fresh `product-manager` prompted with
   the owner's raw idea, the refinement record, and the previous round's refinement; it returns
-  scope + testable acceptance criteria and up to three questions, which you relay to the owner one
-  at a time. **You decide when the loop ends**, by judging the refinement against `groom`'s
+  scope + testable acceptance criteria and every question it cannot settle, which you list first,
+  then relay to the owner one per message. **You decide when the loop ends**, by judging the refinement against `groom`'s
   readiness bar — never by taking the agent's word that it's finished. Then draft and create the
   issue. `skills/groom/SKILL.md` step 4 is the authority on the loop; follow it rather than a
   shape you assume. (`architect` is spawned by `issue-manager`, inside its `activate` step, not by
@@ -325,17 +327,16 @@ on the owner's behalf.
 
 - **Present to the owner by the contract.** Every owner-facing presentation you make — the next
   decision, the archive batch to confirm, an option list — follows the **Presenting to the owner**
-  contract in `docs/workflow.md`: state the substance in plain terms before any identifier, one
-  decision at a time by default, each option with its cost and the recommended one marked. This
-  extends, and does not repeat, the rule above that you never translate the owner's autonomy words
-  into internal Seam vocabulary. The board and the archive batch are deliberate batch presentations
-  the contract names as exempt from the one-at-a-time rule; still state each item in them in plain
-  terms.
+  contract in `docs/workflow.md`, and every question uses its question format, one question per
+  message. This extends, and does not repeat, the rule above that you never translate the owner's
+  autonomy words into internal Seam vocabulary. The board is information, not a question, so it may
+  list many issues at once; the archive confirm is one question. State each item in plain terms.
 - **Lead with the board, then a recommendation.** Tell the owner what's next and what's blocked on
   them in one tight picture, then propose the single next action — don't dump every option.
 - **Always write an issue or PR as `<number>: <title>`** — `85: Field identity in the sync path`,
   `PR 97: Add the test-rigor agent`. Never write a bare number; the owner does not remember
-  numbers, so the title is the part that carries meaning.
+  numbers, so the title is the part that carries meaning.  A question to the owner follows the
+  format in **Presenting to the owner** in `docs/workflow.md`.
 - **Put every issue on its own line, prefixed with `-`.** Never run issues together inline in a
   sentence, separated by commas. This applies to a single issue too — give it its own line, in the
   same `<number>: <title>` format:

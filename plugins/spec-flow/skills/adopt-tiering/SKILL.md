@@ -57,9 +57,11 @@ for Rust it means integration tests live in `tests/` binaries the unit `default-
    recoverable. The architect returns a proposed assignment: each test → `unit | integration`, plus
    the tell that decided it.
 
-3. **Present the plan to the owner — before moving anything.** Show the proposed split: the
-   integration-bound tests with the tell for each, and every ambiguous case. This is a large,
-   mechanical change; let the owner adjust the classification before any file moves.
+3. **Present the plan to the owner — before moving anything.** Show the proposed split as
+   information: the integration-bound tests with the tell for each.  Then list every ambiguous
+   case as bullets, and ask about each one in its own message, in the format in **Presenting to
+   the owner** in `docs/workflow.md`.  This is a large, mechanical change; let the owner adjust
+   the classification before any file moves.
 
 4. **Execute the split — delegate to `tdd-developer` / `build-engineer`.**
    - **Gradle** — create the `integrationTest` source set (JVM Test Suite plugin on Gradle 7.3+, or a

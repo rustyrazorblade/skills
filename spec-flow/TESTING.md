@@ -11,7 +11,8 @@ Keep it short. Every implementation and review agent reads it on every run.
 `skills` is a plugin repo: markdown, shell, and a little Python. Its tests are hand-rolled
 harnesses, each a plain shell script that runs offline and deterministically. The local gate below
 lists every one of them. It has **no test-running CI**, and no framework: there is no `cargo`, no
-Gradle, no `pytest`, and no `npm test` here. Run a harness by invoking it with `bash`.
+Gradle, no `pytest`, and no `npm test` here. Run a harness by invoking it with `bash`, or, for the
+one `.mjs` check, with `node`.
 
 ## The local gate
 
@@ -29,6 +30,17 @@ Run these on a change, and only where the change touches them:
   - `bash plugins/spec-flow/scripts/test-repo-config.sh` covers
     `plugins/spec-flow/scripts/repo-config.sh` and `plugins/spec-flow/scripts/seed-config.sh`.
   - `bash plugins/spec-flow/scripts/test-board.sh` covers `plugins/spec-flow/scripts/board.py`.
+  - `bash plugins/spec-flow/scripts/test-blocked-dependency.sh` covers
+    `plugins/spec-flow/scripts/blocked-dependency.sh`.
+  - `bash plugins/spec-flow/scripts/test-close-on-merge.sh` covers
+    `plugins/spec-flow/scripts/close-on-merge.sh`. It also runs the real
+    `plugins/spec-flow/scripts/blocked-dependency.sh sweep` against its fake `gh`, so a change to
+    `blocked-dependency.sh` means running this harness too.
+  - `bash plugins/spec-flow/scripts/test-issue-body.sh` covers
+    `plugins/spec-flow/scripts/issue-body.sh`.
+  - `node plugins/spec-flow/scripts/test-implement-workflow.mjs` covers the `closingLines`
+    function in `plugins/spec-flow/skills/implement/implement.workflow.js`: the `alsoCloses` guard
+    and the `Closes #` lines. It covers nothing else in that file.
   - `bash plugins/dev-skills/skills/walkthrough/scripts/test-generate-walkthrough.sh` covers
     `plugins/dev-skills/skills/walkthrough/scripts/generate-walkthrough.py`,
     `plugins/dev-skills/skills/walkthrough/assets/viewer.html`, the manifest fixtures in

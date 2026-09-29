@@ -12,21 +12,6 @@ The **Presenting to the owner** section of `docs/workflow.md` SHALL define one q
 - **WHEN** an agent drafts a question whose first line is not the decision
 - **THEN** the draft does not meet the format, and the agent rewrites it so the decision is the first line
 
-### Requirement: Each option states its effect, pros, cons, and tradeoff, and exactly one is recommended
-When a question lists options, each option SHALL state its concrete effect, its pros, its cons, and the tradeoff the choice makes.  Exactly one option SHALL be marked as recommended.  The contract SHALL NOT allow an agent to withhold a recommendation.
-
-#### Scenario: An option states only its effect
-- **WHEN** an option says what happens but gives no pros, cons, or tradeoff
-- **THEN** the option does not meet the format
-
-#### Scenario: An option states only a cost
-- **WHEN** an option states a cost but not its concrete effect
-- **THEN** the option does not meet the format
-
-#### Scenario: A choice the agent thinks is pure preference
-- **WHEN** an agent presents options for a choice it considers the owner's preference
-- **THEN** it still marks exactly one option as recommended
-
 ### Requirement: A live question uses the menu picker, with the recommended option first
 When an agent asks the owner a question live in the session, it SHALL ask it with the menu picker (the `AskUserQuestion` tool), one question per call.  The recommended option SHALL be listed first, and its label SHALL end with "(Recommended)", so the owner can press Enter to choose it.  The question text SHALL carry the decision and why it comes up now.  Each option's description SHALL carry its effect, pros, cons, and tradeoff.  When the picker cannot hold the question, because it has more options than the picker allows, the agent SHALL ask it in plain text in the same format.  A written question, on an issue or a PR, is not affected.
 
@@ -130,32 +115,6 @@ The prompts of `product-manager` and `architect` SHALL tell each agent to follow
 - **WHEN** `architect` returns a set of options for the design stop
 - **THEN** its prompt told it to write each option with its effect, pros, cons, and tradeoff, and to mark one as recommended
 
-### Requirement: One question per message, with no exceptions
-An agent SHALL put at most one question to the owner in a message, live or written.  Anything that needs the owner's decision SHALL be its own message.  When an agent has several questions, it SHALL first list them all as bullets, for context, and then ask them one per message.  An agent MAY show a list of items only when nothing in it needs an answer.  No file in the plugin SHALL allow several questions in one message, and the owner SHALL NOT be offered a batch.
-
-#### Scenario: An agent has several questions
-- **WHEN** an agent has four questions for the owner
-- **THEN** it lists all four as bullets, then asks the first, and asks the next only after the owner answers
-
-#### Scenario: A reader searches for an exception
-- **WHEN** a reader searches `docs/workflow.md`, `skills/groom/SKILL.md`, `skills/setup/SKILL.md`, `skills/activate/SKILL.md`, and the rest of the plugin for a rule that allows several questions in one message
-- **THEN** none exists, including a rule that lets the owner override to a batch
-
-#### Scenario: The board shows many issues
-- **WHEN** the board renders many issues at once
-- **THEN** that is allowed, because nothing in it needs an answer
-
-#### Scenario: Unresolved fix-loop findings
-- **WHEN** `implement` or `address` has three unresolved findings that each need the owner's decision
-- **THEN** each finding is its own question, and the findings list in the PR body is information only
-
-### Requirement: groom asks about each closing-pass assumption in its own message
-`groom` SHALL ask about each assumption from the closing pass in its own message, each with a recommendation.  It SHALL NOT confirm assumptions in bulk.
-
-#### Scenario: The closing pass returns five assumptions
-- **WHEN** the closing pass returns five assumptions, three traceable to the owner and two not
-- **THEN** `groom` lists all five as bullets, then asks about each one in its own message, each with a recommended answer
-
 ### Requirement: setup and the design stop ask about each item in its own message
 `setup` SHALL show its check results as information and SHALL ask about each item that needs an answer in its own message.  `activate` step 4 SHALL ask about each design choice and each debt item in its own message.
 
@@ -201,21 +160,6 @@ No skill or agent SHALL cap the number of questions an agent may ask the owner i
 - **WHEN** a reader searches `skills/groom/SKILL.md`, `agents/product-manager.md`, `skills/activate/SKILL.md`, and the rest of the plugin for a number that caps how many questions reach the owner
 - **THEN** none exists, including "at most three per round", "up to three questions", and "up to five"
 
-### Requirement: A refinement round relays every question it returns, with no per-round limit
-`product-manager` SHALL return every question a round cannot settle from the refinement record or the repo, ranked by how much the answer changes the work, each with a recommended default.  It SHALL NOT hold a question back to meet a per-round size.  `groom` SHALL relay every question the round returns, one per message, after listing them all as bullets.  It SHALL NOT drop or defer a question because of how many the round returned.  The rule that a question arriving without a recommended default is not relayed stays in force.
-
-#### Scenario: A round returns five questions
-- **WHEN** a `product-manager` round returns five questions, each with a recommended default
-- **THEN** `groom` lists all five as bullets, then asks each one in its own message, in the ranked order, and asks the next only after the owner answers
-
-#### Scenario: A round has more open items than three
-- **WHEN** a round finds six open items it cannot settle from the record or the repo
-- **THEN** it returns all six as questions, and none is moved to a later round or turned into an assumption because of a per-round size
-
-#### Scenario: A question without a default in a large round
-- **WHEN** a round returns four questions and one has no recommended default
-- **THEN** `groom` relays the other three, and records the fourth as dropped
-
 ### Requirement: The briefing comes first, in the same turn as the first question
 When the owner returns to the session, or after a review has run, the agent SHALL send, in one turn: the briefing and the bullet list of upcoming questions, then a horizontal rule, then the first question.  Later questions in the same series SHALL carry no briefing.  Each question SHALL still carry the format's parts 2 and 3.
 
@@ -249,3 +193,77 @@ A written question SHALL be posted only as an issue comment.  The comment SHALL 
 #### Scenario: A needs-attention series
 - **WHEN** a needs-attention series has two questions and the owner answers the first
 - **THEN** the `needs-attention` label stays until the second is answered
+
+## MODIFIED Requirements
+
+### Requirement: One question per message, with no exceptions
+An agent SHALL put at most one question to the owner in a message, live or written.  Anything that needs the owner's decision SHALL be its own message.  When an agent has several questions, it SHALL first list them all as bullets, for context, and then ask them one per message.  An agent MAY show a list of items only when nothing in it needs an answer.  No file in the plugin SHALL allow several questions in one message, and the owner SHALL NOT be offered a batch.
+
+#### Scenario: An agent has several questions
+- **WHEN** an agent has four questions for the owner
+- **THEN** it lists all four as bullets, then asks the first, and asks the next only after the owner answers
+
+#### Scenario: A reader searches for an exception
+- **WHEN** a reader searches `docs/workflow.md`, `skills/groom/SKILL.md`, `skills/setup/SKILL.md`, `skills/activate/SKILL.md`, and the rest of the plugin for a rule that allows several questions in one message
+- **THEN** none exists, including a rule that lets the owner override to a batch
+
+#### Scenario: The board shows many issues
+- **WHEN** the board renders many issues at once
+- **THEN** that is allowed, because nothing in it needs an answer
+
+#### Scenario: Unresolved fix-loop findings
+- **WHEN** `implement` or `address` has three unresolved findings that each need the owner's decision
+- **THEN** each finding is its own question, and the findings list in the PR body is information only
+
+### Requirement: Each option states its effect, pros, cons, and tradeoff, and exactly one is recommended
+When a question lists options, each option SHALL state its concrete effect, its pros, its cons, and the tradeoff the choice makes.  Exactly one option SHALL be marked as recommended.  The contract SHALL NOT allow an agent to withhold a recommendation.
+
+#### Scenario: An option states only its effect
+- **WHEN** an option says what happens but gives no pros, cons, or tradeoff
+- **THEN** the option does not meet the format
+
+#### Scenario: An option states only a cost
+- **WHEN** an option states a cost but not its concrete effect
+- **THEN** the option does not meet the format
+
+#### Scenario: A choice the agent thinks is pure preference
+- **WHEN** an agent presents options for a choice it considers the owner's preference
+- **THEN** it still marks exactly one option as recommended
+
+### Requirement: Plain terms and one question per message apply to live and written presentations
+The plain-terms rules SHALL apply to every presentation, whether interactive or written into an artifact such as a PR body or an issue comment.  The one-question-per-message rule SHALL apply to written questions as well as to live turns: a written question is posted on the issue thread, one question per comment.  A written list that needs no answer, such as a residual findings list in a PR body, is information and is not split.
+
+#### Scenario: A finding written into a PR body
+- **WHEN** an agent writes residual findings into a PR body
+- **THEN** each finding is stated in plain terms with the identifier as a trailing tag
+- **AND** the list is information only, and any finding that needs the owner's decision is asked on the issue, one question per comment
+
+### Requirement: Every owner-facing presenter is bound
+Every agent or skill that presents findings, options, or questions to the owner SHALL follow this contract.  The bound presenters are `issue-manager`, `implement`, `address`, `activate`, `groom`, `setup`, and `project-manager`.  `product-manager` and `architect` SHALL follow the question format for any question or list of options they draft for the owner, even though a relayer presents it.  A review subagent that returns structured output to a relayer, and never drafts a question for the owner, is not bound.
+
+#### Scenario: The central coordinator presents a decision
+- **WHEN** `project-manager` asks the owner which issue to start next
+- **THEN** it follows the contract, the same as any other bound presenter
+
+#### Scenario: A review subagent returns findings to its lead
+- **WHEN** a lens returns findings tagged with identifiers to its lead agent
+- **THEN** the identifiers are correct on that agent-to-agent channel and are not changed by this contract
+
+## REMOVED Requirements
+
+### Requirement: The owner may override to a batch
+**Reason**: The owner never wants a batch.  Every question is its own message, and the owner is never offered a set at once.
+**Migration**: None; there is no replacement.  "One question per message, with no exceptions" forbids any rule that lets the owner override to a batch.
+
+### Requirement: Deliberate batch presentations are exempt
+**Reason**: A list is allowed only when nothing in it needs an answer.  The exemption let `groom`'s bulk assumption confirm and the Seam 1 tables act as a batch of questions.
+**Migration**: The board, `setup`'s check results, the rendered spec at Seam 1, and a residual findings list stay allowed as information under "One question per message, with no exceptions".  `groom` asks about each assumption in its own message (`idea-refinement`: "Assumptions are confirmed one at a time, split by provenance").  Seam 1 asks about each override and conflict in its own message ("Seam 1 asks about each override and conflict in its own message").
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Decisions are presented one at a time by default`
+- TO: `### Requirement: One question per message, with no exceptions`
+- FROM: `### Requirement: Options state their cost, and the recommended one is marked where one exists`
+- TO: `### Requirement: Each option states its effect, pros, cons, and tradeoff, and exactly one is recommended`
+- FROM: `### Requirement: Plain terms apply to written artifacts; one-at-a-time applies to live turns`
+- TO: `### Requirement: Plain terms and one question per message apply to live and written presentations`

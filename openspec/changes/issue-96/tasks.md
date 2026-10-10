@@ -48,7 +48,7 @@
 
 ## 6. Review of failure paths by reading
 
-- [ ] 6.1 Read `report-upload.md`, run Completion, and explore Teardown against every failure scenario in `specs/easy-db-lab-report-upload/spec.md` (interactive failure, shut down anyway, retry, keep up, unattended failure, launcher override, one DC fails, rejected explore batch, step-2 failure).  Failure paths are verified by reading only, not live, per owner decision Q9.  Record the result per scenario.
+- [x] 6.1 Read `report-upload.md`, run Completion, and explore Teardown against every failure scenario in `specs/easy-db-lab-report-upload/spec.md` (interactive failure, shut down anyway, retry, keep up, unattended failure, launcher override, one DC fails, rejected explore batch, step-2 failure).  Failure paths are verified by reading only, not live, per owner decision Q9.  Record the result per scenario.
 
 ## 7. Live end-to-end verification (owner decision Q9)
 

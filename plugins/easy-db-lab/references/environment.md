@@ -62,7 +62,7 @@ The full observability stack is deployed automatically when the cluster comes up
 
 The `easy-db-lab` CLI itself is auto-instrumented via the OpenTelemetry Java Agent, which captures HTTP client traces and JVM metrics without any manual instrumentation in the Kotlin code.
 
-`easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. Use `easy-db-lab logs` and `easy-db-lab metrics` for querying. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
+`easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. For log and metric queries, read `easy-db-lab help observability`. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
 
 ## Cassandra
 

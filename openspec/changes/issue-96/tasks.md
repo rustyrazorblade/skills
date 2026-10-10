@@ -41,10 +41,10 @@
 
 ## 5. plugins/easy-db-lab/references/ (commands.md, environment.md)
 
-- [ ] 5.1 Delete `plugins/easy-db-lab/references/commands.md`.
-- [ ] 5.2 `references/environment.md` line 65: remove `easy-db-lab metrics`; point to `easy-db-lab help observability` for log and metric queries.
-- [ ] 5.3 Run `grep -rn "commands\.md" plugins/` and confirm no match.
-- [ ] 5.4 Ask the owner whether to bump the easy-db-lab plugin version (current `0.12.1` in `plugins/easy-db-lab/.claude-plugin/plugin.json`, plus `plugins/easy-db-lab/.codex-plugin/plugin.json`); update both files only after the owner gives the new version.
+- [x] 5.1 Delete `plugins/easy-db-lab/references/commands.md`.
+- [x] 5.2 `references/environment.md` line 65: remove `easy-db-lab metrics`; point to `easy-db-lab help observability` for log and metric queries.
+- [x] 5.3 Run `grep -rn "commands\.md" plugins/` and confirm no match.
+- [x] 5.4 Ask the owner whether to bump the easy-db-lab plugin version (current `0.12.1` in `plugins/easy-db-lab/.claude-plugin/plugin.json`, plus `plugins/easy-db-lab/.codex-plugin/plugin.json`); update both files only after the owner gives the new version.
 
 ## 6. Review of failure paths by reading
 

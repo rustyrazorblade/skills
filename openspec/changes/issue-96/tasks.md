@@ -32,12 +32,12 @@
 
 ## 4. plugins/easy-db-lab/skills/plan/SKILL.md
 
-- [ ] 4.1 Previous Run (line 23): add one sentence that excludes teardown steps from the steps carried into a new plan.
-- [ ] 4.2 Binary resolution (lines 29-34, 66): remove the `commands.md` fallback; check with `command -v`; interactive asks for a path first; unattended or no usable path stops and reports the paths searched; nothing is written from memory.
-- [ ] 4.3 Gap analysis (line 138): remove the "Teardown is included if AWS cost matters" bullet.
-- [ ] 4.4 Step 3 outline (line 231): remove "Tear down (if applicable)"; add one sentence that teardown belongs to the run skill's Completion gate.  Keep the rule that the run skill owns all reporting (line 234), so plans contain no upload step.
-- [ ] 4.5 Step 4 quality gate (lines 271-278, 281): replace the `commands.md` check with verification against `$EDB commands`, `help <topic>`, and `--help`; remove the "Teardown is included if cost matters" bullet.
-- [ ] 4.6 Step 5 review (lines 300-302): replace the `references/commands.md` check with the binary sources.
+- [x] 4.1 Previous Run (line 23): add one sentence that excludes teardown steps from the steps carried into a new plan.
+- [x] 4.2 Binary resolution (lines 29-34, 66): remove the `commands.md` fallback; check with `command -v`; interactive asks for a path first; unattended or no usable path stops and reports the paths searched; nothing is written from memory.
+- [x] 4.3 Gap analysis (line 138): remove the "Teardown is included if AWS cost matters" bullet.
+- [x] 4.4 Step 3 outline (line 231): remove "Tear down (if applicable)"; add one sentence that teardown belongs to the run skill's Completion gate.  Keep the rule that the run skill owns all reporting (line 234), so plans contain no upload step.
+- [x] 4.5 Step 4 quality gate (lines 271-278, 281): replace the `commands.md` check with verification against `$EDB commands`, `help <topic>`, and `--help`; remove the "Teardown is included if cost matters" bullet.
+- [x] 4.6 Step 5 review (lines 300-302): replace the `references/commands.md` check with the binary sources.
 
 ## 5. plugins/easy-db-lab/references/ (commands.md, environment.md)
 

@@ -11,15 +11,15 @@
 
 ## 2. plugins/easy-db-lab/skills/run/SKILL.md
 
-- [ ] 2.1 Discovery (line 46): remove the `commands.md` fallback.  Add the `report upload` support check that points to `report-upload.md`.
-- [ ] 2.2 Before Starting (line 112): keep the ask-for-`--binary` question; add that the skill stops and reports the paths searched when the user has no path or the path is not executable, and that an unattended run never asks and stops with the paths searched.
-- [ ] 2.3 Near "Run Commands to Completion" (line 69): add one rule that every real top-level `$EDB down` is gated by `../../references/report-upload.md`; `spark down` and `down --dry-run` are exempt.
-- [ ] 2.4 Execution Loop step 3 (line 220): replace the `commands.md` load with verification against `$EDB commands`, `$EDB help <topic>`, and `--help`; keep the database references and the `--` separator rule; correct the `cassandra nodetool` example wording to point at `nt`.
-- [ ] 2.5 Execution Loop step 4 (line 243): change `$EDB cassandra nodetool status` to `$EDB cassandra nt status`.
-- [ ] 2.6 Completion step 2 (lines 273-281): after the verified build (exit 0 and `docs/report/index.html` exists), run the upload of the four files per `report-upload.md` before step 3; a failed build still blocks the upload.
-- [ ] 2.7 Completion step 3 (lines 283-312): route a stated shutdown intent (user or launcher), Option 2, and a later shutdown request during Option 1 through the teardown gate; change `$EDB down` to `$EDB down --auto-approve` on every DC.
-- [ ] 2.8 Completion step 3: in unattended mode with no teardown intent, report "cluster still up" to the launcher and stop.
-- [ ] 2.9 Pausing and Resuming: add the "Completion / teardown" resume entry point; state that a coordinator relaunches the run skill there and never runs `$EDB down` itself.  Update the Parallel arms bullet "No agent decides teardown on its own" to point to it.
+- [x] 2.1 Discovery (line 46): remove the `commands.md` fallback.  Add the `report upload` support check that points to `report-upload.md`.
+- [x] 2.2 Before Starting (line 112): keep the ask-for-`--binary` question; add that the skill stops and reports the paths searched when the user has no path or the path is not executable, and that an unattended run never asks and stops with the paths searched.
+- [x] 2.3 Near "Run Commands to Completion" (line 69): add one rule that every real top-level `$EDB down` is gated by `../../references/report-upload.md`; `spark down` and `down --dry-run` are exempt.
+- [x] 2.4 Execution Loop step 3 (line 220): replace the `commands.md` load with verification against `$EDB commands`, `$EDB help <topic>`, and `--help`; keep the database references and the `--` separator rule; correct the `cassandra nodetool` example wording to point at `nt`.
+- [x] 2.5 Execution Loop step 4 (line 243): change `$EDB cassandra nodetool status` to `$EDB cassandra nt status`.
+- [x] 2.6 Completion step 2 (lines 273-281): after the verified build (exit 0 and `docs/report/index.html` exists), run the upload of the four files per `report-upload.md` before step 3; a failed build still blocks the upload.
+- [x] 2.7 Completion step 3 (lines 283-312): route a stated shutdown intent (user or launcher), Option 2, and a later shutdown request during Option 1 through the teardown gate; change `$EDB down` to `$EDB down --auto-approve` on every DC.
+- [x] 2.8 Completion step 3: in unattended mode with no teardown intent, report "cluster still up" to the launcher and stop.
+- [x] 2.9 Pausing and Resuming: add the "Completion / teardown" resume entry point; state that a coordinator relaunches the run skill there and never runs `$EDB down` itself.  Update the Parallel arms bullet "No agent decides teardown on its own" to point to it.
 
 ## 3. plugins/easy-db-lab/skills/explore/SKILL.md
 

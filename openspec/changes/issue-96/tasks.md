@@ -23,12 +23,12 @@
 
 ## 3. plugins/easy-db-lab/skills/explore/SKILL.md
 
-- [ ] 3.1 Step 1 binary resolution (line 26): run `detect-cluster-layout.sh` first and use the wrapper(s) it finds; with no workspace, use `bin/easy-db-lab`, then `PATH` via `command -v`; interactive asks for a path when none resolves; unattended stops and reports the paths searched.
-- [ ] 3.2 Step 1 discovery (lines 30-34): make discovery help-first (`$EDB help`, `$EDB help <topic>`, then `$EDB commands` and `--help`), with the `Unmatched argument` fallback; add the `report upload` support check.
-- [ ] 3.3 Step 2 provisioning (lines 61, 64-65): change `--db`/`--app` to `--db.count`/`--app.count` on the `init` lines only; change the bare `easy-db-lab` on lines 64-65 to `$EDB`.
-- [ ] 3.4 Teardown (lines 96-110): remove `$EDB down --clickhouse.backup`; add the upload of eligible `docs/*.md` per `report-upload.md` before `$EDB down --auto-approve`, with the gate and failure handling; keep `--dry-run` as the exempt preview; state the multi-DC rule.
-- [ ] 3.5 Observability (lines 148-154): remove `logs backup`, `logs ls`, `metrics backup`, `metrics ls`; point to `$EDB help observability`.  Correct any remaining block in the file that repeats tool syntax, or replace it with a pointer to the right `help <topic>`.
-- [ ] 3.6 Guidance Principles (line 188): change principle 1 to the help-first order.
+- [x] 3.1 Step 1 binary resolution (line 26): run `detect-cluster-layout.sh` first and use the wrapper(s) it finds; with no workspace, use `bin/easy-db-lab`, then `PATH` via `command -v`; interactive asks for a path when none resolves; unattended stops and reports the paths searched.
+- [x] 3.2 Step 1 discovery (lines 30-34): make discovery help-first (`$EDB help`, `$EDB help <topic>`, then `$EDB commands` and `--help`), with the `Unmatched argument` fallback; add the `report upload` support check.
+- [x] 3.3 Step 2 provisioning (lines 61, 64-65): change `--db`/`--app` to `--db.count`/`--app.count` on the `init` lines only; change the bare `easy-db-lab` on lines 64-65 to `$EDB`.
+- [x] 3.4 Teardown (lines 96-110): remove `$EDB down --clickhouse.backup`; add the upload of eligible `docs/*.md` per `report-upload.md` before `$EDB down --auto-approve`, with the gate and failure handling; keep `--dry-run` as the exempt preview; state the multi-DC rule.
+- [x] 3.5 Observability (lines 148-154): remove `logs backup`, `logs ls`, `metrics backup`, `metrics ls`; point to `$EDB help observability`.  Correct any remaining block in the file that repeats tool syntax, or replace it with a pointer to the right `help <topic>`.
+- [x] 3.6 Guidance Principles (line 188): change principle 1 to the help-first order.
 
 ## 4. plugins/easy-db-lab/skills/plan/SKILL.md
 

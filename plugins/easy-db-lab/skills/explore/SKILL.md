@@ -23,15 +23,34 @@ Load `../../references/issues.md` for instructions on maintaining `docs/issues.m
 
 ## Step 1 — Check Environment State
 
-**Resolve the binary:** Check whether `bin/easy-db-lab` exists in the current directory (`ls bin/easy-db-lab 2>/dev/null`). If it exists, use `bin/easy-db-lab` as `$EDB`. Otherwise use `easy-db-lab` as `$EDB`. Use `$EDB` for all binary invocations in this skill.
+**Resolve the binary.**  Use `$EDB` for all binary invocations in this skill.  Resolve it in this order:
 
-Run these two commands immediately when invoked, before answering any question or taking any action:
+1. Run `detect-cluster-layout.sh "$PWD"`.  If it exits 0, `eval` its output.  In a single-DC workspace, use the `EDB` wrapper it reports.  In a multi-DC workspace, use the per-DC wrappers it reports (`EDB_DC1`, `EDB_DC2`, ...): run DC commands, uploads, and teardown through every DC wrapper.
+2. If it finds no wrapper, there is no workspace.  Use `$PWD/bin/easy-db-lab` if it is executable.
+3. Otherwise, use the path that `command -v easy-db-lab` prints.
 
-**1. Discover the current command surface:**
 ```bash
+eval "$(detect-cluster-layout.sh "$PWD")"
+```
+
+If no binary resolves in an interactive session, ask the user for a path.  If the user has no path, or the path is not executable, stop and report the paths searched.  In an unattended session, do not ask: stop and report the paths searched.  Without a binary, write no command or file from memory.
+
+Run these commands immediately when invoked, before answering any question or taking any action:
+
+**1. Discover the current command surface, help-first:**
+```bash
+# List the task-oriented topic guides
+$EDB help
+
+# Read the guide for each topic the session touches
+$EDB help <topic>
+
+# The flag-level reference
 $EDB commands
 ```
-Use this to confirm flag names, subcommand structure, and available options. Never guess flags.
+Each `help <topic>` guide gives the intended command sequence for a topic.  Use `$EDB commands`, and `$EDB <command> --help`, to confirm flag names, subcommand structure, and available options.  Never guess flags.  If `$EDB help` errors with `Unmatched argument at index 0: 'help'`, the binary predates the topic guides.  Skip the guides and use `commands` and `--help`.
+
+In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.
 
 **2. Check the directory state:**
 ```bash
@@ -40,6 +59,8 @@ ls state.json 2>/dev/null && echo EXISTS || echo EMPTY
 
 - **`state.json` exists** → a workspace is already initialized. Run `$EDB status` immediately. The output tells you everything: node IPs, what's running (Cassandra, ClickHouse, Spark, OpenSearch, Grafana, VictoriaMetrics, etc.), and the current cluster state. Use this as ground truth before proceeding to Step 3.
 - **No `state.json`** → no environment has been provisioned yet. Proceed to Step 2.
+
+In a multi-DC workspace, `state.json` lives in each DC directory, not in the current directory.  Use the `STATE` value from `detect-cluster-layout.sh` instead: `provisioned` means run `$EDB status` through every DC wrapper.
 
 **This is an existence check only.** `state.json` is an internal file of the `easy-db-lab` tool. It
 is not a documented interface, and its shape can change at any time. Never read it, never parse it,
@@ -58,11 +79,11 @@ Walk through the `$EDB init --up` flow directly:
 
 ```bash
 # Single DC
-$EDB init <name> --db <count> --app <count> --up
+$EDB init <name> --db.count <count> --app.count <count> --up
 
 # Multi-DC (each DC in its own subdirectory, non-overlapping CIDRs /20 or larger)
-(mkdir -p dc1 && cd dc1 && easy-db-lab init dc1 --db <count> --app <count> --cidr 10.0.0.0/16 --up) &
-(mkdir -p dc2 && cd dc2 && easy-db-lab init dc2 --db <count> --app <count> --cidr 10.1.0.0/16 --up) &
+(mkdir -p dc1 && cd dc1 && $EDB init dc1 --db.count <count> --app.count <count> --cidr 10.0.0.0/16 --up) &
+(mkdir -p dc2 && cd dc2 && $EDB init dc2 --db.count <count> --app.count <count> --cidr 10.1.0.0/16 --up) &
 wait
 ```
 
@@ -95,18 +116,21 @@ All `easy-db-lab` commands must be run from the **lab workspace directory** — 
 
 ## Teardown
 
-```bash
-# Tear down (prompts for confirmation)
-$EDB down
+Every real `$EDB down` is gated on the report upload.  Follow `../../references/report-upload.md` for the file selection, the upload procedure, the gate, and the failure handling.
 
-# Preview what would be deleted
+1. Choose the files with the explore rule in the reference.  List every existing `docs/*.md` by absolute path.  Exclude `SUMMARY.md`, and exclude `results.md` while it holds only the scaffold comments.  Name each excluded file in `docs/journal.md`.
+2. If `docs/` does not exist, or no eligible file remains, do not upload.  Run `$EDB down --auto-approve`.
+3. Otherwise, run one `$EDB report upload` command with the eligible files, per DC wrapper.
+4. Run `$EDB down --auto-approve` only if every upload exits 0.  If an upload fails, or the CLI rejects the batch, do not run `down`.  Follow the failure handling in the reference.
+
+In a multi-DC workspace, upload through every DC wrapper first.  Then run `$EDB down --auto-approve` through every DC wrapper.  If there is no wrapper, run each DC's commands from that DC's directory.
+
+```bash
+# Preview what would be deleted (destroys nothing; needs no upload)
 $EDB down --dry-run
 
-# Auto-approve
+# Real teardown, only after the upload gate passes
 $EDB down --auto-approve
-
-# Back up ClickHouse data before teardown
-$EDB down --clickhouse.backup
 ```
 
 ## Database Workflows
@@ -135,23 +159,13 @@ $EDB ip --private db0
 
 ## Observability
 
-```bash
-# Re-apply observability stack config (only if config has drifted — not needed in normal use)
-$EDB grafana update-config
+Read `$EDB help observability` for the observability stack, its endpoints, and the log, metric, and annotation commands.  Confirm flags with `$EDB commands` before you run a command.
 
+```bash
 # Query logs
 $EDB logs query --source cassandra --since 1h
 $EDB logs query --host db0 --grep "ERROR"
 $EDB logs query --unit cassandra.service --since 30m
-$EDB logs query --query '_msg:"OutOfMemory"'
-
-# Back up / restore logs
-$EDB logs backup
-$EDB logs ls
-
-# Back up / restore metrics
-$EDB metrics backup
-$EDB metrics ls
 ```
 
 ## Running Commands on Nodes
@@ -185,7 +199,7 @@ $EDB server --port 8080
 
 ## Guidance Principles
 
-1. **Always run `$EDB commands` first** to get the current command surface before advising on flags.
+1. **Discover the command surface help-first** before advising on flags: run `$EDB help`, then `$EDB help <topic>` for each topic the session touches, then `$EDB commands` and `--help`.
 2. **Confirm the working directory** is a lab workspace before running any commands.
 3. **If `state.json` exists, run `$EDB status`** before any action — it is the source of truth. Test only that the file exists; never read its contents.
 4. **Run every `easy-db-lab` command to completion** before you do anything else. Do not background it, do not cut it short with a timeout, and do not poll `$EDB status` while it runs.

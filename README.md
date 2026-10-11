@@ -156,8 +156,8 @@ Install `easy-db-lab` from the plugins section:
 | Skill | Purpose |
 |-------|---------|
 | `/easy-db-lab:explore` | **Start here** — interactive guided session that provisions an environment if needed, then helps you run tests and explore the cluster |
-| `/easy-db-lab:plan` | Interactively design a lab workflow and write it to a `plan.md` |
-| `/easy-db-lab:run` | Execute a plan step by step in a cluster workspace, confirming each step and journaling as it goes |
+| `/easy-db-lab:plan` | Interactively design a lab workflow and write it to a `plan.md`.  Plans hold no teardown step; `run` owns teardown |
+| `/easy-db-lab:run` | Execute a plan step by step in a cluster workspace, confirming each step and journaling as it goes.  Uploads the report before every teardown |
 | `/easy-db-lab:create-kit` | Author a new kit (kit.yaml, K8s manifests, metrics, dashboards, docs) for any database or workload |
 
 #### Agent
@@ -191,6 +191,9 @@ hands you private IPs; public IPs will not work.
 - Each DC in a multi-DC setup gets its own subdirectory and binary wrapper (`<cluster-dir>/dc1/easy-db-lab`) with independent state
 - `plan` writes to `plan.md` in the current directory unless `--output` says otherwise; `run` reads the plan from `<cluster-dir>/docs/plan.md`
 - Every command and observation is journaled to `<cluster-dir>/docs/journal.md` as it happens, and friction is logged to `docs/issues.md` — this is what lets `run` resume a plan and `plan --previous` learn from a past run
+- `explore`, `plan`, and `run` need the `easy-db-lab` binary.  Each one looks for it in a set order, for example `--binary`, `bin/easy-db-lab`, then `easy-db-lab` on `PATH`.  If no binary resolves, a skill asks for a path in an interactive session; otherwise it stops and reports the paths searched
+- These skills discover the command surface from the binary, help-first: `easy-db-lab help`, then `easy-db-lab help <topic>`, then `easy-db-lab commands` and `--help`.  The plugin ships no static command reference
+- `run` and `explore` upload `docs/*.md` with `easy-db-lab report upload` before every real `down`, so the report shows in the Grafana Tests dashboard.  If the upload fails, they do not tear down.  If the binary has no `report upload`, they skip the upload
 
 ### spec-flow
 

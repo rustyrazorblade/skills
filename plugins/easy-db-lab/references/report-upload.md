@@ -15,7 +15,7 @@ $EDB commands | grep -A2 '^  report'
 If `report upload` is absent, the binary does not support uploads.  Then:
 
 - Skip every upload, at run Completion step 2 and before teardown.
-- Write this once in `docs/journal.md`: the binary has no `report upload`, so the skill skips every upload.
+- Write this once in `docs/journal.md`: the binary has no `report upload`, so the skill skips every upload.  If `docs/journal.md` does not exist yet, the run skill writes the note in its first journal entry after scaffolding.  If the explore skill has no `docs/` directory, tell the user instead.
 - Run `$EDB down --auto-approve` with no gate.
 
 ## Choose the Files
@@ -38,7 +38,7 @@ Never drop one of these four files to make an upload pass.  If a file is missing
 
 ### Explore skill: every eligible `docs/*.md`
 
-1. If `<cluster-dir>/docs/` does not exist, do not upload.  Go to the teardown gate as if the upload exited 0.
+1. If `<cluster-dir>/docs/` does not exist, do not upload.  Tell the user "docs/ not found; no report uploaded" before `down`.  In an unattended session, put this line in the report to the launcher.  Go to the teardown gate as if the upload exited 0.
 2. List every `.md` file that exists directly in `<cluster-dir>/docs/`.
 3. Exclude `SUMMARY.md`.  It is mdbook scaffolding.
 4. Exclude `results.md` while it holds only the scaffold headings and comments.  This command prints nothing for a scaffold-only file: `grep -v -E '^[[:space:]]*(#|<!--.*-->[[:space:]]*$|$)' <cluster-dir>/docs/results.md`.

@@ -25,13 +25,19 @@ Load `../../references/issues.md` for instructions on maintaining `docs/issues.m
 
 **Resolve the binary.**  Use `$EDB` for all binary invocations in this skill.  Resolve it in this order:
 
-1. Run `detect-cluster-layout.sh "$PWD"`.  If it exits 0, `eval` its output.  In a single-DC workspace, use the `EDB` wrapper it reports.  In a multi-DC workspace, use the per-DC wrappers it reports (`EDB_DC1`, `EDB_DC2`, ...): run DC commands, uploads, and teardown through every DC wrapper.
-2. If it finds no wrapper, there is no workspace.  Use `$PWD/bin/easy-db-lab` if it is executable.
+1. Run `detect-cluster-layout.sh "$PWD"` and read its output.  Do not `eval` it: shell state does not persist between Bash tool calls.  Copy the absolute wrapper paths from the output, and use those paths literally in every later command.
+   - `LAYOUT=single`: use the `EDB=` path as `$EDB`.
+   - `LAYOUT=multi`: use each `EDB_<DC>=` path as that DC's wrapper.  Run DC commands, uploads, and teardown through every DC wrapper.
+   - `LAYOUT=multi` with `DCS=bin`: this is not a workspace.  The script matched `bin/easy-db-lab`, which is the binary in an easy-db-lab source checkout.  Ignore the output and go to item 2.
+   - Exit 1 (no wrapper found): there is no wrapper.  Go to item 2.
+2. Use `$PWD/bin/easy-db-lab` if it is executable.
 3. Otherwise, use the path that `command -v easy-db-lab` prints.
 
 ```bash
-eval "$(detect-cluster-layout.sh "$PWD")"
+detect-cluster-layout.sh "$PWD"
 ```
+
+The workspace directory is `$PWD`.  In a multi-DC workspace it is the cluster root, which holds one directory per DC and the shared `docs/`.  This directory is `<cluster-dir>` everywhere in this skill and in `../../references/report-upload.md`.
 
 If no binary resolves in an interactive session, ask the user for a path.  If the user has no path, or the path is not executable, stop and report the paths searched.  In an unattended session, do not ask: stop and report the paths searched.  Without a binary, write no command or file from memory.
 
@@ -50,7 +56,7 @@ $EDB commands
 ```
 Each `help <topic>` guide gives the intended command sequence for a topic.  Use `$EDB commands`, and `$EDB <command> --help`, to confirm flag names, subcommand structure, and available options.  Never guess flags.  If `$EDB help` errors with `Unmatched argument at index 0: 'help'`, the binary predates the topic guides.  Skip the guides and use `commands` and `--help`.
 
-In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.
+In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.  If there is no `docs/` directory, tell the user instead of writing the journal note.
 
 **2. Check the directory state:**
 ```bash
@@ -60,7 +66,10 @@ ls state.json 2>/dev/null && echo EXISTS || echo EMPTY
 - **`state.json` exists** → a workspace is already initialized. Run `$EDB status` immediately. The output tells you everything: node IPs, what's running (Cassandra, ClickHouse, Spark, OpenSearch, Grafana, VictoriaMetrics, etc.), and the current cluster state. Use this as ground truth before proceeding to Step 3.
 - **No `state.json`** → no environment has been provisioned yet. Proceed to Step 2.
 
-In a multi-DC workspace, `state.json` lives in each DC directory, not in the current directory.  Use the `STATE` value from `detect-cluster-layout.sh` instead: `provisioned` means run `$EDB status` through every DC wrapper.
+In a multi-DC workspace, `state.json` lives in each DC directory, not in the current directory:
+
+- **With DC wrappers:** use the `STATE` value from `detect-cluster-layout.sh`.  `provisioned` means run `$EDB status` through every DC wrapper, then go to Step 3.
+- **With no DC wrappers** (for example, a multi-DC lab that this skill provisioned in Step 2): check the direct subdirectories with `ls */state.json 2>/dev/null`.  For each match, run `$EDB status` from that DC directory, then go to Step 3.  Do not go to Step 2.
 
 **This is an existence check only.** `state.json` is an internal file of the `easy-db-lab` tool. It
 is not a documented interface, and its shape can change at any time. Never read it, never parse it,
@@ -118,8 +127,10 @@ All `easy-db-lab` commands must be run from the **lab workspace directory** — 
 
 Every real `$EDB down` is gated on the report upload.  Follow `../../references/report-upload.md` for the file selection, the upload procedure, the gate, and the failure handling.
 
+`<cluster-dir>` is the workspace directory that you passed to `detect-cluster-layout.sh`, which is `$PWD`.  In a multi-DC workspace, it is the cluster root.
+
 1. Choose the files with the explore rule in the reference.  List every existing `docs/*.md` by absolute path.  Exclude `SUMMARY.md`, and exclude `results.md` while it holds only the scaffold comments.  Name each excluded file in `docs/journal.md`.
-2. If `docs/` does not exist, or no eligible file remains, do not upload.  Run `$EDB down --auto-approve`.
+2. If `docs/` does not exist, tell the user "docs/ not found; no report uploaded" before `down`.  In an unattended session, put this line in the report to the launcher.  If `docs/` does not exist, or no eligible file remains, do not upload.  Run `$EDB down --auto-approve`.
 3. Otherwise, run one `$EDB report upload` command with the eligible files, per DC wrapper.
 4. Run `$EDB down --auto-approve` only if every upload exits 0.  If an upload fails, or the CLI rejects the batch, do not run `down`.  Follow the failure handling in the reference.
 

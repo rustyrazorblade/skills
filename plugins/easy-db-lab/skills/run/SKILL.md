@@ -45,7 +45,7 @@ $EDB commands
 
 Use this output as the authoritative source for flag names and available options. Never guess flags.  There is no fallback reference: if `$EDB` does not resolve, stop as described in Before Starting.
 
-**Check for `report upload`.**  In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.
+**Check for `report upload`.**  In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.  Discovery can run before scaffolding; if `docs/journal.md` does not exist yet, write the note in the first journal entry after scaffolding.
 
 **Kit commands are only visible after installation.** If you need to look up the commands, flags, or endpoints for a kit that is not yet installed, use `kit info` instead of relying on `commands`:
 

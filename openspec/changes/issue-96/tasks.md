@@ -52,10 +52,10 @@
 
 ## 7. Live end-to-end verification (owner decision Q9)
 
-- [ ] 7.1 Install the local repo as a marketplace and enable the easy-db-lab plugin so the edited skills load as slash commands.
-- [ ] 7.2 Write a single-DC plan under `tests/plans/` (gitignored) and run it with the run skill into a workspace under `tests/clusters/<timestamp>/` (gitignored).  Confirm: the step-2 upload runs after a good build; the gate upload runs before teardown; teardown is `down --auto-approve`; the S3 prefix `reports/<tenant>/<name>-<clusterId>/` holds one key per name (four keys, no duplicates).
-- [ ] 7.3 Explore teardown with a partial `docs/` (for example `journal.md` and `issues.md` only, plus `SUMMARY.md` and a scaffold-only `results.md`): confirm the upload holds only the eligible files, the journal names the excluded files, and `down` runs only after exit 0.
-- [ ] 7.4 Explore teardown with no `docs/`: confirm no upload runs and `down --auto-approve` runs.
-- [ ] 7.5 Multi-DC run (two DCs, workspace under `tests/clusters/`): confirm the upload runs through every DC wrapper, `journal.md` records each DC's result separately, and `down --auto-approve` runs on every DC only after all uploads succeed.
-- [ ] 7.6 Confirm no cluster from 7.2-7.5 is left running (`$EDB status` per workspace).
-- [ ] 7.7 Run `grep -rn "commands\.md" plugins/` again on the final tree and confirm no file references `commands.md`.
+- [x] 7.1 Install the local repo as a marketplace and enable the easy-db-lab plugin so the edited skills load as slash commands.
+- [x] 7.2 Write a single-DC plan under `tests/plans/` (gitignored) and run it with the run skill into a workspace under `tests/clusters/<timestamp>/` (gitignored).  Confirm: the step-2 upload runs after a good build; the gate upload runs before teardown; teardown is `down --auto-approve`; the S3 prefix `reports/<tenant>/<name>-<clusterId>/` holds one key per name (four keys, no duplicates).
+- [x] 7.3 Explore teardown with a partial `docs/` (for example `journal.md` and `issues.md` only, plus `SUMMARY.md` and a scaffold-only `results.md`): confirm the upload holds only the eligible files, the journal names the excluded files, and `down` runs only after exit 0.
+- [x] 7.4 Explore teardown with no `docs/`: confirm no upload runs and `down --auto-approve` runs.
+- [x] 7.5 Multi-DC run (two DCs, workspace under `tests/clusters/`): confirm the upload runs through every DC wrapper, `journal.md` records each DC's result separately, and `down --auto-approve` runs on every DC only after all uploads succeed.
+- [x] 7.6 Confirm no cluster from 7.2-7.5 is left running (`$EDB status` per workspace).
+- [x] 7.7 Run `grep -rn "commands\.md" plugins/` again on the final tree and confirm no file references `commands.md`.

@@ -182,8 +182,8 @@ $EDB logs query --unit cassandra.service --since 30m
 ## Running Commands on Nodes
 
 ```bash
-# Run a command on all cassandra nodes
-$EDB exec run --type cassandra "nodetool compactionstats"
+# Run nodetool on all cassandra nodes (nodetool is not on PATH under exec run)
+$EDB cassandra nt compactionstats
 
 # Run in parallel
 $EDB exec run --type cassandra -p "df -h"

@@ -35,6 +35,7 @@ test -d src/main/resources/com/rustyrazorblade/easydblab/kits && echo INTERNAL |
 ```
 
 **Internal mode** (the path exists):
+- Repo root: record the absolute path of this easy-db-lab checkout as `<repo-root>`.  Get it from `git rev-parse --show-toplevel` in the directory where the check ran.  Step 5 runs from a different directory, so it needs this absolute path.
 - Kit directory: `src/main/resources/com/rustyrazorblade/easydblab/kits/<name>/`
 - Authoritative schema source: read the **local** files
   `docs/development/kits.md` and `src/main/kotlin/com/rustyrazorblade/easydblab/services/KitConfig.kt`.
@@ -238,7 +239,7 @@ clear checklist rather than provisioning a cluster yourself.
 1. Install and start the kit on a cluster so metrics flow to the metrics backend.  For the
    backend and its endpoint, read `easy-db-lab help observability`.
 2. From the cluster working directory (where `env.sh`, `state.json`, and the kubeconfig live), run `export-workload-metrics <name>`.  Choose the script by the mode from Step 0:
-   - **Internal mode:** run the easy-db-lab repo's own script, `<repo-root>/bin/export-workload-metrics <name>`.
+   - **Internal mode:** run the easy-db-lab repo's own script by its absolute path, `<repo-root>/bin/export-workload-metrics <name>`, with `<repo-root>` from Step 0.  Do not run the bare command name `export-workload-metrics`: this plugin's `bin/` is on `PATH`, so the bare name runs the plugin's copy.
    - **External mode:** run this plugin's copy, `bin/export-workload-metrics <name>` from this plugin's `bin/`.  The copy is best effort: it can lag easy-db-lab's own version until easy-db-lab replaces the script with a first-class command.
 
    The script needs `jq`.  It queries Mimir, in the cluster's tenant, for `{job="<name>"}` series with a sample in the last 5 minutes, so the kit must be running and scraping first.  It writes `<name>/metrics-catalog.json` with these fields:

@@ -97,7 +97,7 @@ Cassandra is a built-in database and does not use the kit system. It is managed 
 
 Each kit should include a `METRICS.md` file describing the metrics it exposes. When planning or running tests, load the relevant kit's `METRICS.md` to understand what is available before querying.
 
-Metrics are collected by VictoriaMetrics and can be queried using its HTTP API or through Grafana. Use `kit info <name>` to locate the metrics documentation for a specific kit.
+To query kit metrics, use Grafana or the metrics backend on the control node.  For the backend, its endpoint, and the tenant header, read `easy-db-lab help observability`. Use `kit info <name>` to locate the metrics documentation for a specific kit.
 
 ---
 

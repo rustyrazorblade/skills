@@ -63,7 +63,7 @@ In the same `$EDB commands` output, check whether `report upload` is listed.  Re
 ls state.json 2>/dev/null && echo EXISTS || echo EMPTY
 ```
 
-- **`state.json` exists** → a workspace is already initialized. Run `$EDB status` immediately. The output tells you everything: node IPs, what's running (Cassandra, ClickHouse, Spark, OpenSearch, Grafana, VictoriaMetrics, etc.), and the current cluster state. Use this as ground truth before proceeding to Step 3.
+- **`state.json` exists** → a workspace is already initialized. Run `$EDB status` immediately. The output tells you everything: node IPs, what's running (Cassandra, ClickHouse, Spark, OpenSearch, Grafana and the observability endpoints, etc.), and the current cluster state. Use this as ground truth before proceeding to Step 3.
 - **No `state.json`** → no environment has been provisioned yet. Proceed to Step 2.
 
 In a multi-DC workspace, `state.json` lives in each DC directory, not in the current directory:

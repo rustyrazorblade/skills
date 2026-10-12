@@ -5,19 +5,31 @@
 # Usage:
 #   bin/export-workload-metrics <workload-name>
 #
-# Queries Mimir, the metrics backend on the control node, and writes
-# <workload>/metrics-catalog.json.
+# Queries Mimir, in the cluster's tenant, and writes <workload>/metrics-catalog.json.
 # Requires env.sh and state.json (for cluster context) and easy-db-lab in PATH.
 #
+# Only series with a sample in the last LIVE_WINDOW are exported: an instant query of the workload's
+# selector returns only series with a sample inside the lookback window (5m). /api/v1/series is not
+# used, since it answers from the index and returns series from pods that died long ago.
+#
+# The catalog is compact: one entry per metric name, its labels mapped to the sorted distinct
+# values seen (at most MAX_LABEL_VALUES per key), per-pod identity labels dropped, and label keys
+# present on every series listed once under common_labels. The transform lives in
+# bin/metrics-catalog.jq.
+#
 set -euo pipefail
+
+LIVE_WINDOW="5m"
+MAX_LABEL_VALUES=20
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
     cat <<EOF
 Usage: bin/export-workload-metrics <workload-name>
 
-Queries Mimir for all metric series with job="<workload>"
-and writes <workload>/metrics-catalog.json in the current cluster
-working directory.
+Queries Mimir for the metric series with job="<workload>"
+that have a sample in the last ${LIVE_WINDOW}, and writes
+<workload>/metrics-catalog.json in the current cluster working directory.
 
 The workload must be running and its metrics must be flowing to
 Mimir before running this script.
@@ -39,30 +51,25 @@ if [ ! -f env.sh ]; then
     exit 1
 fi
 
-if [ ! -f state.json ]; then
-    echo "Error: state.json not found in the current directory."
-    echo "Run this script from the cluster working directory (where kubeconfig and env.sh live)."
-    exit 1
-fi
-
 # shellcheck disable=SC1091
 source env.sh
 
 CONTROL_HOST_PRIVATE="${CONTROL_HOST_PRIVATE:-$(easy-db-lab ip control0 --private)}"
+# Mimir runs native multi-tenancy; a state written before tenants existed is the default tenant.
+TENANT="$(jq -r '.initConfig.tenant // "default"' state.json 2>/dev/null || echo default)"
 
-# Mimir serves the Prometheus API under /prometheus and runs multi-tenant: every
-# query names the cluster's tenant. A state.json with no tenant belongs to "default".
-TENANT="$(jq -r '.initConfig.tenant // "default"' state.json)"
-
-METRICS_URL="http://${CONTROL_HOST_PRIVATE}:9009/prometheus"
+MIMIR_URL="http://${CONTROL_HOST_PRIVATE}:9009/prometheus"
 OUTPUT_DIR="${WORKLOAD}"
 OUTPUT_FILE="${OUTPUT_DIR}/metrics-catalog.json"
 
 mkdir -p "$OUTPUT_DIR"
 
-echo "Querying Mimir at ${METRICS_URL} (tenant ${TENANT}) for job=\"${WORKLOAD}\"..."
+echo "Querying Mimir at ${MIMIR_URL} (tenant ${TENANT}) for job=\"${WORKLOAD}\" series live in the last ${LIVE_WINDOW}..."
 
-RAW=$(curl -sf "${METRICS_URL}/api/v1/series" -H "X-Scope-OrgID: ${TENANT}" --data-urlencode "match[]={job=\"${WORKLOAD}\"}")
+# An instant vector selector returns one result per series with a sample in the lookback window,
+# keeping __name__.
+QUERY="{job=\"${WORKLOAD}\"}"
+RAW=$(curl -sf "${MIMIR_URL}/api/v1/query" -H "X-Scope-OrgID: ${TENANT}" --data-urlencode "query=${QUERY}")
 
 STATUS=$(echo "$RAW" | jq -r '.status')
 if [ "$STATUS" != "success" ]; then
@@ -71,7 +78,7 @@ if [ "$STATUS" != "success" ]; then
     exit 1
 fi
 
-SERIES_COUNT=$(echo "$RAW" | jq '.data | length')
+SERIES_COUNT=$(echo "$RAW" | jq '.data.result | length')
 if [ "$SERIES_COUNT" -eq 0 ]; then
     echo "Warning: no series found for job=\"${WORKLOAD}\" — is the workload running and scraping?"
     exit 1
@@ -79,10 +86,11 @@ fi
 
 EXPORTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-echo "$RAW" | jq --arg workload "$WORKLOAD" --arg ts "$EXPORTED_AT" '{
-  workload: $workload,
-  exported_at: $ts,
-  series: [.data[] | {name: .__name__, labels: (del(.__name__))}]
-}' > "$OUTPUT_FILE"
+echo "$RAW" | jq -L "$SCRIPT_DIR" --arg workload "$WORKLOAD" --arg ts "$EXPORTED_AT" \
+    --argjson cap "$MAX_LABEL_VALUES" 'include "metrics-catalog";
+  {workload: $workload, exported_at: $ts}
+  + ([.data.result[].metric | {name: .__name__, labels: .}] | compact_catalog($cap))
+' > "$OUTPUT_FILE"
 
-echo "Wrote ${SERIES_COUNT} series to ${OUTPUT_FILE}"
+METRIC_COUNT=$(jq '.series | length' "$OUTPUT_FILE")
+echo "Wrote ${METRIC_COUNT} metrics (from ${SERIES_COUNT} series) to ${OUTPUT_FILE}"

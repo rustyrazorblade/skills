@@ -5,8 +5,9 @@
 # Usage:
 #   bin/export-workload-metrics <workload-name>
 #
-# Queries VictoriaMetrics and writes <workload>/metrics-catalog.json.
-# Requires env.sh (for cluster context) and easy-db-lab in PATH.
+# Queries Mimir, the metrics backend on the control node, and writes
+# <workload>/metrics-catalog.json.
+# Requires env.sh and state.json (for cluster context) and easy-db-lab in PATH.
 #
 set -euo pipefail
 
@@ -14,12 +15,12 @@ usage() {
     cat <<EOF
 Usage: bin/export-workload-metrics <workload-name>
 
-Queries VictoriaMetrics for all metric series with job="<workload>"
+Queries Mimir for all metric series with job="<workload>"
 and writes <workload>/metrics-catalog.json in the current cluster
 working directory.
 
 The workload must be running and its metrics must be flowing to
-VictoriaMetrics before running this script.
+Mimir before running this script.
 EOF
 }
 
@@ -38,24 +39,34 @@ if [ ! -f env.sh ]; then
     exit 1
 fi
 
+if [ ! -f state.json ]; then
+    echo "Error: state.json not found in the current directory."
+    echo "Run this script from the cluster working directory (where kubeconfig and env.sh live)."
+    exit 1
+fi
+
 # shellcheck disable=SC1091
 source env.sh
 
 CONTROL_HOST_PRIVATE="${CONTROL_HOST_PRIVATE:-$(easy-db-lab ip control0 --private)}"
 
-VM_URL="http://${CONTROL_HOST_PRIVATE}:8428"
+# Mimir serves the Prometheus API under /prometheus and runs multi-tenant: every
+# query names the cluster's tenant. A state.json with no tenant belongs to "default".
+TENANT="$(jq -r '.initConfig.tenant // "default"' state.json)"
+
+METRICS_URL="http://${CONTROL_HOST_PRIVATE}:9009/prometheus"
 OUTPUT_DIR="${WORKLOAD}"
 OUTPUT_FILE="${OUTPUT_DIR}/metrics-catalog.json"
 
 mkdir -p "$OUTPUT_DIR"
 
-echo "Querying VictoriaMetrics at ${VM_URL} for job=\"${WORKLOAD}\"..."
+echo "Querying Mimir at ${METRICS_URL} (tenant ${TENANT}) for job=\"${WORKLOAD}\"..."
 
-RAW=$(curl -sf "${VM_URL}/api/v1/series" --data-urlencode "match[]={job=\"${WORKLOAD}\"}")
+RAW=$(curl -sf "${METRICS_URL}/api/v1/series" -H "X-Scope-OrgID: ${TENANT}" --data-urlencode "match[]={job=\"${WORKLOAD}\"}")
 
 STATUS=$(echo "$RAW" | jq -r '.status')
 if [ "$STATUS" != "success" ]; then
-    echo "Error: VictoriaMetrics returned status=${STATUS}"
+    echo "Error: Mimir returned status=${STATUS}"
     echo "$RAW" | jq .
     exit 1
 fi

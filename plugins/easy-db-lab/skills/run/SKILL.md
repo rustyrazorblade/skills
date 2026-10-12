@@ -43,7 +43,9 @@ Then read the flag-level reference:
 $EDB commands
 ```
 
-Use this output as the authoritative source for flag names and available options. Never guess flags. If `$EDB` is not yet available, load `../../references/commands.md` as a fallback.
+Use this output as the authoritative source for flag names and available options. Never guess flags.  There is no fallback reference: if `$EDB` does not resolve, stop as described in Before Starting.
+
+**Check for `report upload`.**  In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.  Discovery can run before scaffolding; if `docs/journal.md` does not exist yet, write the note in the first journal entry after scaffolding.
 
 **Kit commands are only visible after installation.** If you need to look up the commands, flags, or endpoints for a kit that is not yet installed, use `kit info` instead of relying on `commands`:
 
@@ -83,6 +85,10 @@ and let them run.
 If a command does exceed the maximum timeout, do not retry it blindly. Run `$EDB status` first to
 see what the command already did, then write an entry to `<cluster-dir>/docs/issues.md`.
 
+## Every Real `down` Is Gated on the Report Upload
+
+Every real top-level `$EDB down` that this skill runs is gated by `../../references/report-upload.md`.  Immediately before it, run the upload procedure in that reference.  Run `$EDB down --auto-approve` only if the upload exits 0; otherwise follow its failure handling.  This rule applies wherever the `down` comes from: a Completion choice, a stated shutdown intent, a request during exploration, or a plan step.  `$EDB spark down` and `$EDB down --dry-run` are exempt.  If the binary has no `report upload` (see the support check in Discover the Command Surface First), skip the upload and run `$EDB down --auto-approve` with no gate.
+
 ## Before Starting
 
 ### 1. Determine the invocation mode
@@ -109,7 +115,7 @@ If a required argument is missing, ask the user for it before continuing.
 - **Datacenters** — if `## Datacenters` is `single`, it is a single-DC cluster; otherwise each `- <dc>: <cidr>` line defines a DC name and CIDR
 
 **Ask the user only for anything missing:**
-- **`easy-db-lab` binary path** (`--binary`) — check for `bin/easy-db-lab` in the current directory first, then try `which easy-db-lab`; only ask if neither is found.
+- **`easy-db-lab` binary path** (`--binary`) — check for `bin/easy-db-lab` in the current directory first, then try `which easy-db-lab`; only ask if neither is found.  If the user has no path, or the path is not executable, stop and report the paths searched.  An unattended run never asks: if neither is found, it stops and reports the paths searched.  Without a binary, write no workspace file and run no plan step.
 - **Java 21 JDK home** (`--jdk`) — leave blank to inherit the system default.
 
 **Scaffold the cluster workspace — run the script, never do this manually:**
@@ -216,16 +222,18 @@ Immediately append a new entry: timestamp + step name + "starting". See `../../r
 **3. Execute**
 
 > **Before running any command that came from the plan file, verify its form against the
-> references.** A plan is prose written earlier, possibly by a different session — its commands are
-> not validated by anything. Load `../../references/commands.md` and the relevant database
-> reference (see **Database Workflows** below) *before* the first step that touches that database,
-> not after a command fails. Check the subcommand name and the flag spelling against the reference;
-> if the plan and the reference disagree, the reference wins and the plan gets corrected.
+> binary.** A plan is prose written earlier, possibly by a different session — its commands are
+> not validated by anything. Before the first step that uses a command, check the subcommand name
+> and the flag spelling against `$EDB commands`, the relevant `$EDB help <topic>`, and the
+> command's `--help`.  Also load the relevant database reference (see **Database Workflows**
+> below) *before* the first step that touches that database, not after a command fails.  If the
+> plan and the binary disagree, the binary wins and the plan gets corrected.
 >
 > This is a blocking precondition, not advice. Two failure modes it prevents, both observed:
-> invoking a subcommand by a name it does not have (`cassandra nodetool` — the command is `nt`),
-> and omitting the `--` separator before passthrough args (`stress start -- <workload> -d 4h ...`).
-> Both produce parser errors that read like bad flags rather than a wrong command.
+> invoking a subcommand by a name it does not have (the plan says `cassandra nodetool`; the
+> binary has `cassandra nt`), and omitting the `--` separator before passthrough args
+> (`stress start -- <workload> -d 4h ...`). Both produce parser errors that read like bad flags
+> rather than a wrong command.
 
 Run the required `$EDB` commands (or AWS CLI, kubectl, etc.) for the step. Show the output.
 
@@ -240,7 +248,7 @@ Every command you run — including any debugging, log inspection, status checks
 
 Confirm the step succeeded. Always use `$EDB` (the full path wrapper), not the bare `easy-db-lab` binary:
 - For `$EDB up`: check that nodes are reachable via `$EDB status`
-- For cassandra start: check cluster health via `$EDB cassandra status` or `$EDB cassandra nodetool status`
+- For cassandra start: check cluster health via `$EDB cassandra nt status`
 - For other steps: use the most appropriate check given the operation
 - For multi-DC: run the check against each DC's wrapper (`$EDB_DC1`, `$EDB_DC2`, etc.)
 
@@ -280,9 +288,13 @@ This generates the browsable lab report from the summary, journal, plan, and iss
 
 **Verify it actually built.** Check the command's exit code and confirm `<cluster-dir>/docs/report/index.html` exists. If `make` fails or the output is missing, do not silently move on — diagnose the cause (missing scaffold files, broken `SUMMARY.md` links, mdbook errors), write an entry to `<cluster-dir>/docs/issues.md`, fix it, and re-run `make` before proceeding to step 3.
 
+**Upload the report.**  The build is good only when `make` exits 0 and `<cluster-dir>/docs/report/index.html` exists.  Do not upload until the build is good.  After a good build, and before step 3, run the upload procedure in `../../references/report-upload.md` with the four files: `results.md`, `journal.md`, `issues.md`, and `plan.md`.  In a multi-DC workspace, upload through every DC's wrapper.  A failed upload here does not affect the cluster: follow the "at run Completion step 2" failure handling in the reference.  If the binary has no `report upload`, skip this upload.
+
 **3. Decide what to do with the cluster**
 
-If the user already stated their intent earlier in the session (e.g. "shut down when done", "tear it down after", "clean up automatically"), honor that instruction without prompting.
+If the user already stated their intent earlier in the session (e.g. "shut down when done", "tear it down after", "clean up automatically"), honor that instruction without prompting.  In an unattended run, a shutdown intent that the launcher stated counts the same way.  A stated shutdown intent tears the cluster down through the gate in `../../references/report-upload.md` (see Every Real `down` Is Gated on the Report Upload), with no prompt.
+
+**Unattended, with no shutdown intent:** do not show the menu, and do not run `down`.  Report "cluster still up" to the launcher, with the workspace path, and stop.  A coordinator or the owner can tear the cluster down later through the "Completion / teardown" entry point in Pausing and Resuming.
 
 Otherwise, present this menu and wait for the user to choose:
 
@@ -307,7 +319,9 @@ Enter 1 or 2 (default: 1):
 
   All subsequent commands, findings, and issues follow the same rules as during plan execution: log every command as it runs, write issues immediately to `issues.md`, never batch or defer.
 
-- **Option 2:** Run `$EDB down` and log the teardown in `<cluster-dir>/docs/journal.md`.
+  If the user later asks to shut down, tear the cluster down through the gate in `../../references/report-upload.md`.  The upload then holds the current journal.
+
+- **Option 2:** Tear the cluster down through the gate in `../../references/report-upload.md`.  Log the teardown in `<cluster-dir>/docs/journal.md`.
 
 If the user responds with something other than 1 or 2, ask them to clarify what they want before taking any action.
 
@@ -316,6 +330,15 @@ If the user responds with something other than 1 or 2, ask them to clarify what 
 If the user asks to stop, record progress in `<cluster-dir>/docs/journal.md` (last completed step + state) so the next session can resume cleanly.
 
 When invoked again, read `<cluster-dir>/docs/journal.md` to determine where to resume, then confirm with the user before continuing.
+
+### Resume entry point: Completion / teardown
+
+Use this entry point to tear down a cluster whose plan is complete, for example after an unattended run reported "cluster still up".  A coordinator or the owner relaunches this skill on the workspace and asks for "Completion / teardown".  The skill then:
+
+1. Resumes the workspace as described in Before Starting (Resume).
+2. Tears the cluster down through the gate in `../../references/report-upload.md`, including its failure handling.
+
+A coordinator never runs `$EDB down` itself.  To tear down a cluster, it relaunches this skill at "Completion / teardown".
 
 ## Error Handling
 
@@ -349,7 +372,7 @@ The execution loop above assumes a human is present to confirm each step. Two si
 - Generate every arm's plan from a single template so the arms cannot drift, then prove it: normalise the intended variables and diff the plans. They should come out byte-identical.
 - Cross-arm gates are coordination, not reporting. Each agent records its numbers in its own journal and reports them to the coordinator, which does the comparing. Do not invent shared state files.
 - The arms sit on different hardware, so run an identical short calibration workload before the measured run. It tells you whether the clusters are comparable at all, and its spread is the error bar on every delta you later report.
-- No agent decides teardown on its own. See Completion.
+- No agent decides teardown on its own.  See Completion.  To tear down an arm, the coordinator relaunches this skill on that arm's workspace at the "Completion / teardown" entry point in Pausing and Resuming; it never runs `$EDB down` itself.
 
 ## Team Agents
 

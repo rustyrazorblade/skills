@@ -35,6 +35,7 @@ test -d src/main/resources/com/rustyrazorblade/easydblab/kits && echo INTERNAL |
 ```
 
 **Internal mode** (the path exists):
+- Repo root: record the absolute path of this easy-db-lab checkout as `<repo-root>`.  Get it from `git rev-parse --show-toplevel` in the directory where the check ran.  Step 5 runs from a different directory, so it needs this absolute path.
 - Kit directory: `src/main/resources/com/rustyrazorblade/easydblab/kits/<name>/`
 - Authoritative schema source: read the **local** files
   `docs/development/kits.md` and `src/main/kotlin/com/rustyrazorblade/easydblab/services/KitConfig.kt`.
@@ -170,10 +171,10 @@ Mode: <internal|external>   Kit dir: <kit-dir>
 - [ ] Pyroscope java-agent patch added to start phase (if JVM)
 
 ## Metrics & dashboards   (requires a live cluster)
-- [ ] Installed + started on a cluster; metrics flowing to VictoriaMetrics
-- [ ] metrics-catalog.json exported (export-workload-metrics <name>)
+- [ ] Installed + started on a cluster; metrics flowing to the metrics backend
+- [ ] metrics-catalog.json exported (internal: repo bin/export-workload-metrics <name>; external: plugin copy, best effort)
 - [ ] METRICS.md authored (every metric name present in the catalog)
-- [ ] dashboards/<name>.json authored (uid <name>-kit, cluster=~"$cluster", VictoriaMetrics)
+- [ ] dashboards/<name>.json authored (uid <name>-kit, cluster=~"$cluster", ${metrics_datasource} picker)
 
 ## Docs
 - [ ] README.md.template written
@@ -235,17 +236,29 @@ These are authored once from real data on a running cluster and committed alongs
 **Write everything you can offline, then pause and hand off** the live-cluster steps with a
 clear checklist rather than provisioning a cluster yourself.
 
-1. Install and start the kit on a cluster so metrics flow to VictoriaMetrics.
-2. From the cluster working directory (where `env.sh` and the kubeconfig live), run
-   `export-workload-metrics <name>` → `<name>/metrics-catalog.json` (workload name, timestamp,
-   series with names + labels). The script ships with this plugin (`bin/export-workload-metrics`);
-   it queries VictoriaMetrics for `{job="<name>"}`, so the kit must be running and scraping first.
+1. Install and start the kit on a cluster so metrics flow to the metrics backend.  For the
+   backend and its endpoint, read `easy-db-lab help observability`.
+2. From the cluster working directory (where `env.sh`, `state.json`, and the kubeconfig live), run `export-workload-metrics <name>`.  Choose the script by the mode from Step 0:
+   - **Internal mode:** run the easy-db-lab repo's own script by its absolute path, `<repo-root>/bin/export-workload-metrics <name>`, with `<repo-root>` from Step 0.  Do not run the bare command name `export-workload-metrics`: this plugin's `bin/` is on `PATH`, so the bare name runs the plugin's copy.
+   - **External mode:** run this plugin's copy, `bin/export-workload-metrics <name>` from this plugin's `bin/`.  The copy is best effort: it can lag easy-db-lab's own version until easy-db-lab replaces the script with a first-class command.
+
+   The script needs `jq`.  It queries Mimir, in the cluster's tenant, for `{job="<name>"}` series with a sample in the last 5 minutes, so the kit must be running and scraping first.  It writes `<name>/metrics-catalog.json` with these fields:
+   - `workload` and `exported_at`
+   - `common_labels`: the label keys on every series, each with its distinct values
+   - `series`: one entry per metric name, sorted, with its other label keys and their distinct values
+
+   Each label keeps at most 20 values.  The catalog drops per-pod labels such as `instance` and `k8s_pod_name`.
 3. Author `METRICS.md` — a markdown table of the genuinely useful metrics. **Every metric name
    must appear in `metrics-catalog.json`.**
 4. Author `dashboards/<name>.json` — built from the names in `METRICS.md`:
    - `"uid": "<name>-kit"` (idempotent re-installs)
    - a `cluster` template variable; scope panels with `{cluster=~"$cluster",job="<name>"}`
-   - datasource `{ "type": "prometheus", "uid": "VictoriaMetrics" }`, `"tags": ["<name>","kit"]`
+   - a `metrics_datasource` template variable (`"type": "datasource"`, `"query": "prometheus"`),
+     and every datasource set to `{ "type": "prometheus", "uid": "${metrics_datasource}" }`
+   - never a fixed datasource uid such as `mimir`: it pins the dashboard to the cluster's own
+     tenant (in internal mode, the easy-db-lab dashboard tests reject it)
+   - a link to another dashboard passes `metrics_datasource` and `cluster`
+   - `"tags": ["<name>","kit"]`
 
 The dashboard is auto-installed when `start` completes (any `.json` in `dashboards/`).
 Metrics registration (the OTel scrape job) is **automatic** for `metrics.type: scrape` — do not

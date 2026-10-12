@@ -20,7 +20,7 @@ If `--previous <cluster-dir>` was provided, read the following files before aski
 - `<cluster-dir>/docs/journal.md` — what was done, what was observed, what worked and what didn't
 - `<cluster-dir>/docs/issues.md` — friction, undocumented behavior, or gaps discovered during the run
 
-Use these to inform the new plan: incorporate steps that were added ad-hoc, avoid approaches that failed, and address known issues. Load `../../references/journal.md` and `../../references/issues.md` for the format these files follow.
+Use these to inform the new plan: incorporate steps that were added ad-hoc, avoid approaches that failed, and address known issues.  Do not carry a teardown step into the new plan, even if the previous journal records one; teardown belongs to the run skill's Completion gate. Load `../../references/journal.md` and `../../references/issues.md` for the format these files follow.
 
 ## Discover Before You Plan
 
@@ -29,9 +29,11 @@ Before asking the user anything, resolve the binary, read the task-oriented guid
 **Resolve the binary** — in priority order:
 1. If `--binary <path>` was passed as an argument to this skill, use that path as `$EDB`
 2. If `bin/easy-db-lab` exists in the current directory, use `bin/easy-db-lab` as `$EDB`
-3. Otherwise use `easy-db-lab` as `$EDB`
+3. Otherwise use the path that `command -v easy-db-lab` prints as `$EDB`
 
 Use `$EDB` for all binary invocations in this skill.
+
+If no binary resolves in an interactive session, ask the user for a path first.  If the user has no path, or the path is not executable, stop and report the paths searched.  In an unattended session, do not ask: stop and report the paths searched.  Without a binary, write no plan and no command from memory.
 
 ### Read the task-oriented guides first
 
@@ -62,8 +64,6 @@ $EDB kit list
 Use `commands` output as the authoritative source for flag names and subcommands — never guess flags.
 
 Use `kit list` output as the authoritative list of installable software. Any database, tool, or app the plan needs to install must appear in this list. If the user asks for something not in the list, stop and ask them what they mean — do not guess, do not try alternatives, and never use `docker`.
-
-If the binary cannot be found, load `../../references/commands.md` as a fallback and warn the user to verify flags when running the plan.
 
 ### `commands` is the index, not the documentation — run `--help` per command
 
@@ -135,7 +135,6 @@ Before writing the final plan, explicitly run a gap check. For each of the follo
 - The workload reflects the actual access pattern being optimized for.
 - The cluster configuration (replication factor, compaction, memtable) is appropriate for the stated workload.
 - There is a step to collect and record results (not just "run the workload and look at Grafana").
-- Teardown is included if AWS cost matters.
 
 Present any gaps as: "One thing I don't see covered yet: [gap]. Do you want to add a step for this, or is it intentionally out of scope?"
 
@@ -228,13 +227,14 @@ In **interactive mode**, show the step outline (step names and brief description
 3. Configure the database(s)
 4. Run the workload or test
 5. Observe / collect results
-6. Tear down (if applicable)
+
+Do not add a teardown step.  Teardown belongs to the run skill's Completion gate, which uploads the report before every `down`.
 
 **The run skill handles all workspace scaffolding** (cluster directory, wrapper, docs) before executing any plan step. The first step in the plan must be provisioning (`easy-db-lab init ... --up`). Never include wrapper creation, directory setup, or `EDB=` assignments — those are handled automatically and must not appear in the plan.
 
 **The run skill also owns the entire reporting apparatus. Never reinvent it in a plan.** It maintains `docs/journal.md` (every command and finding, written as it happens), `docs/issues.md` (friction, written immediately), `docs/results.md` (written at Completion, in a fixed structure: Goal, Results, Key Findings, Performance Results, Configuration Notes, Issues Encountered, Recommendations), `docs/images/` for Grafana screenshots embedded inline, and `make -C <cluster-dir>/docs`, which builds the browsable report at `docs/report/index.html`.
 
-A plan therefore must **not** contain steps that create a results file, define a report format, invent directories for screenshots or metrics exports, or set up cross-session coordination files. Plans say what to do to the cluster; the run skill records what happened.
+A plan therefore must **not** contain steps that create a results file, define a report format, invent directories for screenshots or metrics exports, upload the report (`report upload`), or set up cross-session coordination files. Plans say what to do to the cluster; the run skill records what happened.
 
 When the user asks for something the apparatus does not do by default — a fixed screenshot cadence, extra raw-metric exports, a particular statistic — express it in `## Notes` as a constraint layered onto the existing files (for example: "render dashboards to `docs/images/` every 15 minutes, named `<arm>-<dashboard>-<UTC>.png`; report p95/p99 distributions under Performance Results"). Never as a parallel mechanism beside them.
 
@@ -268,17 +268,17 @@ For each of the following, state whether the plan covers it:
 - **The plan verifies environmental preconditions it depends on** rather than assuming them: kernel settings, capabilities, installed binaries, service state. Settings applied imperatively by a provisioning script may not survive a reboot.
 - **Multi-node claims are checked on more than one node.** If a command targets all nodes, verify more than the first one at least once.
 - **Counts and aggregates are computed over the right unit.** When parsing tool output, confirm what one line or one record actually represents before counting them; many formats are one line per *distinct* item with a weight field, so a line count answers a different question than the one being asked.
-- **Every command in the plan is verified against the references, not recalled.** Load
-  `../../references/commands.md` and the relevant database reference, and check each `$EDB` command
-  the plan emits: the subcommand name exists and is spelled as the reference spells it (some are
-  abbreviations with no long form — `cassandra nt`, not `cassandra nodetool`), the flags exist on
-  that subcommand, and any command passing arguments through to an external tool includes the `--`
-  separator (`cassandra stress start -- <workload> -d 4h --rate 100k`). A plan is executed verbatim
-  by a later session that may trust it over the reference, so an unverified command costs a cluster
-  step and a debugging detour. Commands invented from memory are the failure mode here.
+- **Every command in the plan is verified against the binary, not recalled.** Check each `$EDB`
+  command the plan emits against `$EDB commands`, the relevant `$EDB help <topic>`, and the
+  command's `--help`, and load the relevant database reference: the subcommand name exists and is
+  spelled as the binary spells it (some are abbreviations with no long form — `cassandra nt`, not
+  `cassandra nodetool`), the flags exist on that subcommand, and any command passing arguments
+  through to an external tool includes the `--` separator
+  (`cassandra stress start -- <workload> -d 4h --rate 100k`). A plan is executed verbatim by a
+  later session that may trust it over the binary, so an unverified command costs a cluster step
+  and a debugging detour. Commands invented from memory are the failure mode here.
 - The test produces a specific, measurable output.
 - There is a step that collects and records results, not just "look at the dashboard".
-- Teardown is included if cost matters.
 
 Load `../../references/plan-template.md` and use it as the starting point. Fill in every section — do not leave any placeholder text in the output. Write the completed plan to the path specified by `--output`, if provided; otherwise default to `plan.md` in the current directory. Create any intermediate directories if needed.
 
@@ -297,9 +297,9 @@ Before finishing, review the written plan against the objective established in S
 - **Answers the question** — do the steps actually produce the data needed to answer the research question? If not, what's missing?
 - **Success criteria are measurable** — is there a step that captures the specific metric or observation defined as success?
 - **Every command is concrete** — no vague steps like "configure Cassandra"; each step has an exact command
-- **Every command was checked against the reference** — re-confirm the Step 4 gate held: subcommand
-  names, flag spellings, and `--` separators all match `references/commands.md` and the database
-  reference. This is cheap to re-check and expensive to get wrong.
+- **Every command was checked against the binary** — re-confirm the Step 4 gate held: subcommand
+  names, flag spellings, and `--` separators all match `$EDB commands`, `$EDB help <topic>`,
+  `--help`, and the database reference. This is cheap to re-check and expensive to get wrong.
 - **No gaps in the sequence** — could someone follow this plan start to finish without needing to improvise?
 - **Cassandra-specific:** if the plan involves Cassandra, ask the `cassandra-expert` agent to do a final pass: "Does this plan's configuration match the stated workload and Cassandra version? Are there any settings that will skew the results or make the test harder to interpret?" Incorporate its findings before presenting the review to the user.
 

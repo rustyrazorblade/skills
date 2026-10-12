@@ -28,41 +28,18 @@ kubectl get pods -A
 
 ## Observability Stack
 
-The full observability stack is deployed automatically when the cluster comes up — no manual setup step required. Components run on every cluster node (collectors) or on the control node only (backends).
+The full observability stack deploys automatically when the cluster comes up.  No manual setup step is necessary.
 
-### Collectors (every node)
+This file does not list the stack components or their ports.  Get them from the binary:
 
-| Tool | Purpose |
-|------|---------|
-| OTel Collector | Receives metrics from workloads; config regenerated dynamically per running kit |
-| Fluent Bit | Ships journald (systemd) logs to VictoriaLogs |
-| Grafana Alloy | eBPF-based continuous profiling |
-| Beyla | L7 RED metrics (rate, errors, duration) via eBPF |
-| ebpf_exporter | Low-level kernel metrics: TCP, block I/O, VFS |
-| YACE | Scrapes CloudWatch and bridges to Prometheus format |
-| MAAC agent | Cassandra-specific metrics |
+- `easy-db-lab help observability` names the components, the ports, the tenant header for direct backend queries, and the CLI commands for logs and dashboards.
+- `easy-db-lab status` prints the Grafana URL and the backend endpoints of this cluster.
 
-### Storage Backends (control node)
-
-| Tool | Port | Purpose |
-|------|------|---------|
-| VictoriaMetrics | 8428 | Time-series metrics storage |
-| VictoriaLogs | 9428 | Log storage |
-| Tempo | 3200 | Distributed traces |
-| Pyroscope | 4040 | Continuous profiling data |
-
-### Visualization & Networking
-
-| Tool | Port | Purpose |
-|------|------|---------|
-| Grafana | 3000 | Dashboards for all backends |
-| Hubble (Cilium) | 9965 | L7 network visibility + Prometheus metrics |
-
-> **ALWAYS use the PRIVATE IP in any URL you give the user for Grafana or other observability tools (VictoriaMetrics, VictoriaLogs, Tempo, Pyroscope, Hubble). These services are reachable only over Tailscale via private IPs — public IPs WILL NOT work.** Get the private IP with `easy-db-lab ip --private <node>`.
+> **ALWAYS use the PRIVATE IP in any URL you give the user for Grafana or any other observability endpoint.  These services are reachable only over Tailscale via private IPs: public IPs WILL NOT work.** Get the private IP with `easy-db-lab ip --private <node>`.
 
 The `easy-db-lab` CLI itself is auto-instrumented via the OpenTelemetry Java Agent, which captures HTTP client traces and JVM metrics without any manual instrumentation in the Kotlin code.
 
-`easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. Use `easy-db-lab logs` and `easy-db-lab metrics` for querying. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
+`easy-db-lab grafana update-config` re-applies the observability stack configuration — use it only if config has drifted or you need to refresh after a manual change, not as part of normal setup. For log and metric queries, read `easy-db-lab help observability`. If you need to interact with these directly (e.g. custom queries, imports), use `kubectl` with the `kubeconfig`.
 
 ## Cassandra
 
@@ -158,10 +135,11 @@ Each version directory also contains `conf.orig/` and `cassandra.orig.yaml`, cap
 **Observability backend data (control node):**
 
 ```
-/mnt/db1/victoriametrics/
-/mnt/db1/victorialogs/
 /mnt/db1/grafana/
+/mnt/db1/loki/
+/mnt/db1/mimir/
 /mnt/db1/pyroscope/
+/mnt/db1/tempo/
 /mnt/db1/clickhouse/
   logs/
   keeper/logs/
@@ -175,7 +153,7 @@ Cassandra logs land in `/mnt/db1/cassandra/logs/`. This is set in three places t
 2. `cassandra.in.sh` — `CASSANDRA_LOG_DIR="/mnt/db1/cassandra/logs"`
 3. `/etc/default/cassandra` — sets the `tmp/` fallback (superseded by the above two)
 
-GC logs (JDK 17/21) also land in `CASSANDRA_LOG_DIR`. The OTel Collector mounts `/mnt/db1/cassandra/logs` as a hostPath volume and ships log files to VictoriaLogs.
+GC logs (JDK 17/21) also land in `CASSANDRA_LOG_DIR`. The OTel Collector mounts `/mnt/db1/cassandra/logs` as a hostPath volume and ships log files to Loki.
 
 ### MAAC agents — `/opt/management-api/`
 
@@ -197,5 +175,5 @@ These are injected as `-javaagent:` args via `cassandra.in.sh` and expose Cassan
 | `/usr/local/pyroscope/pyroscope.jar` | Pyroscope Java agent for continuous profiling |
 | `/usr/share/axonops/<version>-agent/lib/` | AxonOps monitoring agents (per Cassandra version) |
 | `/etc/cassandra_versions.yaml` | Source of truth for installed Cassandra versions and build URLs |
-| `/var/log/easydblab/tools/` | exec tool logs shipped to VictoriaLogs by OTel Collector |
+| `/var/log/easydblab/tools/` | exec tool logs shipped to Loki by OTel Collector |
 

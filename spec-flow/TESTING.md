@@ -54,6 +54,7 @@ Run these on a change, and only where the change touches them:
     that scripts directory: not `init-explain.sh`, not `preview.sh`, and not the fixture's `src/`,
     `baseline-src/`, `docs/`, `fake-gh/`, or `explain-map.json`, which are `preview.sh`'s own
     inputs. Editing one of those and getting a green run proves nothing about the edit.
+  - `bash plugins/easy-db-lab/bin/export-workload-metrics.test.sh` covers `plugins/easy-db-lab/bin/export-workload-metrics` and `plugins/easy-db-lab/bin/metrics-catalog.jq`.  These two files and the harness are verbatim copies of easy-db-lab's `bin/`: re-copy them, do not edit them, until easy-db-lab replaces them with a first-class command.
 
   `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it
   means running **both** dev-skills harnesses, not one.

@@ -237,7 +237,11 @@ clear checklist rather than provisioning a cluster yourself.
 
 1. Install and start the kit on a cluster so metrics flow to the metrics backend.  For the
    backend and its endpoint, read `easy-db-lab help observability`.
-2. From the cluster working directory (where `env.sh`, `state.json`, and the kubeconfig live), run `export-workload-metrics <name>`.  The script ships with this plugin (`bin/export-workload-metrics`) as a copy of easy-db-lab's own `bin/export-workload-metrics`.  It needs `jq`.  It queries Mimir, in the cluster's tenant, for `{job="<name>"}` series with a sample in the last 5 minutes, so the kit must be running and scraping first.  It writes `<name>/metrics-catalog.json` with these fields:
+2. From the cluster working directory (where `env.sh`, `state.json`, and the kubeconfig live), run `export-workload-metrics <name>`.  Choose the script by the mode from Step 0:
+   - **Internal mode:** run the easy-db-lab repo's own script, `<repo-root>/bin/export-workload-metrics <name>`.
+   - **External mode:** run this plugin's copy, `bin/export-workload-metrics <name>` from this plugin's `bin/`.  The copy is best effort: it can lag easy-db-lab's own version until easy-db-lab replaces the script with a first-class command.
+
+   The script needs `jq`.  It queries Mimir, in the cluster's tenant, for `{job="<name>"}` series with a sample in the last 5 minutes, so the kit must be running and scraping first.  It writes `<name>/metrics-catalog.json` with these fields:
    - `workload` and `exported_at`
    - `common_labels`: the label keys on every series, each with its distinct values
    - `series`: one entry per metric name, sorted, with its other label keys and their distinct values

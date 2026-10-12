@@ -171,7 +171,7 @@ Mode: <internal|external>   Kit dir: <kit-dir>
 
 ## Metrics & dashboards   (requires a live cluster)
 - [ ] Installed + started on a cluster; metrics flowing to the metrics backend
-- [ ] metrics-catalog.json exported (export-workload-metrics <name>)
+- [ ] metrics-catalog.json exported (internal: repo bin/export-workload-metrics <name>; external: plugin copy, best effort)
 - [ ] METRICS.md authored (every metric name present in the catalog)
 - [ ] dashboards/<name>.json authored (uid <name>-kit, cluster=~"$cluster", ${metrics_datasource} picker)
 

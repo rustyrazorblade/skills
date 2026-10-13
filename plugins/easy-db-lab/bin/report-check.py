@@ -40,7 +40,7 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
 Exit codes: 0 no FAIL; 1 a FAIL; 2 a usage or I/O error; 3 a redaction FAIL, in either mode.
 Without --gate it never edits a file.  With --gate, a non-redaction FAIL, or a --reason, writes
 or replaces the one "⚠ Unchecked: <reasons>" line under "## Caveats" in 1-summary.md and exits
-0.  A clean --gate run with no --reason removes a stale Unchecked line.  The rules are in the
+0.  The line numbers each reason: "⚠ Unchecked: (1) <reason> (2) <reason>".  A clean --gate run with no --reason removes a stale Unchecked line.  The rules are in the
 plugin's references/report.md.
 """
 
@@ -654,7 +654,8 @@ def gate(docs, reasons):
         skip_blank = False
         kept.append(line)
     if reasons:
-        entry = UNCHECKED + "; ".join(reasons)
+        # A reason can hold a ; or a newline: number each one, and keep the line one line.
+        entry = UNCHECKED + " ".join(f"({n}) {' '.join(r.split())}" for n, r in enumerate(reasons, 1))
         if "## Caveats" in kept:
             i = kept.index("## Caveats")
             kept[i + 1:i + 1] = ["", entry]

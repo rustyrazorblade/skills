@@ -264,7 +264,7 @@ make -C <cluster-dir>/docs gate REASONS='--reason "the noise floor does not supp
 
 1. Interactive: show the reasons.  Offer one choice: fix now and re-check once, or proceed unchecked.
 2. Unattended: skip the choice.
-3. Run `make gate`.  For a non-redaction failure, `--gate` writes or replaces one `⚠ Unchecked: <reasons>` line under `## Caveats`, and exits 0.  A clean `--gate` run removes a stale Unchecked line.
+3. Run `make gate`.  For a non-redaction failure, `--gate` writes or replaces one `⚠ Unchecked: <reasons>` line under `## Caveats`, and exits 0.  Each reason gets a number, for example `⚠ Unchecked: (1) <reason> (2) <reason>`.  A clean `--gate` run removes a stale Unchecked line.
 4. Confirm that each reason is in `<issues>`.  The check wrote them there before the subagent ran.
 5. Upload, then run the `down` per `report-upload.md`.  On an upload failure, use the existing failure menu.  A retry re-uploads only; it does not re-run the check.
 6. Unattended: report the failure to the launcher.

@@ -860,6 +860,13 @@ expect_eq "gate: a clean --gate removes a stale line" "0" "$(unchecked_lines "$c
 run_check agree --gate --reason "reviewer saw a confound"
 expect_eq "gate: a --reason alone writes the line" "1" "$(unchecked_lines "$check_dir/1-summary.md")"
 
+# A reason can hold a ; or a newline, so each reason has its own number on the one line.
+run_check agree --gate --reason "the floor is wide; the run is short" --reason "$(printf 'two\nlines')"
+expect_eq "gate: numbered reasons keep a ; and fold a newline on one line" \
+  "⚠ Unchecked: (1) the floor is wide; the run is short (2) two lines" \
+  "$(grep '^⚠ Unchecked: ' "$check_dir/1-summary.md")"
+expect_eq "gate: a reason with a newline still writes one line" "1" "$(grep -c 'Unchecked\|^lines' "$check_dir/1-summary.md")"
+
 fixture_docs "$tmp_root/gate-redact" redact-tunnel
 before="$(tree_sum "$tmp_root/gate-redact")"
 "$checker" --gate "$tmp_root/gate-redact" >/dev/null 2>&1

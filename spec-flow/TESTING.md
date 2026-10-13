@@ -58,15 +58,21 @@ Run these on a change, and only where the change touches them:
     `plugins/easy-db-lab/bin/setup-cluster.sh`, `plugins/easy-db-lab/bin/detect-cluster-layout.sh`,
     `plugins/easy-db-lab/bin/report-graph.py`, `plugins/easy-db-lab/bin/report-check.py`,
     `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
-    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Of
+    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Those fixtures include a stub
+    Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
+    for `render`; both are local HTTP servers on `127.0.0.1`. Of
     `plugins/easy-db-lab/bin/configure-multi-dc-seeds.sh` it covers only the arms-marker guard. It
     also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
     `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
     section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
-    report file names, the required sections, and the image and CSV probe in `report-upload.md`
-    run against a stub binary. Those checks prove the text, not the skill behavior. It needs
-    `mdbook` and `uv` on `PATH`; the first run needs network for uv to fetch matplotlib,
-    pypandoc-binary, requests, and pillow.
+    report file names, no plotting instruction, the required sections, and the image and CSV probe
+    in `report-upload.md` run against a stub binary. Those checks prove the text, not the skill
+    behavior. It also runs two steps in `references/report.md` as written, under bash, against the
+    stub Grafana: the `bash` block under "### Render" (the single-cluster render) and the one
+    under "### Overlay render" (window-variable detection and the whole-run fallback). An edit to
+    either block is covered; the other `report.md` commands are not. It needs `mdbook`, `uv`,
+    `jq`, and `curl` on `PATH`; the first run needs network for uv to fetch pypandoc-binary and
+    requests.
   - `bash plugins/easy-db-lab/bin/export-workload-metrics.test.sh` covers `plugins/easy-db-lab/bin/export-workload-metrics` and `plugins/easy-db-lab/bin/metrics-catalog.jq`.  These two files and the harness are verbatim copies of easy-db-lab's `bin/`: re-copy them, do not edit them, until easy-db-lab replaces them with a first-class command.
 
   `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it

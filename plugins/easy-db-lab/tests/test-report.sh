@@ -595,6 +595,37 @@ out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-bas
 expect_eq "plot: --align accepts an arm in two CSVs with one window" "0" "$?"
 expect_contains "plot: the same-window arm keeps both CSVs' nodes" "$out" "| db2 (baseline) | baseline |"
 
+# time_labels <minutes>: the x tick labels that time_axis gives a window of that length, one per |.
+time_labels() {
+  uv run --quiet --no-project --with 'matplotlib>=3.8' python3 - "$graph" "$1" <<'PYEOF'
+import importlib.util
+import sys
+from datetime import datetime, timedelta, timezone
+spec = importlib.util.spec_from_file_location("report_graph", sys.argv[1])
+graph = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(graph)
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+t0 = datetime(2026, 10, 13, 12, 18, 30, tzinfo=timezone.utc)
+xs = [t0 + timedelta(seconds=15 * i) for i in range(int(sys.argv[2]) * 4 + 1)]
+ax.plot(xs, range(len(xs)))
+graph.time_axis(ax)
+fig.canvas.draw()
+print("|".join(t.get_text() for t in ax.get_xticklabels() if t.get_text()))
+PYEOF
+}
+for minutes in 4 600; do
+  labels="$(time_labels "$minutes" 2>&1)"
+  distinct="$(printf '%s\n' "$labels" | tr '|' '\n' | sort | uniq -d)"
+  if [[ "$labels" == *"|"* && -z "$distinct" ]]; then
+    pass "plot: a $minutes-minute window has distinct time labels"
+  else
+    fail "plot: a $minutes-minute window has distinct time labels" "$labels"
+  fi
+done
+
 # Each arm filters on its own cluster label, so the queries differ only in the cluster matcher.
 out="$("$graph" plot --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-candidate.csv" --name arm-cluster \
   --title "Arm cluster" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"

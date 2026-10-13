@@ -254,6 +254,19 @@ def arm_order(arms):
     return roles + [a for a in arms if a not in roles]
 
 
+def time_axis(ax):
+    """Label the x-axis of a UTC time plot.  Ticks less than a minute apart show seconds, so a
+    short window never repeats a label."""
+    import matplotlib.dates as mdates
+
+    locator = mdates.AutoDateLocator(tz=timezone.utc)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(
+        locator, tz=timezone.utc,
+        formats=["%Y", "%b", "%d", "%H:%M", "%H:%M", "%H:%M:%S"],
+        zero_formats=["", "%Y", "%b", "%d", "%H:%M", "%H:%M:%S"]))
+
+
 def plot(args):
     stats = [s.strip() for s in args.stats.split(",") if s.strip()]
     for s in stats:
@@ -301,7 +314,6 @@ def plot(args):
 
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
 
     style = args.style or os.path.join(docs, "lab.mplstyle")
@@ -338,7 +350,7 @@ def plot(args):
         ax.set_xlabel("Elapsed (s)")
     else:
         ax.set_xlabel("Time (UTC)")
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=timezone.utc))
+        time_axis(ax)
     ax.legend()
 
     name = args.name or os.path.splitext(os.path.basename(args.csv[0]))[0]

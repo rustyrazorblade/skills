@@ -22,7 +22,9 @@
 #   --arm <arm>=<plan.md>
 #                     One arm of a cross-cluster test. Repeat for each arm. Creates the wrapper
 #                     <test-dir>/<arm>/easy-db-lab, copies the plan to docs/3-plan-<arm>.md, and
-#                     lists the arm in the <test-dir>/arms marker. Excludes --dc.
+#                     lists the arm in the <test-dir>/arms marker. Excludes --dc. An arm name
+#                     uses letters, digits, - and _, appears once, and is not docs, bin, data,
+#                     images, export, or arms.
 #   --docs-only       Write the docs scaffold only. Takes no binary and writes no wrapper.
 #
 # The script never rewrites an existing wrapper. It refuses a binary whose real path is a
@@ -113,6 +115,13 @@ else
 fi
 for i in ${ARMS[@]+"${!ARMS[@]}"}; do
   [[ "${ARMS[$i]}" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "error: arm names use letters, digits, - and _: ${ARMS[$i]}" >&2; exit 1; }
+  # An arm directory must not collide with the docs scaffold, the bin/ guard, or the arms marker.
+  case "${ARMS[$i]}" in
+    docs|bin|data|images|export|arms) echo "error: reserved arm name: ${ARMS[$i]}" >&2; exit 1 ;;
+  esac
+  for j in "${!ARMS[@]}"; do
+    [[ $j -lt $i && "${ARMS[$j]}" == "${ARMS[$i]}" ]] && { echo "error: duplicate arm name: ${ARMS[$i]}" >&2; exit 1; }
+  done
   [[ -f "${ARM_PLANS[$i]}" ]] || { echo "error: plan not found for arm ${ARMS[$i]}: ${ARM_PLANS[$i]}" >&2; exit 1; }
 done
 

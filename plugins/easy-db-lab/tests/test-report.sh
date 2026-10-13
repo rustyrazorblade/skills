@@ -243,6 +243,36 @@ expect_eq "arms: the SUMMARY.md Appendix lists the coordinator, then each arm" \
   "$appendix"
 expect_contains "arms: SUMMARY.md keeps the summary and evidence" "$(cat "$td/docs/SUMMARY.md" 2>/dev/null)" "- [Evidence](2-evidence.md)"
 
+# A bad --arm writes nothing: a path in the name, a missing plan, a reserved name, a duplicate.
+while read -r label args; do
+  dest="$tmp_root/arm-bad"
+  rm -rf "$dest"
+  # shellcheck disable=SC2086 # args holds several words
+  out="$(bash "$bin/setup-cluster.sh" "$dest" "$stub_edb" --name t $args 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "arms: $label exits non-zero"; else fail "arms: $label exits non-zero"; fi
+  expect_no_file "arms: $label writes nothing" "$dest"
+done <<EOF
+--arm-../x --arm ../x=$plan_src
+--arm-a=/no/such --arm a=/no/such
+--arm-docs --arm docs=$plan_src
+--arm-bin --arm bin=$plan_src
+--arm-data --arm data=$plan_src
+--arm-images --arm images=$plan_src
+--arm-export --arm export=$plan_src
+--arm-arms --arm arms=$plan_src
+a-duplicate-arm --arm a=$plan_src --arm b=$plan_src --arm a=$plan_src
+EOF
+out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-dup" "$stub_edb" --name t --arm a="$plan_src" --arm a="$plan_src" 2>&1)"
+expect_contains "arms: the duplicate refusal names the arm" "$out" "duplicate arm name: a"
+out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-docs" "$stub_edb" --name t --arm docs="$plan_src" 2>&1)"
+expect_contains "arms: the reserved refusal names the arm" "$out" "reserved arm name: docs"
+
+# The kept-file rule holds for an arm: a rerun with --arm keeps an appended journal line.
+echo "kept arm entry" >> "$td/docs/4-journal-baseline.md"
+bash "$bin/setup-cluster.sh" "$td" "$stub_edb" --name T --arm baseline="$tmp_root/b.md" --arm candidate="$tmp_root/c.md" >/dev/null 2>&1
+expect_contains "arms: a rerun keeps docs/4-journal-baseline.md" "$(cat "$td/docs/4-journal-baseline.md")" "kept arm entry"
+
 # --- detect-cluster-layout.sh ---
 
 layout="$(bash "$bin/detect-cluster-layout.sh" "$td" 2>&1)"

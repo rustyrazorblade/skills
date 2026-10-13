@@ -14,7 +14,8 @@ Usage:
 jira converts 1-summary.md to Atlassian wiki markup through pandoc (pypandoc-binary, so no
 system install).  A Lua filter references each image by file name (!scrape-alloc.png!) for
 manual attachment, turns links to .md pages into their text, and maps each verdict badge to a
-colour.
+colour.  It removes the writer's escape from a ( that opens no emoticon and from the sign of a
+number, so "(MB/s)" and "+20.8%" stay readable.
 
 zip takes the pages that SUMMARY.md lists before "# Appendix" (the summary, the evidence, and
 nested evidence pages), plus every images/ and data/ file they reference.  A listed page outside
@@ -69,6 +70,12 @@ end
 """
 
 LINK_TARGET = re.compile(r"\]\(([^)\s]+)\)")
+# The jira writer escapes every ( so that no text becomes a JIRA emoticon such as (i).  Keep the
+# escape only before an emoticon.
+EMOTICON = r"(?:[ixyn/!?*+-]|on|off|flag|flagoff|\*[rgby])\)"
+ESCAPED_PAREN = re.compile(r"\\\((?!" + EMOTICON + ")")
+# A signed number such as +20.8% or -26.4% opens no underline or strikethrough.
+ESCAPED_SIGN = re.compile(r"\\([+-])(?=\d)")
 
 
 def die(msg):
@@ -86,11 +93,13 @@ def jira(docs, out):
         f.write(LUA_FILTER)
         lua = f.name
     try:
-        text = pypandoc.convert_file(summary, "jira", format="markdown-auto_identifiers", filters=[lua])
+        # No smart extension: it turns the -- of a flag such as --align into an en dash.
+        text = pypandoc.convert_file(summary, "jira", format="markdown-auto_identifiers-smart", filters=[lua])
     finally:
         os.unlink(lua)
     # The jira writer puts an {anchor:} macro on every heading; JIRA needs none.
     text = re.sub(r"\{anchor:[^}]*\}", "", text)
+    text = ESCAPED_SIGN.sub(r"\1", ESCAPED_PAREN.sub("(", text))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write(text)

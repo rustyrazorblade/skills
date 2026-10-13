@@ -900,6 +900,17 @@ expect_contains "jira: the Inconclusive verdict maps to its colour" "$(cat "$tmp
   "{color:#E69F00}*Inconclusive*{color}"
 expect_not_contains "jira: holds only the summary tier" "$jira" "Threats to validity"
 
+# pandoc escapes ( + and -, and its smart extension makes -- an en dash.
+fixture_docs "$tmp_root/export-escapes" jira-escapes
+"$exporter" jira "$tmp_root/export-escapes" "$tmp_root/jira-escapes.txt" >/dev/null 2>&1
+jira_esc="$(cat "$tmp_root/jira-escapes.txt" 2>/dev/null)"
+expect_contains "jira: the Metric link text keeps its unit readable" "$jira_esc" "| Scrape allocation mean (MB/s) |"
+expect_contains "jira: a positive Delta keeps its plain sign" "$jira_esc" "| +20.8% |"
+expect_contains "jira: a negative Delta keeps its plain sign" "$jira_esc" "| -26.4% |"
+# JIRA renders -- as an en dash, so \-\- is the JIRA source for a literal --.
+expect_contains "jira: -- stays two escaped hyphens, not an en dash" "$jira_esc" 'plot \-\-align elapsed'
+expect_contains "jira: an emoticon such as (i) stays escaped" "$jira_esc" '\(i)'
+
 "$exporter" zip "$xd" "$tmp_root/report.zip" >/dev/null 2>&1
 expect_eq "zip: exits 0" "0" "$?"
 listing="$(unzip -Z1 "$tmp_root/report.zip" 2>/dev/null | sort | tr '\n' ' ')"

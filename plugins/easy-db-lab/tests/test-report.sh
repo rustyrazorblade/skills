@@ -262,7 +262,14 @@ done <<EOF
 --arm-export --arm export=$plan_src
 --arm-arms --arm arms=$plan_src
 a-duplicate-arm --arm a=$plan_src --arm b=$plan_src --arm a=$plan_src
+a-b-and-a_b --arm a-b=$plan_src --arm a_b=$plan_src
+Base-and-base --arm Base=$plan_src --arm base=$plan_src
+--arm-Docs --arm Docs=$plan_src
 EOF
+out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-collide" "$stub_edb" --name t --arm a-b="$plan_src" --arm a_b="$plan_src" 2>&1)"
+expect_contains "arms: the a-b and a_b refusal names both arms" "$out" "arm names a-b and a_b collide"
+out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-collide" "$stub_edb" --name t --arm Base="$plan_src" --arm base="$plan_src" 2>&1)"
+expect_contains "arms: the Base and base refusal names both arms" "$out" "arm names Base and base collide"
 out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-dup" "$stub_edb" --name t --arm a="$plan_src" --arm a="$plan_src" 2>&1)"
 expect_contains "arms: the duplicate refusal names the arm" "$out" "duplicate arm name: a"
 out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-docs" "$stub_edb" --name t --arm docs="$plan_src" 2>&1)"
@@ -327,6 +334,17 @@ make_arms "$tmp_root/arms-empty"
 layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-empty" 2>&1)"
 expect_eq "layout: an empty arms marker exits 1" "1" "$?"
 expect_contains "layout: the refusal says the marker lists no arm" "$layout" "lists no arm"
+
+# Two marker arms that map to one EDB_ variable: a-b and a_b, and Base and base.
+for pair in 'a-b a_b' 'Base base'; do
+  # shellcheck disable=SC2086 # pair holds two arm names
+  make_arms "$tmp_root/arms-collide" $pair
+  layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-collide" 2>&1)"
+  expect_eq "layout: the marker arms $pair exit 1" "1" "$?"
+  expect_contains "layout: the refusal for $pair names both arms" "$layout" "arm names ${pair% *} and ${pair#* } collide"
+  expect_not_contains "layout: the marker arms $pair print no LAYOUT" "$layout" "LAYOUT="
+  rm -rf "$tmp_root/arms-collide"
+done
 
 # shellcheck disable=SC2016 # a literal $( ) in an arm name
 for bad in '../x' 'a;b' 'a$(id)'; do

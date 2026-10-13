@@ -25,7 +25,8 @@
 #
 # Each value is quoted for eval with printf %q; ARMS is double-quoted, which is safe because an
 # arm name must match the setup-cluster.sh rule, ^[A-Za-z0-9][A-Za-z0-9_-]*$.  The multi-DC scan
-# skips docs/ and bin/.  Exit 1 if no wrapper is found, or if the marker names a bad arm.
+# skips docs/ and bin/.  Exit 1 if no wrapper is found, if the marker names a bad arm, or if two
+# marker arms give one variable, such as a-b and a_b.
 
 set -euo pipefail
 
@@ -47,6 +48,12 @@ if [[ -f "$CLUSTER_DIR/arms" ]]; then
       echo "error: the arms marker names a bad arm (use letters, digits, - and _): $arm" >&2
       exit 1
     fi
+    for other in ${ARMS[@]+"${ARMS[@]}"}; do
+      if [[ "$(var_name "$other")" == "$(var_name "$arm")" ]]; then
+        echo "error: in the arms marker, the arm names $other and $arm collide: they give one EDB_$(var_name "$arm") variable" >&2
+        exit 1
+      fi
+    done
     wrapper="$CLUSTER_DIR/$arm/easy-db-lab"
     if [[ ! -x "$wrapper" ]]; then
       echo "error: arm $arm has no easy-db-lab wrapper: $wrapper" >&2

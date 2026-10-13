@@ -68,6 +68,11 @@ usage() {
   exit 1
 }
 
+# arm_var <arm>: the EDB_/STATE_ suffix detect-cluster-layout.sh gives the arm.
+arm_var() {
+  echo "$1" | tr '[:lower:]' '[:upper:]' | tr '-' '_'
+}
+
 CLUSTER_DIR="${1:-}"
 [[ -n "$CLUSTER_DIR" && "$CLUSTER_DIR" != --* ]] || usage
 shift
@@ -116,11 +121,15 @@ fi
 for i in ${ARMS[@]+"${!ARMS[@]}"}; do
   [[ "${ARMS[$i]}" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "error: arm names use letters, digits, - and _: ${ARMS[$i]}" >&2; exit 1; }
   # An arm directory must not collide with the docs scaffold, the bin/ guard, or the arms marker.
-  case "${ARMS[$i]}" in
+  # The match ignores case, because APFS does.
+  case "$(echo "${ARMS[$i]}" | tr '[:upper:]' '[:lower:]')" in
     docs|bin|data|images|export|arms) echo "error: reserved arm name: ${ARMS[$i]}" >&2; exit 1 ;;
   esac
   for j in "${!ARMS[@]}"; do
-    [[ $j -lt $i && "${ARMS[$j]}" == "${ARMS[$i]}" ]] && { echo "error: duplicate arm name: ${ARMS[$i]}" >&2; exit 1; }
+    [[ $j -lt $i ]] || continue
+    [[ "${ARMS[$j]}" == "${ARMS[$i]}" ]] && { echo "error: duplicate arm name: ${ARMS[$i]}" >&2; exit 1; }
+    # detect-cluster-layout.sh gives each arm an EDB_ variable: upper case, with - as _.
+    [[ "$(arm_var "${ARMS[$j]}")" == "$(arm_var "${ARMS[$i]}")" ]] && { echo "error: arm names ${ARMS[$j]} and ${ARMS[$i]} collide: they give one EDB_$(arm_var "${ARMS[$i]}") variable" >&2; exit 1; }
   done
   [[ -f "${ARM_PLANS[$i]}" ]] || { echo "error: plan not found for arm ${ARMS[$i]}: ${ARM_PLANS[$i]}" >&2; exit 1; }
 done

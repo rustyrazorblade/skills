@@ -57,11 +57,11 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 7. Skill edits: run, explore, plan
 
-- [ ] 7.1 `skills/run/SKILL.md`: rename every tier file reference, including resume detection at line 104 (`docs/3-plan.md`).  Fix "step 66 above" at line 135.
-- [ ] 7.2 `skills/run/SKILL.md`: replace the screenshot instruction at line 257 with "run `report-graph.py` and append the evidence block per `report.md`".  Replace Completion steps 1-2 (lines 263-291) with "Finalize the report per `report.md`".  Make the pause exit (lines 328-332) write a Partial summary.  Point Team Agents (line 384) to the reasoning review in `report.md`.
-- [ ] 7.3 `skills/run/SKILL.md`: add the `--arm <arm>` and `--finalize` modes, the arms resume from `docs/3-plan-<arm>.md`, and the refusal of teardown without `--arm` in arms mode.  Rewrite "Parallel arms" (lines 369-375) per addendum F12.  Keep the calibration rule at line 374 unchanged.
-- [ ] 7.4 `skills/explore/SKILL.md`: load `report.md`; at Step 1, after the binary and the source-checkout guard, run `setup-cluster.sh "$PWD" --docs-only --name "$(basename "$PWD")"` when `docs/SUMMARY.md` is absent; remove the `DCS=bin` special case at line 31; at Teardown (line 132), run Finalize first with a verdict and a Findings table, and use the every-tier-file scaffold-only exclusion.
-- [ ] 7.5 `skills/plan/SKILL.md`: lines 235-240 describe the tiered report and point to `report.md`; drop "Performance Results" and screenshots; lines 18-23 `--previous` reads `1-summary.md`, `4-journal.md`, and `5-issues.md`.
+- [x] 7.1 `skills/run/SKILL.md`: rename every tier file reference, including resume detection at line 104 (`docs/3-plan.md`).  Fix "step 66 above" at line 135.
+- [x] 7.2 `skills/run/SKILL.md`: replace the screenshot instruction at line 257 with "run `report-graph.py` and append the evidence block per `report.md`".  Replace Completion steps 1-2 (lines 263-291) with "Finalize the report per `report.md`".  Make the pause exit (lines 328-332) write a Partial summary.  Point Team Agents (line 384) to the reasoning review in `report.md`.
+- [x] 7.3 `skills/run/SKILL.md`: add the `--arm <arm>` and `--finalize` modes, the arms resume from `docs/3-plan-<arm>.md`, and the refusal of teardown without `--arm` in arms mode.  Rewrite "Parallel arms" (lines 369-375) per addendum F12.  Keep the calibration rule at line 374 unchanged.
+- [x] 7.4 `skills/explore/SKILL.md`: load `report.md`; at Step 1, after the binary and the source-checkout guard, run `setup-cluster.sh "$PWD" --docs-only --name "$(basename "$PWD")"` when `docs/SUMMARY.md` is absent; remove the `DCS=bin` special case at line 31; at Teardown (line 132), run Finalize first with a verdict and a Findings table, and use the every-tier-file scaffold-only exclusion.
+- [x] 7.5 `skills/plan/SKILL.md`: lines 235-240 describe the tiered report and point to `report.md`; drop "Performance Results" and screenshots; lines 18-23 `--previous` reads `1-summary.md`, `4-journal.md`, and `5-issues.md`.
 
 ## 8. References and README
 

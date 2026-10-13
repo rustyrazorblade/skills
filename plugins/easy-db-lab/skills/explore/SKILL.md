@@ -13,13 +13,17 @@ You are an interactive guide for easy-db-lab sessions. You start by checking whe
 
 Load `../../references/environment.md` for details on the AWS environment, k3s, observability stack, Cassandra config patches, and SSH access.
 
+## Lab Report
+
+Load `../../references/report.md` for every report rule: the file roles, the tiers, the summary layout, the evidence blocks, the exit rule, the check, and Finalize.  In this skill the roles are `<journal>` = `docs/4-journal.md`, `<issues>` = `docs/5-issues.md`, and `<plan>` = `docs/3-plan.md`.
+
 ## Session Log
 
-Load `../../references/journal.md` for instructions on maintaining `docs/journal.md`. Read `docs/journal.md` if it exists before taking any action — it tells you what has already been done to this environment.
+Load `../../references/journal.md` for instructions on maintaining `<journal>`. Read `<journal>` if it exists before taking any action — it tells you what has already been done to this environment.
 
 ## Issues Log
 
-Load `../../references/issues.md` for instructions on maintaining `docs/issues.md`. Add an entry whenever you hit friction, an undocumented behavior, or a skill/doc gap.
+Load `../../references/issues.md` for instructions on maintaining `<issues>`. Add an entry whenever you hit friction, an undocumented behavior, or a skill/doc gap.
 
 ## Step 1 — Check Environment State
 
@@ -27,8 +31,7 @@ Load `../../references/issues.md` for instructions on maintaining `docs/issues.m
 
 1. Run `detect-cluster-layout.sh "$PWD"` and read its output.  Do not `eval` it: shell state does not persist between Bash tool calls.  Copy the absolute wrapper paths from the output, and use those paths literally in every later command.
    - `LAYOUT=single`: use the `EDB=` path as `$EDB`.
-   - `LAYOUT=multi`: use each `EDB_<DC>=` path as that DC's wrapper.  Run DC commands, uploads, and teardown through every DC wrapper.
-   - `LAYOUT=multi` with `DCS=bin`: this is not a workspace.  The script matched `bin/easy-db-lab`, which is the binary in an easy-db-lab source checkout.  Ignore the output and go to item 2.
+   - `LAYOUT=multi`: use each `EDB_<DC>=` path as that DC's wrapper.  Run DC commands, uploads, and teardown through every DC wrapper.  The script skips `bin/` and `docs/`, so neither is ever a DC.
    - Exit 1 (no wrapper found): there is no wrapper.  Go to item 2.
 2. Use `$PWD/bin/easy-db-lab` if it is executable.
 3. Otherwise, use the path that `command -v easy-db-lab` prints.
@@ -40,6 +43,16 @@ detect-cluster-layout.sh "$PWD"
 The workspace directory is `$PWD`.  In a multi-DC workspace it is the cluster root, which holds one directory per DC and the shared `docs/`.  This directory is `<cluster-dir>` everywhere in this skill and in `../../references/report-upload.md`.
 
 If no binary resolves in an interactive session, ask the user for a path.  If the user has no path, or the path is not executable, stop and report the paths searched.  In an unattended session, do not ask: stop and report the paths searched.  Without a binary, write no command or file from memory.
+
+**Refuse a source checkout.**  If `$PWD/bin/easy-db-lab` exists next to `settings.gradle.kts` or `build.gradle.kts`, `$PWD` is an easy-db-lab source checkout, not a workspace.  Do not scaffold or provision there.  Tell the user to change to a workspace directory, and stop.
+
+**Scaffold the report.**  When `docs/SUMMARY.md` is absent, run this before the first journal write:
+
+```bash
+setup-cluster.sh "$PWD" --docs-only --name "$(basename "$PWD")"
+```
+
+`--docs-only` writes the `docs/` scaffold only: it takes no binary, writes no wrapper, and keeps any existing wrapper.  The directory name is only the fallback book title; `make` takes the title from `1-summary.md`.  In a multi-DC workspace, run it once at the cluster root.  When `docs/SUMMARY.md` exists, do not run it.
 
 Run these commands immediately when invoked, before answering any question or taking any action:
 
@@ -119,6 +132,8 @@ With a live environment, ask the user what they want to do next. Suggest concret
 
 Stay interactive — confirm each action before running it, and summarize results so the user can decide what to try next.
 
+When an action measures something, run `report-graph.py fetch` and `plot`, and append the evidence block to the evidence tier per `../../references/report.md`.  Derive the Mimir URL and tenant per DC wrapper.
+
 ## Working Directory
 
 All `easy-db-lab` commands must be run from the **lab workspace directory** — the directory initialized with `easy-db-lab init`. This directory holds `state.json` and other internal cluster configuration files, which you never read. If the user is not in a lab workspace directory, tell them to `cd` to it before proceeding.
@@ -129,10 +144,11 @@ Every real `$EDB down` is gated on the report upload.  Follow `../../references/
 
 `<cluster-dir>` is the workspace directory that you passed to `detect-cluster-layout.sh`, which is `$PWD`.  In a multi-DC workspace, it is the cluster root.
 
-1. Choose the files with the explore rule in the reference.  List every existing `docs/*.md` by absolute path.  Exclude `SUMMARY.md`, and exclude `results.md` while it holds only the scaffold comments.  Name each excluded file in `docs/journal.md`.
-2. If `docs/` does not exist, tell the user "docs/ not found; no report uploaded" before `down`.  In an unattended session, put this line in the report to the launcher.  If `docs/` does not exist, or no eligible file remains, do not upload.  Run `$EDB down --auto-approve`.
-3. Otherwise, run one `$EDB report upload` command with the eligible files, per DC wrapper.
-4. Run `$EDB down --auto-approve` only if every upload exits 0.  If an upload fails, or the CLI rejects the batch, do not run `down`.  Follow the failure handling in the reference.
+1. Run Finalize per `../../references/report.md`.  Write `1-summary.md` first, with a verdict and a Findings table (Finding, Evidence, Severity).  An explore session is never Partial.  Then run the check and `make gate`, with the teardown-gate check-failure rule.
+2. Choose the files with the explore rule in the reference.  List every existing `docs/*.md` by absolute path.  Exclude `SUMMARY.md`, and exclude every tier file that holds only scaffold content.  Name each excluded file in `<journal>`.
+3. If `docs/` does not exist, tell the user "docs/ not found; no report uploaded" before `down`.  In an unattended session, put this line in the report to the launcher.  If `docs/` does not exist, or no eligible file remains, do not upload.  Run `$EDB down --auto-approve`.
+4. Otherwise, run one `$EDB report upload` command with the eligible files, per DC wrapper.
+5. Run `$EDB down --auto-approve` only if every upload exits 0.  If an upload fails, or the CLI rejects the batch, do not run `down`.  Follow the failure handling in the reference.
 
 In a multi-DC workspace, upload through every DC wrapper first.  Then run `$EDB down --auto-approve` through every DC wrapper.  If there is no wrapper, run each DC's commands from that DC's directory.
 

@@ -743,6 +743,73 @@ expect_contains "reference: the not-installed line" "$ref" "Reasoning review: no
 expect_contains "reference: the finalize entry point" "$ref" "run <cluster-dir> --finalize"
 expect_contains "reference: the Partial verdict" "$ref" "Partial: stopped after step N"
 
+# --- skills and references: no stale report structure ---
+
+run_skill="$plugin/skills/run/SKILL.md"
+explore_skill="$plugin/skills/explore/SKILL.md"
+plan_skill="$plugin/skills/plan/SKILL.md"
+upload_ref="$plugin/references/report-upload.md"
+journal_ref="$plugin/references/journal.md"
+issues_ref="$plugin/references/issues.md"
+for f in "$plan_skill" "$run_skill" "$explore_skill" "$upload_ref" "$journal_ref" "$issues_ref"; do
+  name="${f#"$plugin/"}"
+  # results.md anywhere; the old docs/ paths; the old journal and issues names in backticks.  A
+  # backticked plan.md is the plan skill's own output file, not a docs/ name.
+  # shellcheck disable=SC2016 # the backticks are literal markdown
+  stale="$(grep -nE 'results\.md|docs/(plan|journal|issues)\.md|`(journal|issues)\.md`|the fixed four' "$f")"
+  expect_eq "docs: $name holds no old report file name" "" "$stale"
+  if grep -qE 'report\.md|<journal>|<issues>|1-summary\.md' "$f"; then
+    pass "docs: $name describes the tiered report or points to report.md"
+  else
+    fail "docs: $name describes the tiered report or points to report.md"
+  fi
+done
+for f in "$run_skill" "$journal_ref"; do
+  expect_eq "docs: ${f#"$plugin/"} holds no Grafana screenshot instruction" "" "$(grep -niE 'screenshot' "$f")"
+done
+for f in "$run_skill" "$explore_skill"; do
+  expect_contains "docs: ${f#"$plugin/"} loads the shared reference" "$(cat "$f")" "../../references/report.md"
+done
+run_text="$(cat "$run_skill")"
+expect_not_contains "run: the stale step 66 reference is gone" "$run_text" "step 66 above"
+expect_contains "run: resume detects docs/3-plan.md" "$run_text" "docs/3-plan.md"
+expect_contains "run: the --arm mode" "$run_text" "run <test-dir> --arm <arm>"
+expect_contains "run: the --finalize mode" "$run_text" "run <cluster-dir> --finalize"
+expect_contains "run: arms resume reads the arm plan" "$run_text" "docs/3-plan-<arm>.md"
+expect_contains "run: teardown without --arm is refused in arms mode" "$run_text" "refuse"
+expect_contains "run: the pause writes a Partial summary" "$run_text" "Partial: stopped after step N"
+expect_contains "run: Parallel arms is one test directory" "$run_text" "LAYOUT=arms"
+expect_contains "run: the calibration rule is unchanged" "$run_text" \
+  "The arms sit on different hardware, so run an identical short calibration workload before the measured run. It tells you whether the clusters are comparable at all, and its spread is the error bar on every delta you later report."
+expect_not_contains "run: no separate workspace per arm" "$run_text" "each with its own workspace and its own"
+explore_text="$(cat "$explore_skill")"
+# shellcheck disable=SC2016 # the command is literal skill text
+expect_contains "explore: scaffolds with --docs-only" "$explore_text" 'setup-cluster.sh "$PWD" --docs-only --name "$(basename "$PWD")"'
+expect_not_contains "explore: the DCS=bin special case is gone" "$explore_text" "DCS=bin"
+expect_contains "explore: refuses a source checkout" "$explore_text" "source checkout"
+expect_contains "explore: teardown writes a Findings table" "$explore_text" "Findings table"
+plan_text="$(cat "$plan_skill")"
+for f in 1-summary.md 4-journal.md 5-issues.md; do
+  expect_contains "plan: --previous reads docs/$f" "$plan_text" "<cluster-dir>/docs/$f"
+done
+expect_not_contains "plan: no Performance Results section" "$plan_text" "Performance Results"
+expect_contains "plan: points to report.md" "$plan_text" "references/report.md"
+expect_contains "cassandra: Multi-DC Setup applies to LAYOUT=multi only" \
+  "$(sed -n '/^## Multi-DC Setup/,/^### Prerequisites/p' "$plugin/references/cassandra.md")" "LAYOUT=multi"
+expect_eq "readme: no easy-db-lab operator agent" "" "$(grep -n 'easy-db-lab operator' "$plugin/../../README.md")"
+
+# The image and CSV support probe in report-upload.md, run as written against the stub binary.
+probe="$(grep -E "^\\\$EDB commands \| grep 'report upload <FILE>'" "$upload_ref" | head -n 1)"
+if [[ -z "$probe" ]]; then
+  fail "upload: report-upload.md holds the image and CSV probe"
+else
+  pass "upload: report-upload.md holds the image and CSV probe"
+  out="$(EDB="$stub_edb" STUB_COMMANDS="$fixtures/bin/commands-md-only.txt" bash -c "${probe//\$EDB/\"\$EDB\"}")"
+  expect_eq "upload: a .md-only binary gets .md uploads only" "images and CSV: not supported" "$out"
+  out="$(EDB="$stub_edb" STUB_COMMANDS="$fixtures/bin/commands-png-csv.txt" bash -c "${probe//\$EDB/\"\$EDB\"}")"
+  expect_eq "upload: a .png and .csv binary gets images and CSV" "images and CSV: supported" "$out"
+fi
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

@@ -65,12 +65,12 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 8. References and README
 
-- [ ] 8.1 `references/report-upload.md`: support check adds the `.png`/`.csv` probe (lines 7-19); "the fixed four" becomes the five tier files with the scaffold-only carve-out (lines 25-37); the explore exclusion covers every tier file (lines 39-46); the teardown gate starts with Finalize and `make gate` (lines 60-70); roles replace file names (lines 54-58); add the Arms section.
-- [ ] 8.2 `references/journal.md`: use `<journal>`; replace "Grafana Screenshots" (line 64) with the evidence-tier rule; Grafana renders are optional, appendix only, downloaded and never linked.
-- [ ] 8.3 `references/issues.md`: use `<issues>`; tool friction lives only here; result-affecting issues also go to Threats to validity.
-- [ ] 8.4 `references/cassandra.md`: Multi-DC Setup states that it applies to `LAYOUT=multi` only.
-- [ ] 8.5 Repo `README.md` line 165: stop advertising the "easy-db-lab operator" agent.
-- [ ] 8.6 Add a harness case that greps `skills/plan/SKILL.md`, `skills/run/SKILL.md`, `skills/explore/SKILL.md`, `references/report-upload.md`, and `references/journal.md` for `results.md` and the old file names, and the README for "easy-db-lab operator".
+- [x] 8.1 `references/report-upload.md`: support check adds the `.png`/`.csv` probe (lines 7-19); "the fixed four" becomes the five tier files with the scaffold-only carve-out (lines 25-37); the explore exclusion covers every tier file (lines 39-46); the teardown gate starts with Finalize and `make gate` (lines 60-70); roles replace file names (lines 54-58); add the Arms section.
+- [x] 8.2 `references/journal.md`: use `<journal>`; replace "Grafana Screenshots" (line 64) with the evidence-tier rule; Grafana renders are optional, appendix only, downloaded and never linked.
+- [x] 8.3 `references/issues.md`: use `<issues>`; tool friction lives only here; result-affecting issues also go to Threats to validity.
+- [x] 8.4 `references/cassandra.md`: Multi-DC Setup states that it applies to `LAYOUT=multi` only.
+- [x] 8.5 Repo `README.md` line 165: stop advertising the "easy-db-lab operator" agent.
+- [x] 8.6 Add a harness case that greps `skills/plan/SKILL.md`, `skills/run/SKILL.md`, `skills/explore/SKILL.md`, `references/report-upload.md`, and `references/journal.md` for `results.md` and the old file names, and the README for "easy-db-lab operator".
 
 ## 9. Version bump
 

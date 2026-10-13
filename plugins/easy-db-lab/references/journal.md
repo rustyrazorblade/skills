@@ -1,10 +1,10 @@
 # journal.md — Lab Journal
 
-`journal.md` lives at `docs/journal.md` inside the lab workspace directory. It is a human-readable record of everything done to the environment, written for the operator and for anyone reviewing the work later.
+The journal is the file with the role `<journal>`: `docs/4-journal.md` in a single or multi-DC workspace, and `docs/4-journal-<arm>.md` for an arm agent.  `report.md` defines the roles.  The journal is a human-readable record of everything done to the environment, written for the operator and for anyone reviewing the work later.  It is in the appendix of the lab report.
 
 ## Create It Immediately
 
-The very first thing you do in any skill is create `docs/journal.md` if it does not exist (creating `docs/` if needed), then open a new session entry:
+`setup-cluster.sh` creates `<journal>` from the scaffold.  If `docs/SUMMARY.md` does not exist yet, the skill runs `setup-cluster.sh` first, as its own instructions say.  Then, before any other command, open a new session entry in `<journal>`:
 
 ```markdown
 # Lab Journal
@@ -59,20 +59,19 @@ op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
 <key output or metrics if relevant>
 ```
 
-If `docs/journal.md` already exists, read it first to understand the full context of what has been done to this environment before taking any action.
+If `<journal>` already holds entries, read it first to understand the full context of what has been done to this environment before taking any action.
 
-## Grafana Screenshots
+## Measurements Go to the Evidence Tier
 
-When observing performance results — stress test throughput, latency, compaction, anything you'd want to reference later — download a screenshot from Grafana and embed it in the journal entry.
+A measurement that the report states goes to the evidence tier, not to the journal.  After a measuring step, run `report-graph.py fetch` and `plot`, and append the evidence block to `2-evidence.md`, per the Graphs section of `report.md`.  In the journal, record the commands and the key numbers as they happen.
 
-Save screenshots to `docs/images/` and reference them inline:
+A Grafana render image is optional.  If you keep one, it goes in the journal only, in the appendix.  Download it to `docs/images/` and embed it from there; never link to Grafana:
 
 ```markdown
-### 11:22 KeyValue baseline — 30m run complete
-op/s: 24,500 — p99 read: 3.2ms, p99 write: 1.8ms
+### 11:22 KeyValue baseline: 30m run complete
+op/s: 24,500; p99 read: 3.2ms, p99 write: 1.8ms
 
-![KeyValue baseline throughput](images/baseline-throughput.png)
-![KeyValue baseline latency](images/baseline-latency.png)
+![KeyValue baseline dashboard](images/baseline-dashboard.png)
 ```
 
-Name files descriptively — `<test-name>-<metric>.png` — so the images directory is navigable on its own.
+Name files descriptively, `<test-name>-<metric>.png`, so the images directory is navigable on its own.

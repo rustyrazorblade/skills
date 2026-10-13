@@ -54,6 +54,19 @@ Run these on a change, and only where the change touches them:
     that scripts directory: not `init-explain.sh`, not `preview.sh`, and not the fixture's `src/`,
     `baseline-src/`, `docs/`, `fake-gh/`, or `explain-map.json`, which are `preview.sh`'s own
     inputs. Editing one of those and getting a green run proves nothing about the edit.
+  - `bash plugins/easy-db-lab/tests/test-report.sh` covers the easy-db-lab lab report:
+    `plugins/easy-db-lab/bin/setup-cluster.sh`, `plugins/easy-db-lab/bin/detect-cluster-layout.sh`,
+    `plugins/easy-db-lab/bin/report-graph.py`, `plugins/easy-db-lab/bin/report-check.py`,
+    `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
+    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Of
+    `plugins/easy-db-lab/bin/configure-multi-dc-seeds.sh` it covers only the arms-marker guard. It
+    also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
+    `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
+    section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
+    report file names, the required sections, and the image and CSV probe in `report-upload.md`
+    run against a stub binary. Those checks prove the text, not the skill behavior. It needs
+    `mdbook` and `uv` on `PATH`; the first run needs network for uv to fetch matplotlib,
+    pypandoc-binary, requests, and pillow.
   - `bash plugins/easy-db-lab/bin/export-workload-metrics.test.sh` covers `plugins/easy-db-lab/bin/export-workload-metrics` and `plugins/easy-db-lab/bin/metrics-catalog.jq`.  These two files and the harness are verbatim copies of easy-db-lab's `bin/`: re-copy them, do not edit them, until easy-db-lab replaces them with a first-class command.
 
   `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it

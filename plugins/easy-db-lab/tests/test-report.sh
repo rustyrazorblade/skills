@@ -453,6 +453,138 @@ rc=$?
 if [[ $rc -ne 0 ]]; then pass "plot: a CSV outside <docs>/data is refused"; else fail "plot: a CSV outside <docs>/data is refused"; fi
 expect_contains "plot: the refusal names the data dir" "$out" "/data"
 
+# --- report-check.py ---
+
+checker="$bin/report-check.py"
+# run_check <fixture> [args...]: copy docs-agree plus the overlay <fixture> (none for "agree") to a
+# fresh dir, run the checker on it, and set check_dir, check_out, and check_rc.
+run_check() {
+  local name="$1"
+  shift
+  check_dir="$tmp_root/check-$name"
+  rm -rf "$check_dir"
+  if [[ "$name" == agree ]]; then fixture_docs "$check_dir"; else fixture_docs "$check_dir" "$name"; fi
+  check_out="$("$checker" "$@" "$check_dir" 2>&1)"
+  check_rc=$?
+}
+
+tree_sum() { # dir -> one checksum of every file under it
+  (cd "$1" && find . -type f | sort | xargs cat | cksum)
+}
+
+run_check agree
+expect_eq "check: summary and evidence agree, exit 0" "0" "$check_rc"
+expect_not_contains "check: agree has no FAIL" "$check_out" "FAIL"
+expect_not_contains "check: agree has no WARN" "$check_out" "WARN"
+expect_contains "check: the nested page and its slug resolve" "$check_out" "PASS: row Read latency p99 (ms)"
+expect_contains "check: the (MB/s) heading slug resolves" "$check_out" "PASS: row Scrape allocation mean (MB/s)"
+expect_contains "check: a measured noise floor is recomputed" "$check_out" "PASS: noise floor Read latency p99 (ms)"
+expect_contains "check: not measured is accepted" "$check_out" "PASS: noise floor Scrape allocation mean (MB/s): not measured"
+
+# fixture | the word the FAIL line must hold
+while read -r name word; do
+  run_check "$name"
+  expect_eq "check: $name exits 1" "1" "$check_rc"
+  if printf '%s\n' "$check_out" | grep '^FAIL' | grep -qi -- "$word"; then
+    pass "check: $name FAIL names the $word"
+  else
+    fail "check: $name FAIL names the $word" "$(printf '%s\n' "$check_out" | grep '^FAIL' | head -3)"
+  fi
+done <<'EOF'
+wrong-sign sign
+wrong-size size
+wrong-unit unit
+wrong-value candidate
+noise-empty noise floor
+noise-non-numeric noise floor
+noise-wrong-value noise floor
+confirmed-inside-noise noise floor
+bad-verdict verdict
+verdict-mismatch class
+incomplete-block query
+grafana-link grafana
+placeholder-title title
+missing-anchor anchor
+findings-bad-evidence evidence
+cassandra-missing reasoning review
+EOF
+
+for name in noise-not-measured partial findings cassandra-done cassandra-not-installed; do
+  run_check "$name"
+  expect_eq "check: $name exits 0" "0" "$check_rc"
+  expect_not_contains "check: $name has no FAIL" "$check_out" "FAIL"
+done
+run_check partial
+expect_not_contains "check: the Partial token is not a numeral in prose" "$check_out" "WARN"
+
+run_check numeral-in-prose
+expect_eq "check: a numeral in prose exits 0" "0" "$check_rc"
+expect_contains "check: a numeral in prose is a WARN" "$check_out" "WARN: numeral in summary prose"
+
+while read -r name word; do
+  run_check "$name"
+  expect_eq "check: $name exits 3" "3" "$check_rc"
+  if printf '%s\n' "$check_out" | grep '^FAIL' | grep -qi -- "$word"; then
+    pass "check: $name FAIL names the $word"
+  else
+    fail "check: $name FAIL names the $word" "$(printf '%s\n' "$check_out" | grep '^FAIL' | head -3)"
+  fi
+done <<'EOF'
+redact-ipv4-summary IPv4
+redact-account account
+redact-vpc vpc-
+redact-subnet subnet-
+redact-sg sg-
+redact-tunnel tunnel
+redact-query-ip IPv4
+redact-json-ip IPv4
+EOF
+
+out="$("$checker" "$tmp_root/no-such-docs" 2>&1)"
+expect_eq "check: a bad path exits 2" "2" "$?"
+out="$("$checker" 2>&1)"
+expect_eq "check: no path exits 2" "2" "$?"
+
+out="$("$checker" "$ws_noplan/docs" 2>&1)"
+expect_eq "check: the bare scaffold passes, so make works on it" "0" "$?"
+
+# No file edit without --gate.
+fixture_docs "$tmp_root/nogate" wrong-sign
+before="$(tree_sum "$tmp_root/nogate")"
+"$checker" "$tmp_root/nogate" >/dev/null 2>&1
+expect_eq "check: no file edit without --gate" "$before" "$(tree_sum "$tmp_root/nogate")"
+
+# unchecked_lines <summary>: the Unchecked lines in the file.
+unchecked_lines() {
+  grep -c '^⚠ Unchecked: ' "$1"
+}
+
+run_check wrong-sign --gate --reason "the noise floor does not support the verdict"
+expect_eq "gate: a content FAIL with --gate exits 0" "0" "$check_rc"
+expect_eq "gate: writes one Unchecked line" "1" "$(unchecked_lines "$check_dir/1-summary.md")"
+line="$(grep '^⚠ Unchecked: ' "$check_dir/1-summary.md")"
+expect_contains "gate: the line holds the check reason" "$line" "sign"
+expect_contains "gate: the line merges the --reason text" "$line" "the noise floor does not support the verdict"
+caveats_next="$(sed -n '/^## Caveats/,$p' "$check_dir/1-summary.md" | grep -v '^$' | sed -n 2p)"
+expect_eq "gate: the line is under ## Caveats" "$line" "$caveats_next"
+"$checker" --gate "$check_dir" >/dev/null 2>&1
+expect_eq "gate: a second --gate replaces the line" "1" "$(unchecked_lines "$check_dir/1-summary.md")"
+out="$("$checker" "$check_dir" 2>&1)"
+expect_not_contains "gate: the numeral WARN ignores the Unchecked line" "$(printf '%s\n' "$out" | grep WARN)" "Unchecked"
+
+run_check stale-unchecked --gate
+expect_eq "gate: a clean --gate exits 0" "0" "$check_rc"
+expect_eq "gate: a clean --gate removes a stale line" "0" "$(unchecked_lines "$check_dir/1-summary.md")"
+
+run_check agree --gate --reason "reviewer saw a confound"
+expect_eq "gate: a --reason alone writes the line" "1" "$(unchecked_lines "$check_dir/1-summary.md")"
+
+fixture_docs "$tmp_root/gate-redact" redact-tunnel
+before="$(tree_sum "$tmp_root/gate-redact")"
+"$checker" --gate "$tmp_root/gate-redact" >/dev/null 2>&1
+expect_eq "gate: a redaction FAIL with --gate exits 3" "3" "$?"
+expect_eq "gate: a redaction FAIL edits no file" "$before" "$(tree_sum "$tmp_root/gate-redact")"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

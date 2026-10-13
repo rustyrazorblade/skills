@@ -346,6 +346,17 @@ expect_eq "fetch: a --node mapping covers an IPv4 node value" "0" "$?"
 expect_not_contains "fetch: the mapped CSV holds no IP" "$(cat "$gdocs/data/ip-node.csv" 2>/dev/null)" "10.0.1.15"
 stop_mimir
 
+start_mimir "$fixtures/mimir/ec2-node.json" 200
+out="$(fetch "$mimir_url" ec2-node --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "fetch: an unmapped EC2 host name node value is refused"; else fail "fetch: an unmapped EC2 host name node value is refused"; fi
+expect_contains "fetch: the EC2 refusal says to map the node" "$out" "--node"
+expect_no_file "fetch: the EC2 refusal writes no CSV" "$gdocs/data/ec2-node.csv"
+out="$(fetch "$mimir_url" ec2-node --node ip-10-0-1-15.us-west-2.compute.internal:9500=db0 --arm baseline=db0 --arm candidate=db2 2>&1)"
+expect_eq "fetch: a --node mapping covers an EC2 host name node value" "0" "$?"
+expect_not_contains "fetch: the mapped CSV holds no EC2 host name" "$(cat "$gdocs/data/ec2-node.csv" 2>/dev/null)" "ip-10-0-1-15"
+stop_mimir
+
 start_mimir "$fixtures/mimir/ok.json" 200
 out="$(fetch "$mimir_url" lonely --arm baseline=db0 2>&1)"
 rc=$?
@@ -539,6 +550,8 @@ redact-tunnel tunnel
 redact-query-ip IPv4
 redact-json-ip IPv4
 redact-account-period account
+redact-ec2-host EC2 host name
+redact-ec2-host-csv EC2 host name
 EOF
 
 # Not redaction: a 12-digit metric value in data/*.csv and its stats table, infrastructure IDs in

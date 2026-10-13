@@ -31,8 +31,8 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
   - a Cassandra run (the plan or a journal names `cassandra use` or `cassandra start`) has a
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
-  - redaction: no IPv4 address, 12-digit account ID, vpc-, subnet-, or sg- ID, or tunnel wording
-    in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value
+  - redaction: no IPv4 address, EC2 host name such as ip-10-0-1-15, 12-digit account ID, vpc-,
+    subnet-, or sg- ID, or tunnel wording in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value
     column, and a numeric stats table cell are measurements, not account IDs;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
@@ -70,6 +70,7 @@ REDACTION = [
     ("IPv4 address", re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")),
     # Twelve digits that are not part of a decimal number such as 214748364800.0.
     (ACCOUNT, re.compile(r"(?<!\d)(?<!\d\.)\d{12}(?!\d)(?!\.\d)")),
+    ("EC2 host name", re.compile(r"\bip-(?:\d{1,3}-){3}\d{1,3}\b")),
     ("vpc- ID", re.compile(r"\bvpc-[0-9a-f]{8,17}\b")),
     ("subnet- ID", re.compile(r"\bsubnet-[0-9a-f]{8,17}\b")),
     ("sg- ID", re.compile(r"\bsg-[0-9a-f]{8,17}\b")),

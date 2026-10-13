@@ -14,7 +14,7 @@ Two subcommands:
          timestamp_utc,node,arm,value) and <docs>/data/<name>.json (query, start, end, step,
          unit, scale, arms).  It never stores the Mimir URL or the tenant.  It fails on a
          connection error, a non-success status, zero series, and a node value that looks like
-         an IPv4 address with no --node mapping.
+         an IPv4 address or an EC2 host name (ip-10-0-1-15) with no --node mapping.
 
   plot   reads one or more CSVs from <docs>/data, writes <docs>/images/<name>.png with the
          shared style, and prints the full evidence block (heading, image, stats table, Window,
@@ -54,6 +54,8 @@ STAT_TITLES = {
 }
 DEFAULT_STATS = "samples,min,p50,mean,p99,max"
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$")
+# An EC2 host name holds the IP: ip-10-0-1-15, ip-10-0-1-15.ec2.internal, ...compute.internal.
+EC2_HOST = re.compile(r"^ip-\d{1,3}(-\d{1,3}){3}(\.[A-Za-z0-9.-]+)?(:\d+)?$")
 
 
 def die(msg):
@@ -133,9 +135,9 @@ def fetch(args):
             die(f"a series has no {args.node_label} label; aggregate by {args.node_label}")
         if value in node_map:
             node = node_map[value]
-        elif IPV4.match(value):
-            die("a node value looks like an IPv4 address; select nodes by host name, "
-                "or map it with --node VALUE=NAME")
+        elif IPV4.match(value) or EC2_HOST.match(value):
+            die("a node value looks like an IPv4 address or an EC2 host name; select nodes by "
+                "host name, or map it with --node VALUE=NAME")
         else:
             node = value
         if node in seen:

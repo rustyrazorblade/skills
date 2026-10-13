@@ -200,7 +200,7 @@ These identifiers never appear in the summary, the evidence tier, or their CSV a
 
 - account IDs (12 digits);
 - VPC, subnet, and security group IDs (`vpc-`, `subnet-`, `sg-`);
-- IP addresses;
+- IP addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`);
 - tunnel details (SOCKS, Tailscale, SSH port forwards).
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.

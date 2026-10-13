@@ -1,0 +1,4 @@
+{"status": "success", "data": {"resultType": "matrix", "result": [
+  {"metric": {"instance": "ip-10-0-1-15.us-west-2.compute.internal:9500"}, "values": [[1790503200, "26920000"], [1790503230, "26930000"]]},
+  {"metric": {"instance": "db2"}, "values": [[1790503200, "32720000"], [1790503230, "32710000"]]}
+]}}

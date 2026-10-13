@@ -548,6 +548,14 @@ expect_contains "plot: --align writes the candidate Window line" "$out" "Window 
 expect_contains "plot: --align keys nodes by arm" "$out" "| db0 (candidate) | candidate |"
 expect_file "plot: --align writes the PNG" "$gdocs/images/read-latency.png"
 
+out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" \
+  --csv "$gfix/latency-baseline-late.csv" --name shared-arm --title "Shared arm" --align elapsed \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "plot: --align refuses two CSVs that share an arm"; else fail "plot: --align refuses two CSVs that share an arm"; fi
+expect_contains "plot: the shared-arm refusal names the arm" "$out" "arm baseline"
+expect_no_file "plot: the shared-arm refusal writes no PNG" "$gdocs/images/shared-arm.png"
+
 out="$("$graph" plot --csv "$gfix/baseline.csv" --name nested --title "Nested" --page evidence/latency.md \
   --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
 expect_contains "plot: --page makes the image link relative to a nested page" "$out" "![Nested](../images/nested.png)"
@@ -613,6 +621,7 @@ placeholder-title title
 missing-anchor anchor
 findings-bad-evidence evidence
 cassandra-missing reasoning review
+arm-two-windows two windows
 EOF
 
 for name in noise-not-measured partial findings cassandra-done cassandra-not-installed; do

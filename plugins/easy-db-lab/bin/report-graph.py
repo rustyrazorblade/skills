@@ -20,7 +20,8 @@ Two subcommands:
          shared style, and prints the full evidence block (heading, image, stats table, Window,
          Query, Data) on stdout.  The stats table has one row per node and one rollup row per
          arm (Node = all) from pooled samples.  CSVs with a different query, unit, or step are an
-         error.  CSVs with a different window are an error unless --align elapsed is given.
+         error.  CSVs with a different window are an error unless --align elapsed is given.  With
+         --align, two CSVs that share an arm are an error.
 
 Usage:
     report-graph.py fetch --mimir-url URL --tenant T --query PROMQL --start ISO --end ISO \\
@@ -251,6 +252,15 @@ def plot(args):
                 die(f"the CSVs differ in {field}: {first.get(field)!r} and {meta.get(field)!r}")
         if not args.align and (meta.get("start"), meta.get("end")) != (first.get("start"), first.get("end")):
             die("the CSVs have different windows; use --align elapsed to plot each arm from its own start")
+
+    if args.align:
+        # Each arm keeps the window of its CSV, so an arm in two CSVs has no one window.
+        source = {}
+        for path, _, rows in loaded:
+            for arm in sorted({r["arm"] for r in rows}):
+                if source.setdefault(arm, path) != path:
+                    die(f"arm {arm} is in {os.path.basename(source[arm])} and {os.path.basename(path)}; "
+                        "with --align elapsed each arm comes from one CSV")
 
     # Series keyed by (arm, node).  Each arm keeps the window of the CSV it came from.
     series, arm_window, arms = {}, {}, []

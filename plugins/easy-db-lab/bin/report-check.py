@@ -284,7 +284,6 @@ class Evidence:
             meta_rel = os.path.splitext(rel)[0] + ".json"
             meta = self.metadata(os.path.join(docs, meta_rel), meta_rel)
             self.units.add(meta["unit"])
-            seconds = (meta["end"] - meta["start"]).total_seconds()
             with open(os.path.join(docs, rel), newline="") as f:
                 reader = csv.DictReader(f)
                 missing = [k for k in ("timestamp_utc", "node", "arm", "value") if k not in (reader.fieldnames or [])]
@@ -300,7 +299,10 @@ class Evidence:
                     except (TypeError, ValueError):
                         raise BadData(f"{rel} line {n}: the value {r['value']!r} is not a number") from None
                     self.series.setdefault((r["node"], r["arm"]), []).append((t, v))
-                    self.window.setdefault(r["arm"], seconds)
+                    window = (meta["start"], meta["end"])
+                    if self.window.setdefault(r["arm"], window) != window:
+                        raise BadData(f"{rel}: the arm {r['arm']} has two windows; another CSV of the block "
+                                      "gives it a different start or end")
         for points in self.series.values():
             points.sort()
 
@@ -325,7 +327,8 @@ class Evidence:
         return {arm for _, arm in self.series}
 
     def stat(self, arm, stat):
-        return arm_stat([p for (_, a), p in self.series.items() if a == arm], self.window[arm], stat)
+        start, end = self.window[arm]
+        return arm_stat([p for (_, a), p in self.series.items() if a == arm], (end - start).total_seconds(), stat)
 
 
 # --- the summary ---

@@ -623,165 +623,163 @@ render_fails empty "empty body"
 render_fails notpng "not a PNG"
 rm -f "$gdocs/images/keep.png" "$gdocs/images/panel.png" "$gdocs/images/relative.png"
 
-# --- report-graph.py plot ---
+# --- report-graph.py block ---
 
-# pixel_colours <png> <hex>...: print each hex colour that some pixel of the PNG has exactly.
-pixel_colours() {
-  uv run --quiet --no-project --with pillow python3 - "$@" <<'PYEOF'
-import sys
-from PIL import Image
-img = Image.open(sys.argv[1]).convert("RGB")
-seen = set(img.getdata())
-for h in sys.argv[2:]:
-    if tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) in seen:
-        print(h)
-PYEOF
-}
-
-# plot reads CSVs from <docs>/data, as fetch writes them.
+# block reads CSVs from <docs>/data, as fetch writes them, and images from <docs>/images, as render
+# writes them.
 cp "$fixtures/graph/"* "$gdocs/data/"
 gfix="$gdocs/data"
-out="$("$graph" plot --csv "$gfix/baseline.csv" --csv "$gfix/candidate.csv" --name scrape-alloc \
-  --title "Scrape allocation (MB/s)" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_eq "plot: two arms exit 0" "0" "$?"
-expect_file "plot: writes images/<name>.png" "$gdocs/images/scrape-alloc.png"
-colours="$(pixel_colours "$gdocs/images/scrape-alloc.png" 999999 0072B2 e6e6e6 2>&1 | tr '\n' ' ')"
-expect_contains "plot: the baseline series is grey #999999" "$colours" "999999"
-expect_contains "plot: the candidate series is blue #0072B2" "$colours" "0072B2"
-expect_contains "plot: the PNG uses the shared style grid colour" "$colours" "e6e6e6"
-expect_contains "plot: the block starts with the heading" "$out" "## Scrape allocation (MB/s)"
-expect_contains "plot: the block holds the downloaded image" "$out" "![Scrape allocation (MB/s)](images/scrape-alloc.png)"
-expect_contains "plot: the stats table has the default columns" "$out" "| Node | Arm | Samples | Min | p50 | Mean | p99 | Max | Unit |"
-expect_contains "plot: numeric columns are right-aligned" "$out" "|:--|:--|--:|--:|--:|--:|--:|--:|:--|"
-expect_contains "plot: a node row names the node with its role" "$out" "| db0 (baseline) | baseline | 21 | 26.92 |"
-expect_contains "plot: one rollup row per arm, from pooled samples" "$out" "| all | baseline | 42 | 26.92 | 27.09 | 27.09 | 27.27 | 27.27 | MB/s |"
-expect_contains "plot: the candidate rollup row" "$out" "| all | candidate | 21 | 32.72 |"
-expect_contains "plot: the block holds the Window" "$out" "Window: 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
-expect_contains "plot: the block holds the Query" "$out" 'Query: `sum by (instance)'
-expect_contains "plot: the Data line links every CSV" "$out" "Data: [baseline.csv](data/baseline.csv), [candidate.csv](data/candidate.csv)"
+gimg="$gdocs/images"
+for i in scrape-alloc counter tiny read-latency arm-cluster nested throughput-baseline throughput-candidate; do
+  cp "$panel_png" "$gimg/$i.png"
+done
 
-out="$("$graph" plot --csv "$gfix/baseline.csv" --name counter --title "Counter" --stats samples,total,rate \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_contains "plot: --stats swaps the statistic columns" "$out" "| Node | Arm | Samples | Total | Rate | Unit |"
-expect_contains "plot: swapped columns stay right-aligned" "$out" "|:--|:--|--:|--:|--:|:--|"
+# docs_state: one line per file under the graph docs dir, with its checksum, so a case can prove
+# that block wrote no file.
+docs_state() { find "$gdocs" -type f -exec cksum {} + | sort; }
 
-out="$("$graph" plot --csv "$gfix/tiny.csv" --name tiny --title "Tiny" --stats samples,min,mean \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_contains "plot: a value below 1e-4 is fixed-point, which report-check reads" "$out" "| all | baseline | 2 | 0.00001234 | 0.00001234 | s |"
+# block_err <args...>: run block, and set out (stdout), err (stderr), and rc.
+block_err() {
+  out="$("$graph" block "$@" 2>"$tmp_root/block.err")"
+  rc=$?
+  err="$(cat "$tmp_root/block.err")"
+}
 
-out="$("$graph" plot --csv "$gfix/empty.csv" --name empty --title "Empty" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "plot: empty input exits non-zero"; else fail "plot: empty input exits non-zero"; fi
-expect_contains "plot: empty input gives a clear message" "$out" "no rows"
-expect_no_file "plot: empty input writes no PNG" "$gdocs/images/empty.png"
+before="$(docs_state)"
+out="$("$graph" block --csv "$gfix/baseline.csv" --csv "$gfix/candidate.csv" --image "$gimg/scrape-alloc.png" \
+  --title "Scrape allocation (MB/s)" --docs "$gdocs" 2>&1)"
+expect_eq "block: two arms exit 0" "0" "$?"
+expect_eq "block: writes no file" "$before" "$(docs_state)"
+expect_contains "block: the block starts with the heading" "$out" "## Scrape allocation (MB/s)"
+expect_contains "block: the block cites the rendered image" "$out" "![Scrape allocation (MB/s)](images/scrape-alloc.png)"
+expect_contains "block: the stats table has the default columns" "$out" "| Node | Arm | Samples | Min | p50 | Mean | p99 | Max | Unit |"
+expect_contains "block: numeric columns are right-aligned" "$out" "|:--|:--|--:|--:|--:|--:|--:|--:|:--|"
+expect_contains "block: a node row names the node with its role" "$out" "| db0 (baseline) | baseline | 21 | 26.92 |"
+expect_contains "block: one rollup row per arm, from pooled samples" "$out" "| all | baseline | 42 | 26.92 | 27.09 | 27.09 | 27.27 | 27.27 | MB/s |"
+expect_contains "block: the candidate rollup row" "$out" "| all | candidate | 21 | 32.72 |"
+expect_contains "block: the block holds the Window" "$out" "Window: 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
+expect_contains "block: the block holds the Query" "$out" 'Query: `sum by (instance)'
+expect_contains "block: the Data line links every CSV" "$out" "Data: [baseline.csv](data/baseline.csv), [candidate.csv](data/candidate.csv)"
+order="$(printf '%s\n' "$out" | grep -E '^(## |!\[|\| Node |Window|Query|Data: )' | cut -c1-6 | tr '\n' '|')"
+expect_eq "block: heading, image, stats, Window, Query, Data, in that order" \
+  "## Scr|![Scra|| Node|Window|Query:|Data: |" "$order"
+
+out="$("$graph" block --csv "$gfix/baseline.csv" --image "$gimg/counter.png" --title "Counter" \
+  --stats samples,total,rate --docs "$gdocs" 2>&1)"
+expect_contains "block: --stats swaps the statistic columns" "$out" "| Node | Arm | Samples | Total | Rate | Unit |"
+expect_contains "block: swapped columns stay right-aligned" "$out" "|:--|:--|--:|--:|--:|:--|"
+
+out="$("$graph" block --csv "$gfix/tiny.csv" --image "$gimg/tiny.png" --title "Tiny" --stats samples,min,mean \
+  --docs "$gdocs" 2>&1)"
+expect_contains "block: a value below 1e-4 is fixed-point, which report-check reads" "$out" "| all | baseline | 2 | 0.00001234 | 0.00001234 | s |"
+
+block_err --csv "$gfix/empty.csv" --image "$gimg/tiny.png" --title "Empty" --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: empty input exits non-zero"; else fail "block: empty input exits non-zero"; fi
+expect_contains "block: empty input gives a clear message" "$err" "no rows"
+expect_eq "block: empty input prints no block" "" "$out"
 
 for m in unit step query; do
-  out="$("$graph" plot --csv "$gfix/baseline.csv" --csv "$gfix/mismatch-$m.csv" --name "mm-$m" --title "M" \
-    --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-  rc=$?
-  if [[ $rc -ne 0 ]]; then pass "plot: a mismatched $m is an error"; else fail "plot: a mismatched $m is an error"; fi
-  expect_contains "plot: the error names the $m" "$out" "$m"
-  expect_no_file "plot: a mismatched $m writes no PNG" "$gdocs/images/mm-$m.png"
+  block_err --csv "$gfix/baseline.csv" --csv "$gfix/mismatch-$m.csv" --image "$gimg/tiny.png" --title "M" --docs "$gdocs"
+  if [[ $rc -ne 0 ]]; then pass "block: a mismatched $m is an error"; else fail "block: a mismatched $m is an error"; fi
+  expect_contains "block: the error names the $m" "$err" "$m"
+  expect_eq "block: a mismatched $m prints no block" "" "$out"
 done
 
-out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --name read-latency \
-  --title "Read latency (ms)" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "plot: mismatched windows without --align are an error"; else fail "plot: mismatched windows without --align are an error"; fi
-expect_contains "plot: the window error suggests --align elapsed" "$out" "--align elapsed"
+block_err --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --image "$gimg/read-latency.png" \
+  --title "Read latency (ms)" --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: mismatched windows without --arm-windows are an error"; else fail "block: mismatched windows without --arm-windows are an error"; fi
+expect_contains "block: the window error suggests --arm-windows" "$err" "--arm-windows"
+expect_eq "block: mismatched windows print no block" "" "$out"
 
-out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --name read-latency \
-  --title "Read latency (ms)" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_eq "plot: --align elapsed exits 0" "0" "$?"
-expect_contains "plot: --align writes the baseline Window line" "$out" "Window (baseline): 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
-expect_contains "plot: --align writes the candidate Window line" "$out" "Window (candidate): 2026-10-01T11:30:00Z to 2026-10-01T11:40:00Z (10m 0s), step 30s"
-expect_contains "plot: --align keys nodes by arm" "$out" "| db0 (candidate) | candidate |"
-expect_file "plot: --align writes the PNG" "$gdocs/images/read-latency.png"
+out="$("$graph" block --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --image "$gimg/read-latency.png" \
+  --title "Read latency (ms)" --arm-windows --docs "$gdocs" 2>&1)"
+expect_eq "block: --arm-windows exits 0" "0" "$?"
+expect_contains "block: --arm-windows writes the baseline Window line" "$out" "Window (baseline): 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
+expect_contains "block: --arm-windows writes the candidate Window line" "$out" "Window (candidate): 2026-10-01T11:30:00Z to 2026-10-01T11:40:00Z (10m 0s), step 30s"
+expect_contains "block: --arm-windows keys nodes by arm" "$out" "| db0 (candidate) | candidate |"
 
-out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" \
-  --csv "$gfix/latency-baseline-late.csv" --name shared-arm --title "Shared arm" --align elapsed \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "plot: --align refuses two CSVs that share an arm"; else fail "plot: --align refuses two CSVs that share an arm"; fi
-expect_contains "plot: the shared-arm refusal names the arm" "$out" "arm baseline"
-expect_no_file "plot: the shared-arm refusal writes no PNG" "$gdocs/images/shared-arm.png"
+block_err --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" \
+  --csv "$gfix/latency-baseline-late.csv" --image "$gimg/read-latency.png" --title "Shared arm" --arm-windows --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: --arm-windows refuses two CSVs that share an arm"; else fail "block: --arm-windows refuses two CSVs that share an arm"; fi
+expect_contains "block: the shared-arm refusal names the arm" "$err" "arm baseline"
+expect_eq "block: the shared-arm refusal prints no block" "" "$out"
 
 # An arm in two CSVs with one window has one window, as report-check reads it.
-out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-baseline-db2.csv" \
-  --csv "$gfix/latency-candidate.csv" --name same-window --title "Same window" --align elapsed \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_eq "plot: --align accepts an arm in two CSVs with one window" "0" "$?"
-expect_contains "plot: the same-window arm keeps both CSVs' nodes" "$out" "| db2 (baseline) | baseline |"
-
-# time_labels <minutes>: the x tick labels that time_axis gives a window of that length, one per |.
-time_labels() {
-  uv run --quiet --no-project --with 'matplotlib>=3.8' python3 - "$graph" "$1" <<'PYEOF'
-import importlib.util
-import sys
-from datetime import datetime, timedelta, timezone
-spec = importlib.util.spec_from_file_location("report_graph", sys.argv[1])
-graph = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(graph)
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots()
-t0 = datetime(2026, 10, 13, 12, 18, 30, tzinfo=timezone.utc)
-xs = [t0 + timedelta(seconds=15 * i) for i in range(int(sys.argv[2]) * 4 + 1)]
-ax.plot(xs, range(len(xs)))
-graph.time_axis(ax)
-fig.canvas.draw()
-print("|".join(t.get_text() for t in ax.get_xticklabels() if t.get_text()))
-PYEOF
-}
-for minutes in 4 600; do
-  labels="$(time_labels "$minutes" 2>&1)"
-  distinct="$(printf '%s\n' "$labels" | tr '|' '\n' | sort | uniq -d)"
-  if [[ "$labels" == *"|"* && -z "$distinct" ]]; then
-    pass "plot: a $minutes-minute window has distinct time labels"
-  else
-    fail "plot: a $minutes-minute window has distinct time labels" "$labels"
-  fi
-done
+out="$("$graph" block --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-baseline-db2.csv" \
+  --csv "$gfix/latency-candidate.csv" --image "$gimg/read-latency.png" --title "Same window" --arm-windows \
+  --docs "$gdocs" 2>&1)"
+expect_eq "block: --arm-windows accepts an arm in two CSVs with one window" "0" "$?"
+expect_contains "block: the same-window arm keeps both CSVs' nodes" "$out" "| db2 (baseline) | baseline |"
 
 # Each arm filters on its own cluster label, so the queries differ only in the cluster matcher.
-out="$("$graph" plot --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-candidate.csv" --name arm-cluster \
-  --title "Arm cluster" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_eq "plot: queries that differ only in the cluster matcher exit 0" "0" "$?"
+out="$("$graph" block --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-candidate.csv" --image "$gimg/arm-cluster.png" \
+  --title "Arm cluster" --arm-windows --docs "$gdocs" 2>&1)"
+expect_eq "block: queries that differ only in the cluster matcher exit 0" "0" "$?"
 # shellcheck disable=SC2016 # the backticks are literal markdown
-expect_contains "plot: the baseline arm keeps its own Query line" "$out" 'Query (baseline): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster="lab-baseline-1a2b",'
+expect_contains "block: the baseline arm keeps its own Query line" "$out" 'Query (baseline): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster="lab-baseline-1a2b",'
 # shellcheck disable=SC2016 # the backticks are literal markdown
-expect_contains "plot: the candidate arm keeps its own Query line" "$out" 'Query (candidate): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster=~"lab-candidate-.*",'
-expect_not_contains "plot: per-arm queries give no shared Query line" "$out" "Query: "
-out="$("$graph" plot --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-other.csv" --name arm-other \
-  --title "Arm other" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "plot: queries that differ past the cluster matcher are an error"; else fail "plot: queries that differ past the cluster matcher are an error"; fi
-expect_contains "plot: the error names the query" "$out" "differ in query"
-expect_no_file "plot: a query mismatch past the cluster matcher writes no PNG" "$gdocs/images/arm-other.png"
+expect_contains "block: the candidate arm keeps its own Query line" "$out" 'Query (candidate): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster=~"lab-candidate-.*",'
+expect_not_contains "block: per-arm queries give no shared Query line" "$out" "Query: "
+block_err --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-other.csv" --image "$gimg/arm-cluster.png" \
+  --title "Arm other" --arm-windows --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: queries that differ past the cluster matcher are an error"; else fail "block: queries that differ past the cluster matcher are an error"; fi
+expect_contains "block: the error names the query" "$err" "differ in query"
+expect_eq "block: a query mismatch past the cluster matcher prints no block" "" "$out"
 
-# --name is a file name: no path, no leading dot.
+# Per-arm images: one regular-dashboard render per arm, each labelled by arm, and one stats table.
+out="$("$graph" block --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" \
+  --image "baseline=$gimg/throughput-baseline.png" --image "candidate=$gimg/throughput-candidate.png" \
+  --title "Throughput" --arm-windows --docs "$gdocs" 2>&1)"
+expect_eq "block: per-arm images exit 0" "0" "$?"
+expect_contains "block: --image baseline=<png> puts the arm in the alt text" "$out" "![Throughput (baseline)](images/throughput-baseline.png)"
+expect_contains "block: --image candidate=<png> puts the arm in the alt text" "$out" "![Throughput (candidate)](images/throughput-candidate.png)"
+expect_eq "block: per-arm images give one stats table" "1" "$(printf '%s\n' "$out" | grep -c '^| Node ')"
+expect_contains "block: the one table holds the baseline rollup" "$out" "| all | baseline |"
+expect_contains "block: the one table holds the candidate rollup" "$out" "| all | candidate |"
+
+# An image must be a non-empty PNG under <docs>/images, as render writes it.
+: > "$gimg/empty.png"
+printf '<html>login</html>' > "$gimg/html.png"
+cp "$panel_png" "$tmp_root/outside.png"
+for bad in "missing:$gimg/no-such.png:no-such.png" "empty:$gimg/empty.png:empty" "non-PNG:$gimg/html.png:not a PNG" \
+  "outside images/:$tmp_root/outside.png:/images"; do
+  what="${bad%%:*}"
+  rest="${bad#*:}"
+  path="${rest%%:*}"
+  msg="${rest#*:}"
+  block_err --csv "$gfix/baseline.csv" --image "$path" --title "Bad image" --docs "$gdocs"
+  if [[ $rc -ne 0 ]]; then pass "block: a $what image exits non-zero"; else fail "block: a $what image exits non-zero"; fi
+  expect_contains "block: the $what image refusal is clear" "$err" "$msg"
+  expect_eq "block: a $what image prints no block" "" "$out"
+done
+block_err --csv "$gfix/baseline.csv" --title "No image" --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: no --image is a usage error"; else fail "block: no --image is a usage error"; fi
+expect_contains "block: the usage error names --image" "$err" "--image"
+
+# --name is a file name: no path, no leading dot.  block takes no --name; fetch does.
 for bad in '../x' 'a/b' '..' '.hidden' 'a..b'; do
-  out="$("$graph" plot --csv "$gfix/baseline.csv" --name "$bad" --title "Bad" \
-    --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-  rc=$?
-  if [[ $rc -ne 0 ]]; then pass "plot: --name $bad is refused"; else fail "plot: --name $bad is refused"; fi
-  expect_contains "plot: the --name $bad refusal names the rule" "$out" "--name"
   out="$(fetch http://127.0.0.1:1/prometheus "$bad" --arm baseline=db0 2>&1)"
   expect_contains "fetch: the --name $bad refusal names the rule" "$out" "--name"
   expect_not_contains "fetch: --name $bad is refused before the query" "$out" "cannot reach Mimir"
 done
 
-out="$("$graph" plot --csv "$gfix/baseline.csv" --name nested --title "Nested" --page evidence/latency.md \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-expect_contains "plot: --page makes the image link relative to a nested page" "$out" "![Nested](../images/nested.png)"
-expect_contains "plot: --page makes the Data link relative to a nested page" "$out" "Data: [baseline.csv](../data/baseline.csv)"
+out="$("$graph" block --csv "$gfix/baseline.csv" --image "$gimg/nested.png" --title "Nested" --page evidence/latency.md \
+  --docs "$gdocs" 2>&1)"
+expect_contains "block: --page makes the image link relative to a nested page" "$out" "![Nested](../images/nested.png)"
+expect_contains "block: --page makes the Data link relative to a nested page" "$out" "Data: [baseline.csv](../data/baseline.csv)"
 
-out="$("$graph" plot --csv "$fixtures/graph/baseline.csv" --name outside --title "Outside" \
-  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "plot: a CSV outside <docs>/data is refused"; else fail "plot: a CSV outside <docs>/data is refused"; fi
-expect_contains "plot: the refusal names the data dir" "$out" "/data"
+block_err --csv "$fixtures/graph/baseline.csv" --image "$gimg/nested.png" --title "Outside" --docs "$gdocs"
+if [[ $rc -ne 0 ]]; then pass "block: a CSV outside <docs>/data is refused"; else fail "block: a CSV outside <docs>/data is refused"; fi
+expect_contains "block: the refusal names the data dir" "$err" "/data"
+
+# --- report-graph.py: the subcommands and the dependencies ---
+
+help="$("$graph" --help 2>&1)"
+subcommands="$(printf '%s\n' "$help" | sed -n 's/^  *{\(.*\)}.*/\1/p' | head -n 1)"
+expect_eq "graph: --help lists fetch, render, and block only" "fetch,render,block" "$subcommands"
+pep723="$(sed -n '/^# \/\/\/ script/,/^# \/\/\/$/p' "$graph")"
+expect_contains "graph: the PEP 723 block declares requests" "$pep723" "requests"
+expect_not_contains "graph: the PEP 723 block holds no matplotlib" "$pep723" "matplotlib"
 
 # --- report-check.py ---
 

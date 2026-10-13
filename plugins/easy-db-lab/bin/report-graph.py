@@ -2,44 +2,56 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "matplotlib>=3.8",
 #   "requests[socks]>=2.31",
 # ]
 # ///
-"""Download a lab report graph from Mimir, and plot it with its evidence block.
+"""Download a lab report graph from Mimir and Grafana, and print its evidence block.
 
-Two subcommands:
+Three subcommands:
 
-  fetch  queries Mimir query_range and writes <docs>/data/<name>.csv (long form:
-         timestamp_utc,node,arm,value) and <docs>/data/<name>.json (query, start, end, step,
-         unit, scale, arms).  It never stores the Mimir URL or the tenant.  It refuses a query
-         with no cluster="..." or cluster=~"..." matcher before it sends it, because one tenant
-         holds many clusters.  It fails on a connection error, a non-success status, zero
-         series, and a node value that looks like an IPv4 address or an EC2 host name
-         (ip-10-0-1-15) with no --node mapping.
+  fetch   queries Mimir query_range and writes <docs>/data/<name>.csv (long form:
+          timestamp_utc,node,arm,value) and <docs>/data/<name>.json (query, start, end, step,
+          unit, scale, arms).  It never stores the Mimir URL or the tenant.  It refuses a query
+          with no cluster="..." or cluster=~"..." matcher before it sends it, because one tenant
+          holds many clusters.  It fails on a connection error, a non-success status, zero
+          series, and a node value that looks like an IPv4 address or an EC2 host name
+          (ip-10-0-1-15) with no --node mapping.
 
-  plot   reads one or more CSVs from <docs>/data, writes <docs>/images/<name>.png with the
-         shared style, and prints the full evidence block (heading, image, stats table, Window,
-         Query, Data) on stdout.  The stats table has one row per node and one rollup row per
-         arm (Node = all) from pooled samples.  CSVs with a different unit or step are an error.
-         CSVs whose queries differ are an error, unless they differ only in the cluster="..." or
-         cluster=~"..." matcher; then the block has one Query line per arm.  CSVs with a
-         different window are an error unless --align elapsed is given.  With
-         --align, two CSVs that share an arm are an error if their windows differ.  --name holds
-         letters, digits, _, . and -, and no "..".
+  render  downloads one Grafana panel render to <docs>/images/<name>.png.  It sends one GET to
+          /render/d-solo/<UID>/ with panelId, from, to, each var-<NAME>, width, height, and
+          tz=UTC.  An ISO time goes out as epoch milliseconds; a Grafana relative time such as
+          now-93600s goes out unchanged.  It writes the image only for a status 200 and a
+          non-empty PNG body; any other result exits non-zero and leaves the old image as it was.
+          It never stores the Grafana URL.
+
+  block   reads one or more CSVs from <docs>/data and one or more images from <docs>/images, and
+          prints the full evidence block (heading, image, stats table, Window, Query, Data) on
+          stdout.  It draws nothing and writes no file.  Each image must be a non-empty PNG; an
+          image given as ARM=PATH carries the arm in its alt text.  The stats table has one row
+          per node and one rollup row per arm (Node = all) from pooled samples.  CSVs with a
+          different unit or step are an error.  CSVs whose queries differ are an error, unless
+          they differ only in the cluster="..." or cluster=~"..." matcher; then the block has one
+          Query line per arm.  CSVs with a different window are an error unless --arm-windows is
+          given.  With --arm-windows, two CSVs that share an arm are an error if their windows
+          differ.
+
+--name holds letters, digits, _, . and -, and no "..".
 
 Usage:
     report-graph.py fetch --mimir-url URL --tenant T --query PROMQL --start ISO --end ISO \\
         [--step 30s] --node-label instance [--node VALUE=db0]... [--arm baseline=db0,db1]... \\
         --unit "MB/s" [--scale 1e-6] --name scrape-alloc --docs <docs> [--proxy socks5h://...]
-    report-graph.py plot --csv <docs>/data/a.csv [--csv ...] --title "..." [--name n] \\
-        [--style <docs>/lab.mplstyle] [--stats samples,min,p50,mean,p99,max] \\
-        [--align elapsed] [--page 2-evidence.md] --docs <docs>
+    report-graph.py render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME \\
+        [--var NAME=VALUE]... [--width 1200] [--height 600] --name scrape-alloc --docs <docs> \\
+        [--proxy socks5h://...] [--timeout 60]
+    report-graph.py block --csv <docs>/data/a.csv [--csv ...] --image [ARM=]<docs>/images/a.png \\
+        [--image ...] --title "..." [--stats samples,min,p50,mean,p99,max] [--arm-windows] \\
+        [--page 2-evidence.md] --docs <docs>
 
 The statistics: samples, min, p50, mean, p95, p99, max, total, and rate.  total and rate are for
 a counter: total is the last value minus the first, and rate is the total divided by the window
 in seconds.  An arm's rollup pools the samples of its nodes; its total is the sum of the node
-totals.  The rules for evidence blocks are in the plugin's references/report.md.
+totals.  The rules for evidence blocks and renders are in the plugin's references/report.md.
 """
 
 import argparse
@@ -53,8 +65,6 @@ import sys
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-ROLE_COLOURS = {"baseline": "#999999", "candidate": "#0072B2"}
-LINE_STYLES = ["-", "--", ":", "-."]
 STAT_TITLES = {
     "samples": "Samples", "min": "Min", "p50": "p50", "mean": "Mean", "p95": "p95",
     "p99": "p99", "max": "Max", "total": "Total", "rate": "Rate",
@@ -230,7 +240,7 @@ def render(args):
     print(f"image: {png} ({len(body)} bytes)")
 
 
-# --- plot ---
+# --- block ---
 
 
 def quantile(vals, q):
@@ -241,13 +251,7 @@ def quantile(vals, q):
 
 def node_stats(points, seconds):
     """Statistics for one node: points is a time-ordered list of (datetime, value)."""
-    vals = sorted(v for _, v in points)
-    total = points[-1][1] - points[0][1]
-    return {
-        "samples": len(vals), "min": vals[0], "p50": statistics.median(vals),
-        "mean": statistics.fmean(vals), "p95": quantile(vals, 95), "p99": quantile(vals, 99),
-        "max": vals[-1], "total": total, "rate": total / seconds if seconds else 0.0,
-    }
+    return rollup_stats([points], seconds)
 
 
 def rollup_stats(series, seconds):
@@ -281,7 +285,7 @@ def load(path, docs):
     real = os.path.realpath(path)
     data_dir = os.path.realpath(os.path.join(docs, "data"))
     if os.path.dirname(real) != data_dir:
-        die(f"{path}: plot reads CSVs from {os.path.join(docs, 'data')}, where fetch writes them")
+        die(f"{path}: block reads CSVs from {os.path.join(docs, 'data')}, where fetch writes them")
     meta_path = os.path.splitext(real)[0] + ".json"
     if not os.path.exists(meta_path):
         die(f"{path}: no metadata file {os.path.basename(meta_path)} next to it")
@@ -290,8 +294,31 @@ def load(path, docs):
     with open(real, newline="") as f:
         rows = list(csv.DictReader(f))
     if not rows:
-        die(f"{path}: the CSV has no rows; fetch it again before you plot")
+        die(f"{path}: the CSV has no rows; fetch it again before you build the block")
     return real, meta, rows
+
+
+# An --image ARM=PATH prefix is an arm name; a path holds a / or starts with a dot.
+IMAGE_ARM = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_-]*)=(.+)$")
+
+
+def load_image(spec, docs):
+    """Parse --image [ARM=]PATH and check that PATH is a non-empty PNG under <docs>/images."""
+    m = IMAGE_ARM.match(spec)
+    arm, path = (m.group(1), m.group(2)) if m else ("", spec)
+    real = os.path.realpath(path)
+    images_dir = os.path.realpath(os.path.join(docs, "images"))
+    if os.path.dirname(real) != images_dir:
+        die(f"{path}: block reads images from {os.path.join(docs, 'images')}, where render writes them")
+    if not os.path.isfile(real):
+        die(f"{path}: no such image; render it before you build the block")
+    with open(real, "rb") as f:
+        head = f.read(len(PNG_SIGNATURE))
+    if not head:
+        die(f"{path}: the image is empty; render it again")
+    if head != PNG_SIGNATURE:
+        die(f"{path}: the image is not a PNG; render it again")
+    return arm, real
 
 
 def query_shape(query):
@@ -304,26 +331,14 @@ def arm_order(arms):
     return roles + [a for a in arms if a not in roles]
 
 
-def time_axis(ax):
-    """Label the x-axis of a UTC time plot.  Ticks less than a minute apart show seconds, so a
-    short window never repeats a label."""
-    import matplotlib.dates as mdates
-
-    locator = mdates.AutoDateLocator(tz=timezone.utc)
-    ax.xaxis.set_major_locator(locator)
-    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(
-        locator, tz=timezone.utc,
-        formats=["%Y", "%b", "%d", "%H:%M", "%H:%M", "%H:%M:%S"],
-        zero_formats=["", "%Y", "%b", "%d", "%H:%M", "%H:%M:%S"]))
-
-
-def plot(args):
+def block(args):
     stats = [s.strip() for s in args.stats.split(",") if s.strip()]
     for s in stats:
         if s not in STAT_TITLES:
             die(f"unknown statistic {s}; use {', '.join(STAT_TITLES)}")
     docs = os.path.realpath(args.docs)
     loaded = [load(p, docs) for p in args.csv]
+    images = [load_image(spec, docs) for spec in args.image]
 
     first = loaded[0][1]
     for path, meta, _ in loaded[1:]:
@@ -333,10 +348,10 @@ def plot(args):
         for field in ("unit", "step"):
             if meta.get(field) != first.get(field):
                 die(f"the CSVs differ in {field}: {first.get(field)!r} and {meta.get(field)!r}")
-        if not args.align and (meta.get("start"), meta.get("end")) != (first.get("start"), first.get("end")):
-            die("the CSVs have different windows; use --align elapsed to plot each arm from its own start")
+        if not args.arm_windows and (meta.get("start"), meta.get("end")) != (first.get("start"), first.get("end")):
+            die("the CSVs have different windows; use --arm-windows to keep each arm's own window")
 
-    if args.align:
+    if args.arm_windows:
         # Each arm keeps the window of its CSV, so an arm in two CSVs needs one window in both.
         source = {}
         for path, meta, rows in loaded:
@@ -345,7 +360,7 @@ def plot(args):
                 first_path, first_window = source.setdefault(arm, (path, window))
                 if first_window != window:
                     die(f"arm {arm} is in {os.path.basename(first_path)} and {os.path.basename(path)} with "
-                        "different windows; with --align elapsed each arm has one window")
+                        "different windows; with --arm-windows each arm has one window")
 
     # Series keyed by (arm, node).  Each arm keeps the window of the CSV it came from.
     series, arm_window, arm_query, arms = {}, {}, {}, []
@@ -362,58 +377,13 @@ def plot(args):
         points.sort()
     arms = arm_order(arms)
 
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    style = args.style or os.path.join(docs, "lab.mplstyle")
-    plt.style.use(style)
-    palette = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
-    role_hex = {c.lower().lstrip("#") for c in ROLE_COLOURS.values()}
-    extra = [c for c in palette if c.lower().lstrip("#") not in role_hex]
-
-    fig, ax = plt.subplots()
-    extra_i = 0
-    for arm in arms:
-        nodes = sorted(n for a, n in series if a == arm)
-        if arm in ROLE_COLOURS:
-            arm_colour = ROLE_COLOURS[arm]
-        elif arm and extra:
-            arm_colour = extra[extra_i % len(extra)]
-            extra_i += 1
-        else:
-            arm_colour = None
-        start = arm_window[arm][0]
-        for i, node in enumerate(nodes):
-            points = series[(arm, node)]
-            if args.align:
-                xs = [(t - start).total_seconds() for t, _ in points]
-            else:
-                xs = [t for t, _ in points]
-            colour = arm_colour or (palette[i % len(palette)] if palette else None)
-            label = f"{node} ({arm})" if arm else node
-            ax.plot(xs, [v for _, v in points], color=colour, label=label,
-                    linestyle=LINE_STYLES[i % len(LINE_STYLES)] if arm else "-")
-    ax.set_title(args.title)
-    ax.set_ylabel(first.get("unit", ""))
-    if args.align:
-        ax.set_xlabel("Elapsed (s)")
-    else:
-        ax.set_xlabel("Time (UTC)")
-        time_axis(ax)
-    ax.legend()
-
-    name = args.name or os.path.splitext(os.path.basename(args.csv[0]))[0]
-    images = os.path.join(docs, "images")
-    os.makedirs(images, exist_ok=True)
-    png = os.path.join(images, f"{name}.png")
-    fig.savefig(png)
-    plt.close(fig)
-
     page_dir = os.path.dirname(os.path.join(docs, args.page))
     rel = lambda p: os.path.relpath(p, page_dir)
     unit = first.get("unit", "")
-    out = [f"## {args.title}", "", f"![{args.title}]({rel(png)})", ""]
+    out = [f"## {args.title}", ""]
+    for arm, png in images:
+        alt = f"{args.title} ({arm})" if arm else args.title
+        out += [f"![{alt}]({rel(png)})", ""]
     out.append("| Node | Arm | " + " | ".join(STAT_TITLES[s] for s in stats) + " | Unit |")
     out.append("|:--|:--|" + "--:|" * len(stats) + ":--|")
     for arm in arms:
@@ -427,7 +397,7 @@ def plot(args):
         out.append(f"| all | {arm} | " + " | ".join(fmt(s, st[s]) for s in stats) + f" | {unit} |")
     out.append("")
     step = first.get("step", "")
-    if args.align:
+    if args.arm_windows:
         for arm in arms:
             s, e = arm_window[arm]
             out.append(f"Window ({arm}): {iso(s)} to {iso(e)} ({duration((e - s).total_seconds())}), step {step}")
@@ -482,20 +452,20 @@ def main():
     r.add_argument("--proxy", help="for example socks5h://127.0.0.1:1080")
     r.add_argument("--timeout", type=float, default=60.0)
 
-    p = sub.add_parser("plot",help="plot CSVs to images/<name>.png and print the evidence block")
-    p.add_argument("--csv", action="append", required=True)
-    p.add_argument("--title", required=True)
-    p.add_argument("--name")
-    p.add_argument("--style")
-    p.add_argument("--stats", default=DEFAULT_STATS)
-    p.add_argument("--align", choices=["elapsed"])
-    p.add_argument("--page", default="2-evidence.md", help="the page the block goes in, relative to --docs")
-    p.add_argument("--docs", required=True)
+    b = sub.add_parser("block", help="print the evidence block from CSVs and rendered images")
+    b.add_argument("--csv", action="append", required=True)
+    b.add_argument("--image", action="append", required=True, help="[ARM=]PATH under <docs>/images")
+    b.add_argument("--title", required=True)
+    b.add_argument("--stats", default=DEFAULT_STATS)
+    b.add_argument("--arm-windows", action="store_true", help="keep each arm's own window")
+    b.add_argument("--page", default="2-evidence.md", help="the page the block goes in, relative to --docs")
+    b.add_argument("--docs", required=True)
 
     args = ap.parse_args()
-    if args.name is not None and (not NAME.match(args.name) or ".." in args.name):
-        die(f"--name {args.name!r} is not a file name; use letters, digits, _, . and -, with no ..")
-    {"fetch": fetch, "render": render, "plot": plot}[args.cmd](args)
+    name = getattr(args, "name", None)
+    if name is not None and (not NAME.match(name) or ".." in name):
+        die(f"--name {name!r} is not a file name; use letters, digits, _, . and -, with no ..")
+    {"fetch": fetch, "render": render, "block": block}[args.cmd](args)
 
 
 if __name__ == "__main__":

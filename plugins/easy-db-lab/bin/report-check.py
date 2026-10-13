@@ -31,7 +31,8 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
   - redaction: no IPv4 address, 12-digit account ID, vpc-, subnet-, or sg- ID, or tunnel wording
-    in the customer tiers or in data/*.csv and data/*.json;
+    in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value
+    column, and a numeric stats table cell are measurements, not account IDs;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
 
@@ -62,9 +63,12 @@ SPAN = re.compile(r'<span class="verdict verdict-([a-z-]+)">([^<]*)</span>')
 LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$")
 NUMBER = re.compile(r"^([+\-−]?)(\d+(?:\.\d+)?)")
+MEASUREMENT = re.compile(r"^[+\-−]?\d+(?:\.\d+)?$")
+ACCOUNT = "12-digit account ID"
 REDACTION = [
     ("IPv4 address", re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")),
-    ("12-digit account ID", re.compile(r"(?<!\d)\d{12}(?!\d)")),
+    # Twelve digits that are not part of a decimal number such as 214748364800.0.
+    (ACCOUNT, re.compile(r"(?<!\d)(?<!\d\.)\d{12}(?!\d)(?!\.\d)")),
     ("vpc- ID", re.compile(r"\bvpc-[0-9a-f]{8,17}\b")),
     ("subnet- ID", re.compile(r"\bsubnet-[0-9a-f]{8,17}\b")),
     ("sg- ID", re.compile(r"\bsg-[0-9a-f]{8,17}\b")),
@@ -543,16 +547,41 @@ class Checker:
         clean = True
         for rel in files:
             text = read(os.path.join(self.docs, rel))
-            for n, line in enumerate(text.splitlines(), 1):
+            for n, (line, words) in enumerate(without_measurements(rel, text), 1):
                 if rel.endswith(".md") and GRAFANA.search(line):
                     self.report.fail(f"Grafana link in {rel} line {n}: download the graph with report-graph.py")
                     clean = False
                 for what, pattern in REDACTION:
-                    if pattern.search(line):
+                    if pattern.search(words if what == ACCOUNT else line):
                         self.report.redact(f"{what} in {rel} line {n}")
                         clean = False
         if clean:
             self.report.ok("no Grafana link and no infrastructure identifier in the customer tiers and data/")
+
+
+def without_measurements(rel, text):
+    """Each line, paired with the line less its measurement cells: the numeric value column of a
+    data/*.csv, and the numeric cells of a stats table.  A measurement is never an account ID."""
+    lines = text.splitlines()
+    if rel.endswith(".csv"):
+        header = next(csv.reader(lines[:1]), [])
+        col = header.index("value") if "value" in header else None
+        for line in lines:
+            row = next(csv.reader([line]), [])
+            if col is not None and col < len(row) and MEASUREMENT.match(row[col].strip()):
+                row = row[:col] + row[col + 1:]
+            yield line, ",".join(row)
+        return
+    in_stats = False
+    for line in lines:
+        if re.match(r"^\|\s*Node\s*\|\s*Arm\s*\|", line):
+            in_stats = True
+        elif not line.lstrip().startswith("|"):
+            in_stats = False
+        if in_stats:
+            yield line, "|".join(c for c in line.split("|") if not MEASUREMENT.match(c.strip()))
+        else:
+            yield line, line
 
 
 def gate(docs, reasons):

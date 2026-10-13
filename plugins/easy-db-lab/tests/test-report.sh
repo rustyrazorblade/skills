@@ -538,7 +538,16 @@ redact-sg sg-
 redact-tunnel tunnel
 redact-query-ip IPv4
 redact-json-ip IPv4
+redact-account-period account
 EOF
+
+# Not redaction: a 12-digit metric value in data/*.csv and its stats table, infrastructure IDs in
+# the appendix journal, and a dotted version string in summary prose.
+for name in redact-ok-big-value redact-ok-journal redact-ok-version; do
+  run_check "$name"
+  expect_eq "check: $name exits 0" "0" "$check_rc"
+  expect_not_contains "check: $name has no redaction FAIL" "$check_out" "FAIL: redaction"
+done
 
 out="$("$checker" "$tmp_root/no-such-docs" 2>&1)"
 expect_eq "check: a bad path exits 2" "2" "$?"

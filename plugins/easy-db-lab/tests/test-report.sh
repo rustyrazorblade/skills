@@ -880,6 +880,55 @@ expect_contains "overlay step: an unreadable dashboard names the dashboard" "$ou
 expect_eq "overlay step: an unreadable dashboard sends no render" "" "$req"
 rm -f "$gdocs/images/day.png" "$gdocs/images/overlay-overlay-candidate.png"
 
+# The SOCKS proxy step, run as written.  The wrapper's directory holds .socks5-proxy-state; the stub
+# wrapper's `status` logs itself and, when STUB_RESTART names a port, writes a live tunnel on it.
+proxy_step="$(first_bash_block "$report_ref" "### The SOCKS proxy")"
+if [[ "$proxy_step" == *".socks5-proxy-state"* ]]; then
+  pass "reference: The SOCKS proxy holds the proxy step"
+else
+  fail "reference: The SOCKS proxy holds the proxy step"
+fi
+pdir="$tmp_root/proxy"
+mkdir -p "$pdir"
+cat >"$pdir/easy-db-lab" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >>"$(dirname "$0")/status.log"
+[[ -z "${STUB_RESTART:-}" ]] || printf '{"pid":%s,"port":%s}\n' "$STUB_LIVE_PID" "$STUB_RESTART" \
+  >"$(dirname "$0")/.socks5-proxy-state"
+EOF
+chmod +x "$pdir/easy-db-lab"
+sleep 600 &
+live_pid=$!
+(exit 0) &
+dead_pid=$!
+wait "$dead_pid"
+# proxy <state json or ""> [STUB_RESTART port]: run the step and set out to PROXY, log to the status calls.
+proxy() {
+  rm -f "$pdir/.socks5-proxy-state" "$pdir/status.log"
+  [[ -z "$1" ]] || printf '%s\n' "$1" >"$pdir/.socks5-proxy-state"
+  out="$(EDB="$pdir/easy-db-lab" STUB_RESTART="${2:-}" STUB_LIVE_PID="$live_pid" \
+    bash -c "$proxy_step"$'\nprintf %s "$PROXY"' 2>/dev/null)"
+  log="$(cat "$pdir/status.log" 2>/dev/null)"
+}
+proxy "{\"pid\":$live_pid,\"port\":49733}"
+expect_eq "proxy step: a live tunnel gives its port" "socks5h://127.0.0.1:49733" "$out"
+expect_eq "proxy step: a live tunnel runs no status" "" "$log"
+proxy "{\"pid\":$dead_pid,\"port\":1080}" 50373
+expect_eq "proxy step: a dead tunnel runs status" "status" "$log"
+expect_eq "proxy step: a dead tunnel gives the restarted port" "socks5h://127.0.0.1:50373" "$out"
+proxy "{\"pid\":$dead_pid,\"port\":1080}"
+expect_eq "proxy step: a tunnel that status cannot restart gives no proxy" "" "$out"
+proxy ""
+expect_eq "proxy step: no state file gives no proxy" "" "$out"
+expect_eq "proxy step: no state file runs no status" "" "$log"
+kill "$live_pid" 2>/dev/null
+wait "$live_pid" 2>/dev/null
+graphs_ref="$(sed -n '/^## Graphs/,/^## Prose Rules/p' "$report_ref")"
+expect_not_contains "reference: Graphs does not say Grafana is always on Tailscale" "$graphs_ref" "Grafana is reachable over Tailscale"
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: Graphs says status restarts a dead tunnel" "$graphs_ref" '`$EDB status` restarts'
+expect_contains "reference: Graphs runs the proxy step at each use" "$graphs_ref" "before each"
+
 # --- report-check.py ---
 
 checker="$bin/report-check.py"

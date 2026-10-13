@@ -158,6 +158,27 @@ After each plan step that measures something, run `fetch` and then `render`, at 
 
 The steps below use `curl` and `jq`.
 
+### The SOCKS proxy
+
+The CLI reaches the cluster over Tailscale or over an SSH SOCKS tunnel.  The tunnel can stop during a run.  The CLI then starts a new tunnel, often on a new port, so a fixed `--proxy` value breaks.  `$EDB status` restarts a dead tunnel.
+
+Run this step before each `fetch`, each `curl`, and each `render`.  Shell state does not persist between Bash tool calls, so put the step in the same call as the command.  Set `EDB` to the wrapper's absolute path; in a multi-DC or arms layout, use the wrapper of that DC or arm.
+
+```bash
+state="$(dirname "$EDB")/.socks5-proxy-state"
+PROXY=
+if [[ -f "$state" ]]; then
+  kill -0 "$(jq -r .pid "$state")" 2>/dev/null || "$EDB" status >/dev/null
+  if kill -0 "$(jq -r .pid "$state")" 2>/dev/null; then
+    PROXY="socks5h://127.0.0.1:$(jq -r .port "$state")"
+  else
+    echo "no live SOCKS tunnel in $state" >&2
+  fi
+fi
+```
+
+The wrapper's directory holds `.socks5-proxy-state`.  If the file is absent, the CLI started no tunnel, and `PROXY` stays empty.  If the tunnel is still dead after `$EDB status`, write it in `<journal>` and `<issues>`.  The command then fails, and its failure rule applies.  Write each port change in `<journal>`.
+
 ### Fetch
 
 1. Read `$EDB help observability` for the Mimir query endpoint and the tenant header.  Read `$EDB status` for the address that the endpoint uses.  Never read `state.json`.
@@ -175,7 +196,7 @@ report-graph.py fetch --mimir-url "$MIMIR_URL" --tenant "$TENANT" \
   --unit "MB/s" --scale 1e-6 --name scrape-alloc --docs <cluster-dir>/docs
 ```
 
-If Mimir is reachable only through a SOCKS proxy, add `--proxy socks5h://<host>:<port>`.  `fetch` writes `data/<name>.csv` and `data/<name>.json`.  It never stores the URL or the tenant.
+If the SOCKS proxy step set `PROXY`, add `--proxy "$PROXY"`.  `fetch` writes `data/<name>.csv` and `data/<name>.json`.  It never stores the URL or the tenant.
 
 If `fetch` fails, write the command and the error to `<journal>` and `<issues>`, and continue the run.  The missing evidence then fails the check at the next exit.
 
@@ -183,8 +204,8 @@ If `fetch` fails, write the command and the error to `<journal>` and `<issues>`,
 
 1. Read `$EDB help observability` for the Grafana port.  Read `$EDB status` for the address that Grafana uses.  Never read `state.json`.
 2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Grafana.
-3. Set `GRAFANA_URL` to `http://<address>:<port>`.  Grafana is reachable over Tailscale, at the private IP.
-4. If Grafana is reachable only through the SOCKS tunnel, set `PROXY=socks5h://<host>:<port>`.  Otherwise set `PROXY=` (empty).  The steps below pass `--proxy` to `render` and to `curl` when `PROXY` is set.
+3. Set `GRAFANA_URL` to `http://<address>:<port>`, at the private IP.  Over Tailscale, the private IP is reachable directly; otherwise, only through the SOCKS tunnel.
+4. Run "The SOCKS proxy" step before each command below.  The commands pass `--proxy` to `render` and to `curl` when `PROXY` is set.
 
 `render` never stores the URL.  Write the URL in `<journal>` only.
 

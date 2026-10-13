@@ -8,24 +8,18 @@
 #   binary-path       Full path to the easy-db-lab binary, or "easy-db-lab" if on PATH.
 #
 # Options:
-#   --name <name>     Cassandra cluster name. Shared across all nodes in all DCs. Also used
-#                     as the lab report title.
+#   --name <name>     Cassandra cluster name. Shared across all nodes in all DCs. Also the
+#                     fallback lab report title; make takes the title from 1-summary.md.
 #   --jdk <path>      Java home directory. Bakes JAVA_HOME and PATH into every wrapper.
 #   --dc <dc-dir>     Datacenter directory name (e.g. dc1, us-east). Repeat for each DC.
 #                     When omitted, one wrapper is created at the cluster root (single DC).
 #                     When provided, one wrapper is created per DC under <cluster-dir>/<dc-dir>/.
-#   --plan <path>     Path to plan.md. Copied to docs/plan.md as a record of what was executed.
+#   --plan <path>     Path to the plan. Copied to docs/3-plan.md as a record of what was executed.
 #
 # Directory layout — single DC:
 #   <cluster-dir>/
 #     easy-db-lab       ← wrapper (cds into cluster-dir)
 #     docs/             ← lab report source
-#       book.toml
-#       SUMMARY.md
-#       Makefile
-#       journal.md
-#       issues.md
-#       images/
 #
 # Directory layout — multi-DC:
 #   <cluster-dir>/
@@ -34,12 +28,13 @@
 #     <dc2>/
 #       easy-db-lab
 #     docs/             ← shared across DCs; one environment, multiple datacenters
-#       book.toml
-#       SUMMARY.md
-#       Makefile
-#       journal.md
-#       issues.md
-#       images/
+#
+# docs/ holds the tiered lab report.  Each file comes from scaffold/<file>.template:
+#   1-summary.md, 2-evidence.md, 3-plan.md, 4-journal.md, 5-issues.md   ← tier files, copied only when absent
+#   SUMMARY.md                                                         ← copied only when absent
+#   book.toml, Makefile, lab.css, lab.mplstyle                         ← rewritten on every run
+#   images/, data/                                                     ← graphs and their CSV
+# The rules for the report are in references/report.md.
 
 set -euo pipefail
 
@@ -109,26 +104,30 @@ fi
 
 # --- lab report scaffold (shared; always at cluster root) ---
 DOCS="$CLUSTER_DIR/docs"
-mkdir -p "$DOCS/images"
+mkdir -p "$DOCS/images" "$DOCS/data"
 
-cat > "$DOCS/book.toml" <<EOF
-[book]
-title = "$CLUSTER_NAME"
-src = "."
+# sed_escape <text>: escape text for the right-hand side of a sed s|||.
+sed_escape() {
+  printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
+}
 
-[build]
-build-dir = "report"
-EOF
+# render <template> <dest>: copy a scaffold template with its placeholders filled in.
+render() {
+  sed -e "s|@CLUSTER_NAME@|$(sed_escape "$CLUSTER_NAME")|g" \
+      -e "s|@EDB_LAB_BIN@|$(sed_escape "$SCRIPT_DIR")|g" "$1" > "$2"
+}
 
-cp "$SCAFFOLD/SUMMARY.md" "$DOCS/SUMMARY.md"
-cp "$SCAFFOLD/Makefile"    "$DOCS/Makefile"
-[[ -f "$DOCS/journal.md" ]] || cp "$SCAFFOLD/journal.md" "$DOCS/journal.md"
-[[ -f "$DOCS/issues.md"  ]] || cp "$SCAFFOLD/issues.md"  "$DOCS/issues.md"
-[[ -f "$DOCS/results.md" ]] || cp "$SCAFFOLD/results.md" "$DOCS/results.md"
+for tpl in "$SCAFFOLD"/*.template; do
+  name="$(basename "$tpl" .template)"
+  case "$name" in
+    [1-5]-*.md|SUMMARY.md) [[ -f "$DOCS/$name" ]] || render "$tpl" "$DOCS/$name" ;;
+    *) render "$tpl" "$DOCS/$name" ;;
+  esac
+done
 
 if [[ -n "$PLAN_FILE" ]]; then
-  cp "$PLAN_FILE" "$DOCS/plan.md"
-  echo "plan:    $DOCS/plan.md"
+  cp "$PLAN_FILE" "$DOCS/3-plan.md"
+  echo "plan:    $DOCS/3-plan.md"
 fi
 
 # --- summary ---

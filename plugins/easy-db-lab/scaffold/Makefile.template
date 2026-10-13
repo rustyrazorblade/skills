@@ -1,0 +1,46 @@
+# Lab report build.  setup-cluster.sh writes this file from the plugin's
+# scaffold/Makefile.template.  `make` checks the report, builds the book into report/, and
+# writes export/jira.txt and export/report.zip.  The rules are in references/report.md.
+
+# The plugin bin directory that holds the report scripts.  When a script is not there, make
+# finds it on PATH.
+EDB_LAB_BIN ?= @EDB_LAB_BIN@
+
+script = $(or $(wildcard $(EDB_LAB_BIN)/$(1)),$(1))
+CHECK := $(call script,report-check.py)
+EXPORT := $(call script,report-export.py)
+
+# The book title is the first H1 of 1-summary.md, with comments removed.  When it is empty,
+# make exports nothing and the title in book.toml applies.
+TITLE := $(shell sed -n -E 's/^\#([[:space:]]+|$$)//p' 1-summary.md 2>/dev/null | head -n 1 | sed -e 's/<!--.*-->//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//')
+ifneq ($(TITLE),)
+export MDBOOK_BOOK__TITLE := $(TITLE)
+endif
+
+# The skill passes the reasons from the check subagent and cassandra-expert, for example
+# make gate REASONS='--reason "the noise floor does not support the verdict"'.
+REASONS ?=
+
+.PHONY: all build check export gate serve clean
+
+all: check build export
+
+check:
+	$(CHECK) .
+
+build:
+	mdbook build
+
+export:
+	mkdir -p export
+	$(EXPORT) jira . export/jira.txt
+	$(EXPORT) zip . export/report.zip
+
+gate:
+	$(CHECK) --gate $(REASONS) . && $(MAKE) build export
+
+serve:
+	mdbook serve
+
+clean:
+	rm -rf report export

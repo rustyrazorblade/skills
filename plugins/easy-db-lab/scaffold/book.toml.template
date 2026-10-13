@@ -1,0 +1,10 @@
+[book]
+title = "@CLUSTER_NAME@"
+src = "."
+
+[build]
+build-dir = "report"
+
+[output.html]
+additional-css = ["lab.css"]
+no-section-label = true

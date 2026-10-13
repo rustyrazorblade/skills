@@ -14,19 +14,19 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 2. Scaffold templates
 
-- [ ] 2.1 Write harness cases for the scaffold: the five tier files, `SUMMARY.md`, `Makefile`, `book.toml`, `lab.css`, `lab.mplstyle`, `images/`, `data/`; no `results.md`; `--plan` to `docs/3-plan.md`; copy-if-absent for tier files; every scaffold file named `<destination>.template`.
-- [ ] 2.2 Create `scaffold/1-summary.md.template`, `2-evidence.md.template` (with `## Threats to validity`), `3-plan.md.template`, `4-journal.md.template`, and `5-issues.md.template`.  Each holds only headings and `<!-- -->` comments.
-- [ ] 2.3 Create `scaffold/SUMMARY.md.template`: `[Summary](1-summary.md)`, `- [Evidence](2-evidence.md)`, `# Appendix`, then Plan, Journal, Issues.
-- [ ] 2.4 Create the static `scaffold/book.toml.template` with `title = "@CLUSTER_NAME@"`, `src = "."`, `build-dir = "report"`, `[output.html] additional-css = ["lab.css"]`, and `no-section-label = true`.
-- [ ] 2.5 Create `scaffold/lab.css.template`: sticky `thead th`, zebra rows, `.verdict` and `.verdict-{confirmed,refuted,inconclusive,partial}` badges, wider `--content-max-width`, and `@media print`.
-- [ ] 2.6 Create `scaffold/lab.mplstyle.template`.  Check for the `dataviz` skill palette first; else use Okabe-Ito and name the source in a comment.  Set fonts and sizes.
-- [ ] 2.7 Create `scaffold/Makefile.template` with `EDB_LAB_BIN ?= @EDB_LAB_BIN@`, the `MDBOOK_BOOK__TITLE` export only when the `1-summary.md` H1 is not empty, and the targets `all: check build export`, `build`, `check`, `export`, `gate`, `serve`, and `clean`.
-- [ ] 2.8 Delete `scaffold/results.md`, `scaffold/journal.md`, `scaffold/issues.md`, `scaffold/SUMMARY.md`, and `scaffold/Makefile`.
+- [x] 2.1 Write harness cases for the scaffold: the five tier files, `SUMMARY.md`, `Makefile`, `book.toml`, `lab.css`, `lab.mplstyle`, `images/`, `data/`; no `results.md`; `--plan` to `docs/3-plan.md`; copy-if-absent for tier files; every scaffold file named `<destination>.template`.
+- [x] 2.2 Create `scaffold/1-summary.md.template`, `2-evidence.md.template` (with `## Threats to validity`), `3-plan.md.template`, `4-journal.md.template`, and `5-issues.md.template`.  Each holds only headings and `<!-- -->` comments.
+- [x] 2.3 Create `scaffold/SUMMARY.md.template`: `[Summary](1-summary.md)`, `- [Evidence](2-evidence.md)`, `# Appendix`, then Plan, Journal, Issues.
+- [x] 2.4 Create the static `scaffold/book.toml.template` with `title = "@CLUSTER_NAME@"`, `src = "."`, `build-dir = "report"`, `[output.html] additional-css = ["lab.css"]`, and `no-section-label = true`.
+- [x] 2.5 Create `scaffold/lab.css.template`: sticky `thead th`, zebra rows, `.verdict` and `.verdict-{confirmed,refuted,inconclusive,partial}` badges, wider `--content-max-width`, and `@media print`.
+- [x] 2.6 Create `scaffold/lab.mplstyle.template`.  Check for the `dataviz` skill palette first; else use Okabe-Ito and name the source in a comment.  Set fonts and sizes.
+- [x] 2.7 Create `scaffold/Makefile.template` with `EDB_LAB_BIN ?= @EDB_LAB_BIN@`, the `MDBOOK_BOOK__TITLE` export only when the `1-summary.md` H1 is not empty, and the targets `all: check build export`, `build`, `check`, `export`, `gate`, `serve`, and `clean`.
+- [x] 2.8 Delete `scaffold/results.md`, `scaffold/journal.md`, `scaffold/issues.md`, `scaffold/SUMMARY.md`, and `scaffold/Makefile`.
 
 ## 3. setup-cluster, detect-layout, seeds
 
 - [ ] 3.1 Write harness cases for `--docs-only` (no binary, no wrapper), an existing wrapper kept, a binary whose real path is a wrapper path, the source-checkout guard (exit 1), `--arm` with `--dc` (usage error), and the arms scaffold (marker, per-arm wrappers, `3-plan-<arm>.md`, per-arm journal and issues, generated `SUMMARY.md` Appendix).
-- [ ] 3.2 Change `bin/setup-cluster.sh`: copy each `*.template` to its destination (tier files copy-if-absent), sed `@CLUSTER_NAME@` and `@EDB_LAB_BIN@`, create `docs/images` and `docs/data`, copy `--plan` to `docs/3-plan.md`, remove the `book.toml` heredoc, and update the header comment.
+- [x] 3.2 Change `bin/setup-cluster.sh`: copy each `*.template` to its destination (tier files copy-if-absent), sed `@CLUSTER_NAME@` and `@EDB_LAB_BIN@`, create `docs/images` and `docs/data`, copy `--plan` to `docs/3-plan.md`, remove the `book.toml` heredoc, and update the header comment.
 - [ ] 3.3 Add `--docs-only`, the never-rewrite-a-wrapper rule, the binary self-check, and the source-checkout guard to `setup-cluster.sh`.
 - [ ] 3.4 Add `--arm <arm>=<plan.md>` to `setup-cluster.sh`: the `arms` marker, one wrapper per arm, per-arm plan, journal, and issues files, and the generated Appendix.  Reject `--arm` with `--dc`.
 - [ ] 3.5 Write harness cases for `detect-cluster-layout.sh`: `LAYOUT=arms` with `ARMS`, `EDB_<ARM>`, `STATE_<ARM>`, and `STATE`; `bin` skipped like `docs`.  Then change the script.

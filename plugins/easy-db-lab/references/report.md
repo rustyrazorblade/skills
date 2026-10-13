@@ -219,7 +219,7 @@ A partial exit is any exit before every plan step has finished: a pause, or a te
 
 Run the check after you write the summary, and before `make`.  It has three parts.
 
-1. **The script.**  `report-check.py <cluster-dir>/docs`.  `make check` runs the same command.  It prints PASS, FAIL, or WARN per check.  Exit 0 means no FAIL, 1 a FAIL, 2 a usage or I/O error, and 3 a redaction FAIL.  It treats a run as a Cassandra run when `<plan>` or a journal names `cassandra use` or `cassandra start`.
+1. **The script.**  `report-check.py <cluster-dir>/docs`.  `make check` runs the same command.  It prints PASS, FAIL, or WARN per check.  Exit 0 means no FAIL, 1 a FAIL, 2 a usage or I/O error, and 3 a redaction FAIL.  Malformed evidence data, such as a CSV value that is not a number, is a FAIL that names the data file.  It treats a run as a Cassandra run when `<plan>` or a journal names `cassandra use` or `cassandra start`.
 2. **The check subagent.**  Run a general-purpose subagent with the prompt below.
 3. **The reasoning review.**  For a Cassandra run only.  Ask `cassandra-expert` to review the reasoning: confounds, the choice of metric, and whether the noise floor supports the verdict.  When it has run, write `Reasoning review: done`.  `cassandra-expert` ships as a separate plugin.  When it is not installed, write `Reasoning review: not run (cassandra-expert not installed)`, and tell the user or the launcher plainly.
 

@@ -26,7 +26,8 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     a present noise floor;
   - each Findings row links to a complete evidence block;
   - every evidence block has an image from images/, a stats table, a Window line, a Query line,
-    and a Data link to CSVs in data/ with their JSON;
+    and a Data link to CSVs in data/ with their JSON; malformed data (a missing column or field,
+    a value that is not a number, a timestamp that is not ISO 8601) is a FAIL that names the file;
   - a Cassandra run (the plan or a journal names `cassandra use` or `cassandra start`) has a
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
@@ -173,6 +174,7 @@ class Block:
     def __init__(self, page, title, anchor, lines):
         self.page, self.title, self.anchor = page, title, anchor
         self.images, self.has_table, self.windows, self.query, self.csvs = [], False, [], None, []
+        self.evidence = None
         for line in lines:
             m = re.match(r"^!\[[^\]]*\]\(([^)\s]+)\)", line)
             if m:
@@ -230,6 +232,11 @@ def check_block(docs, block, report):
     if missing:
         report.fail(f"evidence block {block.name}: no {', no '.join(missing)}")
         return False
+    try:
+        block.evidence = Evidence(docs, block)
+    except BadData as e:
+        report.fail(f"evidence block {block.name}: malformed data: {e}")
+        return False
     report.ok(f"evidence block {block.name}")
     return True
 
@@ -257,24 +264,56 @@ def arm_stat(series, seconds, stat):
     }[stat]()
 
 
+class BadData(Exception):
+    """Evidence data that cannot be read: the message names the data file and the problem."""
+
+
 class Evidence:
-    """The merged CSVs of one block, keyed by (Node, Arm)."""
+    """The merged CSVs of one block, keyed by (Node, Arm).  Raises BadData on malformed data."""
 
     def __init__(self, docs, block):
         self.series, self.window, self.units = {}, {}, set()
         for c in block.csvs:
-            path = os.path.join(docs, resolve(docs, block.page, c))
-            with open(os.path.splitext(path)[0] + ".json") as f:
-                meta = json.load(f)
-            self.units.add(meta.get("unit", ""))
-            seconds = (parse_time(meta["end"]) - parse_time(meta["start"])).total_seconds()
-            with open(path, newline="") as f:
-                for r in csv.DictReader(f):
-                    key = (r["node"], r["arm"])
-                    self.series.setdefault(key, []).append((parse_time(r["timestamp_utc"]), float(r["value"])))
+            rel = resolve(docs, block.page, c)
+            meta_rel = os.path.splitext(rel)[0] + ".json"
+            meta = self.metadata(os.path.join(docs, meta_rel), meta_rel)
+            self.units.add(meta["unit"])
+            seconds = (meta["end"] - meta["start"]).total_seconds()
+            with open(os.path.join(docs, rel), newline="") as f:
+                reader = csv.DictReader(f)
+                missing = [k for k in ("timestamp_utc", "node", "arm", "value") if k not in (reader.fieldnames or [])]
+                if missing:
+                    raise BadData(f"{rel}: no {', no '.join(missing)} column")
+                for n, r in enumerate(reader, 2):
+                    try:
+                        t = parse_time(r["timestamp_utc"])
+                    except (AttributeError, TypeError, ValueError):
+                        raise BadData(f"{rel} line {n}: the timestamp {r['timestamp_utc']!r} is not ISO 8601") from None
+                    try:
+                        v = float(r["value"])
+                    except (TypeError, ValueError):
+                        raise BadData(f"{rel} line {n}: the value {r['value']!r} is not a number") from None
+                    self.series.setdefault((r["node"], r["arm"]), []).append((t, v))
                     self.window.setdefault(r["arm"], seconds)
         for points in self.series.values():
             points.sort()
+
+    @staticmethod
+    def metadata(path, rel):
+        try:
+            with open(path, encoding="utf-8") as f:
+                meta = json.load(f)
+        except ValueError as e:
+            raise BadData(f"{rel}: not valid JSON: {e}") from None
+        if not isinstance(meta, dict):
+            raise BadData(f"{rel}: not a JSON object")
+        missing = [k for k in ("start", "end", "unit") if k not in meta]
+        if missing:
+            raise BadData(f"{rel}: no {', no '.join(missing)} field")
+        try:
+            return {**meta, "start": parse_time(meta["start"]), "end": parse_time(meta["end"])}
+        except (AttributeError, TypeError, ValueError):
+            raise BadData(f"{rel}: the start {meta['start']!r} or the end {meta['end']!r} cannot be read") from None
 
     def arms(self):
         return {arm for _, arm in self.series}
@@ -429,7 +468,7 @@ class Checker:
         block = self.block_for(target, where)
         if block is None:
             return
-        ev = Evidence(self.docs, block)
+        ev = block.evidence
         if unit.group(1) not in ev.units:
             self.report.fail(f"{where}: unit {unit.group(1)} differs from the evidence JSON unit {', '.join(sorted(ev.units))}")
             return
@@ -484,7 +523,7 @@ class Checker:
         block = self.block_for(target, where)
         if block is None:
             return
-        ev = Evidence(self.docs, block)
+        ev = block.evidence
         if not {"baseline", "candidate"} <= ev.arms():
             self.report.fail(f"{where}: the A/A evidence needs the arms baseline and candidate")
             return

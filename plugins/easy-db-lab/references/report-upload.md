@@ -33,6 +33,34 @@ $EDB commands | awk '{ match($0, /^ */); i = RLENGTH } r && i <= ri { r = 0 } u 
 - **Not supported:** upload only `.md` files.
 - **Supported:** also upload every `images/*.png` and `data/*.csv` file that the uploaded tier files reference, by absolute path.
 
+## The AWS SSO Session
+
+The upload needs a live AWS SSO token.  If the token expires during a run, the upload fails, and the gate keeps the cluster up.  `aws sts get-caller-identity` is not a valid check: it can pass on cached role credentials after the token expires.
+
+Before a run, read the token's real expiry from the SSO cache.  Use the profile that the session uses.  If `AWS_PROFILE` is not set, set it to the profile that the plan names.
+
+```bash
+profile="${AWS_PROFILE:-default}"
+key="$(aws configure get sso_session --profile "$profile" || aws configure get sso_start_url --profile "$profile")"
+cache="$HOME/.aws/sso/cache/$(printf %s "$key" | shasum -a 1 | cut -d' ' -f1).json"
+if [[ -z "$key" ]]; then
+  echo "SSO: $profile is not an SSO profile"
+elif [[ ! -f "$cache" ]]; then
+  echo "SSO: no token for $profile; 0 minutes left"
+else
+  jq -r '(.expiresAt | sub("\\.[0-9]+"; "") | sub("UTC$"; "Z") | fromdateiso8601) - now | [. / 60 | floor, 0] | max | "SSO: \(.) minutes left"' "$cache"
+fi
+```
+
+The step reads only the `expiresAt` field.  Never print or copy the token.  Write the minutes left in `<journal>`.
+
+Estimate the run time from the plan: add the step durations, then add 30 minutes for Finalize, the upload, and teardown.  If fewer minutes remain than that:
+
+- **Interactive:** tell the user to run `aws sso login --profile "$AWS_PROFILE"` before the run starts.  Run the step again after the login.
+- **Unattended:** do not provision.  Report "SSO token expires in N minutes" to the launcher, and stop.
+
+If the profile is not an SSO profile, write that in `<journal>`, and skip this check.
+
 ## Choose the Files
 
 Build the file list before the command runs.  Name each file explicitly by its absolute path, `<cluster-dir>/docs/<name>`.  Never pass a raw glob to the CLI.  The wrapper changes to its own directory before it runs the binary, so a relative `docs/` path breaks.

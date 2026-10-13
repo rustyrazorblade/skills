@@ -1443,6 +1443,60 @@ else
   expect_eq "upload: a .png and .csv binary gets images and CSV" "images and CSV: supported" "$out"
 fi
 
+# The SSO session check in report-upload.md, run as written against a stub aws and a temp HOME.
+# The stub answers `configure get sso_session` and `configure get sso_start_url` from STUB_SESSION and
+# STUB_START_URL, and exits 1 for an empty value, as the real aws does for an unset key.
+sso_step="$(first_bash_block "$upload_ref" "## The AWS SSO Session")"
+if [[ "$sso_step" == *"expiresAt"* ]]; then
+  pass "upload: report-upload.md holds the SSO session check"
+else
+  fail "upload: report-upload.md holds the SSO session check"
+fi
+sso_bin="$tmp_root/sso-bin"
+sso_home="$tmp_root/sso-home"
+mkdir -p "$sso_bin" "$sso_home/.aws/sso/cache"
+cat >"$sso_bin/aws" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1 $2 $4 $5" == "configure get --profile $STUB_PROFILE" ]] || exit 2
+case "$3" in
+  sso_session) v="${STUB_SESSION:-}" ;;
+  sso_start_url) v="${STUB_START_URL:-}" ;;
+  *) v= ;;
+esac
+[[ -n "$v" ]] || exit 1
+echo "$v"
+EOF
+chmod +x "$sso_bin/aws"
+# sso <session> <start url> <expiresAt or ""> : write the token cache for the key, run the step.
+sso() {
+  rm -f "$sso_home/.aws/sso/cache/"*.json
+  local key="${1:-$2}"
+  [[ -z "$3" ]] || printf '{"expiresAt": "%s"}\n' "$3" \
+    >"$sso_home/.aws/sso/cache/$(printf %s "$key" | shasum -a 1 | cut -d' ' -f1).json"
+  out="$(HOME="$sso_home" AWS_PROFILE=lab-user STUB_PROFILE=lab-user STUB_SESSION="$1" STUB_START_URL="$2" \
+    PATH="$sso_bin:$PATH" bash -c "$sso_step" 2>&1)"
+}
+in_2h="$(jq -nr 'now + 7230 | todate')"
+sso easy-db-lab "" "$in_2h"
+expect_eq "sso step: an sso_session profile gives the minutes left" "SSO: 120 minutes left" "$out"
+sso easy-db-lab "" "${in_2h%Z}.220061Z"
+expect_eq "sso step: fractional seconds parse" "SSO: 120 minutes left" "$out"
+sso "" "https://example.awsapps.com/start" "${in_2h%Z}UTC"
+expect_eq "sso step: a legacy start URL profile and a UTC suffix parse" "SSO: 120 minutes left" "$out"
+sso easy-db-lab "" "$(jq -nr 'now - 600 | todate')"
+expect_eq "sso step: an expired token gives 0 minutes" "SSO: 0 minutes left" "$out"
+sso easy-db-lab "" ""
+expect_eq "sso step: no cached token gives 0 minutes" "SSO: no token for lab-user; 0 minutes left" "$out"
+sso "" "" ""
+expect_eq "sso step: a profile with no SSO is named" "SSO: lab-user is not an SSO profile" "$out"
+sso_ref="$(sed -n '/^## The AWS SSO Session/,/^## /p' "$upload_ref")"
+# shellcheck disable=SC2016 # a literal $AWS_PROFILE in the skill text
+expect_contains "upload: the SSO check names the login command" "$sso_ref" 'aws sso login --profile "$AWS_PROFILE"'
+expect_contains "upload: the SSO check says sts can pass on cached credentials" "$sso_ref" "get-caller-identity"
+for f in "$run_skill" "$explore_skill"; do
+  expect_contains "docs: ${f#"$plugin/"} runs the SSO session check" "$(cat "$f")" '"The AWS SSO Session"'
+done
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

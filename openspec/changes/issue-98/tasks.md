@@ -39,8 +39,8 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 - [x] 4.3 Implement `bin/report-graph.py` (PEP 723, `fetch` and `plot`) in the pattern of `plugins/cassandra-expert/skills/training/scripts/verify-sai-capabilities.py`, until 4.1 and 4.2 pass.
 - [x] 4.4 Write harness cases for `report-check.py` over every fixture from group 1: exit 0 for agree, 1 for each content FAIL, 3 for each redaction FAIL, 2 for a bad path; WARN for numeral in prose; `--gate` writes one Unchecked line and exits 0; a clean `--gate` removes a stale line; no file edit without `--gate`; nested page and slug resolution; multi-link Data merge keyed by (Node, Arm).
 - [x] 4.5 Implement `bin/report-check.py` (PEP 723, files only, no network) until 4.4 passes.
-- [ ] 4.6 Write harness cases for `report-export.py`: `jira` holds the summary tier in wiki markup, images as `!name.png!`, no `.md` links, verdict colour; `zip` lists the summary, evidence, nested pages, and their images and CSV, and no appendix file; a missing referenced file fails.
-- [ ] 4.7 Implement `bin/report-export.py` (PEP 723, `pypandoc-binary`, `jira` and `zip`) until 4.6 passes.
+- [x] 4.6 Write harness cases for `report-export.py`: `jira` holds the summary tier in wiki markup, images as `!name.png!`, no `.md` links, verdict colour; `zip` lists the summary, evidence, nested pages, and their images and CSV, and no appendix file; a missing referenced file fails.
+- [x] 4.7 Implement `bin/report-export.py` (PEP 723, `pypandoc-binary`, `jira` and `zip`) until 4.6 passes.
 
 ## 5. Makefile and book
 

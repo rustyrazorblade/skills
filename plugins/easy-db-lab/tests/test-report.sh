@@ -585,6 +585,47 @@ before="$(tree_sum "$tmp_root/gate-redact")"
 expect_eq "gate: a redaction FAIL with --gate exits 3" "3" "$?"
 expect_eq "gate: a redaction FAIL edits no file" "$before" "$(tree_sum "$tmp_root/gate-redact")"
 
+# --- report-export.py ---
+
+exporter="$bin/report-export.py"
+xd="$tmp_root/export-agree"
+fixture_docs "$xd" jira-image
+"$exporter" jira "$xd" "$tmp_root/jira.txt" >/dev/null 2>&1
+expect_eq "jira: exits 0" "0" "$?"
+jira="$(cat "$tmp_root/jira.txt" 2>/dev/null)"
+expect_contains "jira: the title is a wiki heading" "$jira" "h1. Scrape allocation rises with the canary"
+expect_contains "jira: the table is a wiki table" "$jira" "|| Metric || Baseline || Candidate || Delta || Noise floor || Verdict ||"
+expect_contains "jira: an image is referenced by file name" "$jira" "!scrape-alloc.png!"
+expect_not_contains "jira: no images/ path" "$jira" "images/"
+expect_not_contains "jira: no .md links" "$jira" ".md"
+expect_contains "jira: a link becomes its text" "$jira" "| Scrape allocation mean "
+expect_contains "jira: the Refuted verdict maps to its colour" "$jira" "{color:#D55E00}*Refuted*{color}"
+expect_contains "jira: the Confirmed verdict maps to its colour" "$jira" "{color:#009E73}*Confirmed*{color}"
+expect_not_contains "jira: no HTML span" "$jira" "<span"
+expect_not_contains "jira: holds only the summary tier" "$jira" "Threats to validity"
+
+"$exporter" zip "$xd" "$tmp_root/report.zip" >/dev/null 2>&1
+expect_eq "zip: exits 0" "0" "$?"
+listing="$(unzip -Z1 "$tmp_root/report.zip" 2>/dev/null | sort | tr '\n' ' ')"
+for f in 1-summary.md 2-evidence.md evidence/latency.md images/scrape-alloc.png images/read-latency.png \
+  images/noise-latency.png data/scrape-alloc.csv data/latency-baseline.csv data/latency-candidate.csv data/noise-latency.csv; do
+  expect_contains "zip: holds $f" "$listing" "$f "
+done
+for f in 3-plan.md 4-journal.md 5-issues.md SUMMARY.md; do
+  expect_not_contains "zip: holds no $f" "$listing" "$f"
+done
+
+fixture_docs "$tmp_root/export-missing" missing-image
+out="$("$exporter" zip "$tmp_root/export-missing" "$tmp_root/missing.zip" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: a missing referenced file exits non-zero"; else fail "zip: a missing referenced file exits non-zero"; fi
+expect_contains "zip: the error names the missing file" "$out" "images/missing.png"
+expect_no_file "zip: a missing referenced file writes no zip" "$tmp_root/missing.zip"
+
+out="$("$exporter" jira "$ws_noplan/docs" "$tmp_root/scaffold-jira.txt" 2>&1)"
+expect_eq "jira: the bare scaffold exports" "0" "$?"
+expect_not_contains "jira: scaffold comments are dropped" "$(cat "$tmp_root/scaffold-jira.txt" 2>/dev/null)" "<!--"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

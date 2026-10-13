@@ -1022,6 +1022,16 @@ expect_contains "reference: the finalize entry point" "$ref" "run <cluster-dir> 
 expect_contains "reference: the Partial verdict" "$ref" "Partial: stopped after step N"
 expect_contains "reference: a Partial summary with no evidence holds a Findings table" \
   "$(sed -n '/^## The Exit Rule/,/^## The Check/p' "$plugin/references/report.md")" "no measured evidence"
+# The check writes its issues to <issues> before the subagent reads <issues>.
+check_ref="$(sed -n '/^## The Check/,/^### The check subagent prompt/p' "$plugin/references/report.md")"
+review_n="$(printf '%s\n' "$check_ref" | grep -n '^[0-9]\. \*\*The reasoning review' | cut -d: -f1)"
+write_n="$(printf '%s\n' "$check_ref" | grep -n '^[0-9]\. \*\*Write the issues' | cut -d: -f1)"
+subagent_n="$(printf '%s\n' "$check_ref" | grep -n '^[0-9]\. \*\*The check subagent' | cut -d: -f1)"
+if [[ -n "$review_n" && -n "$write_n" && -n "$subagent_n" && "$review_n" -lt "$write_n" && "$write_n" -lt "$subagent_n" ]]; then
+  pass "reference: the check writes <issues> before the subagent reads it"
+else
+  fail "reference: the check writes <issues> before the subagent reads it" "review=$review_n write=$write_n subagent=$subagent_n"
+fi
 fetch_ref="$(sed -n '/^### Fetch/,/^### Plot/p' "$plugin/references/report.md")"
 expect_contains "reference: the Fetch example filters on the cluster label" \
   "$(printf '%s\n' "$fetch_ref" | grep -A1 'report-graph.py fetch')" '{cluster="'

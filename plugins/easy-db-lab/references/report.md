@@ -219,13 +219,14 @@ A partial exit is any exit before every plan step has finished: a pause, or a te
 
 ## The Check
 
-Run the check after you write the summary, and before `make`.  It has three parts.
+Run the check after you write the summary, and before `make`.  It has four parts, in this order.  The subagent runs last, because it reads `<issues>`.
 
 1. **The script.**  `report-check.py <cluster-dir>/docs`.  `make check` runs the same command.  It prints PASS, FAIL, or WARN per check.  Exit 0 means no FAIL, 1 a FAIL, 2 a usage or I/O error, and 3 a redaction FAIL.  Malformed evidence data, such as a CSV value that is not a number, is a FAIL that names the data file.  It treats a run as a Cassandra run when `<plan>` or a journal names `cassandra use` or `cassandra start`.
-2. **The check subagent.**  Run a general-purpose subagent with the prompt below.
-3. **The reasoning review.**  For a Cassandra run only.  Ask `cassandra-expert` to review the reasoning: confounds, the choice of metric, and whether the noise floor supports the verdict.  When it has run, write `Reasoning review: done`.  `cassandra-expert` ships as a separate plugin.  When it is not installed, write `Reasoning review: not run (cassandra-expert not installed)`, and tell the user or the launcher plainly.
+2. **The reasoning review.**  For a Cassandra run only.  Ask `cassandra-expert` to review the reasoning: confounds, the choice of metric, and whether the noise floor supports the verdict.  When it has run, write `Reasoning review: done`.  `cassandra-expert` ships as a separate plugin.  When it is not installed, write `Reasoning review: not run (cassandra-expert not installed)`, and tell the user or the launcher plainly.
+3. **Write the issues.**  Write each FAIL from the script and each concern from the review to `<issues>`.  If one affects the result, also put it under `## Threats to validity`.
+4. **The check subagent.**  Run a general-purpose subagent with the prompt below.  It reads `<issues>` with the issues from step 3 in it.  Write each problem it names to `<issues>` too.
 
-Each concern from the subagent or the review is a reason.  Fix it, or pass it to the gate as `--reason`.
+Each concern from the script, the review, or the subagent is a reason.  Fix it, or pass it to the gate as `--reason`.  If you fix a problem and re-check, run all four parts again.
 
 ### The check subagent prompt
 
@@ -246,7 +247,7 @@ Reply "OK" if every check passes.  Otherwise reply with one line per problem, ea
 Finalize is the report part of every exit, in this order:
 
 1. Write `1-summary.md`, and update the evidence tier.
-2. Run the check: the script, the subagent, and, for a Cassandra run, the reasoning review.
+2. Run the check, in its order: the script, the reasoning review for a Cassandra run, the issues written to `<issues>`, then the subagent.
 3. Apply the check-failure rule for this exit, below.
 4. Build with `make`, or with `make gate` at a teardown gate.
 5. Upload per `report-upload.md`.
@@ -264,7 +265,7 @@ make -C <cluster-dir>/docs gate REASONS='--reason "the noise floor does not supp
 1. Interactive: show the reasons.  Offer one choice: fix now and re-check once, or proceed unchecked.
 2. Unattended: skip the choice.
 3. Run `make gate`.  For a non-redaction failure, `--gate` writes or replaces one `⚠ Unchecked: <reasons>` line under `## Caveats`, and exits 0.  A clean `--gate` run removes a stale Unchecked line.
-4. Write the failure to `<issues>`.
+4. Confirm that each reason is in `<issues>`.  The check wrote them there before the subagent ran.
 5. Upload, then run the `down` per `report-upload.md`.  On an upload failure, use the existing failure menu.  A retry re-uploads only; it does not re-run the check.
 6. Unattended: report the failure to the launcher.
 

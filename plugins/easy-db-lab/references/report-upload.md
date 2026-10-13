@@ -83,7 +83,7 @@ The gate applies to every real top-level `$EDB down` that a skill runs.  It does
 
 Immediately before every real top-level `$EDB down`:
 
-1. Run Finalize, per `report.md`: write `1-summary.md`; run the check (the script, the subagent, and `cassandra-expert` for a Cassandra run); on a non-redaction failure, apply the teardown-gate check-failure rule; run `make gate`.
+1. Run Finalize, per `report.md`: write `1-summary.md`; run the check in its order (the script, `cassandra-expert` for a Cassandra run, the issues written to `<issues>`, then the subagent); on a non-redaction failure, apply the teardown-gate check-failure rule; run `make gate`.
 2. Run the upload procedure.
 3. If every upload exits 0, run `$EDB down --auto-approve`.  Never run a bare `$EDB down`: it waits for a confirmation on stdin, and the Bash tool has no stdin.
 4. If an upload exits non-zero, do not run `down`.  Follow "Failure Handling" below.  A retry re-runs the upload only; it does not re-run the check.

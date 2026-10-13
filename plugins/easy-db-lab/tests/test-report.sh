@@ -624,7 +624,7 @@ cassandra-missing reasoning review
 arm-two-windows two windows
 EOF
 
-for name in noise-not-measured partial findings cassandra-done cassandra-not-installed; do
+for name in noise-not-measured partial inconclusive findings cassandra-done cassandra-not-installed; do
   run_check "$name"
   expect_eq "check: $name exits 0" "0" "$check_rc"
   expect_not_contains "check: $name has no FAIL" "$check_out" "FAIL"
@@ -768,6 +768,14 @@ expect_contains "jira: a link becomes its text" "$jira" "| Scrape allocation mea
 expect_contains "jira: the Refuted verdict maps to its colour" "$jira" "{color:#D55E00}*Refuted*{color}"
 expect_contains "jira: the Confirmed verdict maps to its colour" "$jira" "{color:#009E73}*Confirmed*{color}"
 expect_not_contains "jira: no HTML span" "$jira" "<span"
+for v in partial inconclusive; do
+  fixture_docs "$tmp_root/export-$v" "$v"
+  "$exporter" jira "$tmp_root/export-$v" "$tmp_root/jira-$v.txt" >/dev/null 2>&1
+done
+expect_contains "jira: the Partial verdict maps to its colour" "$(cat "$tmp_root/jira-partial.txt" 2>/dev/null)" \
+  "{color:#999999}*Partial: stopped after step 2*{color}"
+expect_contains "jira: the Inconclusive verdict maps to its colour" "$(cat "$tmp_root/jira-inconclusive.txt" 2>/dev/null)" \
+  "{color:#E69F00}*Inconclusive*{color}"
 expect_not_contains "jira: holds only the summary tier" "$jira" "Threats to validity"
 
 "$exporter" zip "$xd" "$tmp_root/report.zip" >/dev/null 2>&1

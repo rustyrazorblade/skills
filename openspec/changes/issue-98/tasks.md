@@ -2,15 +2,15 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 1. Test harness and fixtures (first)
 
-- [ ] 1.1 Create `tests/test-report.sh`: a bash harness that runs every case, prints PASS or FAIL per case, and exits 0 only when every case passes.  It needs `mdbook` and `uv` and no cluster.
-- [ ] 1.2 Add a stub easy-db-lab binary under `tests/fixtures/bin/` for scaffold and upload-detection cases.  Add two stub `commands` outputs: one whose `report upload <FILE>` line lists `.md` only, one that lists `.png` and `.csv`.
-- [ ] 1.3 Add a fixture docs tree `tests/fixtures/docs-agree/` with an A/B summary, an evidence block, a nested `evidence/` page with a "(MB/s)" heading, a PNG, CSV, and JSON, where every claim agrees.
-- [ ] 1.4 Add the wrong-sign fixture from `metrics21667`: candidate 32.72 MB/s, baselines 26.92 and 27.27 MB/s, summary claims -17.2%.
-- [ ] 1.5 Add wrong-size, wrong-unit, "not measured" noise floor, Confirmed-inside-noise, bad verdict value, verdict class/text mismatch, incomplete evidence block, Grafana link, placeholder title, and numeral-in-prose fixtures.
-- [ ] 1.6 Add Cassandra-run fixtures: "Reasoning review: done", "Reasoning review: not run (cassandra-expert not installed)", and one with no Reasoning review line.
-- [ ] 1.7 Add redaction fixtures: an IPv4 in the summary, a 12-digit account ID, `vpc-`/`subnet-`/`sg-` IDs, tunnel wording, an IP in a Query line, and an IP in a `data/*.json`.
-- [ ] 1.8 Add arms fixtures: one CSV per arm with different windows and the same query, unit, and step, and a Data line with several CSV links.
-- [ ] 1.9 Add graph fixtures: a baseline and candidate CSV, an empty CSV, and CSVs with mismatched metadata.  Add an empty-result Mimir stub (a local HTTP server that returns success with zero series).
+- [x] 1.1 Create `tests/test-report.sh`: a bash harness that runs every case, prints PASS or FAIL per case, and exits 0 only when every case passes.  It needs `mdbook` and `uv` and no cluster.
+- [x] 1.2 Add a stub easy-db-lab binary under `tests/fixtures/bin/` for scaffold and upload-detection cases.  Add two stub `commands` outputs: one whose `report upload <FILE>` line lists `.md` only, one that lists `.png` and `.csv`.
+- [x] 1.3 Add a fixture docs tree `tests/fixtures/docs-agree/` with an A/B summary, an evidence block, a nested `evidence/` page with a "(MB/s)" heading, a PNG, CSV, and JSON, where every claim agrees.
+- [x] 1.4 Add the wrong-sign fixture from `metrics21667`: candidate 32.72 MB/s, baselines 26.92 and 27.27 MB/s, summary claims -17.2%.
+- [x] 1.5 Add wrong-size, wrong-unit, "not measured" noise floor, Confirmed-inside-noise, bad verdict value, verdict class/text mismatch, incomplete evidence block, Grafana link, placeholder title, and numeral-in-prose fixtures.
+- [x] 1.6 Add Cassandra-run fixtures: "Reasoning review: done", "Reasoning review: not run (cassandra-expert not installed)", and one with no Reasoning review line.
+- [x] 1.7 Add redaction fixtures: an IPv4 in the summary, a 12-digit account ID, `vpc-`/`subnet-`/`sg-` IDs, tunnel wording, an IP in a Query line, and an IP in a `data/*.json`.
+- [x] 1.8 Add arms fixtures: one CSV per arm with different windows and the same query, unit, and step, and a Data line with several CSV links.
+- [x] 1.9 Add graph fixtures: a baseline and candidate CSV, an empty CSV, and CSVs with mismatched metadata.  Add an empty-result Mimir stub (a local HTTP server that returns success with zero series).
 
 ## 2. Scaffold templates
 

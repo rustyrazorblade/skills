@@ -25,10 +25,10 @@ If `report upload` is absent, the binary does not support uploads.  Then:
 Today `report upload` accepts `.md` files only.  Check once, at discovery, whether this binary also accepts images and CSV:
 
 ```bash
-$EDB commands | grep 'report upload <FILE>' | grep '\.png' | grep -q '\.csv' && echo "images and CSV: supported" || echo "images and CSV: not supported"
+$EDB commands | awk '{ match($0, /^ */); i = RLENGTH } r && i <= ri { r = 0 } u && i <= ui { u = 0 } !r && $1 == "report" { r = 1; ri = i; next } r && !u && $1 == "upload" { u = 1; ui = i; next } u && $1 == "<FILE>" && /\.png/ && /\.csv/ { ok = 1 } END { exit !ok }' && echo "images and CSV: supported" || echo "images and CSV: not supported"
 ```
 
-Support exists only when the `report upload <FILE>` line lists both `.png` and `.csv`.  Record the result once in `<journal>`.
+`$EDB commands` prints `report`, `upload`, and the `<FILE>` argument on three lines, each indented below the one before.  The probe reads only the `<FILE>` line inside the `report` and `upload` block.  Support exists only when that line lists both `.png` and `.csv`.  Record the result once in `<journal>`.
 
 - **Not supported:** upload only `.md` files.
 - **Supported:** also upload every `images/*.png` and `data/*.csv` file that the uploaded tier files reference, by absolute path.

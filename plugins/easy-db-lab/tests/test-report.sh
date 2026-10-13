@@ -1080,8 +1080,10 @@ expect_contains "cassandra: Multi-DC Setup applies to LAYOUT=multi only" \
   "$(sed -n '/^## Multi-DC Setup/,/^### Prerequisites/p' "$plugin/references/cassandra.md")" "LAYOUT=multi"
 expect_eq "readme: no easy-db-lab operator agent" "" "$(grep -n 'easy-db-lab operator' "$plugin/../../README.md")"
 
-# The image and CSV support probe in report-upload.md, run as written against the stub binary.
-probe="$(grep -E "^\\\$EDB commands \| grep 'report upload <FILE>'" "$upload_ref" | head -n 1)"
+# The image and CSV support probe in report-upload.md, run as written against the stub binary.  The
+# stub's commands outputs have the real layout: report, upload, and <FILE> on three lines, plus a
+# <FILE> line with .png and .csv under another command.
+probe="$(sed -n '/^### Image and CSV support/,/^## /p' "$upload_ref" | grep -E '^\$EDB commands \|' | head -n 1)"
 if [[ -z "$probe" ]]; then
   fail "upload: report-upload.md holds the image and CSV probe"
 else

@@ -2,6 +2,7 @@ Commands:
   init <NAME>                     Create a new environment
   up                              Provision the environment
   down                            Tear down the environment
-  report
-  report upload <FILE>...         Upload report files (.md, .png, .csv) to the test's documents
+  report                          Report commands
+    upload                        Upload report files to the test's documents
+      <FILE> (required) - Report files (.md, .png, .csv) to upload
   status                          Show the environment status

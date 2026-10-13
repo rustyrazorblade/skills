@@ -728,6 +728,16 @@ out="$("$checker" "$tmp_root/no-such-docs" 2>&1)"
 expect_eq "check: a bad path exits 2" "2" "$?"
 out="$("$checker" 2>&1)"
 expect_eq "check: no path exits 2" "2" "$?"
+expect_contains "check: a bad path names the error" "$("$checker" "$tmp_root/no-such-docs" 2>&1)" "report-check: not a docs directory"
+
+# An I/O error names its class: a customer page that is a directory.
+io_docs="$tmp_root/io-error/docs"
+fixture_docs "$io_docs"
+mkdir -p "$io_docs/dir-page.md"
+perl -pi -e 'print "- [Dir](dir-page.md)\n" if /^# Appendix/' "$io_docs/SUMMARY.md"
+out="$("$checker" "$io_docs" 2>&1)"
+expect_eq "check: a directory page exits 2" "2" "$?"
+expect_contains "check: the I/O error names its class" "$out" "IsADirectoryError"
 
 out="$("$checker" "$ws_noplan/docs" 2>&1)"
 expect_eq "check: the bare scaffold passes, so make works on it" "0" "$?"

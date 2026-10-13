@@ -692,8 +692,11 @@ def main():
         else:
             checker.summary(text)
         checker.grafana_and_redaction()
-    except (Usage, OSError, ValueError, KeyError) as e:
+    except Usage as e:
         print(f"report-check: {e}", file=sys.stderr)
+        sys.exit(2)
+    except (OSError, ValueError, KeyError) as e:
+        print(f"report-check: {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(2)
 
     print(f"report-check: {len(report.fails) + len(report.redactions)} failed ({len(report.redactions)} redaction), {len(report.warns)} warnings")

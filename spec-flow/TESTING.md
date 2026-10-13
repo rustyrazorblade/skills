@@ -65,12 +65,14 @@ Run these on a change, and only where the change touches them:
     also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
     `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
     section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
-    report file names, no plotting instruction, the required sections, and the image and CSV probe
-    in `report-upload.md` run against a stub binary. Those checks prove the text, not the skill
-    behavior. It also runs two steps in `references/report.md` as written, under bash, against the
-    stub Grafana: the `bash` block under "### Render" (the single-cluster render) and the one
-    under "### Overlay render" (window-variable detection and the whole-run fallback). An edit to
-    either block is covered; the other `report.md` commands are not. It needs `mdbook`, `uv`,
+    report file names, no plotting instruction, and the required sections. Those checks prove the
+    text, not the skill behavior. It also runs some `bash` blocks as written, under bash, against
+    stubs: in `references/report.md`, the blocks under "### The SOCKS proxy" (against a stub
+    wrapper and `.socks5-proxy-state`), "### Render" (the single-cluster render), and
+    "### Overlay render" (window-variable detection and the whole-run fallback), the last two
+    against the stub Grafana; in `references/report-upload.md`, the image and CSV probe (against
+    a stub binary) and the block under "## The AWS SSO Session" (against a stub `aws` and a temp
+    `HOME`). An edit to one of these blocks is covered; the other commands in those files are not. It needs `mdbook`, `uv`,
     `jq`, and `curl` on `PATH`; the first run needs network for uv to fetch pypandoc-binary and
     requests.
   - `bash plugins/easy-db-lab/bin/export-workload-metrics.test.sh` covers `plugins/easy-db-lab/bin/export-workload-metrics` and `plugins/easy-db-lab/bin/metrics-catalog.jq`.  These two files and the harness are verbatim copies of easy-db-lab's `bin/`: re-copy them, do not edit them, until easy-db-lab replaces them with a first-class command.

@@ -12,9 +12,11 @@ Two subcommands:
 
   fetch  queries Mimir query_range and writes <docs>/data/<name>.csv (long form:
          timestamp_utc,node,arm,value) and <docs>/data/<name>.json (query, start, end, step,
-         unit, scale, arms).  It never stores the Mimir URL or the tenant.  It fails on a
-         connection error, a non-success status, zero series, and a node value that looks like
-         an IPv4 address or an EC2 host name (ip-10-0-1-15) with no --node mapping.
+         unit, scale, arms).  It never stores the Mimir URL or the tenant.  It refuses a query
+         with no cluster="..." or cluster=~"..." matcher before it sends it, because one tenant
+         holds many clusters.  It fails on a connection error, a non-success status, zero
+         series, and a node value that looks like an IPv4 address or an EC2 host name
+         (ip-10-0-1-15) with no --node mapping.
 
   plot   reads one or more CSVs from <docs>/data, writes <docs>/images/<name>.png with the
          shared style, and prints the full evidence block (heading, image, stats table, Window,
@@ -109,6 +111,9 @@ def pairs(values, flag):
 def fetch(args):
     import requests
 
+    if not CLUSTER_MATCHER.search(args.query):
+        die('the query has no cluster matcher; a Mimir tenant holds many clusters, so add '
+            'cluster="<this cluster>" to the selector')
     start, end = parse_time(args.start), parse_time(args.end)
     step = step_seconds(args.step)
     node_map = dict(pairs(args.node, "--node"))

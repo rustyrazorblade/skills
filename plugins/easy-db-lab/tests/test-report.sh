@@ -412,12 +412,13 @@ stop_mimir() {
 }
 trap 'stop_mimir; rm -rf "$tmp_root"' EXIT
 
-# fetch <mimir-url> <name> [extra args...]: run fetch on the graph workspace with the usual window.
+# fetch <mimir-url> <name> [extra args...]: run fetch on the graph workspace with the usual window
+# and fetch_query, which filters on this cluster's label.
+fetch_query='sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{cluster="graph-1a2b",instance=~"db.*"}[1m]))'
 fetch() {
   local url="$1" name="$2"
   shift 2
-  "$graph" fetch --mimir-url "$url" --tenant lab-tenant \
-    --query 'sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~"db.*"}[1m]))' \
+  "$graph" fetch --mimir-url "$url" --tenant lab-tenant --query "$fetch_query" \
     --start 2026-10-01T10:00:00Z --end 2026-10-01T10:10:00Z --step 30s \
     --node-label instance --unit MB/s --scale 1e-6 --name "$name" --docs "$gdocs" "$@"
 }
@@ -427,6 +428,19 @@ rc=$?
 if [[ $rc -ne 0 ]]; then pass "fetch: an unreachable Mimir exits non-zero"; else fail "fetch: an unreachable Mimir exits non-zero"; fi
 expect_contains "fetch: an unreachable Mimir gives a clear message" "$out" "cannot reach Mimir"
 expect_no_file "fetch: an unreachable Mimir writes no CSV" "$gdocs/data/unreachable.csv"
+
+# A tenant holds many clusters, so a query with no cluster matcher can return another cluster's series.
+start_mimir "$fixtures/mimir/ok.json" 200
+saved_query="$fetch_query"
+fetch_query='sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~"db.*"}[1m]))'
+out="$(fetch "$mimir_url" no-cluster --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+fetch_query="$saved_query"
+stop_mimir
+if [[ $rc -ne 0 ]]; then pass "fetch: a query with no cluster matcher is refused"; else fail "fetch: a query with no cluster matcher is refused"; fi
+expect_contains "fetch: the refusal names the cluster matcher" "$out" 'cluster="'
+expect_no_file "fetch: the cluster refusal writes no CSV" "$gdocs/data/no-cluster.csv"
+expect_eq "fetch: the cluster refusal sends no request" "" "$(cat "$mimir_log" 2>/dev/null)"
 
 start_mimir "$fixtures/mimir/empty.json" 200
 out="$(fetch "$mimir_url" empty --arm baseline=db0 --arm candidate=db2 2>&1)"
@@ -1006,6 +1020,10 @@ expect_contains "reference: <journal> is 4-journal.md in a single layout" "$ref"
 expect_contains "reference: the not-installed line" "$ref" "Reasoning review: not run (cassandra-expert not installed)"
 expect_contains "reference: the finalize entry point" "$ref" "run <cluster-dir> --finalize"
 expect_contains "reference: the Partial verdict" "$ref" "Partial: stopped after step N"
+fetch_ref="$(sed -n '/^### Fetch/,/^### Plot/p' "$plugin/references/report.md")"
+expect_contains "reference: the Fetch example filters on the cluster label" \
+  "$(printf '%s\n' "$fetch_ref" | grep -A1 'report-graph.py fetch')" '{cluster="'
+expect_not_contains "reference: Fetch claims no tenant per arm" "$fetch_ref" "own Mimir URL and tenant"
 
 # --- skills and references: no stale report structure ---
 

@@ -108,7 +108,7 @@ In a multi-DC workspace, each DC has its own wrapper at `<cluster-dir>/<dc>/easy
 3. If any DC's upload exits non-zero, run `down` on no DC.  Follow "Failure Handling" below.
 4. After every DC's upload exits 0, run `$EDB down --auto-approve` through every DC's wrapper.
 
-The same rule applies at run Completion step 2: upload the five tier files through every DC's wrapper, and record each DC's result separately.  For `report-graph.py fetch`, derive the Mimir URL and tenant per DC wrapper.
+The same rule applies at run Completion step 2: upload the five tier files through every DC's wrapper, and record each DC's result separately.  For `report-graph.py fetch`, derive the Mimir URL, the tenant, and the `cluster` label per DC wrapper.
 
 ## Arms
 

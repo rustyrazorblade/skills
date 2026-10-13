@@ -133,7 +133,7 @@ Each claim in the summary traces to one evidence block.  A block holds, in this 
 
 Window: 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s
 
-Query: `sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~"db.*"}[1m]))`
+Query: `sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{cluster="lab-ab-1c9bbb2f-aab1-4478-ac8d-35cb6ca31790",instance=~"db.*"}[1m]))`
 
 Data: [scrape-alloc.csv](data/scrape-alloc.csv)
 ```
@@ -159,13 +159,15 @@ After each plan step that measures something, fetch the data and plot it, before
 ### Fetch
 
 1. Read `$EDB help observability` for the Mimir query endpoint and the tenant header.  Read `$EDB status` for the address that the endpoint uses.  Never read `state.json`.
-2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Mimir URL and tenant.
-3. Select nodes by host name, for example `instance=~"db.*"`.  Never select by IP.  If the node label holds an IP, map each value to a host name with `--node <value>=db0`.  `fetch` refuses an IPv4-looking node value with no mapping.
-4. Run `fetch`:
+2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Mimir URL.  Do not assume a tenant per DC or per arm; several clusters can share one tenant, such as `default`.
+3. Find this cluster's `cluster` label value.  It is the cluster name and the cluster ID from `$EDB status`, for example `lab-ab-1c9bbb2f-aab1-4478-ac8d-35cb6ca31790`.  Confirm it in the list from `api/v1/label/cluster/values`.  Write it in `<journal>`.
+4. Filter every fetch query on `cluster="<value>"`.  A tenant holds the series of many clusters, so a query with no `cluster` filter can return another cluster's data.  `fetch` refuses a query with no `cluster` matcher.
+5. Select nodes by host name, for example `instance=~"db.*"`.  Never select by IP.  If the node label holds an IP, map each value to a host name with `--node <value>=db0`.  `fetch` refuses an IPv4-looking node value with no mapping.
+6. Run `fetch`:
 
 ```bash
 report-graph.py fetch --mimir-url "$MIMIR_URL" --tenant "$TENANT" \
-  --query 'sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~"db.*"}[1m]))' \
+  --query 'sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{cluster="lab-ab-1c9bbb2f-aab1-4478-ac8d-35cb6ca31790",instance=~"db.*"}[1m]))' \
   --start 2026-10-01T10:00:00Z --end 2026-10-01T10:10:00Z --step 30s \
   --node-label instance --arm baseline=db0,db1 --arm candidate=db2 \
   --unit "MB/s" --scale 1e-6 --name scrape-alloc --docs <cluster-dir>/docs
@@ -306,7 +308,7 @@ An arm agent never writes another arm's files, `1-summary.md`, or `2-evidence.md
 
 ### Per-arm fetch
 
-An arm agent runs as `run <test-dir> --arm <arm> [step N]` and binds `$EDB` to `EDB_<ARM>` only.  After each measuring step, while its Mimir is up, it fetches its own data with `--name <metric>-<arm> --arm <arm>=<nodes>`.  A missed fetch is permanent after that arm's `down`, so fetch before the next step.
+An arm agent runs as `run <test-dir> --arm <arm> [step N]` and binds `$EDB` to `EDB_<ARM>` only.  After each measuring step, while its Mimir is up, it fetches its own data with `--name <metric>-<arm> --arm <arm>=<nodes>`, and a query that filters on its own `cluster` label.  A missed fetch is permanent after that arm's `down`, so fetch before the next step.
 
 ### The arm gate
 

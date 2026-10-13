@@ -691,7 +691,7 @@ cassandra-missing reasoning review
 arm-two-windows two windows
 EOF
 
-for name in noise-not-measured partial inconclusive findings cassandra-done cassandra-not-installed arm-cluster; do
+for name in noise-not-measured partial partial-no-evidence inconclusive findings cassandra-done cassandra-not-installed arm-cluster; do
   run_check "$name"
   expect_eq "check: $name exits 0" "0" "$check_rc"
   expect_not_contains "check: $name has no FAIL" "$check_out" "FAIL"
@@ -1020,6 +1020,8 @@ expect_contains "reference: <journal> is 4-journal.md in a single layout" "$ref"
 expect_contains "reference: the not-installed line" "$ref" "Reasoning review: not run (cassandra-expert not installed)"
 expect_contains "reference: the finalize entry point" "$ref" "run <cluster-dir> --finalize"
 expect_contains "reference: the Partial verdict" "$ref" "Partial: stopped after step N"
+expect_contains "reference: a Partial summary with no evidence holds a Findings table" \
+  "$(sed -n '/^## The Exit Rule/,/^## The Check/p' "$plugin/references/report.md")" "no measured evidence"
 fetch_ref="$(sed -n '/^### Fetch/,/^### Plot/p' "$plugin/references/report.md")"
 expect_contains "reference: the Fetch example filters on the cluster label" \
   "$(printf '%s\n' "$fetch_ref" | grep -A1 'report-graph.py fetch')" '{cluster="'

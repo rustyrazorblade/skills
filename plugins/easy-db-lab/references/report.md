@@ -45,7 +45,7 @@ A nested page is in the book and in `export/report.zip`.  It is not in the uploa
 
 1. **Title.**  An H1 that states the result in plain words, for example `# Scrape allocation drops with the fix`.  `make` uses it as the book title.  Never leave the template placeholder; the check fails it.
 2. **Verdict line.**  `Verdict: ` plus one verdict badge, then one sentence.
-3. **Table.**  The comparison table for an A/B run.  The Findings table for any other run and for every explore session.
+3. **Table.**  The comparison table for an A/B run.  The Findings table for any other run, for every explore session, and for a Partial summary with no measured evidence.
 4. **Reasoning review line.**  For a Cassandra run only: `Reasoning review: done`, or `Reasoning review: not run (cassandra-expert not installed)`.  See "The Check" below.
 5. **`## What this means`.**  Two to four sentences for a customer.  State no number here.
 6. **`## Caveats`.**  The limits of the result, as a list.  The check writes its Unchecked line here.
@@ -95,7 +95,7 @@ The anchor after `#` is the heading id that mdbook makes: lower case, punctuatio
 | Read latency rises during compaction | [Read latency (ms)](evidence/latency.md#read-latency-ms) | High |
 ```
 
-Each Evidence cell links to at least one evidence block.
+Each Evidence cell links to at least one evidence block.  A table with no findings yet holds the header and the separator row, and no other row.
 
 ### Noise Floor
 
@@ -215,7 +215,7 @@ Write `1-summary.md` at every exit:
 - before every gated teardown;
 - on pause.
 
-A partial exit is any exit before every plan step has finished: a pause, or a teardown gate before the plan ends.  A partial summary has the verdict `Partial: stopped after step N` and one sentence.  The check runs in full at every exit; there are no relaxed rules for a Partial summary.  An explore session is never Partial: at teardown it writes a verdict and a Findings table.
+A partial exit is any exit before every plan step has finished: a pause, or a teardown gate before the plan ends.  A partial summary has the verdict `Partial: stopped after step N` and one sentence.  A partial summary with no measured evidence holds the Findings table, because there is no comparison to state.  With no findings yet, the table has a header and no rows.  The check runs in full at every exit; there are no relaxed rules for a Partial summary.  An explore session is never Partial: at teardown it writes a verdict and a Findings table.
 
 ## The Check
 

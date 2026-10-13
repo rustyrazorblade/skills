@@ -97,6 +97,16 @@ Each `down` attempt gets its own Finalize and upload first.  An earlier successf
 
 This gate covers a plan step that runs a real `$EDB down`.  Such a step needs no special handling.
 
+### A failed down after a good upload
+
+A `down` can fail after every upload exits 0, for example when the SOCKS proxy drops in the middle of the `down`.  Some services can already be stopped.
+
+1. This is not an upload failure.  Do not use "Failure Handling" below.
+2. Write the `down` command and its error to `<journal>` and `<issues>`.
+3. Run the gate again once: Finalize, the upload procedure, then `$EDB down --auto-approve`.  The journal has changed, so the upload must run again.
+4. If the second `down` also fails, stop.  Leave the cluster for a manual retry.
+5. Report the failure to the user, or to the launcher in an unattended run.  Give the workspace path and the `down` error.
+
 ## Multi-DC
 
 This section applies to `LAYOUT=multi` only.  `LAYOUT=arms` follows "Arms" below.

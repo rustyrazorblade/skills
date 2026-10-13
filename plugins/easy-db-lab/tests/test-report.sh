@@ -1080,6 +1080,11 @@ expect_contains "cassandra: Multi-DC Setup applies to LAYOUT=multi only" \
   "$(sed -n '/^## Multi-DC Setup/,/^### Prerequisites/p' "$plugin/references/cassandra.md")" "LAYOUT=multi"
 expect_eq "readme: no easy-db-lab operator agent" "" "$(grep -n 'easy-db-lab operator' "$plugin/../../README.md")"
 
+down_rule="$(sed -n '/^### A failed down after a good upload/,/^##/p' "$upload_ref")"
+expect_contains "upload: a failed down after a good upload is not an upload failure" "$down_rule" "not an upload failure"
+expect_contains "upload: a failed down re-runs the gate once" "$down_rule" "once"
+expect_contains "upload: a second failed down names the workspace" "$down_rule" "workspace path"
+
 # The image and CSV support probe in report-upload.md, run as written against the stub binary.  The
 # stub's commands outputs have the real layout: report, upload, and <FILE> on three lines, plus a
 # <FILE> line with .png and .csv under another command.

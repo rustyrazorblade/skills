@@ -343,8 +343,25 @@ for pair in 'a-b a_b' 'Base base'; do
   expect_eq "layout: the marker arms $pair exit 1" "1" "$?"
   expect_contains "layout: the refusal for $pair names both arms" "$layout" "arm names ${pair% *} and ${pair#* } collide"
   expect_not_contains "layout: the marker arms $pair print no LAYOUT" "$layout" "LAYOUT="
+  expect_not_contains "layout: the marker arms $pair print no EDB_ line for the first arm" "$layout" "EDB_$(echo "${pair% *}" | tr '[:lower:]-' '[:upper:]_')="
   rm -rf "$tmp_root/arms-collide"
 done
+
+# A hand-written marker can name a reserved directory; the refusal prints no EDB_ line at all.
+for reserved in docs Docs bin data images export arms; do
+  make_arms "$tmp_root/arms-reserved" baseline
+  mkdir -p "$tmp_root/arms-reserved/$reserved"
+  printf '#!/bin/sh\n' > "$tmp_root/arms-reserved/$reserved/easy-db-lab"
+  chmod +x "$tmp_root/arms-reserved/$reserved/easy-db-lab"
+  printf '%s\n' "$reserved" >> "$tmp_root/arms-reserved/arms"
+  layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-reserved" 2>&1)"
+  expect_eq "layout: the reserved arm $reserved in the marker exits 1" "1" "$?"
+  expect_contains "layout: the refusal names the reserved arm $reserved" "$layout" "reserved arm name: $reserved"
+  expect_not_contains "layout: the reserved arm $reserved prints no EDB_ line" "$layout" "EDB_BASELINE="
+  rm -rf "$tmp_root/arms-reserved"
+done
+layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-ghost" 2>&1)"
+expect_not_contains "layout: an arm with no wrapper prints no EDB_ line" "$layout" "EDB_BASELINE="
 
 # shellcheck disable=SC2016 # a literal $( ) in an arm name
 for bad in '../x' 'a;b' 'a$(id)'; do
@@ -356,6 +373,7 @@ for bad in '../x' 'a;b' 'a$(id)'; do
   layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-bad" 2>&1)"
   expect_eq "layout: the arm name $bad in the marker exits 1" "1" "$?"
   expect_not_contains "layout: the arm name $bad prints no variable" "$layout" "LAYOUT="
+  expect_not_contains "layout: the arm name $bad prints no EDB_ line" "$layout" "EDB_BASELINE="
   rm -rf "$tmp_root/arms-bad"
 done
 
@@ -1149,6 +1167,7 @@ expect_contains "upload: a second failed down names the workspace" "$down_rule" 
 # The image and CSV support probe in report-upload.md, run as written against the stub binary.  The
 # stub's commands outputs have the real layout: report, upload, and <FILE> on three lines, plus a
 # <FILE> line with .png and .csv under another command.
+# shellcheck disable=SC2016 # a literal $EDB in the pattern
 probe="$(sed -n '/^### Image and CSV support/,/^## /p' "$upload_ref" | grep -E '^\$EDB commands \|' | head -n 1)"
 if [[ -z "$probe" ]]; then
   fail "upload: report-upload.md holds the image and CSV probe"

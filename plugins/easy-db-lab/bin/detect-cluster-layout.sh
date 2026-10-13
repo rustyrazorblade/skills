@@ -25,8 +25,9 @@
 #
 # Each value is quoted for eval with printf %q; ARMS is double-quoted, which is safe because an
 # arm name must match the setup-cluster.sh rule, ^[A-Za-z0-9][A-Za-z0-9_-]*$.  The multi-DC scan
-# skips docs/ and bin/.  Exit 1 if no wrapper is found, if the marker names a bad arm, or if two
-# marker arms give one variable, such as a-b and a_b.
+# skips docs/ and bin/.  Exit 1 if no wrapper is found, if the marker names a bad arm or a
+# reserved one (docs, bin, data, images, export, arms, in any case), or if two marker arms give
+# one variable, such as a-b and a_b.  On a refusal it prints no variable at all.
 
 set -euo pipefail
 
@@ -41,6 +42,8 @@ var_name() {
 # Cross-cluster arms: the marker comes before the wrapper scan.
 if [[ -f "$CLUSTER_DIR/arms" ]]; then
   ARMS=()
+  # Every line waits until all arms pass, so a refusal prints no EDB_ line.
+  LINES=()
   STATE=unprovisioned
   while IFS= read -r arm || [[ -n "$arm" ]]; do
     [[ -n "$arm" ]] || continue
@@ -48,6 +51,10 @@ if [[ -f "$CLUSTER_DIR/arms" ]]; then
       echo "error: the arms marker names a bad arm (use letters, digits, - and _): $arm" >&2
       exit 1
     fi
+    # The setup-cluster.sh rule: no arm directory is a scaffold directory or the marker, in any case.
+    case "$(echo "$arm" | tr '[:upper:]' '[:lower:]')" in
+      docs|bin|data|images|export|arms) echo "error: the arms marker names a reserved arm name: $arm" >&2; exit 1 ;;
+    esac
     for other in ${ARMS[@]+"${ARMS[@]}"}; do
       if [[ "$(var_name "$other")" == "$(var_name "$arm")" ]]; then
         echo "error: in the arms marker, the arm names $other and $arm collide: they give one EDB_$(var_name "$arm") variable" >&2
@@ -62,13 +69,14 @@ if [[ -f "$CLUSTER_DIR/arms" ]]; then
     ARMS+=("$arm")
     [[ -f "$CLUSTER_DIR/$arm/state.json" ]] && ARM_STATE=provisioned || ARM_STATE=unprovisioned
     [[ "$ARM_STATE" == provisioned ]] && STATE=provisioned
-    printf 'EDB_%s=%q\n' "$(var_name "$arm")" "$wrapper"
-    echo "STATE_$(var_name "$arm")=$ARM_STATE"
+    LINES+=("$(printf 'EDB_%s=%q' "$(var_name "$arm")" "$wrapper")")
+    LINES+=("STATE_$(var_name "$arm")=$ARM_STATE")
   done < "$CLUSTER_DIR/arms"
   if [[ ${#ARMS[@]} -eq 0 ]]; then
     echo "error: the arms marker lists no arm: $CLUSTER_DIR/arms" >&2
     exit 1
   fi
+  printf '%s\n' "${LINES[@]}"
   echo "LAYOUT=arms"
   echo "ARMS=\"${ARMS[*]}\""
   echo "STATE=$STATE"

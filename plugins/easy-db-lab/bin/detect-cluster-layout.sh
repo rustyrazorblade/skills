@@ -23,7 +23,9 @@
 #     STATE_<ARM>=provisioned|unprovisioned
 #     STATE=provisioned|unprovisioned   (provisioned if any arm has state.json)
 #
-# The multi-DC scan skips docs/ and bin/.  Exit 1 if no wrapper is found.
+# Each value is quoted for eval with printf %q; ARMS is double-quoted, which is safe because an
+# arm name must match the setup-cluster.sh rule, ^[A-Za-z0-9][A-Za-z0-9_-]*$.  The multi-DC scan
+# skips docs/ and bin/.  Exit 1 if no wrapper is found, or if the marker names a bad arm.
 
 set -euo pipefail
 
@@ -41,6 +43,10 @@ if [[ -f "$CLUSTER_DIR/arms" ]]; then
   STATE=unprovisioned
   while IFS= read -r arm || [[ -n "$arm" ]]; do
     [[ -n "$arm" ]] || continue
+    if [[ ! "$arm" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+      echo "error: the arms marker names a bad arm (use letters, digits, - and _): $arm" >&2
+      exit 1
+    fi
     wrapper="$CLUSTER_DIR/$arm/easy-db-lab"
     if [[ ! -x "$wrapper" ]]; then
       echo "error: arm $arm has no easy-db-lab wrapper: $wrapper" >&2
@@ -49,7 +55,7 @@ if [[ -f "$CLUSTER_DIR/arms" ]]; then
     ARMS+=("$arm")
     [[ -f "$CLUSTER_DIR/$arm/state.json" ]] && ARM_STATE=provisioned || ARM_STATE=unprovisioned
     [[ "$ARM_STATE" == provisioned ]] && STATE=provisioned
-    echo "EDB_$(var_name "$arm")=$wrapper"
+    printf 'EDB_%s=%q\n' "$(var_name "$arm")" "$wrapper"
     echo "STATE_$(var_name "$arm")=$ARM_STATE"
   done < "$CLUSTER_DIR/arms"
   if [[ ${#ARMS[@]} -eq 0 ]]; then
@@ -65,7 +71,7 @@ fi
 if [[ -x "$CLUSTER_DIR/easy-db-lab" ]]; then
   [[ -f "$CLUSTER_DIR/state.json" ]] && STATE=provisioned || STATE=unprovisioned
   echo "LAYOUT=single"
-  echo "EDB=$CLUSTER_DIR/easy-db-lab"
+  printf 'EDB=%q\n' "$CLUSTER_DIR/easy-db-lab"
   echo "STATE=$STATE"
   exit 0
 fi
@@ -79,8 +85,7 @@ for wrapper in "$CLUSTER_DIR"/*/easy-db-lab; do
   dc=$(basename "$(dirname "$wrapper")")
   [[ "$dc" == "docs" || "$dc" == "bin" ]] && continue
   DCS+=("$dc")
-  VAR="EDB_$(var_name "$dc")"
-  echo "${VAR}=${wrapper}"
+  printf 'EDB_%s=%q\n' "$(var_name "$dc")" "$wrapper"
   [[ -f "$CLUSTER_DIR/$dc/state.json" ]] && STATE=provisioned
 done
 
@@ -90,5 +95,5 @@ if [[ ${#DCS[@]} -eq 0 ]]; then
 fi
 
 echo "LAYOUT=multi"
-echo "DCS=${DCS[*]}"
+printf 'DCS=%q\n' "${DCS[*]}"
 echo "STATE=$STATE"

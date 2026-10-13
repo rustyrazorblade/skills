@@ -268,6 +268,67 @@ layout="$(bash "$bin/detect-cluster-layout.sh" "$ws_bin" 2>&1)"
 expect_contains "layout: multi-DC still detected" "$layout" "LAYOUT=multi"
 expect_not_contains "layout: bin is not a DC" "$layout" "EDB_BIN="
 
+# make_arms <dir> <arm>...: an arms marker listing each arm, and a wrapper for each arm.
+make_arms() {
+  local dir="$1" arm
+  shift
+  mkdir -p "$dir"
+  : > "$dir/arms"
+  for arm in "$@"; do
+    printf '%s\n' "$arm" >> "$dir/arms"
+    mkdir -p "$dir/$arm"
+    printf '#!/bin/sh\n' > "$dir/$arm/easy-db-lab"
+    chmod +x "$dir/$arm/easy-db-lab"
+  done
+}
+
+make_arms "$tmp_root/arms-canary" baseline canary-1
+layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-canary" 2>&1)"
+expect_contains "layout: the arm canary-1 gives EDB_CANARY_1" "$layout" "EDB_CANARY_1=$tmp_root/arms-canary/canary-1/easy-db-lab"
+expect_contains "layout: the arm canary-1 gives STATE_CANARY_1" "$layout" "STATE_CANARY_1=unprovisioned"
+
+make_arms "$tmp_root/arms-ghost" baseline
+printf 'ghost\n' >> "$tmp_root/arms-ghost/arms"
+layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-ghost" 2>&1)"
+expect_eq "layout: an arm with no wrapper exits 1" "1" "$?"
+expect_contains "layout: the refusal names the arm with no wrapper" "$layout" "ghost"
+
+make_arms "$tmp_root/arms-empty"
+layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-empty" 2>&1)"
+expect_eq "layout: an empty arms marker exits 1" "1" "$?"
+expect_contains "layout: the refusal says the marker lists no arm" "$layout" "lists no arm"
+
+# shellcheck disable=SC2016 # a literal $( ) in an arm name
+for bad in '../x' 'a;b' 'a$(id)'; do
+  make_arms "$tmp_root/arms-bad" baseline
+  mkdir -p "$tmp_root/arms-bad/$bad"
+  printf '#!/bin/sh\n' > "$tmp_root/arms-bad/$bad/easy-db-lab"
+  chmod +x "$tmp_root/arms-bad/$bad/easy-db-lab"
+  printf '%s\n' "$bad" >> "$tmp_root/arms-bad/arms"
+  layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-bad" 2>&1)"
+  expect_eq "layout: the arm name $bad in the marker exits 1" "1" "$?"
+  expect_not_contains "layout: the arm name $bad prints no variable" "$layout" "LAYOUT="
+  rm -rf "$tmp_root/arms-bad"
+done
+
+# The output is eval-safe: a cluster dir with a space and a $ in its name, and the DCS list.
+odd="$tmp_root/odd \$dir"
+make_arms "$odd" baseline
+# shellcheck disable=SC2016 # the eval runs in the child shell
+got="$(bash -c 'eval "$("$1" "$2")" && printf "%s" "$EDB_BASELINE"' _ "$bin/detect-cluster-layout.sh" "$odd" 2>&1)"
+expect_eq "layout: eval keeps an arm wrapper path with a space and a \$" "$odd/baseline/easy-db-lab" "$got"
+mkdir -p "$odd-multi/dc1" "$odd-multi/dc2"
+for d in dc1 dc2; do
+  printf '#!/bin/sh\n' > "$odd-multi/$d/easy-db-lab"
+  chmod +x "$odd-multi/$d/easy-db-lab"
+done
+# shellcheck disable=SC2016 # the eval runs in the child shell
+got="$(bash -c 'eval "$("$1" "$2")" && printf "%s|%s" "$DCS" "$EDB_DC1"' _ "$bin/detect-cluster-layout.sh" "$odd-multi" 2>&1)"
+expect_eq "layout: eval keeps DCS and a DC wrapper path with a space" "dc1 dc2|$odd-multi/dc1/easy-db-lab" "$got"
+# shellcheck disable=SC2016 # run/SKILL.md evals the output unquoted
+got="$(bash -c 'eval $("$1" "$2") && printf "%s|%s" "$DCS" "$STATE"' _ "$bin/detect-cluster-layout.sh" "$ws_multi" 2>&1)"
+expect_eq "layout: the unquoted eval in run/SKILL.md sets DCS and STATE" "dc1 dc2|unprovisioned" "$got"
+
 # --- configure-multi-dc-seeds.sh ---
 
 out="$(bash "$bin/configure-multi-dc-seeds.sh" "$td" --name T --dc baseline --dc candidate 2>&1)"

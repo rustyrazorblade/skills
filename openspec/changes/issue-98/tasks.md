@@ -78,7 +78,7 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 10. End-to-end test on a real cluster (under the gitignored root `tests/`)
 
-- [ ] 10.1 Run `tests/test-report.sh` and confirm every case passes.
+- [x] 10.1 Run `tests/test-report.sh` and confirm every case passes.
 - [ ] 10.2 Write a short A/B plan at the repo root `tests/plans/report-ab.md`.  Run it with the run skill to Completion in `tests/clusters/<timestamp>/`.  Confirm: a summary with a verdict and a filled comparison table, at least one evidence block whose PNG and CSV came from Mimir, a passing check, a good `make` with all three outputs, and an upload of the five files that the Grafana Tests index shows in the order 1 to 5.
 - [ ] 10.3 Run a short plan, stop after step 2, and go through the teardown gate.  Confirm the uploaded `1-summary.md` holds "Partial: stopped after step 2".
 - [ ] 10.4 Run an explore session in an empty directory.  Confirm it scaffolds with `--docs-only` before its first report write, and that at teardown `1-summary.md` holds a verdict and a Findings table.

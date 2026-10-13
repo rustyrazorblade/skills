@@ -30,7 +30,7 @@ $EDB commands | awk '{ match($0, /^ */); i = RLENGTH } r && i <= ri { r = 0 } u 
 
 `$EDB commands` prints `report`, `upload`, and the `<FILE>` argument on three lines, each indented below the one before.  The probe reads only the `<FILE>` line inside the `report` and `upload` block.  Support exists only when that line lists both `.png` and `.csv`.  Record the result once in `<journal>`.
 
-- **Not supported:** upload only `.md` files.
+- **Not supported:** upload only `.md` files.  Warning: the S3 and Grafana document index then shows broken image and data links in the evidence tier.  The images and the data are in the built `report/` and in `export/report.zip`.
 - **Supported:** also upload every `images/*.png` and `data/*.csv` file that the uploaded tier files reference, by absolute path.
 
 ## The AWS SSO Session
@@ -131,9 +131,21 @@ A `down` can fail after every upload exits 0, for example when the SOCKS proxy d
 
 1. This is not an upload failure.  Do not use "Failure Handling" below.
 2. Write the `down` command and its error to `<journal>` and `<issues>`.
-3. Run the gate again once: Finalize, the upload procedure, then `$EDB down --auto-approve`.  The journal has changed, so the upload must run again.
-4. If the second `down` also fails, stop.  Leave the cluster for a manual retry.
-5. Report the failure to the user, or to the launcher in an unattended run.  Give the workspace path and the `down` error.
+3. Check whether the infrastructure is already gone.  A `down` can delete every resource, then exit 1 on a later error, such as a DNS miss for another region.  Run `$EDB status`.  Then look up the VPC and its instances by the VPC ID in `<journal>`, with the session's profile and the cluster's region:
+
+   ```bash
+   aws ec2 describe-vpcs --vpc-ids <vpc-id> --region <region>
+   aws ec2 describe-instances --filters Name=vpc-id,Values=<vpc-id> \
+     Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down --region <region>
+   ```
+
+   If `describe-vpcs` fails with `InvalidVpcID.NotFound` and no instance is listed, the infrastructure is gone:
+   - Write the result in `<journal>`.
+   - Do not run `down` again.  A retry fails with "vpc does not exist".
+   - Report the stale local state to the user, or to the launcher: `$EDB status` can still say Infrastructure UP.  Give the workspace path and the first `down` error.  Then stop.
+4. Run the gate again once: Finalize, the upload procedure, then `$EDB down --auto-approve`.  The journal has changed, so the upload must run again.  In an arm, run the arm gate again: this arm's three-file upload, then this arm's `down`.  The arm gate has no Finalize.
+5. If the second `down` also fails, stop.  Leave the cluster for a manual retry.
+6. Report the failure to the user, or to the launcher in an unattended run.  Give the workspace path and the `down` error.
 
 ## Multi-DC
 
@@ -163,7 +175,7 @@ $EDB report upload \
   <test-dir>/docs/5-issues-<arm>.md
 ```
 
-Use the normal upload procedure and failure handling.  Run `down` on this arm only, and only if the upload exits 0.  The arm gate writes no summary, and it runs no check and no `make`.
+Use the normal upload procedure and failure handling.  Run `down` on this arm only, and only if the upload exits 0.  The arm gate writes no summary, and it runs no check and no `make`.  If this arm's `down` fails after the upload exits 0, follow "A failed down after a good upload" above.
 
 ### The final upload
 

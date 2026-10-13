@@ -1427,6 +1427,23 @@ down_rule="$(sed -n '/^### A failed down after a good upload/,/^##/p' "$upload_r
 expect_contains "upload: a failed down after a good upload is not an upload failure" "$down_rule" "not an upload failure"
 expect_contains "upload: a failed down re-runs the gate once" "$down_rule" "once"
 expect_contains "upload: a second failed down names the workspace" "$down_rule" "workspace path"
+expect_contains "upload: a failed down checks whether the infrastructure is gone" "$down_rule" "already gone"
+expect_contains "upload: a failed down looks up the VPC by its ID" "$down_rule" "describe-vpcs --vpc-ids"
+expect_contains "upload: a failed down names the retry error when the VPC is gone" "$down_rule" "vpc does not exist"
+expect_contains "upload: gone infrastructure reports the stale local state" "$down_rule" "stale local state"
+expect_contains "upload: a failed arm down re-runs the arm gate" "$down_rule" "In an arm, run the arm gate again"
+gone_n="$(printf '%s\n' "$down_rule" | grep -n 'already gone' | head -n 1 | cut -d: -f1)"
+retry_n="$(printf '%s\n' "$down_rule" | grep -n 'Run the gate again once' | head -n 1 | cut -d: -f1)"
+if [[ -n "$gone_n" && -n "$retry_n" && "$gone_n" -lt "$retry_n" ]]; then
+  pass "upload: the gone check comes before the retry"
+else
+  fail "upload: the gone check comes before the retry" "gone=$gone_n retry=$retry_n"
+fi
+arm_gate="$(sed -n '/^### The arm gate/,/^### /p' "$upload_ref")"
+expect_contains "upload: the arm gate points to the failed-down rule" "$arm_gate" "A failed down after a good upload"
+image_ref="$(sed -n '/^### Image and CSV support/,/^## /p' "$upload_ref")"
+expect_contains "upload: a .md-only binary warns of broken images in the index" "$image_ref" "broken image"
+expect_contains "upload: the warning names where the images are" "$image_ref" "export/report.zip"
 
 # The image and CSV support probe in report-upload.md, run as written against the stub binary.  The
 # stub's commands outputs have the real layout: report, upload, and <FILE> on three lines, plus a

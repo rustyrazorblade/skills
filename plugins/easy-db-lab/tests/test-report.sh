@@ -86,10 +86,10 @@ printf '# Lab Plan: scaffold test\n\nStep one.\n' > "$plan_src"
 out="$(bash "$bin/setup-cluster.sh" "$ws" "$stub_edb" --name lab-test --plan "$plan_src" 2>&1)"
 expect_eq "scaffold: setup-cluster.sh exits 0" "0" "$?"
 docs="$ws/docs"
-for f in 1-summary.md 2-evidence.md 3-plan.md 4-journal.md 5-issues.md SUMMARY.md Makefile book.toml lab.css lab.mplstyle images data; do
+for f in 1-summary.md 2-evidence.md 3-plan.md 4-journal.md 5-issues.md SUMMARY.md Makefile book.toml lab.css images data; do
   expect_file "scaffold: docs/$f exists" "$docs/$f"
 done
-for f in results.md plan.md journal.md issues.md; do
+for f in results.md plan.md journal.md issues.md lab.mplstyle; do
   expect_no_file "scaffold: no docs/$f" "$docs/$f"
 done
 expect_eq "scaffold: --plan is copied to docs/3-plan.md" "$(cat "$plan_src")" "$(cat "$docs/3-plan.md" 2>/dev/null)"
@@ -152,11 +152,6 @@ for v in confirmed refuted inconclusive partial; do
 done
 expect_contains "css: wider content column" "$css" "--content-max-width"
 expect_contains "css: print styles" "$css" "@media print"
-
-style="$(cat "$docs/lab.mplstyle" 2>/dev/null)"
-expect_contains "style: names the palette source" "$style" "Okabe-Ito"
-expect_contains "style: sets the colour cycle" "$style" "axes.prop_cycle"
-expect_contains "style: sets the font size" "$style" "font.size"
 
 # --- setup-cluster.sh: --docs-only, wrapper guards, and the source-checkout guard ---
 

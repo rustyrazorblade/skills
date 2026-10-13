@@ -54,8 +54,8 @@
 # docs/ holds the tiered lab report.  Each file comes from scaffold/<file>.template:
 #   1-summary.md, 2-evidence.md, 3-plan.md, 4-journal.md, 5-issues.md   ← tier files, copied only when absent
 #   SUMMARY.md                                                         ← copied only when absent
-#   book.toml, Makefile, lab.css, lab.mplstyle                         ← rewritten on every run
-#   images/, data/                                                     ← graphs and their CSV
+#   book.toml, Makefile, lab.css                                       ← rewritten on every run
+#   images/, data/                                                     ← Grafana renders and their CSV
 # The rules for the report are in references/report.md.
 
 set -euo pipefail

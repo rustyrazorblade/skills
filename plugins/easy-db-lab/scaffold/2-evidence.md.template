@@ -1,6 +1,6 @@
 # Evidence
 
-<!-- One evidence block per measured claim: heading, image, stats table, Window, Query, and Data link.  report-graph.py plot prints each block.  The rules are in the plugin's references/report.md. -->
+<!-- One evidence block per measured claim: heading, image, stats table, Window, Query, and Data link.  report-graph.py block prints each block.  The rules are in the plugin's references/report.md. -->
 
 ## Threats to validity
 

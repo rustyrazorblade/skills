@@ -728,6 +728,21 @@ make -s -C "$td/docs" build >/dev/null 2>&1
 expect_eq "make: the arms scaffold builds" "0" "$?"
 expect_contains "make: the arms sidebar lists each arm's journal" "$(toc_order "$td/docs/report")" "4-journal-candidate.html"
 
+# --- references/report.md: the shared reference ---
+
+ref="$(cat "$plugin/references/report.md" 2>/dev/null)"
+for h in "## File Roles" "## The Tiers" "## The Summary Layout" "### Noise Floor" "## Evidence Blocks" \
+  "### Threats to validity" "## Graphs" "## Prose Rules" "## Redaction" "## The Exit Rule" "## The Check" \
+  "### The check subagent prompt" "### The check-failure rule" "### A redaction failure" "## Arms" \
+  "### The arm gate" "### Final Finalize" "### Plot with --align elapsed"; do
+  expect_contains "reference: report.md has $h" "$ref" "$h"
+done
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: <journal> is 4-journal.md in a single layout" "$ref" '| `<journal>` | `4-journal.md` | `4-journal-<arm>.md` |'
+expect_contains "reference: the not-installed line" "$ref" "Reasoning review: not run (cassandra-expert not installed)"
+expect_contains "reference: the finalize entry point" "$ref" "run <cluster-dir> --finalize"
+expect_contains "reference: the Partial verdict" "$ref" "Partial: stopped after step N"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

@@ -50,10 +50,10 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 6. Shared reference: references/report.md
 
-- [ ] 6.1 Create `references/report.md` with tier contents, the fixed summary layout, the comparison row contract, the Noise floor rule, the evidence block format and default stats columns, Threats to validity, the STE prose rules, redaction (select nodes by host name, never by IP; branch names and unreleased bugs are the owner's call), file roles, and the exit rule with the Partial definition.
-- [ ] 6.2 Add the "Check" section: the script, the check subagent prompt, the `cassandra-expert` reasoning review and the not-installed line, the gate order (F13), the check-failure rule (decision 2), the redaction rule (decision B), and `run <cluster-dir> --finalize`.
-- [ ] 6.3 Add the graph section: how to derive the Mimir URL and tenant per wrapper from `$EDB help observability` and `$EDB status`, `--proxy`, and how a failed fetch is logged.
-- [ ] 6.4 Add the arms section: write ownership, per-arm fetch, the arm gate, Final Finalize with the teardown-gate check rules, and `plot --align elapsed`.
+- [x] 6.1 Create `references/report.md` with tier contents, the fixed summary layout, the comparison row contract, the Noise floor rule, the evidence block format and default stats columns, Threats to validity, the STE prose rules, redaction (select nodes by host name, never by IP; branch names and unreleased bugs are the owner's call), file roles, and the exit rule with the Partial definition.
+- [x] 6.2 Add the "Check" section: the script, the check subagent prompt, the `cassandra-expert` reasoning review and the not-installed line, the gate order (F13), the check-failure rule (decision 2), the redaction rule (decision B), and `run <cluster-dir> --finalize`.
+- [x] 6.3 Add the graph section: how to derive the Mimir URL and tenant per wrapper from `$EDB help observability` and `$EDB status`, `--proxy`, and how a failed fetch is logged.
+- [x] 6.4 Add the arms section: write ownership, per-arm fetch, the arm gate, Final Finalize with the teardown-gate check rules, and `plot --align elapsed`.
 
 ## 7. Skill edits: run, explore, plan
 

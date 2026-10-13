@@ -203,7 +203,9 @@ def fmt(stat, v):
         return str(v)
     if v == 0 or abs(v) >= 1:
         return f"{v:.2f}"
-    return f"{v:.4g}"
+    # Four significant digits in fixed point, never an exponent, so report-check reads the cell.
+    places = 3 - math.floor(math.log10(abs(v)))
+    return f"{v:.{places}f}".rstrip("0").rstrip(".")
 
 
 def duration(seconds):

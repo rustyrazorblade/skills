@@ -515,6 +515,10 @@ out="$("$graph" plot --csv "$gfix/baseline.csv" --name counter --title "Counter"
 expect_contains "plot: --stats swaps the statistic columns" "$out" "| Node | Arm | Samples | Total | Rate | Unit |"
 expect_contains "plot: swapped columns stay right-aligned" "$out" "|:--|:--|--:|--:|--:|:--|"
 
+out="$("$graph" plot --csv "$gfix/tiny.csv" --name tiny --title "Tiny" --stats samples,min,mean \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_contains "plot: a value below 1e-4 is fixed-point, which report-check reads" "$out" "| all | baseline | 2 | 0.00001234 | 0.00001234 | s |"
+
 out="$("$graph" plot --csv "$gfix/empty.csv" --name empty --title "Empty" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
 rc=$?
 if [[ $rc -ne 0 ]]; then pass "plot: empty input exits non-zero"; else fail "plot: empty input exits non-zero"; fi

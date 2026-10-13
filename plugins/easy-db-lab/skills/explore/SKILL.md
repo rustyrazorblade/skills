@@ -132,7 +132,7 @@ With a live environment, ask the user what they want to do next. Suggest concret
 
 Stay interactive — confirm each action before running it, and summarize results so the user can decide what to try next.
 
-When an action measures something, run `report-graph.py fetch` and `plot`, and append the evidence block to the evidence tier per `../../references/report.md`.  Derive the Mimir URL, the tenant, and the `cluster` label per DC wrapper.
+When an action measures something, run `report-graph.py fetch` and then `render` while the cluster is up.  Then run `block`, and append the evidence block to the evidence tier per `../../references/report.md`.  Derive the Mimir URL, the tenant, the Grafana URL, and the `cluster` label per DC wrapper.
 
 ## Working Directory
 

@@ -117,7 +117,7 @@ Each claim in the summary traces to one evidence block.  A block holds, in this 
 5. The Query, as inline code.
 6. A Data link to one or more CSVs in `data/`.
 
-`report-graph.py plot` prints the full block.  Paste it into the evidence tier without edits:
+`report-graph.py block` prints the full block.  Paste it into the evidence tier without edits:
 
 ```markdown
 ## Scrape allocation (MB/s)
@@ -144,9 +144,9 @@ When a metric needs other statistics, swap them with `--stats`.  For a counter, 
 
 Rules:
 
-- Download every graph.  Never link to a Grafana graph from the summary or the evidence tier.
-- A Grafana render image is optional.  If you keep one, put it in `<journal>`, in the appendix only.  Download it to `images/`; never link it.
-- For a block in a nested page, pass `--page evidence/<page>.md` to `plot`, so its links are relative to that page.
+- The image is a Grafana panel render that `render` downloads to `images/`.  Never link to a Grafana graph from the summary or the evidence tier.
+- The numbers come from the CSV only.  The image shows the same metric over the same window, so the reader sees what the Grafana UI shows.
+- For a block in a nested page, pass `--page evidence/<page>.md` to `block`, so its links are relative to that page.
 
 ### Threats to validity
 
@@ -154,7 +154,9 @@ Rules:
 
 ## Graphs
 
-After each plan step that measures something, fetch the data and plot it, before the next step starts.  Then append the evidence block to the evidence tier.
+After each plan step that measures something, run `fetch` and then `render`, at the same point, before the next step starts.  Mimir and Grafana stop with the cluster, so neither works after `down`.  Then run `block`, and append the evidence block to the evidence tier.  `block` reads files only, so it also works after `down`.
+
+The steps below use `curl` and `jq`.
 
 ### Fetch
 
@@ -177,14 +179,67 @@ If Mimir is reachable only through a SOCKS proxy, add `--proxy socks5h://<host>:
 
 If `fetch` fails, write the command and the error to `<journal>` and `<issues>`, and continue the run.  The missing evidence then fails the check at the next exit.
 
-### Plot
+### The Grafana URL
+
+1. Read `$EDB help observability` for the Grafana port.  Read `$EDB status` for the address that Grafana uses.  Never read `state.json`.
+2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Grafana.
+3. Set `GRAFANA_URL` to `http://<address>:<port>`.  Grafana is reachable over Tailscale, at the private IP.
+4. If Grafana is reachable only through the SOCKS tunnel, set `PROXY=socks5h://<host>:<port>`.  Otherwise set `PROXY=` (empty).  The steps below pass `--proxy` to `render` and to `curl` when `PROXY` is set.
+
+`render` never stores the URL.  Write the URL in `<journal>` only.
+
+### Pick a panel
+
+Pick a panel on a regular dashboard that shows the same metric as the block's query.  List the dashboards:
 
 ```bash
-report-graph.py plot --csv <cluster-dir>/docs/data/scrape-alloc.csv \
+proxy=()
+[[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
+curl -fsS "${proxy[@]}" "$GRAFANA_URL/api/search?type=dash-db" | jq -r '.[] | "\(.uid)  \(.title)"'
+```
+
+List the panels of one dashboard, with their ids and queries:
+
+```bash
+proxy=()
+[[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
+curl -fsS "${proxy[@]}" "$GRAFANA_URL/api/dashboards/uid/<UID>" \
+  | jq -r '.dashboard.panels[] | (., .panels[]?) | select(.targets) | "\(.id)  \(.title)  \([.targets[].expr] | join(" ; "))"'
+```
+
+Pick the panel whose query measures the same thing as the block's query.  Set `DASHBOARD` to the dashboard uid and `PANEL` to the panel id.  Find the dashboard's cluster variable in `.dashboard.templating.list[].name`; it is usually `cluster`.  Set `CLUSTER` to this cluster's `cluster` label value, the value that the fetch query filters on.  Write the dashboard, the panel, and the reason for the choice in `<journal>`.
+
+In an arms layout, a metric with an overlay panel uses the overlay render instead (see "Arms" below).
+
+### Render
+
+Set `DOCS=<cluster-dir>/docs` and `NAME` to the `--name` of the block's fetch.  Then run:
+
+```bash
+proxy=()
+[[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
+report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
+  --from "$(jq -r .start "$DOCS/data/$NAME.json")" --to "$(jq -r .end "$DOCS/data/$NAME.json")" \
+  --var "cluster=$CLUSTER" --name "$NAME" --docs "$DOCS" "${proxy[@]}"
+```
+
+If the dashboard's cluster variable has another name, change `cluster=` to that name.
+
+The image window is the block's measured window: the `start` and `end` in `data/<name>.json`, as absolute times.  A 24-hour test gets a 24-hour image.  Never use a fixed or default range.  Never use a relative range for a single-cluster render; only an overlay render uses one.
+
+`render` writes `images/<name>.png` only for a status 200 and a PNG body.  On any other result it exits non-zero, names the cause, and leaves an existing `images/<name>.png` as it was.
+
+If `render` fails, write the command and the error to `<journal>` and `<issues>`, and continue the run, the same as a failed fetch.  `block` refuses a missing image, so the missing evidence fails the check at the next exit.
+
+### Block
+
+```bash
+report-graph.py block --csv <cluster-dir>/docs/data/scrape-alloc.csv \
+  --image <cluster-dir>/docs/images/scrape-alloc.png \
   --title "Scrape allocation (MB/s)" --docs <cluster-dir>/docs
 ```
 
-`plot` reads CSVs only from `docs/data/`.  It writes `images/<name>.png` with `lab.mplstyle` and prints the evidence block.  The baseline arm is grey and the candidate arm is blue; nodes in one arm differ by line style.  CSVs with a different unit or step are an error.  CSVs whose queries differ are an error, unless they differ only in the `cluster` matcher.  Then the block has one Query line per arm, for example `Query (baseline): ...`.  CSVs with different windows are an error, except with `--align elapsed` (see "Arms" below).
+`block` reads CSVs only from `docs/data/` and images only from `docs/images/`.  Each image must be a non-empty PNG.  It draws nothing, writes no file, and prints the evidence block.  `--image <arm>=<path>` puts the arm in the alt text, for example `![Throughput (baseline)](images/throughput-baseline.png)`.  CSVs with a different unit or step are an error.  CSVs whose queries differ are an error, unless they differ only in the `cluster` matcher.  Then the block has one Query line per arm, for example `Query (baseline): ...`.  CSVs with different windows are an error, except with `--arm-windows` (see "Arms" below).
 
 ## Prose Rules
 
@@ -302,25 +357,91 @@ No two agents write the same file.
 
 | Writer | Writes in `docs/` |
 |:--|:--|
-| Coordinator | `1-summary.md`, `2-evidence.md`, `evidence/`, `4-journal.md`, `5-issues.md`, `images/` |
-| Arm agent | `4-journal-<arm>.md`, `5-issues-<arm>.md`, `data/*-<arm>.csv`, `data/*-<arm>.json` |
+| Coordinator | `1-summary.md`, `2-evidence.md`, `evidence/`, `4-journal.md`, `5-issues.md`, `images/*-overlay-<arm>.png` |
+| Arm agent | `4-journal-<arm>.md`, `5-issues-<arm>.md`, `data/*-<arm>.csv`, `data/*-<arm>.json`, `images/*-<arm>.png` |
 
-An arm agent never writes another arm's files, `1-summary.md`, or `2-evidence.md`.
+An arm agent never writes another arm's files, `1-summary.md`, or `2-evidence.md`.  The `-<arm>` suffix keeps each arm's files apart.
 
-### Per-arm fetch
+### Per-arm fetch and render
 
 An arm agent runs as `run <test-dir> --arm <arm> [step N]` and binds `$EDB` to `EDB_<ARM>` only.  After each measuring step, while its Mimir is up, it fetches its own data with `--name <metric>-<arm> --arm <arm>=<nodes>`, and a query that filters on its own `cluster` label.  A missed fetch is permanent after that arm's `down`, so fetch before the next step.
+
+For a metric with no overlay panel in the table under "Overlay render", the arm agent also renders its own panel at the same point.  It follows "Pick a panel" and "Render" above, with its own Grafana, its own cluster, and its own window, and `NAME=<metric>-<arm>`.  The image goes to `images/<metric>-<arm>.png`.  A metric with an overlay panel gets no per-arm render; the coordinator renders its overlay.
 
 ### The arm gate
 
 An arm's gate replaces Finalize for that arm.  The arm agent uploads `3-plan-<arm>.md`, `4-journal-<arm>.md`, and `5-issues-<arm>.md` through its own wrapper, with the normal upload-failure handling.  Then it runs `down` on its own arm only.  It writes no summary, and it runs no check and no `make`.
 
+### Overlay render
+
+A cross-cluster metric with an overlay panel gets one combined image: a render of that panel from one arm's Grafana.  That Grafana reads both clusters from the shared Mimir.  The overlay panels:
+
+| Dashboard | UID | Overlay panels |
+|:--|:--|:--|
+| A/B Comparison | `ab-comparison` | 1001 Throughput, 1002 Read p99, 1003 Write p99, 1004 Error rate, 1005 CPU busy, 1006 Disk I/O, 1007 GC pause |
+| Cassandra Cluster Comparison | `c09599ec-8d87-4fe5-9346-9e85c41d33af` | the same ids as A/B Comparison |
+| System A/B Comparison | `system-ab-comparison` | 1001 CPU busy, 1002 Memory used, 1003 Disk I/O, 1004 Network |
+
+The coordinator renders every overlay after every arm reports completion, from the render arm: the last arm still up.  It derives that arm's Grafana URL from `EDB_<ARM>` per "The Grafana URL" above.  Set `GRAFANA_URL` and `PROXY` for the render arm, `DOCS=<test-dir>/docs`, and `NAME` to the metric (the arm CSVs are `data/<metric>-<arm>.csv`).  Set `DASHBOARD` and `PANEL` from the table.  Set `ARM` to the candidate arm, `BASE_CLUSTER` to the baseline arm's `cluster` label value, and `CAND_CLUSTER` to the candidate arm's.  Then run:
+
+```bash
+proxy=()
+[[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
+base="$DOCS/data/$NAME-baseline.json"
+cand="$DOCS/data/$NAME-$ARM.json"
+ms() { jq -r "$1 | fromdateiso8601 * 1000" "$2"; }
+if ! dash="$(curl -fsS "${proxy[@]}" "$GRAFANA_URL/api/dashboards/uid/$DASHBOARD")"; then
+  echo "overlay $NAME: cannot read dashboard $DASHBOARD" >&2
+  false
+else
+  window=()
+  if jq -e '(["base_from", "base_to", "cand_from", "cand_to"] - [.dashboard.templating.list[]?.name]) == []' \
+      <<<"$dash" >/dev/null; then
+    window=(--var "base_from=$(ms .start "$base")" --var "base_to=$(ms .end "$base")" \
+      --var "cand_from=$(ms .start "$cand")" --var "cand_to=$(ms .end "$cand")")
+  else
+    echo "journal: overlay $NAME ($DASHBOARD) has no window variables (rustyrazorblade/easy-db-lab#1015); rendered the whole-run overlay"
+    echo "caveat: The overlay image for $NAME covers each cluster's whole run, not only the measured window."
+  fi
+  n=$(( $(date +%s) - $(jq -s 'map(.start | fromdateiso8601) | min' "$base" "$cand") ))
+  report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
+    --from "now-${n}s" --to now \
+    --var "baseline_cluster=$BASE_CLUSTER" --var "candidate_cluster=$CAND_CLUSTER" "${window[@]}" \
+    --name "$NAME-overlay-$ARM" --docs "$DOCS" "${proxy[@]}"
+fi
+```
+
+The step does this:
+
+1. It reads the dashboard JSON through `/api/dashboards/uid/<UID>`.  If it cannot, it renders nothing and exits non-zero.
+2. It looks for the window variables `base_from`, `base_to`, `cand_from`, and `cand_to` (rustyrazorblade/easy-db-lab#1015).  When all four exist, it sets them to each arm's measured `start` and `end` from `data/<metric>-<arm>.json`, in epoch milliseconds, so the image shows the measured windows.
+3. It renders with a relative range, `--from now-<N>s --to now`, where N is the number of seconds from the earlier arm's measured start to now.  Each overlay panel sets its own range, and an absolute dashboard range turns that off.  Never use a fixed range.  The dashboard moves each run to a common start, so do not align the windows yourself.
+4. It writes `images/<metric>-overlay-<arm>.png`.
+
+**The whole-run fallback.**  When the dashboard has no window variables, the overlay covers each cluster's whole run, from its first `up` sample to its last.  The step renders it anyway and prints two lines.  Copy the `journal:` line to `4-journal.md`.  Copy the text after `caveat: ` as a line under `## Caveats` in `1-summary.md`, when Final Finalize writes the summary.
+
+**More than two arms.**  Render one overlay per arm other than baseline, with that arm as `ARM` and its cluster as `CAND_CLUSTER`.  In the block, label each image with its arm: `--image <arm>=<test-dir>/docs/images/<metric>-overlay-<arm>.png`.
+
+**A failed overlay render.**  Write the command and the error to `4-journal.md` and `5-issues.md`, the same as a failed fetch.  When interactive, offer one retry.  Then release the render arm.  The block with no image fails the check, and the teardown-gate rule adds the Unchecked line.
+
+For a metric with no overlay panel, the coordinator renders nothing.  Its block lists the arm agents' images, each labelled by arm: `--image baseline=<test-dir>/docs/images/<metric>-baseline.png --image candidate=<test-dir>/docs/images/<metric>-candidate.png`.  The stats table stays one table from both arms' CSVs.
+
+### Hold and release
+
+An arm runs its gate and its `down` only when the coordinator relaunches `run <test-dir> --arm <arm>` at Completion / teardown.  So the coordinator holds the render arm by not relaunching it.
+
+1. The coordinator may relaunch the other arms for teardown at any time after they report completion.
+2. It keeps the render arm, the last arm still up, until it has rendered every overlay image to `docs/images/`.
+3. Then it relaunches the render arm for teardown.  That relaunch is the release.  The arm runs its gate and its `down`.
+
+The hold and the release use no shared state file.  The only files in play stay the per-arm files and the `arms` marker.  A failed overlay render never keeps the render arm up: after one retry at most, the coordinator releases it.
+
 ### Final Finalize
 
-After the last arm reports completion, the coordinator runs `run <test-dir> --finalize` once.  The arms can be up or down.  Final Finalize:
+After the last arm reports completion and the coordinator has rendered the overlay images, the coordinator runs `run <test-dir> --finalize` once.  The arms can be up or down.  Final Finalize:
 
-1. plots from the CSVs on disk with `plot --align elapsed`;
-2. writes the summary and the evidence tier;
+1. builds each evidence block from the CSVs and the images on disk with `block --arm-windows`, and renders nothing;
+2. writes the summary and the evidence tier, with each fallback caveat line under `## Caveats`;
 3. runs the check with the teardown-gate rules: one chance to fix when interactive, else the Unchecked line;
 4. runs `make gate`;
 5. uploads through every arm's wrapper, per `report-upload.md`;
@@ -328,6 +449,6 @@ After the last arm reports completion, the coordinator runs `run <test-dir> --fi
 
 Arms still up afterwards are torn down when the coordinator relaunches `run <test-dir> --arm <arm>` at Completion / teardown.
 
-### Plot with --align elapsed
+### Block with --arm-windows
 
-The arms run at different times, so their windows differ.  `plot --align elapsed` keeps each CSV's window and puts the seconds since that CSV's start on the x-axis.  The block holds one Window line per arm, for example `Window (baseline): ...`.  Each arm's query filters on its own `cluster` label, so the queries can differ in the `cluster` matcher only.  Then the block holds one Query line per arm.  The rest of the query, the unit, and the step must match.  Series are keyed by arm and node, with legends such as "db0 (baseline)".  The Data line links every arm's CSV, and the check merges them, keyed by node and arm.
+The arms run at different times, so their windows differ.  `block --arm-windows` keeps each CSV's window.  The block holds one Window line per arm, for example `Window (baseline): ...`.  Each arm's query filters on its own `cluster` label, so the queries can differ in the `cluster` matcher only.  Then the block holds one Query line per arm.  The rest of the query, the unit, and the step must match.  Stats rows are keyed by arm and node, with labels such as "db0 (baseline)".  The Data line links every arm's CSV, and the check merges them, keyed by node and arm.

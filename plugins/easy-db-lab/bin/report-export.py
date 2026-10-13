@@ -93,7 +93,7 @@ def jira(docs, out):
         f.write(LUA_FILTER)
         lua = f.name
     try:
-        # No smart extension: it turns the -- of a flag such as --align into an en dash.
+        # No smart extension: it turns the -- of a flag such as --arm-windows into an en dash.
         text = pypandoc.convert_file(summary, "jira", format="markdown-auto_identifiers-smart", filters=[lua])
     finally:
         os.unlink(lua)

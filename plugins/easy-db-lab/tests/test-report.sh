@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Behavioral test for the easy-db-lab lab report: the scaffold that setup-cluster.sh writes, the
 # layout scripts, the graph, check, and export scripts, the docs Makefile, and the skill text. It
-# needs mdbook and uv, and no cluster. A stub easy-db-lab binary and a stub Mimir stand in for the
-# real ones. Prints PASS or FAIL per case and exits 0 only when every case passes. macOS bash 3.2
-# compatible (no associative arrays, no mapfile). Touches nothing outside its own temp directory.
+# needs mdbook, uv, jq, and curl, and no cluster. A stub easy-db-lab binary, a stub Mimir, and a stub
+# Grafana stand in for the real ones. Prints PASS or FAIL per case and exits 0 only when every case
+# passes. macOS bash 3.2 compatible (no associative arrays, no mapfile). Touches nothing outside
+# its own temp directory.
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -53,7 +54,7 @@ expect_no_file() { # desc path
   if [[ -e "$2" ]]; then fail "$1" "unexpected: $2"; else pass "$1"; fi
 }
 
-for tool in mdbook uv; do
+for tool in mdbook uv jq curl; do
   command -v "$tool" >/dev/null 2>&1 || { echo "test-report: '$tool' is required but not on PATH." >&2; exit 1; }
 done
 
@@ -776,6 +777,109 @@ pep723="$(sed -n '/^# \/\/\/ script/,/^# \/\/\/$/p' "$graph")"
 expect_contains "graph: the PEP 723 block declares requests" "$pep723" "requests"
 expect_not_contains "graph: the PEP 723 block holds no matplotlib" "$pep723" "matplotlib"
 
+# --- references/report.md: the render steps, run as written against the stub Grafana ---
+
+# first_bash_block <file> <heading>: print the first ```bash block in the section under <heading>.
+first_bash_block() {
+  awk -v h="$2" '$0 == h { s = 1; next } s && !b && /^#/ { exit } s && /^```bash$/ { b = 1; next }
+    b && /^```$/ { exit } b { print }' "$1"
+}
+report_ref="$plugin/references/report.md"
+# render_log_line: the one render request in the stub log.
+render_log_line() { grep '^/render/' "$grafana_log" 2>/dev/null; }
+
+# A single-cluster render uses the block's measured window from data/<name>.json, as absolute times.
+single_step="$(first_bash_block "$report_ref" "### Render")"
+if [[ "$single_step" == *"report-graph.py render"* ]]; then
+  pass "reference: Render holds the single-cluster render step"
+else
+  fail "reference: Render holds the single-cluster render step"
+fi
+cp "$fixtures/grafana/day.json" "$gdocs/data/day.json"
+start_grafana png
+out="$(GRAFANA_URL="$grafana_url" PROXY="" DOCS="$gdocs" NAME=day DASHBOARD=cassandra-overview PANEL=7 \
+  CLUSTER=graph-1a2b PATH="$bin:$PATH" bash -c "$single_step" 2>&1)"
+expect_eq "render step: the single-cluster step exits 0" "0" "$?"
+req="$(render_log_line)"
+expect_contains "render step: from is the block JSON's start" "$req" "from=1790848800000&"
+expect_contains "render step: to is the block JSON's end, 24 hours later" "$req" "to=1790935200000&"
+expect_contains "render step: the cluster variable is the run's cluster" "$req" "var-cluster=graph-1a2b"
+expect_file "render step: the single-cluster step writes the image" "$gdocs/images/day.png"
+stop_grafana
+
+# The overlay render: window variables when the dashboard has them, else the whole-run fallback.
+overlay_step="$(first_bash_block "$report_ref" "### Overlay render")"
+if [[ "$overlay_step" == *"report-graph.py render"* ]]; then
+  pass "reference: Overlay render holds the overlay render step"
+else
+  fail "reference: Overlay render holds the overlay render step"
+fi
+cp "$fixtures/graph/latency-baseline.json" "$gdocs/data/overlay-baseline.json"
+cp "$fixtures/graph/latency-candidate.json" "$gdocs/data/overlay-candidate.json"
+base_start=1790848800 # 2026-10-01T10:00:00Z, the earlier arm's measured start
+# overlay <dashboard.json or ""> : run the overlay step and set out, rc, and req (the render request).
+overlay() {
+  start_grafana png ${1:+"$1"}
+  local t0 t1
+  t0="$(date +%s)"
+  out="$(GRAFANA_URL="$grafana_url" PROXY="" DOCS="$gdocs" NAME=overlay ARM=candidate DASHBOARD=ab-comparison \
+    PANEL=1001 BASE_CLUSTER=lab-baseline-1a2b CAND_CLUSTER=lab-candidate-3c4d PATH="$bin:$PATH" \
+    bash -c "$overlay_step" 2>&1)"
+  rc=$?
+  t1="$(date +%s)"
+  req="$(render_log_line)"
+  n_min=$((t0 - base_start))
+  n_max=$((t1 - base_start))
+  stop_grafana
+}
+# expect_relative_range <desc>: from is now-<N>s with N from the earlier arm's start to the render.
+expect_relative_range() {
+  local n
+  n="$(printf '%s\n' "$req" | sed -n 's/.*[?&]from=now-\([0-9]*\)s&.*/\1/p')"
+  if [[ -n "$n" && "$n" -ge "$n_min" && "$n" -le "$n_max" ]]; then
+    pass "$1"
+  else
+    fail "$1" "from=now-${n}s, want N in $n_min..$n_max: $req"
+  fi
+  expect_contains "$1: to is now" "$req" "&to=now&"
+}
+
+overlay "$fixtures/grafana/dashboard-window-vars.json"
+expect_eq "overlay step: with window variables exits 0" "0" "$rc"
+expect_contains "overlay step: the step reads the dashboard JSON" "$(cat "$grafana_log" 2>/dev/null)" "/api/dashboards/uid/ab-comparison"
+expect_contains "overlay step: the request goes to the overlay panel" "$req" "/render/d-solo/ab-comparison/?panelId=1001&"
+expect_contains "overlay step: baseline_cluster is set" "$req" "var-baseline_cluster=lab-baseline-1a2b"
+expect_contains "overlay step: candidate_cluster is set" "$req" "var-candidate_cluster=lab-candidate-3c4d"
+expect_contains "overlay step: base_from is the baseline start in epoch ms" "$req" "var-base_from=1790848800000"
+expect_contains "overlay step: base_to is the baseline end in epoch ms" "$req" "var-base_to=1790849400000"
+expect_contains "overlay step: cand_from is the candidate start in epoch ms" "$req" "var-cand_from=1790854200000"
+expect_contains "overlay step: cand_to is the candidate end in epoch ms" "$req" "var-cand_to=1790854800000"
+expect_relative_range "overlay step: with window variables the range is relative"
+expect_not_contains "overlay step: with window variables there is no fallback caveat" "$out" "whole run"
+expect_file "overlay step: writes the overlay image" "$gdocs/images/overlay-overlay-candidate.png"
+
+overlay "$fixtures/grafana/dashboard-no-window-vars.json"
+expect_eq "overlay step: without window variables exits 0" "0" "$rc"
+for v in base_from base_to cand_from cand_to; do
+  expect_not_contains "overlay step: without window variables the request holds no var-$v" "$req" "var-$v="
+done
+expect_contains "overlay step: the fallback still sets the clusters" "$req" "var-candidate_cluster=lab-candidate-3c4d"
+expect_relative_range "overlay step: without window variables the range is relative"
+caveat="$(printf '%s\n' "$out" | sed -n 's/^caveat: //p')"
+expect_contains "overlay step: the fallback prints the Caveats line" "$caveat" "covers each cluster's whole run, not only the measured window"
+overlay_ref="$(sed -n '/^### Overlay render/,/^### /p' "$report_ref")"
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: the fallback puts the caveat line under ## Caveats in 1-summary.md" \
+  "$overlay_ref" '`## Caveats` in `1-summary.md`'
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: the fallback is noted in 4-journal.md" "$overlay_ref" '`4-journal.md`'
+
+overlay ""
+if [[ "$rc" -ne 0 ]]; then pass "overlay step: an unreadable dashboard exits non-zero"; else fail "overlay step: an unreadable dashboard exits non-zero"; fi
+expect_contains "overlay step: an unreadable dashboard names the dashboard" "$out" "cannot read dashboard ab-comparison"
+expect_eq "overlay step: an unreadable dashboard sends no render" "" "$req"
+rm -f "$gdocs/images/day.png" "$gdocs/images/overlay-overlay-candidate.png"
+
 # --- report-check.py ---
 
 checker="$bin/report-check.py"
@@ -1019,7 +1123,7 @@ expect_contains "jira: the Metric link text keeps its unit readable" "$jira_esc"
 expect_contains "jira: a positive Delta keeps its plain sign" "$jira_esc" "| +20.8% |"
 expect_contains "jira: a negative Delta keeps its plain sign" "$jira_esc" "| -26.4% |"
 # JIRA renders -- as an en dash, so \-\- is the JIRA source for a literal --.
-expect_contains "jira: -- stays two escaped hyphens, not an en dash" "$jira_esc" 'plot \-\-align elapsed'
+expect_contains "jira: -- stays two escaped hyphens, not an en dash" "$jira_esc" 'block \-\-arm-windows'
 expect_contains "jira: an emoticon such as (i) stays escaped" "$jira_esc" '\(i)'
 
 "$exporter" zip "$xd" "$tmp_root/report.zip" >/dev/null 2>&1
@@ -1172,7 +1276,8 @@ ref="$(cat "$plugin/references/report.md" 2>/dev/null)"
 for h in "## File Roles" "## The Tiers" "## The Summary Layout" "### Noise Floor" "## Evidence Blocks" \
   "### Threats to validity" "## Graphs" "## Prose Rules" "## Redaction" "## The Exit Rule" "## The Check" \
   "### The check subagent prompt" "### The check-failure rule" "### A redaction failure" "## Arms" \
-  "### The arm gate" "### Final Finalize" "### Plot with --align elapsed"; do
+  "### The arm gate" "### Final Finalize" "### Block with --arm-windows" "### Render" "### Block" \
+  "### Overlay render" "### Hold and release"; do
   expect_contains "reference: report.md has $h" "$ref" "$h"
 done
 # shellcheck disable=SC2016 # the backticks are literal markdown
@@ -1192,7 +1297,7 @@ if [[ -n "$review_n" && -n "$write_n" && -n "$subagent_n" && "$review_n" -lt "$w
 else
   fail "reference: the check writes <issues> before the subagent reads it" "review=$review_n write=$write_n subagent=$subagent_n"
 fi
-fetch_ref="$(sed -n '/^### Fetch/,/^### Plot/p' "$plugin/references/report.md")"
+fetch_ref="$(sed -n '/^### Fetch/,/^### The Grafana URL/p' "$plugin/references/report.md")"
 expect_contains "reference: the Fetch example filters on the cluster label" \
   "$(printf '%s\n' "$fetch_ref" | grep -A1 'report-graph.py fetch')" '{cluster="'
 expect_not_contains "reference: Fetch claims no tenant per arm" "$fetch_ref" "own Mimir URL and tenant"
@@ -1221,6 +1326,23 @@ done
 for f in "$run_skill" "$journal_ref"; do
   expect_eq "docs: ${f#"$plugin/"} holds no Grafana screenshot instruction" "" "$(grep -niE 'screenshot' "$f")"
 done
+# Grafana renders replaced local plotting: no plot step, no shared style, no fixed role colours, and
+# no render as an optional appendix image.  Each file points to render and block instead.
+for f in "$report_ref" "$journal_ref" "$run_skill" "$explore_skill"; do
+  name="${f#"$plugin/"}"
+  # shellcheck disable=SC2016 # the backticks are literal markdown
+  expect_eq "docs: $name holds no plotting instruction" "" \
+    "$(grep -niE 'report-graph\.py plot|`plot`|lab\.mplstyle|matplotlib|role colou?r|render image is optional|--align' "$f")"
+  # shellcheck disable=SC2016 # the backticks are literal markdown
+  if grep -qE '`render`|report-graph\.py.*render' "$f" && grep -qE '`block`|report-graph\.py.*block' "$f"; then
+    pass "docs: $name points to render and block"
+  else
+    fail "docs: $name points to render and block"
+  fi
+done
+arms_rule="$(sed -n '/^\*\*Parallel arms\.\*\*/,/^## /p' "$run_skill")"
+expect_contains "run: Parallel arms renders the overlays before Final Finalize" "$arms_rule" "overlay"
+expect_contains "run: Parallel arms releases the render arm" "$arms_rule" "release"
 for f in "$run_skill" "$explore_skill"; do
   expect_contains "docs: ${f#"$plugin/"} loads the shared reference" "$(cat "$f")" "../../references/report.md"
 done

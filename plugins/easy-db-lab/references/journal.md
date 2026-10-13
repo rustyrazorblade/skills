@@ -63,15 +63,12 @@ If `<journal>` already holds entries, read it first to understand the full conte
 
 ## Measurements Go to the Evidence Tier
 
-A measurement that the report states goes to the evidence tier, not to the journal.  After a measuring step, run `report-graph.py fetch` and `plot`, and append the evidence block to `2-evidence.md`, per the Graphs section of `report.md`.  In the journal, record the commands and the key numbers as they happen.
-
-A Grafana render image is optional.  If you keep one, it goes in the journal only, in the appendix.  Download it to `docs/images/` and embed it from there; never link to Grafana:
+A measurement that the report states goes to the evidence tier, not to the journal.  After a measuring step, while the cluster is up, run `report-graph.py fetch` and then `render`.  Then run `block`, and append the evidence block to `2-evidence.md`.  The Graphs section of `report.md` gives each step.  In the journal, record the commands, the dashboard and panel you rendered, and the key numbers as they happen:
 
 ```markdown
 ### 11:22 KeyValue baseline: 30m run complete
 op/s: 24,500; p99 read: 3.2ms, p99 write: 1.8ms
-
-![KeyValue baseline dashboard](images/baseline-dashboard.png)
+Rendered cassandra-overview panel 7 over 11:00:00Z to 11:30:00Z to images/throughput.png.
 ```
 
-Name files descriptively, `<test-name>-<metric>.png`, so the images directory is navigable on its own.
+Never link to Grafana from the journal.  Every image is a render that `report-graph.py render` downloads to `docs/images/`.

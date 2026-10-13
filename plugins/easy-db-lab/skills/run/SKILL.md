@@ -266,7 +266,7 @@ Confirm the step succeeded. Always use `$EDB` (the full path wrapper), not the b
 
 **5. Update `<journal>` with outcome**
 
-Update the journal entry with the final outcome and any relevant output. If the step measured something (throughput, latency, compaction), run `report-graph.py` and append the evidence block per `../../references/report.md`, before the next step.
+Update the journal entry with the final outcome and any relevant output. If the step measured something (throughput, latency, compaction), run `report-graph.py fetch` and then `render` while the cluster is up, then `block`, and append the evidence block per `../../references/report.md`, before the next step.
 
 **6. Proceed**
 
@@ -370,11 +370,12 @@ The execution loop above assumes a human is present to confirm each step. Two si
 
 **Parallel arms.** A cross-cluster A/B is one test directory (`LAYOUT=arms`): one cluster per arm, one agent per arm, one shared `docs/`, and one report.  The coordinator scaffolds it once with `setup-cluster.sh --arm`, as the Arms section of `../../references/report.md` shows.  Rules that keep the comparison meaningful:
 
-- An arm agent runs as `run <test-dir> --arm <arm>` and runs commands only through its own wrapper.  In `docs/` it writes only its own files: `4-journal-<arm>.md`, `5-issues-<arm>.md`, and `data/*-<arm>.*`.  It never writes another arm's files, `1-summary.md`, or `2-evidence.md`.
+- An arm agent runs as `run <test-dir> --arm <arm>` and runs commands only through its own wrapper.  In `docs/` it writes only its own files: `4-journal-<arm>.md`, `5-issues-<arm>.md`, `data/*-<arm>.*`, and `images/*-<arm>.png`.  It never writes another arm's files, `1-summary.md`, or `2-evidence.md`.  It renders its own panel only for a metric with no overlay panel.
 - Generate every arm's plan from a single template so the arms cannot drift, then prove it: normalise the intended variables and diff the plans. They should come out byte-identical.
 - Cross-arm gates are coordination, not reporting. Each arm reports its numbers to the coordinator, which does the comparing.  The per-arm files above are the only shared state.  Do not invent other shared state files.
 - The arms sit on different hardware, so run an identical short calibration workload before the measured run. It tells you whether the clusters are comparable at all, and its spread is the error bar on every delta you later report.
 - No agent decides teardown on its own.  The coordinator relaunches `run <test-dir> --arm <arm>` at the "Completion / teardown" entry point in Pausing and Resuming for each arm, and runs `run <test-dir> --finalize` once after the last arm reports.  It never runs `$EDB down` itself.
+- Before Final Finalize, the coordinator renders each overlay image from the render arm, the last arm still up, per "Overlay render" in the Arms section of `../../references/report.md`.  It holds that arm by not relaunching it.  After the last overlay render, it relaunches the render arm for teardown: that relaunch is the release.  A failed overlay render is logged, gets one retry when interactive, and then the coordinator releases the arm.
 
 ## Team Agents
 

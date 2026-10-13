@@ -1,0 +1,16 @@
+{
+  "dashboard": {
+    "uid": "ab-comparison",
+    "title": "A/B Comparison",
+    "templating": {
+      "list": [
+        {"name": "baseline_cluster", "type": "query"},
+        {"name": "candidate_cluster", "type": "query"},
+        {"name": "base_start", "type": "query"},
+        {"name": "base_from_offset", "type": "query"},
+        {"name": "cand_start", "type": "query"}
+      ]
+    }
+  },
+  "meta": {"slug": "a-b-comparison"}
+}

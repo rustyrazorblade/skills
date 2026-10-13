@@ -14,5 +14,5 @@ The canary does not cut scrape allocation.  It raises it on every node, so the c
 ## Caveats
 
 - The scrape allocation row has no noise floor measurement.
-- The latency graph used plot --align elapsed.
+- The latency block used block --arm-windows.
 - The text (i) is not an info icon.

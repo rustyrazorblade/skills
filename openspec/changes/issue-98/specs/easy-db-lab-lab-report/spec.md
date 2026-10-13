@@ -313,7 +313,7 @@ The run and explore skills SHALL update the evidence tier after each step that m
 
 ### Requirement: The graph script renders a Grafana panel to a PNG
 
-The `render` subcommand of `bin/report-graph.py` SHALL download one Grafana panel render and write it to `docs/images/<name>.png`.  It SHALL draw nothing itself.  Its interface SHALL be `render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME [--var NAME=VALUE]... [--width 1200] [--height 600] --name NAME --docs DOCS [--proxy socks5h://...] [--timeout 60]`.  It SHALL send one GET to `<grafana-url>/render/d-solo/<UID>/?panelId=<ID>&from=<from>&to=<to>&var-<NAME>=<VALUE>...&width=<width>&height=<height>&tz=UTC`, with each value URL-encoded.  `--from` and `--to` SHALL take an ISO 8601 UTC time, which the script sends as epoch milliseconds, or a Grafana relative time such as `now-1h` or `now`, which the script sends unchanged.  `--name` SHALL follow the `fetch` rule: letters, digits, `_`, `.`, and `-`, and no path.  The script SHALL write the PNG only when the response status is 200 and the body is not empty and starts with the PNG signature.  On a connection error, a timeout, another status, an empty body, or a body that is not a PNG, it SHALL exit non-zero with a message that names the cause, and it SHALL NOT write or replace `images/<name>.png`.  It SHALL NOT store the Grafana URL anywhere.  The skill SHALL derive the Grafana URL for each wrapper from `$EDB help observability` and `$EDB status`, SHALL pass `--proxy` when it reaches Grafana through the SOCKS tunnel, and SHALL NOT read `state.json`.  The writer SHALL choose a panel that shows the same metric as the block's query, and SHALL render it over the block's window, with the dashboard's cluster variable set to the run's cluster.
+The `render` subcommand of `bin/report-graph.py` SHALL download one Grafana panel render and write it to `docs/images/<name>.png`.  It SHALL draw nothing itself.  Its interface SHALL be `render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME [--var NAME=VALUE]... [--width 1200] [--height 600] --name NAME --docs DOCS [--proxy socks5h://...] [--timeout 60]`.  It SHALL send one GET to `<grafana-url>/render/d-solo/<UID>/?panelId=<ID>&from=<from>&to=<to>&var-<NAME>=<VALUE>...&width=<width>&height=<height>&tz=UTC`, with each value URL-encoded.  `--from` and `--to` SHALL take an ISO 8601 UTC time, which the script sends as epoch milliseconds, or a Grafana relative time such as `now-93600s` or `now`, which the script sends unchanged.  `--name` SHALL follow the `fetch` rule: letters, digits, `_`, `.`, and `-`, and no path.  The script SHALL write the PNG only when the response status is 200 and the body is not empty and starts with the PNG signature.  On a connection error, a timeout, another status, an empty body, or a body that is not a PNG, it SHALL exit non-zero with a message that names the cause, and it SHALL NOT write or replace `images/<name>.png`.  It SHALL NOT store the Grafana URL anywhere.  The skill SHALL derive the Grafana URL for each wrapper from `$EDB help observability` and `$EDB status`, SHALL pass `--proxy` when it reaches Grafana through the SOCKS tunnel, and SHALL NOT read `state.json`.  The writer SHALL choose a panel that shows the same metric as the block's query, and SHALL render it over the block's window, with the dashboard's cluster variable set to the run's cluster.  The image window SHALL be the block's measured window: the `start` and `end` in the block's `data/<name>.json`, passed as absolute ISO times.  The writer SHALL NOT use a fixed or default range.  A relative time SHALL be used only for an overlay render, as the overlay requirement states.
 
 #### Scenario: A render writes the panel PNG
 
@@ -328,8 +328,14 @@ The `render` subcommand of `bin/report-graph.py` SHALL download one Grafana pane
 
 #### Scenario: A relative range passes through
 
-- **WHEN** `render` gets `--from now-1h --to now`
-- **THEN** the request holds `from=now-1h` and `to=now`
+- **WHEN** `render` gets `--from now-93600s --to now`
+- **THEN** the request holds `from=now-93600s` and `to=now`
+
+#### Scenario: A single-cluster render uses the measured window
+
+- **WHEN** the writer renders a regular dashboard panel for an evidence block whose `data/<name>.json` holds `start` 2026-10-01T10:00:00Z and `end` 2026-10-02T10:00:00Z
+- **THEN** the render request holds `from` and `to` for exactly that window
+- **AND** the image covers the whole 24-hour window, not a fixed or default range
 
 #### Scenario: Grafana is unreachable
 
@@ -628,7 +634,9 @@ In `LAYOUT=arms`, when a comparison dashboard has an overlay panel for a metric,
 | Cassandra Cluster Comparison | `c09599ec-8d87-4fe5-9346-9e85c41d33af` | the same ids as A/B Comparison |
 | System A/B Comparison | `system-ab-comparison` | 1001 CPU busy, 1002 Memory used, 1003 Disk I/O, 1004 Network |
 
-The coordinator SHALL render an overlay with `--var baseline_cluster=<baseline arm cluster_name> --var candidate_cluster=<candidate arm cluster_name>` and the relative range `--from now-1h --to now`.  Each overlay panel sets its own range from the two runs, and an absolute range turns that range off.  The dashboard moves each run to a common start, so the coordinator SHALL NOT align windows for the image.  In a test with more than two arms, the coordinator SHALL render one overlay per arm other than baseline, with that arm as `candidate_cluster`, and SHALL give each image that arm as its label.
+The coordinator SHALL render an overlay with `--var baseline_cluster=<baseline arm cluster_name> --var candidate_cluster=<candidate arm cluster_name>`.  Each overlay panel sets its own range, so the dashboard range SHALL be relative: the coordinator SHALL pass `--from now-<N>s --to now`, where N is the number of seconds from the earlier arm's measured start to the render time.  The coordinator SHALL NOT use a fixed range.  The dashboard moves each run to a common start, so the coordinator SHALL NOT align windows for the image.
+
+The image SHALL show each arm's measured window when the dashboard supports it.  The coordinator SHALL detect support by reading the dashboard JSON through `<grafana-url>/api/dashboards/uid/<UID>` and finding the variables `base_from`, `base_to`, `cand_from`, and `cand_to` (rustyrazorblade/easy-db-lab#1015).  When they exist, the coordinator SHALL set them, as epoch milliseconds, to the `start` and `end` in each arm's `data/<name>.json` for the block's metric.  When they do not exist, the overlay covers each cluster's whole run, from its first `up` sample to its last.  The coordinator SHALL then render it anyway, SHALL note the fallback in `4-journal.md`, and SHALL add a `## Caveats` line to `1-summary.md` that says the overlay image covers each cluster's whole run, not only the measured window.  In a test with more than two arms, the coordinator SHALL render one overlay per arm other than baseline, with that arm as `candidate_cluster`, and SHALL give each image that arm as its label.
 
 The render arm SHALL be the last arm still up.  An arm runs its gate and its `down` only when the coordinator relaunches `run <test-dir> --arm <arm>` at Completion / teardown, so the coordinator holds the render arm by not relaunching it.  The coordinator SHALL relaunch the render arm for teardown only after it has rendered every overlay image to `docs/images/`; that relaunch is the release.  The coordinator MAY relaunch the other arms for teardown at any time after they report completion.  The hold and the release SHALL use no shared state file: the only files in play stay the per-arm files and the `arms` marker.  The coordinator SHALL derive the render arm's Grafana URL from `EDB_<ARM>` through `help observability` and `status`.  When an overlay render fails, the coordinator SHALL log the failure to `4-journal.md` and `5-issues.md`, SHALL offer one retry when interactive, and SHALL then release the arm.  The evidence block with no image then fails the check, and the teardown-gate rule applies.
 
@@ -639,6 +647,17 @@ When no comparison dashboard has an overlay panel for a metric, each arm agent S
 - **WHEN** every arm has reported completion and a measured metric has an overlay panel
 - **THEN** the coordinator renders that overlay panel from the render arm's Grafana, with `baseline_cluster` and `candidate_cluster` set, before it relaunches the render arm for teardown
 - **AND** the evidence block for that metric holds one image
+
+#### Scenario: The overlay shows the measured windows
+
+- **WHEN** the comparison dashboard defines `base_from`, `base_to`, `cand_from`, and `cand_to`
+- **THEN** the overlay render request sets them to each arm's measured `start` and `end`, in epoch milliseconds
+- **AND** the request uses a relative range from the earlier arm's measured start to now, not a fixed range
+
+#### Scenario: The dashboard has no window variables
+
+- **WHEN** the comparison dashboard defines none of the window variables
+- **THEN** the coordinator renders the whole-run overlay, notes the fallback in `4-journal.md`, and adds a `## Caveats` line to `1-summary.md` that says the image covers each cluster's whole run
 
 #### Scenario: The coordinator releases the render arm
 

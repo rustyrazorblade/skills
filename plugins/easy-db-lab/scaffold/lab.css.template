@@ -16,10 +16,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.content thead th {
+/* The whole thead sticks, so mdbook's collapsed thead row border sticks with it. */
+.content thead {
   position: sticky;
   top: 0;
   z-index: 1;
+}
+
+.content thead th {
   background: var(--table-header-bg);
 }
 
@@ -61,12 +65,20 @@
     overflow: visible;
   }
 
-  .content thead th {
+  .content thead {
     position: static;
   }
 
+  /* A stats table must fit the page width, so print cells are tighter and smaller. */
   .content table {
+    width: 100%;
+    font-size: 0.8em;
     page-break-inside: avoid;
+  }
+
+  .content table td,
+  .content table th {
+    padding: 2px 6px;
   }
 
   .content img {

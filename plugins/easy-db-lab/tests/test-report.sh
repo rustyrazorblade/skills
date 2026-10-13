@@ -274,6 +274,185 @@ out="$(bash "$bin/configure-multi-dc-seeds.sh" "$td" --name T --dc baseline --dc
 expect_eq "seeds: an arms marker makes the seeds script exit 1" "1" "$?"
 expect_contains "seeds: the refusal names the arms marker" "$out" "arms marker"
 
+# --- report-graph.py fetch ---
+
+graph="$bin/report-graph.py"
+gws="$tmp_root/graph-ws"
+bash "$bin/setup-cluster.sh" "$gws" "$stub_edb" --name graph >/dev/null 2>&1
+gdocs="$gws/docs"
+
+mimir_pid=""
+# start_mimir <response.json> <http-status>: start the stub Mimir and set mimir_url and mimir_log.
+start_mimir() {
+  local port_file="$tmp_root/mimir.port"
+  mimir_log="$tmp_root/mimir.log"
+  rm -f "$port_file" "$mimir_log"
+  python3 "$fixtures/mimir/stub.py" "$1" "$2" "$port_file" "$mimir_log" &
+  mimir_pid=$!
+  local _
+  for _ in $(seq 1 50); do
+    [[ -s "$port_file" ]] && break
+    sleep 0.1
+  done
+  mimir_url="http://127.0.0.1:$(cat "$port_file")/prometheus"
+}
+stop_mimir() {
+  [[ -z "$mimir_pid" ]] || kill "$mimir_pid" 2>/dev/null
+  wait "$mimir_pid" 2>/dev/null
+  mimir_pid=""
+}
+trap 'stop_mimir; rm -rf "$tmp_root"' EXIT
+
+# fetch <mimir-url> <name> [extra args...]: run fetch on the graph workspace with the usual window.
+fetch() {
+  local url="$1" name="$2"
+  shift 2
+  "$graph" fetch --mimir-url "$url" --tenant lab-tenant \
+    --query 'sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~"db.*"}[1m]))' \
+    --start 2026-10-01T10:00:00Z --end 2026-10-01T10:10:00Z --step 30s \
+    --node-label instance --unit MB/s --scale 1e-6 --name "$name" --docs "$gdocs" "$@"
+}
+
+out="$(fetch http://127.0.0.1:1/prometheus unreachable --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "fetch: an unreachable Mimir exits non-zero"; else fail "fetch: an unreachable Mimir exits non-zero"; fi
+expect_contains "fetch: an unreachable Mimir gives a clear message" "$out" "cannot reach Mimir"
+expect_no_file "fetch: an unreachable Mimir writes no CSV" "$gdocs/data/unreachable.csv"
+
+start_mimir "$fixtures/mimir/empty.json" 200
+out="$(fetch "$mimir_url" empty --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+stop_mimir
+if [[ $rc -ne 0 ]]; then pass "fetch: zero series exits non-zero"; else fail "fetch: zero series exits non-zero"; fi
+expect_contains "fetch: zero series gives a clear message" "$out" "no series"
+expect_no_file "fetch: zero series writes no CSV" "$gdocs/data/empty.csv"
+
+start_mimir "$fixtures/mimir/error.json" 400
+out="$(fetch "$mimir_url" bad-query --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+stop_mimir
+if [[ $rc -ne 0 ]]; then pass "fetch: a non-success status exits non-zero"; else fail "fetch: a non-success status exits non-zero"; fi
+expect_contains "fetch: a non-success status shows the Mimir error" "$out" "parse error"
+expect_no_file "fetch: a non-success status writes no CSV" "$gdocs/data/bad-query.csv"
+
+start_mimir "$fixtures/mimir/ip-node.json" 200
+out="$(fetch "$mimir_url" ip-node --arm baseline=db0 --arm candidate=db2 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "fetch: an unmapped IPv4 node value is refused"; else fail "fetch: an unmapped IPv4 node value is refused"; fi
+expect_contains "fetch: the refusal says to map the node" "$out" "--node"
+expect_no_file "fetch: the refusal writes no CSV" "$gdocs/data/ip-node.csv"
+out="$(fetch "$mimir_url" ip-node --node 10.0.1.15:9500=db0 --arm baseline=db0 --arm candidate=db2 2>&1)"
+expect_eq "fetch: a --node mapping covers an IPv4 node value" "0" "$?"
+expect_not_contains "fetch: the mapped CSV holds no IP" "$(cat "$gdocs/data/ip-node.csv" 2>/dev/null)" "10.0.1.15"
+stop_mimir
+
+start_mimir "$fixtures/mimir/ok.json" 200
+out="$(fetch "$mimir_url" lonely --arm baseline=db0 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "fetch: a node in no --arm is refused"; else fail "fetch: a node in no --arm is refused"; fi
+expect_contains "fetch: the refusal names the node" "$out" "db2"
+out="$(fetch "$mimir_url" scrape-alloc --arm baseline=db0 --arm candidate=db2 2>&1)"
+expect_eq "fetch: a good response exits 0" "0" "$?"
+stop_mimir
+csv="$(cat "$gdocs/data/scrape-alloc.csv" 2>/dev/null)"
+json="$(cat "$gdocs/data/scrape-alloc.json" 2>/dev/null)"
+expect_eq "fetch: the CSV is long form" "timestamp_utc,node,arm,value" "$(head -n 1 "$gdocs/data/scrape-alloc.csv" 2>/dev/null)"
+expect_contains "fetch: the CSV holds scaled values with the arm" "$csv" ",db0,baseline,26.92"
+expect_contains "fetch: the CSV holds the candidate arm" "$csv" ",db2,candidate,32.72"
+for key in query start end step unit scale arms; do
+  expect_contains "fetch: the JSON holds $key" "$json" "\"$key\""
+done
+expect_contains "fetch: the JSON holds the unit" "$json" '"MB/s"'
+expect_not_contains "fetch: the JSON holds no Mimir URL" "$json" "127.0.0.1"
+expect_not_contains "fetch: the JSON holds no tenant" "$json" "lab-tenant"
+expect_not_contains "fetch: the CSV holds no tenant" "$csv" "lab-tenant"
+req="$(cat "$mimir_log" 2>/dev/null)"
+expect_contains "fetch: the request goes to query_range under the Mimir URL" "$req" "/prometheus/api/v1/query_range?"
+expect_contains "fetch: the request sends the tenant header" "$req" "tenant=lab-tenant"
+expect_contains "fetch: the request sends the step" "$req" "step=30"
+
+# --- report-graph.py plot ---
+
+# pixel_colours <png> <hex>...: print each hex colour that some pixel of the PNG has exactly.
+pixel_colours() {
+  uv run --quiet --no-project --with pillow python3 - "$@" <<'PYEOF'
+import sys
+from PIL import Image
+img = Image.open(sys.argv[1]).convert("RGB")
+seen = set(img.getdata())
+for h in sys.argv[2:]:
+    if tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) in seen:
+        print(h)
+PYEOF
+}
+
+# plot reads CSVs from <docs>/data, as fetch writes them.
+cp "$fixtures/graph/"* "$gdocs/data/"
+gfix="$gdocs/data"
+out="$("$graph" plot --csv "$gfix/baseline.csv" --csv "$gfix/candidate.csv" --name scrape-alloc \
+  --title "Scrape allocation (MB/s)" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_eq "plot: two arms exit 0" "0" "$?"
+expect_file "plot: writes images/<name>.png" "$gdocs/images/scrape-alloc.png"
+colours="$(pixel_colours "$gdocs/images/scrape-alloc.png" 999999 0072B2 e6e6e6 2>&1 | tr '\n' ' ')"
+expect_contains "plot: the baseline series is grey #999999" "$colours" "999999"
+expect_contains "plot: the candidate series is blue #0072B2" "$colours" "0072B2"
+expect_contains "plot: the PNG uses the shared style grid colour" "$colours" "e6e6e6"
+expect_contains "plot: the block starts with the heading" "$out" "## Scrape allocation (MB/s)"
+expect_contains "plot: the block holds the downloaded image" "$out" "![Scrape allocation (MB/s)](images/scrape-alloc.png)"
+expect_contains "plot: the stats table has the default columns" "$out" "| Node | Arm | Samples | Min | p50 | Mean | p99 | Max | Unit |"
+expect_contains "plot: numeric columns are right-aligned" "$out" "|:--|:--|--:|--:|--:|--:|--:|--:|:--|"
+expect_contains "plot: a node row names the node with its role" "$out" "| db0 (baseline) | baseline | 21 | 26.92 |"
+expect_contains "plot: one rollup row per arm, from pooled samples" "$out" "| all | baseline | 42 | 26.92 | 27.09 | 27.09 | 27.27 | 27.27 | MB/s |"
+expect_contains "plot: the candidate rollup row" "$out" "| all | candidate | 21 | 32.72 |"
+expect_contains "plot: the block holds the Window" "$out" "Window: 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
+expect_contains "plot: the block holds the Query" "$out" 'Query: `sum by (instance)'
+expect_contains "plot: the Data line links every CSV" "$out" "Data: [baseline.csv](data/baseline.csv), [candidate.csv](data/candidate.csv)"
+
+out="$("$graph" plot --csv "$gfix/baseline.csv" --name counter --title "Counter" --stats samples,total,rate \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_contains "plot: --stats swaps the statistic columns" "$out" "| Node | Arm | Samples | Total | Rate | Unit |"
+expect_contains "plot: swapped columns stay right-aligned" "$out" "|:--|:--|--:|--:|--:|:--|"
+
+out="$("$graph" plot --csv "$gfix/empty.csv" --name empty --title "Empty" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "plot: empty input exits non-zero"; else fail "plot: empty input exits non-zero"; fi
+expect_contains "plot: empty input gives a clear message" "$out" "no rows"
+expect_no_file "plot: empty input writes no PNG" "$gdocs/images/empty.png"
+
+for m in unit step query; do
+  out="$("$graph" plot --csv "$gfix/baseline.csv" --csv "$gfix/mismatch-$m.csv" --name "mm-$m" --title "M" \
+    --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "plot: a mismatched $m is an error"; else fail "plot: a mismatched $m is an error"; fi
+  expect_contains "plot: the error names the $m" "$out" "$m"
+  expect_no_file "plot: a mismatched $m writes no PNG" "$gdocs/images/mm-$m.png"
+done
+
+out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --name read-latency \
+  --title "Read latency (ms)" --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "plot: mismatched windows without --align are an error"; else fail "plot: mismatched windows without --align are an error"; fi
+expect_contains "plot: the window error suggests --align elapsed" "$out" "--align elapsed"
+
+out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-candidate.csv" --name read-latency \
+  --title "Read latency (ms)" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_eq "plot: --align elapsed exits 0" "0" "$?"
+expect_contains "plot: --align writes the baseline Window line" "$out" "Window (baseline): 2026-10-01T10:00:00Z to 2026-10-01T10:10:00Z (10m 0s), step 30s"
+expect_contains "plot: --align writes the candidate Window line" "$out" "Window (candidate): 2026-10-01T11:30:00Z to 2026-10-01T11:40:00Z (10m 0s), step 30s"
+expect_contains "plot: --align keys nodes by arm" "$out" "| db0 (candidate) | candidate |"
+expect_file "plot: --align writes the PNG" "$gdocs/images/read-latency.png"
+
+out="$("$graph" plot --csv "$gfix/baseline.csv" --name nested --title "Nested" --page evidence/latency.md \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_contains "plot: --page makes the image link relative to a nested page" "$out" "![Nested](../images/nested.png)"
+expect_contains "plot: --page makes the Data link relative to a nested page" "$out" "Data: [baseline.csv](../data/baseline.csv)"
+
+out="$("$graph" plot --csv "$fixtures/graph/baseline.csv" --name outside --title "Outside" \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "plot: a CSV outside <docs>/data is refused"; else fail "plot: a CSV outside <docs>/data is refused"; fi
+expect_contains "plot: the refusal names the data dir" "$out" "/data"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

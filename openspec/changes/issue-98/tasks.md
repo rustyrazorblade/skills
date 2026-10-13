@@ -34,9 +34,9 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 4. Scripts: graph, check, export
 
-- [ ] 4.1 Write harness cases for `report-graph.py fetch`: `127.0.0.1:1` exits non-zero with a clear message and no CSV; the empty-result stub exits non-zero; an unmapped IPv4 node value is refused; the JSON holds no URL or tenant.
-- [ ] 4.2 Write harness cases for `report-graph.py plot`: PNG written with the shared style; a pixel check finds grey `#999999` and blue `#0072B2`; empty input exits non-zero with no PNG; mismatched metadata is an error; mismatched windows without `--align` are an error; `--align elapsed` writes one Window line per arm; the stats table uses `--:` alignment and per-arm rollup rows.
-- [ ] 4.3 Implement `bin/report-graph.py` (PEP 723, `fetch` and `plot`) in the pattern of `plugins/cassandra-expert/skills/training/scripts/verify-sai-capabilities.py`, until 4.1 and 4.2 pass.
+- [x] 4.1 Write harness cases for `report-graph.py fetch`: `127.0.0.1:1` exits non-zero with a clear message and no CSV; the empty-result stub exits non-zero; an unmapped IPv4 node value is refused; the JSON holds no URL or tenant.
+- [x] 4.2 Write harness cases for `report-graph.py plot`: PNG written with the shared style; a pixel check finds grey `#999999` and blue `#0072B2`; empty input exits non-zero with no PNG; mismatched metadata is an error; mismatched windows without `--align` are an error; `--align elapsed` writes one Window line per arm; the stats table uses `--:` alignment and per-arm rollup rows.
+- [x] 4.3 Implement `bin/report-graph.py` (PEP 723, `fetch` and `plot`) in the pattern of `plugins/cassandra-expert/skills/training/scripts/verify-sai-capabilities.py`, until 4.1 and 4.2 pass.
 - [ ] 4.4 Write harness cases for `report-check.py` over every fixture from group 1: exit 0 for agree, 1 for each content FAIL, 3 for each redaction FAIL, 2 for a bad path; WARN for numeral in prose; `--gate` writes one Unchecked line and exits 0; a clean `--gate` removes a stale line; no file edit without `--gate`; nested page and slug resolution; multi-link Data merge keyed by (Node, Arm).
 - [ ] 4.5 Implement `bin/report-check.py` (PEP 723, files only, no network) until 4.4 passes.
 - [ ] 4.6 Write harness cases for `report-export.py`: `jira` holds the summary tier in wiki markup, images as `!name.png!`, no `.md` links, verdict colour; `zip` lists the summary, evidence, nested pages, and their images and CSV, and no appendix file; a missing referenced file fails.

@@ -315,7 +315,7 @@ The run and explore skills SHALL update the evidence tier after each step that m
 
 ### Requirement: The graph script plots CSV to a styled PNG and an evidence block
 
-The `plot` subcommand SHALL read one or more CSVs, write `docs/images/<name>.png` with the shared style, and print the full evidence block to stdout.  The stats table SHALL have one row per node and one rollup row per arm (Node = all) from pooled samples.  Nodes in one arm SHALL differ by line style.  Empty input SHALL exit non-zero and write no PNG.  CSVs with mismatched query, unit, or step SHALL be an error.  Without `--align elapsed`, CSVs with mismatched windows SHALL be an error.  With `--align elapsed`, each CSV SHALL keep its window, the x-axis SHALL be seconds since that CSV's start, and the block SHALL hold one Window line per arm.
+The `plot` subcommand SHALL read one or more CSVs, write `docs/images/<name>.png` with the shared style, and print the full evidence block to stdout.  The stats table SHALL have one row per node and one rollup row per arm (Node = all) from pooled samples.  Nodes in one arm SHALL differ by line style.  Empty input SHALL exit non-zero and write no PNG.  CSVs with mismatched query, unit, or step SHALL be an error.  Two queries that differ only in their `cluster` label matcher SHALL NOT count as mismatched, because each arm filters on its own cluster; with `--align elapsed`, the block SHALL then hold one Query line per arm.  Without `--align elapsed`, CSVs with mismatched windows SHALL be an error.  With `--align elapsed`, each CSV SHALL keep its window, the x-axis SHALL be seconds since that CSV's start, and the block SHALL hold one Window line per arm.
 
 #### Scenario: A CSV fixture becomes a styled PNG
 
@@ -335,7 +335,7 @@ The `plot` subcommand SHALL read one or more CSVs, write `docs/images/<name>.png
 
 #### Scenario: Arms with different windows
 
-- **WHEN** `plot --align elapsed` gets one CSV per arm with different windows and the same query, unit, and step
+- **WHEN** `plot --align elapsed` gets one CSV per arm with different windows, the same unit and step, and queries that differ only in their `cluster` label matcher
 - **THEN** the x-axis is seconds since each CSV's start
 - **AND** the evidence block holds one Window line per arm, for example "Window (baseline): ..."
 

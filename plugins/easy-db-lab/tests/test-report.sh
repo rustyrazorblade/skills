@@ -750,7 +750,6 @@ expect_eq "check: no file edit without --gate" "$before" "$(tree_sum "$tmp_root/
 
 # Malformed evidence data is a content FAIL (exit 1) that names the data file, not an exit 2.
 # fixture | the data file the FAIL line must name
-bad_data_fixtures="data-non-numeric data-no-column data-json-no-start data-json-no-unit data-bad-time data-bad-json"
 while read -r name file; do
   run_check "$name"
   expect_eq "check: $name exits 1" "1" "$check_rc"
@@ -761,6 +760,9 @@ while read -r name file; do
   fi
   fixture_docs "$tmp_root/pristine-$name" "$name"
   expect_eq "check: $name edits no file without --gate" "$(tree_sum "$tmp_root/pristine-$name")" "$(tree_sum "$check_dir")"
+  "$checker" --gate "$check_dir" >/dev/null 2>&1
+  expect_eq "gate: --gate exits 0 on $name" "0" "$?"
+  expect_contains "gate: --gate writes the Unchecked line on $name" "$(grep '^⚠ Unchecked: ' "$check_dir/1-summary.md")" "$file"
 done <<'EOF'
 data-non-numeric data/scrape-alloc.csv
 data-no-column data/scrape-alloc.csv
@@ -937,16 +939,15 @@ expect_file "make: gate builds the report" "$fws/docs/report/index.html"
 expect_file "make: gate writes the exports" "$fws/docs/export/report.zip"
 expect_contains "make: gate passes REASONS to the checker" "$(grep '^⚠ Unchecked: ' "$fws/docs/1-summary.md")" "reviewer saw a confound"
 
-for name in $bad_data_fixtures; do
-  bws="$tmp_root/make-$name"
-  bash "$bin/setup-cluster.sh" "$bws" "$stub_edb" --name "$name" >/dev/null 2>&1
-  fixture_docs "$bws/docs" "$name"
-  make -s -C "$bws/docs" gate >/dev/null 2>&1
-  expect_eq "make: gate exits 0 on $name" "0" "$?"
-  expect_file "make: gate builds the report on $name" "$bws/docs/report/index.html"
-  expect_file "make: gate writes the exports on $name" "$bws/docs/export/report.zip"
-  expect_contains "make: gate writes the Unchecked line on $name" "$(grep '^⚠ Unchecked: ' "$bws/docs/1-summary.md")" "data/scrape-alloc"
-done
+# One bad-data fixture at make level; the check-level loop covers the rest.
+bws="$tmp_root/make-data-bad-json"
+bash "$bin/setup-cluster.sh" "$bws" "$stub_edb" --name data-bad-json >/dev/null 2>&1
+fixture_docs "$bws/docs" data-bad-json
+make -s -C "$bws/docs" gate >/dev/null 2>&1
+expect_eq "make: gate exits 0 on bad data" "0" "$?"
+expect_file "make: gate builds the report on bad data" "$bws/docs/report/index.html"
+expect_file "make: gate writes the exports on bad data" "$bws/docs/export/report.zip"
+expect_contains "make: gate writes the Unchecked line on bad data" "$(grep '^⚠ Unchecked: ' "$bws/docs/1-summary.md")" "data/scrape-alloc.json"
 
 rws="$tmp_root/make-redact"
 bash "$bin/setup-cluster.sh" "$rws" "$stub_edb" --name make-redact >/dev/null 2>&1

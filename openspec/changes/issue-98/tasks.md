@@ -74,7 +74,7 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 9. Version bump
 
-- [ ] 9.1 Bump the version from 0.13.0 to 0.14.0, as the owner confirmed in the issue's owner-instruction comment.  Update `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` together.
+- [x] 9.1 Bump the version from 0.13.0 to 0.14.0, as the owner confirmed in the issue's owner-instruction comment.  Update `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` together.
 
 ## 10. End-to-end test on a real cluster (under the gitignored root `tests/`)
 

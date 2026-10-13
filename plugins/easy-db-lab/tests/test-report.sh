@@ -656,6 +656,9 @@ redact-json-ip IPv4
 redact-account-period account
 redact-ec2-host EC2 host name
 redact-ec2-host-csv EC2 host name
+redact-account-csv-node account
+redact-account-stats-node account
+redact-account-stats-bare account
 EOF
 
 # Not redaction: a 12-digit metric value in data/*.csv and its stats table, infrastructure IDs in

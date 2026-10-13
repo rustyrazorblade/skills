@@ -613,7 +613,8 @@ class Checker:
 
 def without_measurements(rel, text):
     """Each line, paired with the line less its measurement cells: the numeric value column of a
-    data/*.csv, and the numeric cells of a stats table.  A measurement is never an account ID."""
+    data/*.csv, and the numeric cells under a stat column of a stats table.  A measurement is
+    never an account ID; a Node, Arm, or Unit cell can be one."""
     lines = text.splitlines()
     if rel.endswith(".csv"):
         header = next(csv.reader(lines[:1]), [])
@@ -624,14 +625,16 @@ def without_measurements(rel, text):
                 row = row[:col] + row[col + 1:]
             yield line, ",".join(row)
         return
-    in_stats = False
+    header = None
     for line in lines:
         if re.match(r"^\|\s*Node\s*\|\s*Arm\s*\|", line):
-            in_stats = True
+            header = [c.strip() for c in line.split("|")]
         elif not line.lstrip().startswith("|"):
-            in_stats = False
-        if in_stats:
-            yield line, "|".join(c for c in line.split("|") if not MEASUREMENT.match(c.strip()))
+            header = None
+        if header:
+            cells = line.split("|")
+            yield line, "|".join(c for i, c in enumerate(cells) if not (
+                i < len(header) and header[i].lower() in STATS and MEASUREMENT.match(c.strip())))
         else:
             yield line, line
 

@@ -626,6 +626,108 @@ out="$("$exporter" jira "$ws_noplan/docs" "$tmp_root/scaffold-jira.txt" 2>&1)"
 expect_eq "jira: the bare scaffold exports" "0" "$?"
 expect_not_contains "jira: scaffold comments are dropped" "$(cat "$tmp_root/scaffold-jira.txt" 2>/dev/null)" "<!--"
 
+# --- make: the docs Makefile on the scaffold and on docs-agree ---
+
+# toc_order <report-dir>: the sidebar entries in order, one per |, from mdbook's toc.html.
+toc_order() {
+  grep -oE 'href="[^"]+\.html"|part-title">[^<]+' "$1/toc.html" 2>/dev/null \
+    | sed -e 's/^href="//' -e 's/"$//' -e 's/^part-title">/part:/' | tr '\n' '|'
+}
+
+if command -v report-check.py >/dev/null 2>&1; then
+  fail "make: the test PATH holds no plugin bin/" "$(command -v report-check.py)"
+else
+  pass "make: the test PATH holds no plugin bin/"
+fi
+
+mws="$tmp_root/make-scaffold"
+bash "$bin/setup-cluster.sh" "$mws" "$stub_edb" --name make-test >/dev/null 2>&1
+make -s -C "$mws/docs" >/dev/null 2>&1
+expect_eq "make: the bare scaffold builds" "0" "$?"
+expect_file "make: the scaffold gives report/index.html" "$mws/docs/report/index.html"
+expect_file "make: the scaffold gives export/jira.txt" "$mws/docs/export/jira.txt"
+expect_file "make: the scaffold gives export/report.zip" "$mws/docs/export/report.zip"
+expect_contains "make: the placeholder H1 falls back to the cluster name" \
+  "$(grep -o 'menu-title">[^<]*' "$mws/docs/report/index.html" 2>/dev/null)" 'menu-title">make-test'
+expect_contains "make: index.html is the summary page" "$(cat "$mws/docs/report/index.html" 2>/dev/null)" "What this means"
+expect_eq "make: the scaffold sidebar is summary, Evidence, then the Appendix" \
+  "1-summary.html|2-evidence.html|part:Appendix|3-plan.html|4-journal.html|5-issues.html|" \
+  "$(toc_order "$mws/docs/report")"
+
+aws_="$tmp_root/make-agree"
+bash "$bin/setup-cluster.sh" "$aws_" "$stub_edb" --name make-agree >/dev/null 2>&1
+cp -R "$fixtures/docs-agree/." "$aws_/docs/"
+out="$(make -C "$aws_/docs" 2>&1)"
+expect_eq "make: docs-agree builds" "0" "$?"
+expect_contains "make: the check runs first" "$out" "PASS: row Scrape allocation mean (MB/s)"
+rep="$aws_/docs/report"
+for f in "$rep/index.html" "$aws_/docs/export/jira.txt" "$aws_/docs/export/report.zip"; do
+  expect_file "make: docs-agree gives ${f#"$aws_/docs/"}" "$f"
+done
+expect_contains "make: the book title is the summary H1" \
+  "$(grep -o 'menu-title">[^<]*' "$rep/index.html" 2>/dev/null)" 'menu-title">Scrape allocation rises with the canary'
+expect_contains "make: index.html opens on the summary" "$(cat "$rep/index.html" 2>/dev/null)" 'id="scrape-allocation-rises-with-the-canary"'
+expect_eq "make: the sidebar nests Latency under Evidence, above the Appendix" \
+  "1-summary.html|2-evidence.html|evidence/latency.html|part:Appendix|3-plan.html|4-journal.html|5-issues.html|" \
+  "$(toc_order "$rep")"
+expect_contains "make: the (MB/s) heading id is the checker's slug" "$(cat "$rep/2-evidence.html" 2>/dev/null)" 'id="scrape-allocation-mbs"'
+expect_contains "make: the nested heading id is the checker's slug" "$(cat "$rep/evidence/latency.html" 2>/dev/null)" 'id="read-latency-ms"'
+expect_contains "make: index.html links lab.css" "$(cat "$rep/index.html" 2>/dev/null)" 'href="lab'
+built_css="$(cat "$rep"/lab-*.css 2>/dev/null)"
+for rule in "position: sticky" "tbody tr:nth-child(even)" ".verdict-confirmed" "--content-max-width" "@media print"; do
+  expect_contains "make: the built lab.css holds $rule" "$built_css" "$rule"
+done
+expect_contains "make: a verdict renders as a badge span" "$(cat "$rep/index.html" 2>/dev/null)" '<span class="verdict verdict-refuted">Refuted</span>'
+expect_contains "make: numeric columns are right-aligned in HTML" "$(cat "$rep/2-evidence.html" 2>/dev/null)" 'text-align: right'
+
+ews="$tmp_root/make-empty-title"
+bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
+cp -R "$fixtures/docs-agree/." "$ews/docs/"
+perl -pi -e 's/^# .*/#/ if $. == 1' "$ews/docs/1-summary.md"
+make -s -C "$ews/docs" build >/dev/null 2>&1
+expect_contains "make: an empty H1 keeps the book.toml title" \
+  "$(grep -o 'menu-title">[^<]*' "$ews/docs/report/index.html" 2>/dev/null)" 'menu-title">fallback-name'
+
+fws="$tmp_root/make-fail"
+bash "$bin/setup-cluster.sh" "$fws" "$stub_edb" --name make-fail >/dev/null 2>&1
+fixture_docs "$fws/docs" wrong-sign
+out="$(make -C "$fws/docs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "make: a check FAIL stops make"; else fail "make: a check FAIL stops make"; fi
+expect_contains "make: the check flags the sign before the build" "$out" "wrong sign"
+expect_no_file "make: a check FAIL builds no report" "$fws/docs/report/index.html"
+
+out="$(make -C "$fws/docs" gate REASONS='--reason "reviewer saw a confound"' 2>&1)"
+expect_eq "make: gate exits 0 on a content FAIL" "0" "$?"
+expect_file "make: gate builds the report" "$fws/docs/report/index.html"
+expect_file "make: gate writes the exports" "$fws/docs/export/report.zip"
+expect_contains "make: gate passes REASONS to the checker" "$(grep '^⚠ Unchecked: ' "$fws/docs/1-summary.md")" "reviewer saw a confound"
+
+rws="$tmp_root/make-redact"
+bash "$bin/setup-cluster.sh" "$rws" "$stub_edb" --name make-redact >/dev/null 2>&1
+fixture_docs "$rws/docs" redact-tunnel
+make -s -C "$rws/docs" gate >/dev/null 2>&1
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "make: gate stops on a redaction FAIL"; else fail "make: gate stops on a redaction FAIL"; fi
+expect_no_file "make: a redaction FAIL builds no report" "$rws/docs/report/index.html"
+
+mws2="$tmp_root/make-missing"
+bash "$bin/setup-cluster.sh" "$mws2" "$stub_edb" --name make-missing >/dev/null 2>&1
+fixture_docs "$mws2/docs" missing-image
+make -s -C "$mws2/docs" >/dev/null 2>&1
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "make: a missing referenced image exits non-zero"; else fail "make: a missing referenced image exits non-zero"; fi
+make -s -C "$mws2/docs" build export >/dev/null 2>&1
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "make: export alone also fails on the missing image"; else fail "make: export alone also fails on the missing image"; fi
+
+out="$(PATH="$bin:$PATH" make -C "$aws_/docs" EDB_LAB_BIN=/no/such/dir check 2>&1)"
+expect_eq "make: with no scripts in EDB_LAB_BIN, make finds them on PATH" "0" "$?"
+
+make -s -C "$td/docs" build >/dev/null 2>&1
+expect_eq "make: the arms scaffold builds" "0" "$?"
+expect_contains "make: the arms sidebar lists each arm's journal" "$(toc_order "$td/docs/report")" "4-journal-candidate.html"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

@@ -880,8 +880,9 @@ expect_contains "overlay step: an unreadable dashboard names the dashboard" "$ou
 expect_eq "overlay step: an unreadable dashboard sends no render" "" "$req"
 rm -f "$gdocs/images/day.png" "$gdocs/images/overlay-overlay-candidate.png"
 
-# The SOCKS proxy step, run as written.  The wrapper's directory holds .socks5-proxy-state; the stub
-# wrapper's `status` logs itself and, when STUB_RESTART names a port, writes a live tunnel on it.
+# The SOCKS proxy step, run as written.  The wrapper's directory holds .socks5-proxy.env, or, from an
+# older binary, .socks5-proxy-state.  The stub wrapper's `status` logs itself and, when STUB_RESTART
+# names a port, writes a live tunnel on it: to the .env file when STUB_ENV is set, else to the state.
 proxy_step="$(first_bash_block "$report_ref" "### The SOCKS proxy")"
 if [[ "$proxy_step" == *".socks5-proxy-state"* ]]; then
   pass "reference: The SOCKS proxy holds the proxy step"
@@ -893,8 +894,13 @@ mkdir -p "$pdir"
 cat >"$pdir/easy-db-lab" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >>"$(dirname "$0")/status.log"
-[[ -z "${STUB_RESTART:-}" ]] || printf '{"pid":%s,"port":%s}\n' "$STUB_LIVE_PID" "$STUB_RESTART" \
-  >"$(dirname "$0")/.socks5-proxy-state"
+[[ -n "${STUB_RESTART:-}" ]] || exit 0
+if [[ -n "${STUB_ENV:-}" ]]; then
+  printf 'EDL_TAILSCALE_ACTIVE=false\nEDL_SOCKS_PORT=%s\nEDL_SOCKS_PID=%s\n' "$STUB_RESTART" "$STUB_LIVE_PID" \
+    >"$(dirname "$0")/.socks5-proxy.env"
+else
+  printf '{"pid":%s,"port":%s}\n' "$STUB_LIVE_PID" "$STUB_RESTART" >"$(dirname "$0")/.socks5-proxy-state"
+fi
 EOF
 chmod +x "$pdir/easy-db-lab"
 sleep 600 &
@@ -902,11 +908,13 @@ live_pid=$!
 (exit 0) &
 dead_pid=$!
 wait "$dead_pid"
-# proxy <state json or ""> [STUB_RESTART port]: run the step and set out to PROXY, log to the status calls.
+# proxy <state json or ""> [STUB_RESTART port] [env file text or ""]: write the state files, run the
+# step, and set out to PROXY and log to the status calls.  An env file text makes status write the env.
 proxy() {
-  rm -f "$pdir/.socks5-proxy-state" "$pdir/status.log"
+  rm -f "$pdir/.socks5-proxy-state" "$pdir/.socks5-proxy.env" "$pdir/status.log"
   [[ -z "$1" ]] || printf '%s\n' "$1" >"$pdir/.socks5-proxy-state"
-  out="$(EDB="$pdir/easy-db-lab" STUB_RESTART="${2:-}" STUB_LIVE_PID="$live_pid" \
+  [[ -z "${3:-}" ]] || printf '%s\n' "$3" >"$pdir/.socks5-proxy.env"
+  out="$(EDB="$pdir/easy-db-lab" STUB_RESTART="${2:-}" STUB_ENV="${3:-}" STUB_LIVE_PID="$live_pid" \
     bash -c "$proxy_step"$'\nprintf %s "$PROXY"' 2>/dev/null)"
   log="$(cat "$pdir/status.log" 2>/dev/null)"
 }
@@ -921,6 +929,21 @@ expect_eq "proxy step: a tunnel that status cannot restart gives no proxy" "" "$
 proxy ""
 expect_eq "proxy step: no state file gives no proxy" "" "$out"
 expect_eq "proxy step: no state file runs no status" "" "$log"
+env_live="$(printf 'EDL_TAILSCALE_ACTIVE=false\nEDL_SOCKS_PORT=24811\nEDL_SOCKS_PID=%s' "$live_pid")"
+proxy "" "" "$env_live"
+expect_eq "proxy step: a live tunnel in .socks5-proxy.env gives its port" "socks5h://127.0.0.1:24811" "$out"
+expect_eq "proxy step: a live tunnel in .socks5-proxy.env runs no status" "" "$log"
+proxy "{\"pid\":$live_pid,\"port\":1080}" "" "$env_live"
+expect_eq "proxy step: .socks5-proxy.env wins over .socks5-proxy-state" "socks5h://127.0.0.1:24811" "$out"
+proxy "" 27003 "$(printf 'EDL_TAILSCALE_ACTIVE=false\nEDL_SOCKS_PORT=24811\nEDL_SOCKS_PID=%s' "$dead_pid")"
+expect_eq "proxy step: a dead tunnel in .socks5-proxy.env runs status" "status" "$log"
+expect_eq "proxy step: a dead tunnel in .socks5-proxy.env gives the restarted port" "socks5h://127.0.0.1:27003" "$out"
+proxy "" 27004 "EDL_TAILSCALE_ACTIVE=false"
+expect_eq "proxy step: .socks5-proxy.env with no tunnel runs status" "status" "$log"
+expect_eq "proxy step: .socks5-proxy.env with no tunnel gives the started port" "socks5h://127.0.0.1:27004" "$out"
+proxy "" 27005 "EDL_TAILSCALE_ACTIVE=true"
+expect_eq "proxy step: a Tailscale cluster gives no proxy" "" "$out"
+expect_eq "proxy step: a Tailscale cluster runs no status" "" "$log"
 kill "$live_pid" 2>/dev/null
 wait "$live_pid" 2>/dev/null
 graphs_ref="$(sed -n '/^## Graphs/,/^## Prose Rules/p' "$report_ref")"
@@ -928,6 +951,8 @@ expect_not_contains "reference: Graphs does not say Grafana is always on Tailsca
 # shellcheck disable=SC2016 # the backticks are literal markdown
 expect_contains "reference: Graphs says status restarts a dead tunnel" "$graphs_ref" '`$EDB status` restarts'
 expect_contains "reference: Graphs runs the proxy step at each use" "$graphs_ref" "before each"
+socks_ref="$(sed -n '/^### The SOCKS proxy/,/^### Fetch/p' "$report_ref")"
+expect_not_contains "reference: the proxy step does not source the env file" "$socks_ref" "source "
 
 # --- report-check.py ---
 
@@ -1510,6 +1535,9 @@ sso_ref="$(sed -n '/^## The AWS SSO Session/,/^## /p' "$upload_ref")"
 # shellcheck disable=SC2016 # a literal $AWS_PROFILE in the skill text
 expect_contains "upload: the SSO check names the login command" "$sso_ref" 'aws sso login --profile "$AWS_PROFILE"'
 expect_contains "upload: the SSO check says sts can pass on cached credentials" "$sso_ref" "get-caller-identity"
+# shellcheck disable=SC2016 # a literal $AWS_PROFILE in the reference text
+expect_eq "upload: every aws sso login names the profile" "" \
+  "$(grep -n 'aws sso login' "$upload_ref" | grep -v 'aws sso login --profile "$AWS_PROFILE"')"
 for f in "$run_skill" "$explore_skill"; do
   expect_contains "docs: ${f#"$plugin/"} runs the SSO session check" "$(cat "$f")" '"The AWS SSO Session"'
 done

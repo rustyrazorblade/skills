@@ -165,19 +165,35 @@ The CLI reaches the cluster over Tailscale or over an SSH SOCKS tunnel.  The tun
 Run this step before each `fetch`, each `curl`, and each `render`.  Shell state does not persist between Bash tool calls, so put the step in the same call as the command.  Set `EDB` to the wrapper's absolute path; in a multi-DC or arms layout, use the wrapper of that DC or arm.
 
 ```bash
-state="$(dirname "$EDB")/.socks5-proxy-state"
-PROXY=
-if [[ -f "$state" ]]; then
-  kill -0 "$(jq -r .pid "$state")" 2>/dev/null || "$EDB" status >/dev/null
-  if kill -0 "$(jq -r .pid "$state")" 2>/dev/null; then
-    PROXY="socks5h://127.0.0.1:$(jq -r .port "$state")"
+dir="$(dirname "$EDB")"
+tunnel() {
+  if [[ -f "$dir/.socks5-proxy.env" ]]; then
+    pid="$(sed -n 's/^EDL_SOCKS_PID=//p' "$dir/.socks5-proxy.env" | tr -d "\"'")"
+    port="$(sed -n 's/^EDL_SOCKS_PORT=//p' "$dir/.socks5-proxy.env" | tr -d "\"'")"
+  elif [[ -f "$dir/.socks5-proxy-state" ]]; then
+    pid="$(jq -r .pid "$dir/.socks5-proxy-state")"
+    port="$(jq -r .port "$dir/.socks5-proxy-state")"
   else
-    echo "no live SOCKS tunnel in $state" >&2
+    return 1
+  fi
+}
+live() { [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; }
+PROXY=
+if grep -qx 'EDL_TAILSCALE_ACTIVE=true' "$dir/.socks5-proxy.env" 2>/dev/null; then
+  echo "Tailscale: no SOCKS tunnel needed" >&2
+elif tunnel; then
+  live || { "$EDB" status >/dev/null; tunnel; }
+  if live; then
+    PROXY="socks5h://127.0.0.1:$port"
+  else
+    echo "no live SOCKS tunnel recorded in $dir" >&2
   fi
 fi
 ```
 
-The wrapper's directory holds `.socks5-proxy-state`.  If the file is absent, the CLI started no tunnel, and `PROXY` stays empty.  If the tunnel is still dead after `$EDB status`, write it in `<journal>` and `<issues>`.  The command then fails, and its failure rule applies.  Write each port change in `<journal>`.
+The wrapper's directory holds the tunnel record.  The step reads `.socks5-proxy.env`, the documented record, and parses `EDL_SOCKS_PORT` and `EDL_SOCKS_PID` without `source`.  It reads the internal `.socks5-proxy-state` only when `.socks5-proxy.env` is absent, because released binaries write only `.socks5-proxy-state`.
+
+If `.socks5-proxy.env` says `EDL_TAILSCALE_ACTIVE=true`, the cluster needs no tunnel, and `PROXY` stays empty.  If neither file exists, the CLI started no tunnel, and `PROXY` stays empty.  If the tunnel is still dead after `$EDB status`, write it in `<journal>` and `<issues>`.  The command then fails, and its failure rule applies.  Write each port change in `<journal>`.
 
 ### Fetch
 

@@ -192,7 +192,7 @@ The CLI has two failure messages.  Both exit non-zero.
 
 Common causes:
 
-- **Expired AWS SSO session.**  The CLI retries before it fails, so this failure can be slow.  Tell the user to run `aws sso login` and then retry.
+- **Expired AWS SSO session.**  The CLI retries before it fails, so this failure can be slow.  Tell the user to run `aws sso login --profile "$AWS_PROFILE"` and then retry.
 - **Invalid file name.**  A name must end in `.md` and use only letters, numbers, `.`, `_`, and `-`.
 - **Missing file.**  A file in the list does not exist.
 - **Stray `index.md`.**  The CLI reserves the name `index.md` for the index, so it rejects the batch.
@@ -206,7 +206,7 @@ Common causes:
 3. Write the failure to `<journal>` and `<issues>`.
 4. Ask the user to choose: retry, shut down anyway, or keep the cluster up.
 
-- **Retry:** the user can fix the cause first, for example with `aws sso login`.  Run the upload procedure again.  Do not re-run the check.  Run `$EDB down --auto-approve` only if the new upload exits 0.  If it fails again, start this procedure again at step 1.
+- **Retry:** the user can fix the cause first, for example with `aws sso login --profile "$AWS_PROFILE"`.  Run the upload procedure again.  Do not re-run the check.  Run `$EDB down --auto-approve` only if the new upload exits 0.  If it fails again, start this procedure again at step 1.
 - **Shut down anyway:** run `$EDB down --auto-approve`, on every DC.  Write in `<journal>` that the report was not uploaded.
 - **Keep the cluster up:** do not run `down`.  Write the choice in `<journal>`.
 

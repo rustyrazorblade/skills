@@ -4,7 +4,7 @@ Spec files: `L` = `specs/easy-db-lab-lab-report/spec.md`, `U` = `specs/easy-db-l
 
 | Source | Requirement | Covering scenario(s) | Status |
 |---|---|---|---|
-| AC: Scaffold | `setup-cluster.sh` scaffolds five tier files, `SUMMARY.md`, `Makefile`, `book.toml`, CSS, style, `images/`, `data/`; no `results.md` | L: "A new workspace gets the tier scaffold" | ✅ Covered |
+| AC: Scaffold | `setup-cluster.sh` scaffolds five tier files, `SUMMARY.md`, `Makefile`, `book.toml`, CSS, `images/`, `data/`; no `results.md`; no `lab.mplstyle` (redirect 2) | L: "A new workspace gets the tier scaffold" | ✅ Covered |
 | AC: Scaffold | `--plan` is copied to `docs/3-plan.md` | L: "The plan is copied to the plan tier" | ✅ Covered |
 | AC: Scaffold | `book.toml` references the house CSS through `additional-css` | L: "book.toml wires the house CSS" | ✅ Covered |
 | AC: Scaffold | `make` title is the summary's plain-words title, not the cluster slug | L: "The title is the plain-words title" | ✅ Covered |
@@ -15,9 +15,18 @@ Spec files: `L` = `specs/easy-db-lab-lab-report/spec.md`, `U` = `specs/easy-db-l
 | AC: Exports | `make` on a sample tree produces `export/jira.txt` and `export/report.zip` | L: "make produces the exports" | ✅ Covered |
 | AC: Exports | `jira.txt` holds the summary tier in wiki markup; images by file name | L: "jira.txt holds the summary tier" | ✅ Covered |
 | AC: Exports | `report.zip` holds summary, evidence, nested pages, images, CSV; no plan, journal, issues | L: "report.zip holds only the customer tiers" | ✅ Covered |
-| AC: Graph | CSV fixture through uv gives a PNG in `docs/images/` with the shared style | L: "A CSV fixture becomes a styled PNG" | ✅ Covered |
-| AC: Graph | Baseline and candidate arms get their fixed role colours | L: "Each arm gets its role colour", "Role colours are fixed" | ✅ Covered |
-| AC: Graph | Mimir unreachable or no series: non-zero exit, clear message, no empty PNG | L: "Mimir is unreachable", "The query returns no series", "Empty input writes no PNG" | ✅ Covered |
+| AC: Graph (changed by redirect 2) | The image in `docs/images/` is a Grafana panel render that `render` downloads, for the same metric and window, through the render API | L: "A render writes the panel PNG", "An ISO window becomes epoch milliseconds", "A relative range passes through", "The block cites the rendered image" | ✅ Covered |
+| AC: Graph (removed by redirect 2) | Baseline and candidate arms get their fixed role colours | None | ⚠️ Excluded: the owner removed custom rendering at Seam 1 (redirect 2); the colours are the Grafana panel's own |
+| AC: Graph | Mimir unreachable or no series: non-zero exit, clear message, no empty PNG | L: "Mimir is unreachable", "The query returns no series", "Empty input prints no block" | ✅ Covered |
+| Redirect 2 | Render failure (unreachable, non-200, empty or non-PNG body) exits non-zero with a clear message and writes no image | L: "Grafana is unreachable", "Grafana returns an error status", "Grafana returns a body that is not a PNG", "A failed render keeps the old image" | ✅ Covered |
+| Redirect 2 | Renders run while the cluster is up, at the same point as fetch; a failed render is logged and the run continues | L: "A measuring step adds an evidence block", "A failed render does not stop the run" | ✅ Covered |
+| Redirect 2 | `block` builds the evidence block and the stats table from the CSVs and an image path; it draws nothing | L: "The block cites the rendered image", "A missing or non-PNG image", "Empty input prints no block" | ✅ Covered |
+| Redirect 2 | matplotlib plotting, `lab.mplstyle`, and the role colours are gone from the script, the scaffold, and the references | L: "The script holds no plotting code", "No custom plotting instruction", "A new workspace gets the tier scaffold" | ✅ Covered |
+| Redirect 2 | Cross-cluster: one combined overlay render from the last arm still up, which holds its `down` until the render and is then released, with no shared state file | L: "The last arm holds its down until the overlay render", "The coordinator releases the render arm", "The hold uses no shared state file", "An overlay render fails" | ✅ Covered |
+| Redirect 2 | No overlay panel for a metric: one render per arm from a regular dashboard, labelled by arm; one combined stats table | L: "A metric with no overlay panel", "Per-arm images are labelled by arm" | ✅ Covered |
+| Redirect 1 | CSVs whose queries differ only in the `cluster` matcher are not a query mismatch | L: "Arms with different windows", "Mismatched windows without arm windows" | ✅ Covered |
+| Redirect 2 (E2E) | Single-cluster A/B: each uploaded image is a Grafana render of a regular dashboard panel | L: "A single-cluster A/B renders from a regular dashboard"; tasks 12.1 | ✅ Covered |
+| Redirect 2 (E2E) | Two-arm test: the uploaded evidence holds a combined overlay render, and the render arm went down after it | L: "A two-arm test on a real cluster"; tasks 12.2 | ✅ Covered |
 | AC: Check | Wrong sign against the CSV (`metrics21667`) is flagged before `make` | L: "Wrong sign (the metrics21667 pattern)" | ✅ Covered |
 | AC: Check | Wrong size or wrong unit is flagged before `make` | L: "Wrong size", "Wrong unit" | ✅ Covered |
 | AC: Check | Summary and evidence agree: check passes and `make` proceeds | L: "Summary and evidence agree" | ✅ Covered |
@@ -42,7 +51,7 @@ Spec files: `L` = `specs/easy-db-lab-lab-report/spec.md`, `U` = `specs/easy-db-l
 | AC: Content | Every summary claim maps to an evidence block with image, stats, Window, Query, Data link | L: "A summary claim maps to a full evidence block", "An incomplete evidence block fails" | ✅ Covered |
 | AC: Content | No Grafana graph links in summary and evidence tiers | L: "No Grafana links in the customer tiers" | ✅ Covered |
 | AC: Docs | plan, run, explore, report-upload, journal hold no stale `results.md` reference | L: "No stale results.md reference", "No vague screenshot instruction", "Plan previous reads the tier files" | ✅ Covered |
-| AC: E2E | Short A/B plan to Completion on a real cluster: verdict and table, Mimir PNG and CSV, passing check, `make` with three outputs, five-file upload in order 1 to 5 | L: "A full A/B run on a real cluster"; tasks 10.2 | ✅ Covered |
+| AC: E2E | Short A/B plan to Completion on a real cluster: verdict and table, Grafana render image and Mimir CSV, passing check, `make` with three outputs, five-file upload in order 1 to 5 | L: "A full A/B run on a real cluster"; tasks 10.2, 12.1 | ✅ Covered |
 | Scope (debt) | Scaffold naming `<destination>.template`; static `book.toml.template` | L: "Templates follow the destination naming rule" | ✅ Covered |
 | Scope (debt) | Reporting rules move from run SKILL.md to `report.md`; fix "step 66 above" | L: "Run SKILL.md holds no reporting rules", "Both skills load the reference" | ✅ Covered |
 | Scope (debt) | README stops advertising the operator agent | L: "README advertises no operator agent" | ✅ Covered |
@@ -55,13 +64,17 @@ Spec files: `L` = `specs/easy-db-lab-lab-report/spec.md`, `U` = `specs/easy-db-l
 | Risk (architect) | Nested evidence pages are not uploaded; images broken in Grafana until CLI support | U: "Single-cluster run uploads the five tier files", "Binary accepts images and CSV" | ✅ Covered |
 | Risk (architect) | Cross-cluster: which workspace holds the comparison summary | L: "One report per cross-cluster test", "Final Finalize after the last arm" | ✅ Covered |
 | Risk (architect) | Explore provisions without `setup-cluster.sh`, so `docs/` may lack the scaffold | L: "Explore starts with no report scaffold", "Explore starts with a scaffold" | ✅ Covered |
-| Risk (architect) | First `make` needs network for uv packages | None | ⚠️ Excluded — environment property, accepted by the owner; no behavior to specify |
-| Risk (architect) | `src = "."` copies `data/`, `export/`, Makefile, style into `report/` | None | ⚠️ Excluded — verified harmless by the architect and accepted; no behavior change |
+| Risk (architect) | First `make` needs network for uv packages | None | ⚠️ Excluded: environment property, accepted by the owner; no behavior to specify |
+| Risk (architect) | `src = "."` copies `data/`, `export/`, Makefile, style into `report/` | None | ⚠️ Excluded: verified harmless by the architect and accepted; no behavior change |
 | Risk (architect) | Pause writes a Partial summary, which is non-scaffold, so it uploads later | L: "Pause writes a Partial summary"; U: "A scaffold-only tier file is excluded and named" | ✅ Covered |
-| Risk (architect) | No migration; old workspaces break on resume | None | ⚠️ Excluded — out of scope by the issue ("Old workspaces: not supported") |
+| Risk (architect) | No migration; old workspaces break on resume | None | ⚠️ Excluded: out of scope by the issue ("Old workspaces: not supported") |
 | Risk (architect) | Hard dependency: real-binary image/CSV upload test needs the unfiled CLI change and the D7 wording contract | U: "Binary accepts images and CSV" (stub `$EDB`, task 1.2) | ✅ Covered |
 | Risk (addendum) | An arm must fetch before its own `down`; a missed fetch is permanent | L: "A failed fetch does not stop the run", "Final Finalize with a check failure" | ✅ Covered |
 | Risk (addendum) | An arm's later upload replaces only its appendix files; coordinator copy stale until then | U: "Arm gate upload" (requirement text: later arm upload replaces only that arm's files) | ✅ Covered |
 | Risk (addendum) | `--gate` edits `1-summary.md` after the subagent reviewed it | L: "A clean gate removes a stale line", "Check failure at a teardown gate"; requirement limits the edit to one Unchecked line | ✅ Covered |
 | Risk (addendum) | The arms marker is a shared contract across three scripts | L: "The arms scaffold", "Layout detection reports arms", "Seeds script refuses arms" | ✅ Covered |
 | Critic (decision 8) | Findings 1, 2, 5, 6, 7, 11, 12: arms layout, per-arm down, Final Finalize, per-arm files, generated SUMMARY, arm-prefixed names and per-arm windows, no seeds script, Parallel arms rewrite | L: "The arms scaffold", "Arm gate", "Teardown without an arm", "Final Finalize after the last arm", "Arms with different windows", "Nodes are named by role", "Seeds script refuses arms", "No two agents write the same file" | ✅ Covered |
+| Risk (redirect 2) | An overlay panel covers each cluster's whole `up` period, not only the measured window | None | ⚠️ Excluded: a property of the comparison dashboards, which compute their own windows; the stats table and the per-arm Window lines carry the measured windows, and the checker uses the CSVs |
+| Risk (redirect 2) | The render arm stays up longer for the overlay renders | L: "An overlay render fails" (one retry, then release) | ✅ Covered |
+| Risk (redirect 2) | A render needs Grafana anonymous access and the renderer sidecar | L: "Grafana is unreachable", "Grafana returns an error status", "A failed render does not stop the run" | ✅ Covered |
+| Risk (redirect 2) | The writer picks a panel that does not match the block's query | None | ⚠️ Excluded: a writer choice guided by `report.md` (task 11.6); the checker's numbers come from the CSV only, so the claims stay checked |

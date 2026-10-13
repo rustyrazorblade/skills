@@ -15,13 +15,14 @@ A reader cannot trust or reuse the result without reading the journal.  This cha
 
 All paths are under `plugins/easy-db-lab/` unless stated.
 
-- **Scaffold (new templates, old files deleted).**  `scaffold/` holds `1-summary.md.template`, `2-evidence.md.template` (with `## Threats to validity`), `3-plan.md.template`, `4-journal.md.template`, `5-issues.md.template`, `SUMMARY.md.template`, `book.toml.template` (static, with `additional-css`), `lab.css.template` (house theme), `lab.mplstyle.template` (shared matplotlib style), and `Makefile.template`.  **BREAKING:** `scaffold/results.md`, `journal.md`, `issues.md`, `SUMMARY.md`, and `Makefile` are deleted.  Old workspaces are not supported.
+- **Scaffold (new templates, old files deleted).**  `scaffold/` holds `1-summary.md.template`, `2-evidence.md.template` (with `## Threats to validity`), `3-plan.md.template`, `4-journal.md.template`, `5-issues.md.template`, `SUMMARY.md.template`, `book.toml.template` (static, with `additional-css`), `lab.css.template` (house theme), and `Makefile.template`.  **BREAKING:** `scaffold/results.md`, `journal.md`, `issues.md`, `SUMMARY.md`, and `Makefile` are deleted.  Redirect 2 also deletes `scaffold/lab.mplstyle.template`, which an earlier step of this change added.  Old workspaces are not supported.
 - **`bin/setup-cluster.sh` (modified).**  It copies each template to its destination, creates `docs/images/` and `docs/data/`, and copies `--plan` to `docs/3-plan.md`.  The `book.toml` heredoc goes away.  New flags: `--arm <arm>=<plan.md>` (cross-cluster arms layout, writes the `<test-dir>/arms` marker, excludes `--dc`) and `--docs-only` (scaffold only, no binary, no wrapper).  It never rewrites an existing wrapper.  It refuses a binary whose real path is a wrapper it would write, and it refuses a directory that is an easy-db-lab source checkout.
 - **`bin/detect-cluster-layout.sh` (modified).**  It reports `LAYOUT=arms`, `ARMS`, `EDB_<ARM>`, and `STATE_<ARM>` when the `arms` marker exists.  It skips `bin` like `docs`.
 - **`bin/configure-multi-dc-seeds.sh` (modified).**  It exits 1 when `<cluster-dir>/arms` exists.
-- **`bin/report-graph.py` (new, PEP 723).**  `fetch` queries Mimir `query_range` and writes `docs/data/<name>.csv` and `.json`.  `plot` writes `docs/images/<name>.png` with the shared style and prints the evidence block.  It supports `--align elapsed` for arms.
+- **`bin/report-graph.py` (new, PEP 723).**  `fetch` queries Mimir `query_range` and writes `docs/data/<name>.csv` and `.json`.  `render` downloads a Grafana panel render (`/render/d-solo/<uid>/`, through the grafana-image-renderer sidecar on every cluster) to `docs/images/<name>.png`, and fails with no image on an unreachable Grafana, a non-200 status, or a body that is not a PNG.  `block` prints the evidence block from the CSVs and the rendered images; it draws nothing.  `--arm-windows` gives one Window line per arm.  The script does not use matplotlib (redirect 2: the owner rejected custom rendering).
 - **`bin/report-check.py` (new, PEP 723).**  It checks summary claims against evidence blocks and CSVs (sign, size, unit, noise floor, verdict), the evidence block format, the Reasoning review line, Grafana links, and redaction.  `--gate` writes the "⚠ Unchecked: <reasons>" Caveats line.  Exit 3 means a redaction failure.
 - **`bin/report-export.py` (new, PEP 723).**  `jira` writes `export/jira.txt` (summary tier in Atlassian wiki markup through pandoc).  `zip` writes `export/report.zip` (summary and evidence tiers with their images and data, no appendix).
+- **Cross-cluster images (redirect 2).**  A metric with an overlay panel in a comparison dashboard (`ab-comparison`, Cassandra Cluster Comparison, `system-ab-comparison`) gets one combined render from the last arm still up.  The coordinator holds that arm by not relaunching it for teardown until the overlay renders are on disk, then relaunches it.  A metric with no overlay panel gets one render per arm, from a regular dashboard, labelled by arm.  The stats table stays combined from both CSVs.
 - **`references/report.md` (new).**  One shared reference that the run and explore skills load.  It holds the tier contents, the fixed summary layout, the Noise floor rule, the evidence block format, the prose rules, redaction, the exit rule, the check step, file roles, and the arms rules.
 - **`skills/run/SKILL.md` (modified).**  Reporting rules move out of the execution loop, Completion, and Team Agents into `report.md`.  The stale "step 66 above" at line 135 is fixed.  The pause exit writes a Partial summary.  New modes: `run <test-dir> --arm <arm>` and `run <cluster-dir> --finalize`.  "Parallel arms" (lines 369-375) is rewritten to one test directory and one report.  The calibration rule at line 374 is unchanged.
 - **`skills/explore/SKILL.md` (modified).**  It loads `report.md`.  At Step 1 it runs `setup-cluster.sh "$PWD" --docs-only --name "$(basename "$PWD")"` when `docs/SUMMARY.md` is absent.  It refuses a source checkout.  At Teardown it writes `1-summary.md` with a verdict and a Findings table first.
@@ -33,7 +34,7 @@ All paths are under `plugins/easy-db-lab/` unless stated.
 - **Version.**  `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` go from 0.13.0 to 0.14.0.
 - **`tests/test-report.sh` and `tests/fixtures/` (new).**  A local harness that runs every no-cluster acceptance criterion.
 
-User-visible behavior: every upload holds a summary with a verdict first.  Every summary claim traces to a downloaded graph, a stats table, and a CSV.  `make` produces `report/index.html`, `export/jira.txt`, and `export/report.zip`.  A cross-cluster A/B produces one report.
+User-visible behavior: every upload holds a summary with a verdict first.  Every summary claim traces to a downloaded Grafana panel render, a stats table, and a CSV.  `make` produces `report/index.html`, `export/jira.txt`, and `export/report.zip`.  A cross-cluster A/B produces one report.
 
 ## Capabilities
 
@@ -47,7 +48,7 @@ User-visible behavior: every upload holds a summary with a verdict first.  Every
 
 ## Impact
 
-- New Python scripts run through `uv` with PEP 723 metadata.  The first `make` needs network access to fetch matplotlib and pypandoc-binary.
+- New Python scripts run through `uv` with PEP 723 metadata.  The first `make` needs network access to fetch pypandoc-binary.
 - Existing workspaces with `results.md` break on resume.  This is accepted.  Tests are ephemeral.
 - `report upload` accepts `.md` only today, so images and CSV are not uploaded until the CLI supports them (separate easy-db-lab issue).
 - The arms marker is a new contract shared by `setup-cluster.sh`, `detect-cluster-layout.sh`, and `configure-multi-dc-seeds.sh`.

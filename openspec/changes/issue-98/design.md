@@ -13,7 +13,7 @@ The architect prototyped the mechanics against mdbook v0.5.3, uv, and pandoc thr
 - A five-tier report (`1-summary.md` to `5-issues.md`) that the Grafana Tests index shows in order.
 - A summary with the verdict first, a fixed table, and every number traced to an evidence block.
 - A mechanical check that catches the `metrics21667` contradiction before `make`.
-- Graphs downloaded from Mimir as PNG and CSV, never linked.
+- Data downloaded from Mimir as CSV, and images downloaded as Grafana panel renders, never linked.
 - `make` produces the HTML book, a JIRA export, and a zip of the customer tiers.
 - A summary at every exit, so no upload is blank.
 - One report per cross-cluster test.
@@ -30,14 +30,16 @@ The architect prototyped the mechanics against mdbook v0.5.3, uv, and pandoc thr
 
 ## Decisions
 
-The owner accepted D1 to D8 as the architect recommended (decision 1), the minor fixes m1 to m8 (decision 6), and the architect addendum in full (decision 10).
+The owner accepted D1 to D8 as the architect recommended (decision 1), the minor fixes m1 to m8 (decision 6), and the architect addendum in full (decision 10).  Two owner redirects at Seam 1 changed the graph design after that.  Redirect 1: a query difference in the `cluster` label matcher only is not a mismatch.  Redirect 2: Grafana panel renders replace local plotting (see "Redirect 2" below).  Where an earlier entry here disagrees with a redirect, the redirect wins.
 
 ### Pipeline
 
 ```
 skill (run/explore) --writes--> docs/1-summary.md, 2-evidence.md (rules: references/report.md)
-     | after each measuring step:  report-graph.py fetch  (Mimir -> data/<n>.csv + data/<n>.json)
-     |                             report-graph.py plot   (CSV -> images/<n>.png + evidence block on stdout)
+     | after each measuring step, while the cluster is up:
+     |                             report-graph.py fetch  (Mimir -> data/<n>.csv + data/<n>.json)
+     |                             report-graph.py render (Grafana panel render -> images/<n>.png)
+     | then:                       report-graph.py block  (CSV + image -> evidence block on stdout)
      | at every exit:  write summary -> check (report-check.py + subagent + cassandra-expert) -> make -> upload
 make (docs/Makefile):  check -> mdbook build (title from 1-summary.md H1) -> export/jira.txt, export/report.zip
 ```
@@ -58,9 +60,11 @@ The Makefile exports `MDBOOK_BOOK__TITLE` from the first `# ` line of `1-summary
 
 ### D3a, D3b, D3c: graph script
 
-One PEP 723 file with two subcommands.  `fetch` takes `--mimir-url`, `--tenant`, `--query`, `--start`, `--end`, `[--step 30s]`, `--node-label`, `[--node VALUE=db0]...`, `--arm`, `--unit`, `[--scale]`, `--name`, `--docs`, and an optional `--proxy socks5h://...` (m6).  It writes `data/<name>.csv` (long form: `timestamp_utc,node,arm,value`) and `data/<name>.json` (`query, start, end, step, unit, scale, arms`).  It never stores the URL or the tenant.  It fails on a connection error, a non-success status, zero series, or an IPv4-looking node value with no `--node` mapping.  The skill derives the Mimir URL and tenant from `$EDB help observability` and `$EDB status`, per DC wrapper, and never reads `state.json`.
+One PEP 723 file.  Redirect 2 changed its subcommands to `fetch`, `render`, and `block`; the `fetch` contract below is unchanged.  `fetch` takes `--mimir-url`, `--tenant`, `--query`, `--start`, `--end`, `[--step 30s]`, `--node-label`, `[--node VALUE=db0]...`, `--arm`, `--unit`, `[--scale]`, `--name`, `--docs`, and an optional `--proxy socks5h://...` (m6).  It writes `data/<name>.csv` (long form: `timestamp_utc,node,arm,value`) and `data/<name>.json` (`query, start, end, step, unit, scale, arms`).  It never stores the URL or the tenant.  It fails on a connection error, a non-success status, zero series, or an IPv4-looking node value with no `--node` mapping.  The skill derives the Mimir URL and tenant from `$EDB help observability` and `$EDB status`, per DC wrapper, and never reads `state.json`.
 
-`plot` takes one or more `--csv`, `--style`, `--title`, `[--stats ...]`, `[--align elapsed]`, and `--docs`.  It writes `images/<name>.png` and prints the full evidence block.  The stats table has one row per node plus one rollup row per arm (Node = all), from pooled samples.  The stat menu is samples, min, p50, mean, p95, p99, max, total, and rate.  Role colours come from an explicit map keyed by arm name: baseline grey `#999999`, candidate blue `#0072B2`, extra arms in palette order; plots with no arm use palette order (m5).  Nodes in an arm differ by line style.
+~~`plot` takes one or more `--csv`, `--style`, `--title`, `[--stats ...]`, `[--align elapsed]`, and `--docs`.  It writes `images/<name>.png`.  Role colours come from an explicit map keyed by arm name (m5).  Nodes in an arm differ by line style.~~ (superseded by redirect 2)
+
+`block` keeps the rest of the old `plot` contract.  It prints the full evidence block.  The stats table has one row per node plus one rollup row per arm (Node = all), from pooled samples.  The stat menu is samples, min, p50, mean, p95, p99, max, total, and rate.
 
 ### D4, D4b: check
 
@@ -82,7 +86,7 @@ The `$EDB commands` support check is extended.  Support exists when the `report 
 
 ### D8a, D8b: tests
 
-A local bash harness, `plugins/easy-db-lab/tests/test-report.sh`, with fixtures under `plugins/easy-db-lab/tests/fixtures/`.  The plugin-level `tests/` is tracked; the repo `.gitignore` ignores only the root `/tests`.  Coverage: scaffold through a stub binary; `make` on the scaffold and on a fixture tree (title, index is the summary, Appendix in the table of contents, `lab.css` link and rules, `unzip -l`, jira grep); a plot pixel check for grey and blue; `fetch` against `127.0.0.1:1` and an empty-result stub; check fixtures for agree, wrong sign, wrong size, wrong unit, and redaction.  The wrong-sign fixture uses the `metrics21667` numbers: candidate 32.72 MB/s, baseline 26.92 and 27.27 MB/s, claim -17.2%.  Upload detection uses a stub `$EDB`.  The CSS criteria are checked by rule presence plus one manual visual check.
+A local bash harness, `plugins/easy-db-lab/tests/test-report.sh`, with fixtures under `plugins/easy-db-lab/tests/fixtures/`.  The plugin-level `tests/` is tracked; the repo `.gitignore` ignores only the root `/tests`.  Coverage: scaffold through a stub binary; `make` on the scaffold and on a fixture tree (title, index is the summary, Appendix in the table of contents, `lab.css` link and rules, `unzip -l`, jira grep); ~~a plot pixel check for grey and blue~~ (superseded by redirect 2: `render` against a stub Grafana HTTP server that returns a PNG, an error status, an empty body, and a body that is not a PNG, and against `127.0.0.1:1`; `block` with a CSV and an image); `fetch` against `127.0.0.1:1` and an empty-result stub; check fixtures for agree, wrong sign, wrong size, wrong unit, and redaction.  The wrong-sign fixture uses the `metrics21667` numbers: candidate 32.72 MB/s, baseline 26.92 and 27.27 MB/s, claim -17.2%.  Upload detection uses a stub `$EDB`.  The CSS criteria are checked by rule presence plus one manual visual check.
 
 ### Exit rule and check failures (owner decision 2)
 
@@ -108,11 +112,36 @@ A cross-cluster test has exactly one report.  `setup-cluster.sh <test-dir> <bina
 
 `detect-cluster-layout.sh` checks the marker before the wrapper scan and reports `LAYOUT=arms`, `ARMS`, `EDB_<ARM>`, `STATE_<ARM>`, and `STATE` (provisioned if any arm is).  `configure-multi-dc-seeds.sh` exits 1 when the marker exists.
 
-An arm agent runs as `run <test-dir> --arm <arm> [step N]` and binds `$EDB` to `EDB_<ARM>` only.  It writes only `4-journal-<arm>.md`, `5-issues-<arm>.md`, and `data/*-<arm>.*`.  It fetches its own data after each measuring step while its Mimir is up (F2 option a).  Its arm gate uploads `3-plan-<arm>.md`, `4-journal-<arm>.md`, and `5-issues-<arm>.md` through its own wrapper, then runs `down` on its own arm; no summary, check, or make.  Without `--arm`, the skill refuses teardown in arms mode.
+An arm agent runs as `run <test-dir> --arm <arm> [step N]` and binds `$EDB` to `EDB_<ARM>` only.  It writes only `4-journal-<arm>.md`, `5-issues-<arm>.md`, `data/*-<arm>.*`, and (since redirect 2) `images/*-<arm>.png`.  It fetches its own data after each measuring step while its Mimir is up (F2 option a).  Its arm gate uploads `3-plan-<arm>.md`, `4-journal-<arm>.md`, and `5-issues-<arm>.md` through its own wrapper, then runs `down` on its own arm; no summary, check, or make.  Without `--arm`, the skill refuses teardown in arms mode.
 
-The coordinator owns `1-summary.md`, `2-evidence.md`, `4-journal.md`, and `5-issues.md`.  After the last arm reports, it runs `run <test-dir> --finalize` once, with arms up or down.  Final Finalize plots from the CSVs on disk with `plot --align elapsed`, writes the summary and evidence, checks with the teardown-gate rules, makes, and uploads through every arm's wrapper.  The upload list is every top-level `.md` that `docs/SUMMARY.md` links, minus scaffold-only files.  Arms still up afterwards are torn down when the coordinator relaunches each arm at Completion / teardown.
+The coordinator owns `1-summary.md`, `2-evidence.md`, `4-journal.md`, and `5-issues.md`.  After the last arm reports and the coordinator has rendered the overlay images (see "Redirect 2"), it runs `run <test-dir> --finalize` once, with arms up or down.  Final Finalize builds each evidence block from the CSVs and the images on disk with `block --arm-windows`, writes the summary and evidence, checks with the teardown-gate rules, makes, and uploads through every arm's wrapper.  The upload list is every top-level `.md` that `docs/SUMMARY.md` links, minus scaffold-only files.  Arms still up afterwards are torn down when the coordinator relaunches each arm at Completion / teardown.
 
-`plot --align elapsed` keeps each CSV's window and puts seconds since that CSV's start on the x-axis.  It writes one Window line per arm.  The query, unit, and step must still match.  Without `--align`, mismatched windows are an error.  Series are keyed by (arm, node), with legends such as "db0 (baseline)".  A Data line may hold several CSV links; the checker follows all, merges them, and keys by (Node, Arm).
+`block --arm-windows` (formerly `plot --align elapsed`) keeps each CSV's window and writes one Window line per arm.  The unit and the step must still match, and the queries must match apart from the `cluster` matcher (redirect 1); when they differ there, the block writes one Query line per arm.  Without `--arm-windows`, mismatched windows are an error.  Stats rows are keyed by (arm, node), with labels such as "db0 (baseline)".  A Data line may hold several CSV links; the checker follows all, merges them, and keys by (Node, Arm).
+
+### Redirect 2: Grafana panel renders replace local plotting (owner override of Q8 and the plot half of Q18)
+
+The owner reversed Q8 (plot locally from the CSV) and the matplotlib half of Q18 (a shared `lab.mplstyle` and fixed role colours) at Seam 1: "Let's use the images from Grafana exporter, we don't need to over complicate this.  It'll be consistent with what people see in the UI."  Then: "No more custom rendering, that was a stupid, over complicated idea."  This is an owner override of the architect.  The `lab.css` half of Q18 stays.
+
+Fact: every easy-db-lab cluster's Grafana pod runs a grafana-image-renderer v5.12.4 sidecar (easy-db-lab `GrafanaManifestBuilder.kt:49,199-207,269-271`), so the render API `/render/d-solo/<uid>/` works on every cluster.  Anonymous access worked in a past run (`~/dev/cassandra/clusters/smoke-test/docs/journal.md:61`).  The operator reaches Grafana over Tailscale or the SOCKS tunnel.
+
+The shape the owner settled:
+
+- **Q1 (a).**  Keep `fetch` (Mimir to CSV), the stats table from that CSV, and the checker's recompute.  Remove only matplotlib plotting, `lab.mplstyle`, and the fixed role colours.  The image is a Grafana render of a panel for the same metric and window.
+- **Q2 (b).**  A cross-cluster metric gets one combined image.  The last arm stays up until the coordinator renders the overlay panel of a comparison dashboard from that arm's Grafana.  That Grafana reads both clusters from the shared Mimir.  Then that arm tears down.
+- **Q3 (a).**  When no overlay panel exists for the metric, each arm renders its own panel from a regular dashboard while it is up.  Each image is labelled by arm.  The stats table stays combined.
+
+The interface:
+
+- `render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME [--var NAME=VALUE]... [--width 1200] [--height 600] --name NAME --docs DOCS [--proxy socks5h://...] [--timeout 60]` sends one GET to `/render/d-solo/<UID>/?panelId=..&from=..&to=..&var-..=..&width=..&height=..&tz=UTC`.  An ISO time goes out as epoch milliseconds; a Grafana relative time such as `now-1h` goes out unchanged.  It writes `images/<name>.png` only for a status 200 and a non-empty body with the PNG signature.  Any other result exits non-zero, names the cause, and leaves `images/<name>.png` as it was.  It stores no URL.  It uses `requests[socks]`, the same as `fetch`.
+- `block --csv ... --image [ARM=]PATH ... --title .. [--stats ..] [--arm-windows] [--page ..] --docs ..` prints the evidence block from the CSVs and the image paths.  It draws nothing and writes no file.  It checks that each image is a non-empty PNG under `images/`.  `ARM=PATH` puts the arm in the alt text.  `plot` and the matplotlib dependency are removed.
+- Timing: `fetch` and `render` run at the same point, after each measuring step, while the cluster is up.  Grafana and Mimir stop with the cluster.  `block` reads files only, so the coordinator can run it at Final Finalize with every arm down.
+- Overlay panels: `ab-comparison` and Cassandra Cluster Comparison (`c09599ec-8d87-4fe5-9346-9e85c41d33af`) hold 1001 Throughput, 1002 Read p99, 1003 Write p99, 1004 Error rate, 1005 CPU busy, 1006 Disk I/O, and 1007 GC pause.  `system-ab-comparison` holds 1001 CPU busy, 1002 Memory used, 1003 Disk I/O, and 1004 Network.  Each takes `var-baseline_cluster` and `var-candidate_cluster`.  Each overlay panel sets its own range (`timeFrom` from `max_len`), and shifts each run with a PromQL offset (`base_offset`, `cand_offset`) to a common start.  The panel description says an absolute dashboard range turns the panel's own range off, so the coordinator renders an overlay with `--from now-1h --to now`.
+
+Hold and release.  The existing rules already give the mechanism.  No agent decides teardown on its own, and an arm runs its gate and `down` only when the coordinator relaunches `run <test-dir> --arm <arm>` at Completion / teardown.  So the coordinator holds the render arm (the last arm still up) by not relaunching it.  After it has rendered every overlay image to `docs/images/`, it relaunches that arm; the relaunch is the release.  It may relaunch the other arms at any time after they report completion.  No new shared state file is needed.  A failed overlay render is logged, gets one retry when interactive, and then the arm is released; the block with no image fails the check, and the teardown-gate rule adds the Unchecked line.
+
+Per-arm fallback.  For a metric with no overlay panel, each arm agent renders its own regular dashboard panel to `images/<metric>-<arm>.png` at the same point as its fetch.  Arm agents now also write `images/*-<arm>.png`; the `-<arm>` suffix keeps the no-two-writers rule.  The coordinator passes those images as `--image <arm>=<path>`.
+
+The check is unchanged.  Its evidence-block rule already needs an image file under `images/` and refuses a linked image, so a Grafana render that was not downloaded fails it.
 
 ### File roles (addendum F6)
 
@@ -132,7 +161,11 @@ Scaffold files follow the `<destination>.template` rule.  `book.toml` becomes a 
 - [Nested evidence pages are not uploaded by the single-layout run skill, and images are broken in Grafana until the CLI supports them.] → The support check (D7) adds images and CSV when the CLI supports them.  The full report stays in `report/` and `export/report.zip`.
 - [Cross-cluster: which workspace holds the comparison summary was unstated.] → Owner decision 4: one test directory; the coordinator writes the summary.
 - [Explore provisions without `setup-cluster.sh`, so `docs/` may lack the scaffold.] → Owner decision 5: explore runs `setup-cluster.sh --docs-only` when `docs/SUMMARY.md` is absent.
-- [The first `make` needs network access for uv to fetch matplotlib and pypandoc-binary.] → Accepted.  uv caches the packages after the first run.
+- [The first `make` needs network access for uv to fetch pypandoc-binary.  The graph script needs `requests[socks]` the first time it runs.] → Accepted.  uv caches the packages after the first run.
+- [An overlay panel covers each cluster's whole `up` period within the dashboard's Lookback, not only the measured window of the block.] → The stats table and the Window lines still give the measured windows, and the checker recomputes from the CSVs, not from the image.  This follows from Q2 (b), because the dashboards compute their own windows; it is stated here so the owner sees it.
+- [The render arm stays up a little longer, for the overlay renders.] → Accepted by Q2 (b).  A failed render releases the arm after one retry, so a render problem never keeps a cluster up.
+- [A render needs Grafana anonymous access and the renderer sidecar.] → Both exist on every cluster today.  A failure is logged and the missing image fails the check, the same as a failed fetch.
+- [The image and the stats table come from different code paths, so they can disagree if the writer picks the wrong panel.] → The writer picks the panel per `report.md`, and the block holds the Query next to the image.  The numbers that the checker trusts come from the CSV only.
 - [`src = "."` copies `data/`, `export/`, the Makefile, and the style into `report/`.] → Accepted; verified harmless.
 - [A pause writes a Partial summary, which makes it non-scaffold, so it uploads later.] → Intended.
 - [No migration; old workspaces break on resume.] → Accepted by scope.
@@ -197,6 +230,15 @@ Each entry gives the option and why it was rejected.  "Owner override" marks a p
 - **Decision B, redaction at a teardown gate.**  The owner chose (a): a redaction failure blocks the upload but not the `down`.  Rejected:
   - (b) A redaction failure blocks both the upload and the `down`.  Rejected: a writing problem must not keep a cluster up, and the upload works after `down`.
   - (c) No exemption, so the report uploads with the identifier in it.  Rejected: it breaks the redaction criterion.
+
+### Redirect 2 (Grafana panel renders)
+
+- **The original design: plot the CSV locally with matplotlib, a shared `lab.mplstyle`, and fixed role colours (Q8, plot half of Q18).**  Rejected by the owner at Seam 1 as over-complicated custom rendering.  A Grafana render is also what readers see in the UI.  Owner override of the architect.
+- **Q1 (b): take the stats from the Grafana panel data instead of the Mimir CSV.**  Rejected: the checker's recompute needs a CSV it can read with no network, and the panel data has no stable format to recompute from.
+- **Q1 (c): the writer copies the numbers by hand from the Grafana panel.**  Rejected: this brings back the `metrics21667` failure, where the prose and the numbers disagreed, and the checker has nothing to recompute.
+- **Q2 (a): one render per arm always, and no combined image.**  Rejected: the reader must compare two images by eye, and the comparison dashboards already put both runs on one axis from a common start.
+- **Q3 (b): restrict cross-cluster claims to metrics that have an overlay panel.**  Rejected: it limits what a test can measure to the panels that exist today.
+- **Q3 (c): add an overlay panel to a dashboard during the run.**  Rejected: it changes a shared dashboard during a test, and a hand-made panel is custom rendering again.
 
 ## Migration Plan
 

@@ -523,6 +523,106 @@ expect_contains "fetch: the request goes to query_range under the Mimir URL" "$r
 expect_contains "fetch: the request sends the tenant header" "$req" "tenant=lab-tenant"
 expect_contains "fetch: the request sends the step" "$req" "step=30"
 
+# --- report-graph.py render ---
+
+grafana_pid=""
+# start_grafana <mode> [dashboard.json]: start the stub Grafana and set grafana_url and grafana_log.
+start_grafana() {
+  local port_file="$tmp_root/grafana.port"
+  grafana_log="$tmp_root/grafana.log"
+  rm -f "$port_file" "$grafana_log"
+  python3 "$fixtures/grafana/stub.py" "$1" "$port_file" "$grafana_log" ${2:+"$2"} &
+  grafana_pid=$!
+  local _
+  for _ in $(seq 1 50); do
+    [[ -s "$port_file" ]] && break
+    sleep 0.1
+  done
+  grafana_url="http://127.0.0.1:$(cat "$port_file")"
+}
+stop_grafana() {
+  [[ -z "$grafana_pid" ]] || kill "$grafana_pid" 2>/dev/null
+  wait "$grafana_pid" 2>/dev/null
+  grafana_pid=""
+}
+trap 'stop_mimir; stop_grafana; rm -rf "$tmp_root"' EXIT
+
+# render <grafana-url> <name> [extra args...]: render panel 7 of one dashboard over the usual window.
+render() {
+  local url="$1" name="$2"
+  shift 2
+  "$graph" render --grafana-url "$url" --dashboard cassandra-overview --panel 7 \
+    --from 2026-10-01T10:00:00Z --to 2026-10-01T10:10:00Z --name "$name" --docs "$gdocs" "$@"
+}
+panel_png="$fixtures/grafana/panel.png"
+
+start_grafana png
+out="$(render "$grafana_url" panel --var cluster=graph-1a2b --var "job=a b" 2>&1)"
+expect_eq "render: a 200 PNG exits 0" "0" "$?"
+if cmp -s "$panel_png" "$gdocs/images/panel.png"; then
+  pass "render: writes the body byte for byte to images/<name>.png"
+else
+  fail "render: writes the body byte for byte to images/<name>.png" "$out"
+fi
+req="$(cat "$grafana_log" 2>/dev/null)"
+expect_eq "render: one GET per render" "1" "$(grep -c . "$grafana_log" 2>/dev/null)"
+expect_contains "render: the request goes to /render/d-solo/<UID>/" "$req" "/render/d-solo/cassandra-overview/?"
+for p in panelId=7 from=1790848800000 to=1790849400000 var-cluster=graph-1a2b var-job=a+b width=1200 height=600 tz=UTC; do
+  expect_contains "render: the request holds $p" "$req" "$p"
+done
+expect_eq "render: no file in docs/ holds the Grafana URL" "" "$(grep -rl "${grafana_url#http://}" "$gdocs" 2>/dev/null)"
+
+rm -f "$grafana_log"
+out="$(render "$grafana_url" relative --from now-93600s --to now 2>&1)"
+expect_eq "render: a relative range exits 0" "0" "$?"
+req="$(cat "$grafana_log" 2>/dev/null)"
+expect_contains "render: now-93600s goes out unchanged" "$req" "from=now-93600s&"
+expect_contains "render: now goes out unchanged" "$req" "to=now&"
+
+rm -f "$grafana_log"
+out="$(render "$grafana_url" bad-time --from yesterday 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "render: a time that is neither ISO nor relative is refused"; else fail "render: a time that is neither ISO nor relative is refused"; fi
+expect_contains "render: the time refusal names the time" "$out" "yesterday"
+expect_eq "render: the time refusal sends no request" "" "$(cat "$grafana_log" 2>/dev/null)"
+
+# --name is a file name under images/, as for fetch.
+for bad in '../x' 'a/b' '..' '.hidden' 'a..b'; do
+  rm -f "$grafana_log"
+  out="$(render "$grafana_url" "$bad" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "render: --name $bad is refused"; else fail "render: --name $bad is refused"; fi
+  expect_contains "render: the --name $bad refusal names the rule" "$out" "--name"
+  expect_eq "render: --name $bad is refused before the request" "" "$(cat "$grafana_log" 2>/dev/null)"
+done
+stop_grafana
+
+out="$(render http://127.0.0.1:1 unreachable 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "render: an unreachable Grafana exits non-zero"; else fail "render: an unreachable Grafana exits non-zero"; fi
+expect_contains "render: an unreachable Grafana gives a clear message" "$out" "cannot reach Grafana"
+expect_no_file "render: an unreachable Grafana writes no image" "$gdocs/images/unreachable.png"
+
+# render_fails <mode> <message>: a failed render exits non-zero, names the cause, writes no image,
+# and leaves an existing image with the same --name unchanged.
+render_fails() {
+  local mode="$1" msg="$2"
+  start_grafana "$mode"
+  out="$(render "$grafana_url" "fail-$mode" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "render: the $mode response exits non-zero"; else fail "render: the $mode response exits non-zero"; fi
+  expect_contains "render: the $mode response names the cause" "$out" "$msg"
+  expect_no_file "render: the $mode response writes no image" "$gdocs/images/fail-$mode.png"
+  printf 'old image\n' > "$gdocs/images/keep.png"
+  render "$grafana_url" keep >/dev/null 2>&1
+  expect_eq "render: the $mode response leaves the old image unchanged" "old image" "$(cat "$gdocs/images/keep.png")"
+  stop_grafana
+}
+render_fails 500 "HTTP 500"
+render_fails empty "empty body"
+render_fails notpng "not a PNG"
+rm -f "$gdocs/images/keep.png" "$gdocs/images/panel.png" "$gdocs/images/relative.png"
+
 # --- report-graph.py plot ---
 
 # pixel_colours <png> <hex>...: print each hex colour that some pixel of the PNG has exactly.

@@ -51,6 +51,7 @@ import re
 import statistics
 import sys
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 ROLE_COLOURS = {"baseline": "#999999", "candidate": "#0072B2"}
 LINE_STYLES = ["-", "--", ":", "-."]
@@ -66,6 +67,9 @@ EC2_HOST = re.compile(r"^ip-\d{1,3}(-\d{1,3}){3}(\.[A-Za-z0-9.-]+)?(:\d+)?$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 # A Mimir tenant holds many clusters, so each arm's query selects its own cluster label.
 CLUSTER_MATCHER = re.compile(r'(?<![A-Za-z0-9_])cluster\s*=~?\s*"(?:[^"\\]|\\.)*"')
+# A Grafana relative time: now, now-93600s, now-1h/h.  It goes to Grafana unchanged.
+RELATIVE_TIME = re.compile(r"^now([+-]\d+[smhdwMy])?(/[smhdwMy])?$")
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def die(msg):
@@ -73,11 +77,11 @@ def die(msg):
     sys.exit(1)
 
 
-def parse_time(text):
+def parse_time(text, kind="an ISO 8601 time"):
     try:
         t = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
-        die(f"not an ISO 8601 time: {text}")
+        die(f"not {kind}: {text}")
     if t.tzinfo is None:
         t = t.replace(tzinfo=timezone.utc)
     return t.astimezone(timezone.utc)
@@ -105,6 +109,10 @@ def pairs(values, flag):
     return out
 
 
+def proxies(args):
+    return {"http": args.proxy, "https": args.proxy} if args.proxy else None
+
+
 # --- fetch ---
 
 
@@ -123,12 +131,11 @@ def fetch(args):
     node_arm = {n: arm for arm, nodes in arms.items() for n in nodes}
 
     url = args.mimir_url.rstrip("/") + "/api/v1/query_range"
-    proxies = {"http": args.proxy, "https": args.proxy} if args.proxy else None
     params = {"query": args.query, "start": int(start.timestamp()),
               "end": int(end.timestamp()), "step": step}
     try:
         resp = requests.get(url, params=params, headers={"X-Scope-OrgID": args.tenant},
-                            proxies=proxies, timeout=args.timeout)
+                            proxies=proxies(args), timeout=args.timeout)
     except requests.exceptions.RequestException as e:
         die(f"cannot reach Mimir: {e.__class__.__name__}: {e}")
     try:
@@ -178,6 +185,49 @@ def fetch(args):
         json.dump(meta, f, indent=2)
         f.write("\n")
     print(f"data: {os.path.join(data, args.name)}.csv ({len(rows)} samples, {len(seen)} nodes)")
+
+
+# --- render ---
+
+
+def grafana_time(text):
+    """A Grafana relative time goes out unchanged; an ISO time goes out as epoch milliseconds."""
+    if RELATIVE_TIME.match(text):
+        return text
+    t = parse_time(text, "an ISO 8601 time or a Grafana relative time such as now-3600s")
+    return str(int(t.timestamp() * 1000))
+
+
+def render(args):
+    import requests
+
+    params = [("panelId", args.panel), ("from", grafana_time(args.from_)),
+              ("to", grafana_time(args.to))]
+    params += [(f"var-{k}", v) for k, v in pairs(args.var, "--var")]
+    params += [("width", args.width), ("height", args.height), ("tz", "UTC")]
+    url = f"{args.grafana_url.rstrip('/')}/render/d-solo/{quote(args.dashboard, safe='')}/"
+    try:
+        resp = requests.get(url, params=params, proxies=proxies(args), timeout=args.timeout)
+    except requests.exceptions.RequestException as e:
+        die(f"cannot reach Grafana: {e.__class__.__name__}: {e}")
+    if resp.status_code != 200:
+        die(f"Grafana returned HTTP {resp.status_code}: {resp.text[:200]}")
+    body = resp.content
+    if not body:
+        die("Grafana returned an empty body; check the dashboard uid, the panel id, and the renderer")
+    if not body.startswith(PNG_SIGNATURE):
+        die(f"Grafana returned a body that is not a PNG ({resp.headers.get('Content-Type', 'no type')}); "
+            "check that anonymous access and the image renderer work")
+
+    # Write a temporary file and rename it, so a render never leaves half an image.
+    images = os.path.join(args.docs, "images")
+    os.makedirs(images, exist_ok=True)
+    png = os.path.join(images, f"{args.name}.png")
+    tmp = f"{png}.tmp"
+    with open(tmp, "wb") as f:
+        f.write(body)
+    os.replace(tmp, png)
+    print(f"image: {png} ({len(body)} bytes)")
 
 
 # --- plot ---
@@ -418,7 +468,21 @@ def main():
     f.add_argument("--proxy", help="for example socks5h://127.0.0.1:1080")
     f.add_argument("--timeout", type=float, default=30.0)
 
-    p = sub.add_parser("plot", help="plot CSVs to images/<name>.png and print the evidence block")
+    r = sub.add_parser("render", help="download one Grafana panel render to images/<name>.png")
+    r.add_argument("--grafana-url", required=True)
+    r.add_argument("--dashboard", required=True, help="the dashboard uid")
+    r.add_argument("--panel", type=int, required=True, help="the panel id")
+    r.add_argument("--from", dest="from_", required=True, help="ISO 8601 UTC, or now-<N>s")
+    r.add_argument("--to", required=True, help="ISO 8601 UTC, or now")
+    r.add_argument("--var", action="append", help="NAME=VALUE; sent as var-NAME=VALUE")
+    r.add_argument("--width", type=int, default=1200)
+    r.add_argument("--height", type=int, default=600)
+    r.add_argument("--name", required=True)
+    r.add_argument("--docs", required=True)
+    r.add_argument("--proxy", help="for example socks5h://127.0.0.1:1080")
+    r.add_argument("--timeout", type=float, default=60.0)
+
+    p = sub.add_parser("plot",help="plot CSVs to images/<name>.png and print the evidence block")
     p.add_argument("--csv", action="append", required=True)
     p.add_argument("--title", required=True)
     p.add_argument("--name")
@@ -431,7 +495,7 @@ def main():
     args = ap.parse_args()
     if args.name is not None and (not NAME.match(args.name) or ".." in args.name):
         die(f"--name {args.name!r} is not a file name; use letters, digits, _, . and -, with no ..")
-    fetch(args) if args.cmd == "fetch" else plot(args)
+    {"fetch": fetch, "render": render, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":

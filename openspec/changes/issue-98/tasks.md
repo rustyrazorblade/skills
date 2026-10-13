@@ -25,12 +25,12 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 ## 3. setup-cluster, detect-layout, seeds
 
-- [ ] 3.1 Write harness cases for `--docs-only` (no binary, no wrapper), an existing wrapper kept, a binary whose real path is a wrapper path, the source-checkout guard (exit 1), `--arm` with `--dc` (usage error), and the arms scaffold (marker, per-arm wrappers, `3-plan-<arm>.md`, per-arm journal and issues, generated `SUMMARY.md` Appendix).
+- [x] 3.1 Write harness cases for `--docs-only` (no binary, no wrapper), an existing wrapper kept, a binary whose real path is a wrapper path, the source-checkout guard (exit 1), `--arm` with `--dc` (usage error), and the arms scaffold (marker, per-arm wrappers, `3-plan-<arm>.md`, per-arm journal and issues, generated `SUMMARY.md` Appendix).
 - [x] 3.2 Change `bin/setup-cluster.sh`: copy each `*.template` to its destination (tier files copy-if-absent), sed `@CLUSTER_NAME@` and `@EDB_LAB_BIN@`, create `docs/images` and `docs/data`, copy `--plan` to `docs/3-plan.md`, remove the `book.toml` heredoc, and update the header comment.
-- [ ] 3.3 Add `--docs-only`, the never-rewrite-a-wrapper rule, the binary self-check, and the source-checkout guard to `setup-cluster.sh`.
-- [ ] 3.4 Add `--arm <arm>=<plan.md>` to `setup-cluster.sh`: the `arms` marker, one wrapper per arm, per-arm plan, journal, and issues files, and the generated Appendix.  Reject `--arm` with `--dc`.
-- [ ] 3.5 Write harness cases for `detect-cluster-layout.sh`: `LAYOUT=arms` with `ARMS`, `EDB_<ARM>`, `STATE_<ARM>`, and `STATE`; `bin` skipped like `docs`.  Then change the script.
-- [ ] 3.6 Write a harness case for `configure-multi-dc-seeds.sh` exiting 1 with an `arms` marker.  Then add the guard.
+- [x] 3.3 Add `--docs-only`, the never-rewrite-a-wrapper rule, the binary self-check, and the source-checkout guard to `setup-cluster.sh`.
+- [x] 3.4 Add `--arm <arm>=<plan.md>` to `setup-cluster.sh`: the `arms` marker, one wrapper per arm, per-arm plan, journal, and issues files, and the generated Appendix.  Reject `--arm` with `--dc`.
+- [x] 3.5 Write harness cases for `detect-cluster-layout.sh`: `LAYOUT=arms` with `ARMS`, `EDB_<ARM>`, `STATE_<ARM>`, and `STATE`; `bin` skipped like `docs`.  Then change the script.
+- [x] 3.6 Write a harness case for `configure-multi-dc-seeds.sh` exiting 1 with an `arms` marker.  Then add the guard.
 
 ## 4. Scripts: graph, check, export
 

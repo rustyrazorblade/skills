@@ -158,6 +158,122 @@ expect_contains "style: names the palette source" "$style" "Okabe-Ito"
 expect_contains "style: sets the colour cycle" "$style" "axes.prop_cycle"
 expect_contains "style: sets the font size" "$style" "font.size"
 
+# --- setup-cluster.sh: --docs-only, wrapper guards, and the source-checkout guard ---
+
+ws_docs="$tmp_root/docs-only"
+bash "$bin/setup-cluster.sh" "$ws_docs" --docs-only --name "docs-only" >/dev/null 2>&1
+expect_eq "docs-only: exits 0" "0" "$?"
+expect_file "docs-only: writes the scaffold" "$ws_docs/docs/1-summary.md"
+expect_no_file "docs-only: writes no wrapper" "$ws_docs/easy-db-lab"
+
+ws_kept="$tmp_root/kept-wrapper"
+mkdir -p "$ws_kept"
+printf '#!/bin/sh\n# hand-made wrapper\n' > "$ws_kept/easy-db-lab"
+chmod +x "$ws_kept/easy-db-lab"
+before="$(cat "$ws_kept/easy-db-lab")"
+bash "$bin/setup-cluster.sh" "$ws_kept" --docs-only --name kept >/dev/null 2>&1
+expect_eq "docs-only: an existing wrapper is unchanged" "$before" "$(cat "$ws_kept/easy-db-lab")"
+bash "$bin/setup-cluster.sh" "$ws_kept" "$stub_edb" --name kept >/dev/null 2>&1
+expect_eq "wrapper: setup-cluster.sh never rewrites an existing wrapper" "$before" "$(cat "$ws_kept/easy-db-lab")"
+
+ws_self="$tmp_root/self-wrapper"
+mkdir -p "$ws_self"
+printf '#!/bin/sh\n' > "$ws_self/easy-db-lab"
+chmod +x "$ws_self/easy-db-lab"
+out="$(bash "$bin/setup-cluster.sh" "$ws_self" "$ws_self/easy-db-lab" --name self 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "wrapper: a binary that is its own wrapper exits non-zero"; else fail "wrapper: a binary that is its own wrapper exits non-zero"; fi
+expect_contains "wrapper: the refusal names the wrapper" "$out" "$ws_self/easy-db-lab"
+expect_no_file "wrapper: the refusal writes nothing" "$ws_self/docs"
+
+for gradle in settings.gradle.kts build.gradle.kts; do
+  src="$tmp_root/checkout-$gradle"
+  mkdir -p "$src/bin"
+  printf '#!/bin/sh\n' > "$src/bin/easy-db-lab"
+  chmod +x "$src/bin/easy-db-lab"
+  touch "$src/$gradle"
+  out="$(bash "$bin/setup-cluster.sh" "$src" --docs-only --name src 2>&1)"
+  expect_eq "checkout: a source checkout with $gradle exits 1" "1" "$?"
+  expect_contains "checkout: the refusal says to change to a workspace" "$out" "workspace"
+  expect_no_file "checkout: the refusal writes nothing" "$src/docs"
+done
+
+out="$(bash "$bin/setup-cluster.sh" "$tmp_root/arm-dc" "$stub_edb" --name t --arm a="$plan_src" --dc dc1 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "arms: --arm with --dc exits non-zero"; else fail "arms: --arm with --dc exits non-zero"; fi
+expect_contains "arms: --arm with --dc prints a usage message" "$out" "Usage"
+expect_no_file "arms: --arm with --dc writes nothing" "$tmp_root/arm-dc"
+
+ws_multi="$tmp_root/multi"
+bash "$bin/setup-cluster.sh" "$ws_multi" "$stub_edb" --name multi --dc dc1 --dc dc2 >/dev/null 2>&1
+expect_eq "multi-DC: setup-cluster.sh exits 0" "0" "$?"
+if [[ -x "$ws_multi/dc1/easy-db-lab" && -x "$ws_multi/dc2/easy-db-lab" ]]; then
+  pass "multi-DC: one wrapper per DC"
+else
+  fail "multi-DC: one wrapper per DC"
+fi
+expect_file "multi-DC: one shared docs scaffold" "$ws_multi/docs/1-summary.md"
+expect_no_file "multi-DC: no arms marker" "$ws_multi/arms"
+
+# --- setup-cluster.sh: the cross-cluster arms layout ---
+
+td="$tmp_root/arms-test"
+printf '# Plan template\n' > "$tmp_root/tpl.md"
+printf '# Plan: baseline\n' > "$tmp_root/b.md"
+printf '# Plan: candidate\n' > "$tmp_root/c.md"
+bash "$bin/setup-cluster.sh" "$td" "$stub_edb" --name T --plan "$tmp_root/tpl.md" \
+  --arm baseline="$tmp_root/b.md" --arm candidate="$tmp_root/c.md" >/dev/null 2>&1
+expect_eq "arms: setup-cluster.sh exits 0" "0" "$?"
+expect_eq "arms: the marker lists one arm per line" "baseline candidate" "$(tr '\n' ' ' < "$td/arms" 2>/dev/null | sed 's/ $//')"
+for arm in baseline candidate; do
+  if [[ -x "$td/$arm/easy-db-lab" ]]; then pass "arms: $arm has a wrapper"; else fail "arms: $arm has a wrapper"; fi
+  for f in "3-plan-$arm.md" "4-journal-$arm.md" "5-issues-$arm.md"; do
+    expect_file "arms: docs/$f exists" "$td/docs/$f"
+  done
+done
+expect_no_file "arms: no wrapper at the test-dir root" "$td/easy-db-lab"
+expect_eq "arms: --plan goes to docs/3-plan.md" "# Plan template" "$(cat "$td/docs/3-plan.md" 2>/dev/null)"
+expect_eq "arms: --arm baseline goes to docs/3-plan-baseline.md" "# Plan: baseline" "$(cat "$td/docs/3-plan-baseline.md" 2>/dev/null)"
+expect_eq "arms: --arm candidate goes to docs/3-plan-candidate.md" "# Plan: candidate" "$(cat "$td/docs/3-plan-candidate.md" 2>/dev/null)"
+expect_file "arms: the coordinator has its own journal" "$td/docs/4-journal.md"
+expect_file "arms: the coordinator has its own issues file" "$td/docs/5-issues.md"
+appendix="$(sed -n '/^# Appendix/,$p' "$td/docs/SUMMARY.md" 2>/dev/null | grep '\](' | tr '\n' '|')"
+expect_eq "arms: the SUMMARY.md Appendix lists the coordinator, then each arm" \
+  "- [Plan](3-plan.md)|- [Coordinator journal](4-journal.md)|- [Coordinator issues](5-issues.md)|- [Plan: baseline](3-plan-baseline.md)|- [Journal: baseline](4-journal-baseline.md)|- [Issues: baseline](5-issues-baseline.md)|- [Plan: candidate](3-plan-candidate.md)|- [Journal: candidate](4-journal-candidate.md)|- [Issues: candidate](5-issues-candidate.md)|" \
+  "$appendix"
+expect_contains "arms: SUMMARY.md keeps the summary and evidence" "$(cat "$td/docs/SUMMARY.md" 2>/dev/null)" "- [Evidence](2-evidence.md)"
+
+# --- detect-cluster-layout.sh ---
+
+layout="$(bash "$bin/detect-cluster-layout.sh" "$td" 2>&1)"
+expect_contains "layout: arms marker gives LAYOUT=arms" "$layout" "LAYOUT=arms"
+expect_contains "layout: ARMS lists the arms" "$layout" 'ARMS="baseline candidate"'
+expect_contains "layout: EDB_BASELINE" "$layout" "EDB_BASELINE=$td/baseline/easy-db-lab"
+expect_contains "layout: EDB_CANDIDATE" "$layout" "EDB_CANDIDATE=$td/candidate/easy-db-lab"
+expect_contains "layout: STATE_BASELINE" "$layout" "STATE_BASELINE=unprovisioned"
+expect_contains "layout: STATE is unprovisioned with no arm up" "$layout" "STATE=unprovisioned"
+touch "$td/candidate/state.json"
+layout="$(bash "$bin/detect-cluster-layout.sh" "$td" 2>&1)"
+expect_contains "layout: STATE_CANDIDATE is provisioned" "$layout" "STATE_CANDIDATE=provisioned"
+expect_contains "layout: STATE is provisioned when any arm is" "$layout" "STATE=provisioned"
+expect_not_contains "layout: arms mode is not multi" "$layout" "LAYOUT=multi"
+
+ws_bin="$tmp_root/with-bin"
+mkdir -p "$ws_bin/bin" "$ws_bin/dc1" "$ws_bin/dc2"
+for d in bin dc1 dc2; do
+  printf '#!/bin/sh\n' > "$ws_bin/$d/easy-db-lab"
+  chmod +x "$ws_bin/$d/easy-db-lab"
+done
+layout="$(bash "$bin/detect-cluster-layout.sh" "$ws_bin" 2>&1)"
+expect_contains "layout: multi-DC still detected" "$layout" "LAYOUT=multi"
+expect_not_contains "layout: bin is not a DC" "$layout" "EDB_BIN="
+
+# --- configure-multi-dc-seeds.sh ---
+
+out="$(bash "$bin/configure-multi-dc-seeds.sh" "$td" --name T --dc baseline --dc candidate 2>&1)"
+expect_eq "seeds: an arms marker makes the seeds script exit 1" "1" "$?"
+expect_contains "seeds: the refusal names the arms marker" "$out" "arms marker"
+
 mk="$(cat "$docs/Makefile" 2>/dev/null)"
 expect_contains "make: all is check build export" "$mk" "all: check build export"
 for t in build check export gate serve clean; do

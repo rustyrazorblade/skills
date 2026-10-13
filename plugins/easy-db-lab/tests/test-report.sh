@@ -562,6 +562,24 @@ for name in redact-ok-big-value redact-ok-journal redact-ok-version; do
   expect_not_contains "check: $name has no redaction FAIL" "$check_out" "FAIL: redaction"
 done
 
+# SUMMARY.md: a customer page outside docs/ is a FAIL, and ./page and page are one page.
+outside_docs="$tmp_root/outside/docs"
+fixture_docs "$outside_docs" summary-outside
+printf '# Secret\n\nAccount 123456789012.\n' > "$tmp_root/outside/secret.md"
+abs_docs="$tmp_root/absolute/docs"
+fixture_docs "$abs_docs"
+printf '# Secret\n' > "$tmp_root/absolute/secret.md"
+perl -pi -e 'print "- [Secret]('"$tmp_root"'/absolute/secret.md)\n" if /^# Appendix/' "$abs_docs/SUMMARY.md"
+for d in "$outside_docs" "$abs_docs"; do
+  out="$("$checker" "$d" 2>&1)"
+  expect_eq "check: a SUMMARY.md page outside docs/ exits 1 (${d#"$tmp_root/"})" "1" "$?"
+  expect_contains "check: the FAIL names the page outside docs/ (${d#"$tmp_root/"})" "$(printf '%s\n' "$out" | grep '^FAIL')" "secret.md"
+done
+run_check summary-dot
+expect_eq "check: summary-dot exits 0" "0" "$check_rc"
+expect_eq "check: ./2-evidence.md and 2-evidence.md load once" "1" \
+  "$(printf '%s\n' "$check_out" | grep -c 'PASS: evidence block 2-evidence.md#scrape-allocation-mbs')"
+
 out="$("$checker" "$tmp_root/no-such-docs" 2>&1)"
 expect_eq "check: a bad path exits 2" "2" "$?"
 out="$("$checker" 2>&1)"
@@ -665,6 +683,16 @@ rc=$?
 if [[ $rc -ne 0 ]]; then pass "zip: a missing referenced file exits non-zero"; else fail "zip: a missing referenced file exits non-zero"; fi
 expect_contains "zip: the error names the missing file" "$out" "images/missing.png"
 expect_no_file "zip: a missing referenced file writes no zip" "$tmp_root/missing.zip"
+
+for d in "$outside_docs" "$abs_docs"; do
+  zip_out="$tmp_root/${d#"$tmp_root/"}"
+  zip_out="${zip_out%/docs}.zip"
+  out="$("$exporter" zip "$d" "$zip_out" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "zip: a SUMMARY.md page outside docs/ exits non-zero (${d#"$tmp_root/"})"; else fail "zip: a SUMMARY.md page outside docs/ exits non-zero (${d#"$tmp_root/"})"; fi
+  expect_contains "zip: the error names the page outside docs/ (${d#"$tmp_root/"})" "$out" "secret.md"
+  expect_no_file "zip: a page outside docs/ writes no zip (${d#"$tmp_root/"})" "$zip_out"
+done
 
 out="$("$exporter" jira "$ws_noplan/docs" "$tmp_root/scaffold-jira.txt" 2>&1)"
 expect_eq "jira: the bare scaffold exports" "0" "$?"

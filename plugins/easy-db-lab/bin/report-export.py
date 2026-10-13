@@ -17,7 +17,8 @@ manual attachment, turns links to .md pages into their text, and maps each verdi
 colour.
 
 zip takes the pages that SUMMARY.md lists before "# Appendix" (the summary, the evidence, and
-nested evidence pages), plus every images/ and data/ file they reference.  The appendix (plan,
+nested evidence pages), plus every images/ and data/ file they reference.  A listed page outside
+docs/ fails the export.  The appendix (plan,
 journal, issues) is not in the zip.  A referenced file that does not exist fails the export, and
 no zip is written.
 """
@@ -109,6 +110,9 @@ def customer_pages(docs):
                 target = os.path.normpath(target.split("#")[0])
                 if target.endswith(".md") and target not in pages:
                     pages.append(target)
+    outside = [p for p in pages if os.path.isabs(p) or p == os.pardir or p.startswith(os.pardir + os.sep)]
+    if outside:
+        die("SUMMARY.md lists customer pages outside docs/: " + ", ".join(outside))
     return pages
 
 

@@ -162,10 +162,15 @@ def customer_pages(docs):
         if re.match(r"^#\s+Appendix\b", line):
             break
         for _, target in LINK.findall(line):
-            target = target.split("#")[0]
+            target = os.path.normpath(target.split("#")[0])
             if target.endswith(".md") and target not in pages:
-                pages.append(os.path.normpath(target))
+                pages.append(target)
     return pages
+
+
+def outside_docs(page):
+    """True for a docs-relative path that leaves docs/: absolute, or one that starts with ..."""
+    return os.path.isabs(page) or page == os.pardir or page.startswith(os.pardir + os.sep)
 
 
 # --- evidence blocks ---
@@ -374,10 +379,14 @@ def table(lines):
 class Checker:
     def __init__(self, docs, report):
         self.docs, self.report = docs, report
-        self.pages = customer_pages(docs)
+        pages = customer_pages(docs)
+        self.outside = [p for p in pages if outside_docs(p)]
+        self.pages = [p for p in pages if not outside_docs(p)]
         self.blocks = {}
 
     def load_blocks(self):
+        for page in self.outside:
+            self.report.fail(f"SUMMARY.md lists {page}, which is outside docs/; every customer page must be under docs/")
         for page in self.pages:
             if page == "1-summary.md":
                 continue

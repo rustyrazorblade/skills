@@ -581,6 +581,22 @@ out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-bas
 expect_eq "plot: --align accepts an arm in two CSVs with one window" "0" "$?"
 expect_contains "plot: the same-window arm keeps both CSVs' nodes" "$out" "| db2 (baseline) | baseline |"
 
+# Each arm filters on its own cluster label, so the queries differ only in the cluster matcher.
+out="$("$graph" plot --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-candidate.csv" --name arm-cluster \
+  --title "Arm cluster" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_eq "plot: queries that differ only in the cluster matcher exit 0" "0" "$?"
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "plot: the baseline arm keeps its own Query line" "$out" 'Query (baseline): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster="lab-baseline-1a2b",'
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "plot: the candidate arm keeps its own Query line" "$out" 'Query (candidate): `histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{cluster=~"lab-candidate-.*",'
+expect_not_contains "plot: per-arm queries give no shared Query line" "$out" "Query: "
+out="$("$graph" plot --csv "$gfix/cluster-baseline.csv" --csv "$gfix/cluster-other.csv" --name arm-other \
+  --title "Arm other" --align elapsed --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "plot: queries that differ past the cluster matcher are an error"; else fail "plot: queries that differ past the cluster matcher are an error"; fi
+expect_contains "plot: the error names the query" "$out" "differ in query"
+expect_no_file "plot: a query mismatch past the cluster matcher writes no PNG" "$gdocs/images/arm-other.png"
+
 # --name is a file name: no path, no leading dot.
 for bad in '../x' 'a/b' '..' '.hidden' 'a..b'; do
   out="$("$graph" plot --csv "$gfix/baseline.csv" --name "$bad" --title "Bad" \
@@ -661,13 +677,15 @@ cassandra-missing reasoning review
 arm-two-windows two windows
 EOF
 
-for name in noise-not-measured partial inconclusive findings cassandra-done cassandra-not-installed; do
+for name in noise-not-measured partial inconclusive findings cassandra-done cassandra-not-installed arm-cluster; do
   run_check "$name"
   expect_eq "check: $name exits 0" "0" "$check_rc"
   expect_not_contains "check: $name has no FAIL" "$check_out" "FAIL"
 done
 run_check partial
 expect_not_contains "check: the Partial token is not a numeral in prose" "$check_out" "WARN"
+run_check arm-cluster
+expect_contains "check: a block with one Query line per arm passes its row" "$check_out" "PASS: row Read latency p99 (ms)"
 
 run_check numeral-in-prose
 expect_eq "check: a numeral in prose exits 0" "0" "$check_rc"

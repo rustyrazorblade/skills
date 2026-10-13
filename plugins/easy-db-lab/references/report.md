@@ -182,7 +182,7 @@ report-graph.py plot --csv <cluster-dir>/docs/data/scrape-alloc.csv \
   --title "Scrape allocation (MB/s)" --docs <cluster-dir>/docs
 ```
 
-`plot` reads CSVs only from `docs/data/`.  It writes `images/<name>.png` with `lab.mplstyle` and prints the evidence block.  The baseline arm is grey and the candidate arm is blue; nodes in one arm differ by line style.  CSVs with a different query, unit, or step are an error.  CSVs with different windows are an error, except with `--align elapsed` (see "Arms" below).
+`plot` reads CSVs only from `docs/data/`.  It writes `images/<name>.png` with `lab.mplstyle` and prints the evidence block.  The baseline arm is grey and the candidate arm is blue; nodes in one arm differ by line style.  CSVs with a different unit or step are an error.  CSVs whose queries differ are an error, unless they differ only in the `cluster` matcher.  Then the block has one Query line per arm, for example `Query (baseline): ...`.  CSVs with different windows are an error, except with `--align elapsed` (see "Arms" below).
 
 ## Prose Rules
 
@@ -327,4 +327,4 @@ Arms still up afterwards are torn down when the coordinator relaunches `run <tes
 
 ### Plot with --align elapsed
 
-The arms run at different times, so their windows differ.  `plot --align elapsed` keeps each CSV's window and puts the seconds since that CSV's start on the x-axis.  The block holds one Window line per arm, for example `Window (baseline): ...`.  The query, the unit, and the step must still match.  Series are keyed by arm and node, with legends such as "db0 (baseline)".  The Data line links every arm's CSV, and the check merges them, keyed by node and arm.
+The arms run at different times, so their windows differ.  `plot --align elapsed` keeps each CSV's window and puts the seconds since that CSV's start on the x-axis.  The block holds one Window line per arm, for example `Window (baseline): ...`.  Each arm's query filters on its own `cluster` label, so the queries can differ in the `cluster` matcher only.  Then the block holds one Query line per arm.  The rest of the query, the unit, and the step must match.  Series are keyed by arm and node, with legends such as "db0 (baseline)".  The Data line links every arm's CSV, and the check merges them, keyed by node and arm.

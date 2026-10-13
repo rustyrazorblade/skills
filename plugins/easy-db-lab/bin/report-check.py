@@ -189,9 +189,9 @@ class Block:
                 self.has_table = True
             if re.match(r"^Window( \([^)]*\))?: ", line):
                 self.windows.append(line)
-            m = re.match(r"^Query: `(.*)`\s*$", line)
+            m = re.match(r"^Query( \([^)]*\))?: `(.*)`\s*$", line)
             if m:
-                self.query = m.group(1)
+                self.query = m.group(2)
             if line.startswith("Data: "):
                 self.csvs += [t for _, t in LINK.findall(line) if t.endswith(".csv")]
 

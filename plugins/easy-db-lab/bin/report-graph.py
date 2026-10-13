@@ -19,8 +19,10 @@ Two subcommands:
   plot   reads one or more CSVs from <docs>/data, writes <docs>/images/<name>.png with the
          shared style, and prints the full evidence block (heading, image, stats table, Window,
          Query, Data) on stdout.  The stats table has one row per node and one rollup row per
-         arm (Node = all) from pooled samples.  CSVs with a different query, unit, or step are an
-         error.  CSVs with a different window are an error unless --align elapsed is given.  With
+         arm (Node = all) from pooled samples.  CSVs with a different unit or step are an error.
+         CSVs whose queries differ are an error, unless they differ only in the cluster="..." or
+         cluster=~"..." matcher; then the block has one Query line per arm.  CSVs with a
+         different window are an error unless --align elapsed is given.  With
          --align, two CSVs that share an arm are an error if their windows differ.  --name holds
          letters, digits, _, . and -, and no "..".
 
@@ -60,6 +62,8 @@ IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$")
 EC2_HOST = re.compile(r"^ip-\d{1,3}(-\d{1,3}){3}(\.[A-Za-z0-9.-]+)?(:\d+)?$")
 # --name becomes a file name under data/ or images/, so it holds no path.
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+# A Mimir tenant holds many clusters, so each arm's query selects its own cluster label.
+CLUSTER_MATCHER = re.compile(r'(?<![A-Za-z0-9_])cluster\s*=~?\s*"(?:[^"\\]|\\.)*"')
 
 
 def die(msg):
@@ -235,6 +239,11 @@ def load(path, docs):
     return real, meta, rows
 
 
+def query_shape(query):
+    """The query with its cluster matcher blanked: two arms' queries can differ only there."""
+    return CLUSTER_MATCHER.sub('cluster=""', query or "")
+
+
 def arm_order(arms):
     roles = [a for a in ("baseline", "candidate") if a in arms]
     return roles + [a for a in arms if a not in roles]
@@ -250,7 +259,10 @@ def plot(args):
 
     first = loaded[0][1]
     for path, meta, _ in loaded[1:]:
-        for field in ("query", "unit", "step"):
+        if query_shape(meta.get("query")) != query_shape(first.get("query")):
+            die(f"the CSVs differ in query, apart from the cluster matcher: {first.get('query')!r} "
+                f"and {meta.get('query')!r}")
+        for field in ("unit", "step"):
             if meta.get(field) != first.get(field):
                 die(f"the CSVs differ in {field}: {first.get(field)!r} and {meta.get(field)!r}")
         if not args.align and (meta.get("start"), meta.get("end")) != (first.get("start"), first.get("end")):
@@ -268,7 +280,7 @@ def plot(args):
                         "different windows; with --align elapsed each arm has one window")
 
     # Series keyed by (arm, node).  Each arm keeps the window of the CSV it came from.
-    series, arm_window, arms = {}, {}, []
+    series, arm_window, arm_query, arms = {}, {}, {}, []
     for path, meta, rows in loaded:
         window = (parse_time(meta["start"]), parse_time(meta["end"]))
         for r in rows:
@@ -277,6 +289,7 @@ def plot(args):
             if r["arm"] not in arms:
                 arms.append(r["arm"])
             arm_window.setdefault(r["arm"], window)
+            arm_query.setdefault(r["arm"], meta.get("query", ""))
     for points in series.values():
         points.sort()
     arms = arm_order(arms)
@@ -356,8 +369,13 @@ def plot(args):
         s, e = parse_time(first["start"]), parse_time(first["end"])
         out.append(f"Window: {iso(s)} to {iso(e)} ({duration((e - s).total_seconds())}), step {step}")
         out.append("")
-    out.append(f"Query: `{first.get('query', '')}`")
-    out.append("")
+    if len({meta.get("query") for _, meta, _ in loaded}) == 1:
+        out.append(f"Query: `{first.get('query', '')}`")
+        out.append("")
+    else:
+        for arm in arms:
+            out.append(f"Query ({arm}): `{arm_query[arm]}`")
+            out.append("")
     out.append("Data: " + ", ".join(f"[{os.path.basename(p)}]({rel(p)})" for p, _, _ in loaded))
     print("\n".join(out))
 

@@ -21,7 +21,8 @@ Two subcommands:
          Query, Data) on stdout.  The stats table has one row per node and one rollup row per
          arm (Node = all) from pooled samples.  CSVs with a different query, unit, or step are an
          error.  CSVs with a different window are an error unless --align elapsed is given.  With
-         --align, two CSVs that share an arm are an error.
+         --align, two CSVs that share an arm are an error if their windows differ.  --name holds
+         letters, digits, _, . and -, and no "..".
 
 Usage:
     report-graph.py fetch --mimir-url URL --tenant T --query PROMQL --start ISO --end ISO \\
@@ -57,6 +58,8 @@ DEFAULT_STATS = "samples,min,p50,mean,p99,max"
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$")
 # An EC2 host name holds the IP: ip-10-0-1-15, ip-10-0-1-15.ec2.internal, ...compute.internal.
 EC2_HOST = re.compile(r"^ip-\d{1,3}(-\d{1,3}){3}(\.[A-Za-z0-9.-]+)?(:\d+)?$")
+# --name becomes a file name under data/ or images/, so it holds no path.
+NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 def die(msg):
@@ -254,13 +257,15 @@ def plot(args):
             die("the CSVs have different windows; use --align elapsed to plot each arm from its own start")
 
     if args.align:
-        # Each arm keeps the window of its CSV, so an arm in two CSVs has no one window.
+        # Each arm keeps the window of its CSV, so an arm in two CSVs needs one window in both.
         source = {}
-        for path, _, rows in loaded:
+        for path, meta, rows in loaded:
+            window = (meta.get("start"), meta.get("end"))
             for arm in sorted({r["arm"] for r in rows}):
-                if source.setdefault(arm, path) != path:
-                    die(f"arm {arm} is in {os.path.basename(source[arm])} and {os.path.basename(path)}; "
-                        "with --align elapsed each arm comes from one CSV")
+                first_path, first_window = source.setdefault(arm, (path, window))
+                if first_window != window:
+                    die(f"arm {arm} is in {os.path.basename(first_path)} and {os.path.basename(path)} with "
+                        "different windows; with --align elapsed each arm has one window")
 
     # Series keyed by (arm, node).  Each arm keeps the window of the CSV it came from.
     series, arm_window, arms = {}, {}, []
@@ -389,6 +394,8 @@ def main():
     p.add_argument("--docs", required=True)
 
     args = ap.parse_args()
+    if args.name is not None and (not NAME.match(args.name) or ".." in args.name):
+        die(f"--name {args.name!r} is not a file name; use letters, digits, _, . and -, with no ..")
     fetch(args) if args.cmd == "fetch" else plot(args)
 
 

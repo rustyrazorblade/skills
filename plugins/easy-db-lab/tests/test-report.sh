@@ -574,6 +574,25 @@ if [[ $rc -ne 0 ]]; then pass "plot: --align refuses two CSVs that share an arm"
 expect_contains "plot: the shared-arm refusal names the arm" "$out" "arm baseline"
 expect_no_file "plot: the shared-arm refusal writes no PNG" "$gdocs/images/shared-arm.png"
 
+# An arm in two CSVs with one window has one window, as report-check reads it.
+out="$("$graph" plot --csv "$gfix/latency-baseline.csv" --csv "$gfix/latency-baseline-db2.csv" \
+  --csv "$gfix/latency-candidate.csv" --name same-window --title "Same window" --align elapsed \
+  --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+expect_eq "plot: --align accepts an arm in two CSVs with one window" "0" "$?"
+expect_contains "plot: the same-window arm keeps both CSVs' nodes" "$out" "| db2 (baseline) | baseline |"
+
+# --name is a file name: no path, no leading dot.
+for bad in '../x' 'a/b' '..' '.hidden' 'a..b'; do
+  out="$("$graph" plot --csv "$gfix/baseline.csv" --name "$bad" --title "Bad" \
+    --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "plot: --name $bad is refused"; else fail "plot: --name $bad is refused"; fi
+  expect_contains "plot: the --name $bad refusal names the rule" "$out" "--name"
+  out="$(fetch http://127.0.0.1:1/prometheus "$bad" --arm baseline=db0 2>&1)"
+  expect_contains "fetch: the --name $bad refusal names the rule" "$out" "--name"
+  expect_not_contains "fetch: --name $bad is refused before the query" "$out" "cannot reach Mimir"
+done
+
 out="$("$graph" plot --csv "$gfix/baseline.csv" --name nested --title "Nested" --page evidence/latency.md \
   --style "$gdocs/lab.mplstyle" --docs "$gdocs" 2>&1)"
 expect_contains "plot: --page makes the image link relative to a nested page" "$out" "![Nested](../images/nested.png)"

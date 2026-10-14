@@ -87,3 +87,4 @@ fragment-socks	4-journal.md	See [it](#open-the-socks-tunnel).	!tunnel wording
 html-id-placeholder	4-journal.html	<h2 id="open-the-tunnel"><a href="#open-the-tunnel">Open the &lt;tunnel&gt;</a></h2>	=
 idempotent	4-journal.md	Already \<private-ip> and `<tunnel>` here.	=
 url-with-fragment	1-summary.md	Open [it](http://control0:3000/d/x#panel).	Open [it](\<service-url>).
+svg-entity	images/d.svg	<text>10.0.1.15</text>	<text>&lt;private-ip&gt;</text>

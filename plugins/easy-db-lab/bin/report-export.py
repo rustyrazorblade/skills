@@ -92,8 +92,9 @@ end
 LINK_TARGET = re.compile(r"\]\(([^)\s]+)\)")
 # The theme files that the staged book needs besides its pages.
 THEME = ["SUMMARY.md", "book.toml", "lab.css"]
-# The staged files that are text, so the replace step and the scan read them.
-TEXT = (".md", ".csv", ".json", ".toml")
+# The image types that the export copies unchanged.  Every other staged file must be text, so
+# that the replace step and the scan read it.
+IMAGES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 # The jira writer escapes every ( so that no text becomes a JIRA emoticon such as (i).  Keep the
 # escape only before an emoticon.
 EMOTICON = r"(?:[ixyn/!?*+-]|on|off|flag|flagoff|\*[rgby])\)"
@@ -176,13 +177,32 @@ def book_files(docs):
     return files + [t for t in THEME if os.path.exists(os.path.join(docs, t)) and t not in files]
 
 
-def stage(docs, files, dest):
+def texts(docs, files):
+    """The files that are text: each one that is not a known image and decodes as UTF-8.  A file
+    that is neither fails the export, because the replace step cannot read it."""
+    out, unknown = [], []
+    for rel in files:
+        if rel.lower().endswith(IMAGES):
+            continue
+        with open(os.path.join(docs, rel), "rb") as f:
+            try:
+                f.read().decode("utf-8")
+            except UnicodeDecodeError:
+                unknown.append(rel)
+                continue
+        out.append(rel)
+    if unknown:
+        die("referenced files that are neither text nor a png, jpg, gif, or webp image: " + ", ".join(unknown))
+    return out
+
+
+def stage(docs, files, text_files, dest):
     """Copy files into dest, with each text file redacted."""
     shutil.rmtree(dest, ignore_errors=True)
     for rel in files:
         src, out = os.path.join(docs, rel), os.path.join(dest, rel)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        if rel.endswith(TEXT):
+        if rel in text_files:
             with open(src, encoding="utf-8") as f:
                 text = redact(rel, f.read())
             with open(out, "w", encoding="utf-8") as f:
@@ -191,13 +211,12 @@ def stage(docs, files, dest):
             shutil.copyfile(src, out)
 
 
-def leftovers(dest, files):
+def leftovers(dest, text_files):
     """One message per identifier that remains in the staged text files."""
     found = []
-    for rel in files:
-        if rel.endswith(TEXT):
-            with open(os.path.join(dest, rel), encoding="utf-8") as f:
-                found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, f.read())]
+    for rel in text_files:
+        with open(os.path.join(dest, rel), encoding="utf-8") as f:
+            found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, f.read())]
     return found
 
 
@@ -214,8 +233,9 @@ def zip_report(docs, out):
         die("redaction: rename these files and their links: " + "; ".join(found))
     export = os.path.dirname(os.path.abspath(out))
     staged, html = os.path.join(export, "stage"), os.path.join(export, "html")
-    stage(docs, files, staged)
-    found = leftovers(staged, files)
+    text_files = texts(docs, files)
+    stage(docs, files, text_files, staged)
+    found = leftovers(staged, text_files)
     if found:
         die("redaction: identifiers remain in the staged book under " + staged + ": " + "; ".join(found))
     mdbook = shutil.which("mdbook")

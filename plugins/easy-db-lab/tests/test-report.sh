@@ -1567,6 +1567,36 @@ if [[ $rc -ne 0 ]]; then pass "zip: an identifier in a file name fails the expor
 expect_contains "zip: the file name error names the kind and the file" "$out" "EC2 host name in the file name images/db-ip-10-0-1-15.png"
 expect_no_file "zip: an identifier in a file name writes no zip" "$tmp_root/export-name/report.zip"
 
+# Every referenced text file is redacted, whatever its extension; an SVG gets the entity form so
+# it stays valid XML.  A referenced file that is neither text nor a known image fails the export.
+bash "$bin/setup-cluster.sh" "$tmp_root/export-text" "$stub_edb" --name export-text >/dev/null 2>&1
+xt="$tmp_root/export-text/docs"
+fixture_docs "$xt" share-book
+printf 'node 10.0.1.15 at /Users/someone/lab\n' > "$xt/data/notes.txt"
+printf 'host: control0:3000\n' > "$xt/data/conf.yaml"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><text>10.0.1.15</text></svg>\n' > "$xt/images/diagram.svg"
+printf '\n[notes](data/notes.txt), [conf](data/conf.yaml), and ![diagram](images/diagram.svg)\n' >> "$xt/5-issues.md"
+out="$("$exporter" zip "$xt" "$tmp_root/export-text/report.zip" 2>&1)"
+expect_eq "zip: text files of any extension export" "0" "$?"
+xtx="$tmp_root/export-text/extract"
+mkdir -p "$xtx"
+unzip -q "$tmp_root/export-text/report.zip" -d "$xtx" 2>/dev/null
+expect_eq "zip: a .txt data file is redacted" "node <private-ip> at <local-path>" "$(cat "$xtx/data/notes.txt" 2>/dev/null)"
+expect_eq "zip: a .yaml data file is redacted" "host: <service-url>" "$(cat "$xtx/data/conf.yaml" 2>/dev/null)"
+expect_contains "zip: an SVG is redacted with the entity form" "$(cat "$xtx/images/diagram.svg" 2>/dev/null)" '<text>&lt;private-ip&gt;</text>'
+expect_eq "zip: a PNG is copied unchanged" "$(cksum < "$xt/images/scrape-alloc.png")" "$(cksum < "$xtx/images/scrape-alloc.png" 2>/dev/null)"
+
+bash "$bin/setup-cluster.sh" "$tmp_root/export-binary" "$stub_edb" --name export-binary >/dev/null 2>&1
+xb="$tmp_root/export-binary/docs"
+fixture_docs "$xb" share-book
+printf '\x00\xff\xfe binary' > "$xb/data/blob.bin"
+printf '\n[blob](data/blob.bin)\n' >> "$xb/5-issues.md"
+out="$("$exporter" zip "$xb" "$tmp_root/export-binary/report.zip" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: a referenced binary that is not an image fails the export"; else fail "zip: a referenced binary that is not an image fails the export"; fi
+expect_contains "zip: the binary error names the file" "$out" "data/blob.bin"
+expect_no_file "zip: a referenced binary writes no zip" "$tmp_root/export-binary/report.zip"
+
 ews="$tmp_root/make-empty-title"
 bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
 cp -R "$fixtures/docs-agree/." "$ews/docs/"

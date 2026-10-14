@@ -273,8 +273,11 @@ def _replace(segment, placeholder, protected, offset):
 def redact(rel, text):
     """The text with each identifier replaced by its <kind> placeholder and each wrapper variable
     by the command name.  In a markdown page, a placeholder outside code is escaped as \\<kind>,
-    so that mdbook shows it rather than read it as an HTML tag."""
+    so that mdbook shows it rather than read it as an HTML tag.  In an SVG, HTML, or XML file it
+    is &lt;kind&gt;, so that the file stays well formed."""
     raw = lambda name: f"<{name}>"
+    if rel.lower().endswith((".svg", ".html", ".htm", ".xml")):
+        raw = lambda name: f"&lt;{name}&gt;"
     escaped = lambda name: f"\\<{name}>"
     markdown = rel.endswith(".md")
     out, fenced = [], False

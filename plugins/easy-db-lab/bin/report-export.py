@@ -97,8 +97,9 @@ THEME = ["SUMMARY.md", "book.toml", "lab.css"]
 # The image types that the export copies unchanged.  Every other staged file must be text, so
 # that the replace step and the scan read it.
 IMAGES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
-# The mdbook directives that pull another file into a page.
-INCLUDE = re.compile(r"\{\{#(include|rustdoc_include|playground)\b")
+# The mdbook directives that pull another file into a page, with or without spaces inside the
+# braces: {{#include x}} and {{ #include x }}.
+INCLUDE = re.compile(r"\{\{\s*#(include|rustdoc_include|playground)\b")
 # The jira writer escapes every ( so that no text becomes a JIRA emoticon such as (i).  Keep the
 # escape only before an emoticon.
 EMOTICON = r"(?:[ixyn/!?*+-]|on|off|flag|flagoff|\*[rgby])\)"

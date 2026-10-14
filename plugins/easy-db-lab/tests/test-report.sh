@@ -1631,6 +1631,17 @@ for directive in include rustdoc_include playground; do
   expect_no_file "zip: a {{#$directive}} writes no zip" "$tmp_root/export-$directive/report.zip"
 done
 
+# mdbook also reads a directive with spaces inside the braces.
+bash "$bin/setup-cluster.sh" "$tmp_root/export-include-space" "$stub_edb" --name export-include-space >/dev/null 2>&1
+xs="$tmp_root/export-include-space/docs"
+fixture_docs "$xs" share-book
+printf '\n{{ #include ../../../kubeconfig }}\n' >> "$xs/5-issues.md"
+out="$("$exporter" zip "$xs" "$tmp_root/export-include-space/report.zip" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: a {{ #include }} with spaces fails the export"; else fail "zip: a {{ #include }} with spaces fails the export"; fi
+expect_contains "zip: the {{ #include }} error names the page and line" "$out" "{{#include in 5-issues.md line 7"
+expect_no_file "zip: a {{ #include }} with spaces writes no zip" "$tmp_root/export-include-space/report.zip"
+
 # mdbook turns 10\.0\.1\.15 into 10.0.1.15, which the staged scan cannot see.  The scan of the
 # built HTML catches it, names the file and line, and writes no zip.
 bash "$bin/setup-cluster.sh" "$tmp_root/export-built" "$stub_edb" --name export-built >/dev/null 2>&1

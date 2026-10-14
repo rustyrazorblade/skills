@@ -49,7 +49,7 @@ def load_check():
 
 
 _check = load_check()
-redact, scan = _check.redact, _check.scan
+redact, scan, measurements = _check.redact, _check.scan, _check.measurements
 
 # Okabe-Ito, the same badge colours as lab.css.
 LUA_FILTER = r"""
@@ -95,6 +95,8 @@ THEME = ["SUMMARY.md", "book.toml", "lab.css"]
 # The image types that the export copies unchanged.  Every other staged file must be text, so
 # that the replace step and the scan read it.
 IMAGES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+# The mdbook directives that pull another file into a page.
+INCLUDE = re.compile(r"\{\{#(include|rustdoc_include|playground)\b")
 # The jira writer escapes every ( so that no text becomes a JIRA emoticon such as (i).  Keep the
 # escape only before an emoticon.
 EMOTICON = r"(?:[ixyn/!?*+-]|on|off|flag|flagoff|\*[rgby])\)"
@@ -220,6 +222,47 @@ def leftovers(dest, text_files):
     return found
 
 
+def includes(dest, text_files):
+    """One message per mdbook include directive in a staged page.  mdbook would pull the named
+    file into the book after the replace step, unredacted."""
+    found = []
+    for rel in text_files:
+        if rel.endswith(".md"):
+            with open(os.path.join(dest, rel), encoding="utf-8") as f:
+                for n, line in enumerate(f, 1):
+                    found += [f"{{{{#{d} in {rel} line {n}" for d in INCLUDE.findall(line)]
+    return found
+
+
+def measured(dest, text_files):
+    """The measurement cells of the staged files, which the built HTML shows outside markdown."""
+    out = set()
+    for rel in text_files:
+        with open(os.path.join(dest, rel), encoding="utf-8") as f:
+            out |= measurements(rel, f.read())
+    return out
+
+
+def built_leftovers(html, keep):
+    """One message per identifier in a text file of the built HTML: the pages, print.html, the
+    search index, and the table of contents.  mdbook can turn text that the staged scan cannot
+    read, such as 10\\.0\\.1\\.15, into an identifier."""
+    found = []
+    for root, _, names in os.walk(html):
+        for name in sorted(names):
+            path = os.path.join(root, name)
+            rel = os.path.relpath(path, html)
+            if rel.lower().endswith(IMAGES):
+                continue
+            with open(path, "rb") as f:
+                try:
+                    text = f.read().decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
+            found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, text, keep)]
+    return found
+
+
 def named(files):
     """One message per identifier in a staged file's path.  The replace step never renames a
     file, because a page links to it by that name."""
@@ -235,7 +278,7 @@ def zip_report(docs, out):
     staged, html = os.path.join(export, "stage"), os.path.join(export, "html")
     text_files = texts(docs, files)
     stage(docs, files, text_files, staged)
-    found = leftovers(staged, text_files)
+    found = leftovers(staged, text_files) + includes(staged, text_files)
     if found:
         die("redaction: identifiers remain in the staged book under " + staged + ": " + "; ".join(found))
     mdbook = shutil.which("mdbook")
@@ -251,6 +294,9 @@ def zip_report(docs, out):
         die("mdbook build of the staged book failed: " + built.stderr.strip())
     # mdbook copies book.toml into the built HTML; it is a build input, not part of the book.
     os.remove(os.path.join(html, "book.toml"))
+    found = built_leftovers(html, measured(staged, text_files))
+    if found:
+        die("redaction: identifiers remain in the built book under " + html + ": " + "; ".join(found))
     tmp = out + ".tmp"
     count = 0
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:

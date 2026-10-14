@@ -1597,6 +1597,34 @@ if [[ $rc -ne 0 ]]; then pass "zip: a referenced binary that is not an image fai
 expect_contains "zip: the binary error names the file" "$out" "data/blob.bin"
 expect_no_file "zip: a referenced binary writes no zip" "$tmp_root/export-binary/report.zip"
 
+# An mdbook include directive would pull an unredacted file into the book, so a staged page that
+# holds one fails the export.
+for directive in include rustdoc_include playground; do
+  bash "$bin/setup-cluster.sh" "$tmp_root/export-$directive" "$stub_edb" --name "export-$directive" >/dev/null 2>&1
+  xi="$tmp_root/export-$directive/docs"
+  fixture_docs "$xi" share-book
+  printf '\n{{#%s ../../secret.txt}}\n' "$directive" >> "$xi/5-issues.md"
+  out="$("$exporter" zip "$xi" "$tmp_root/export-$directive/report.zip" 2>&1)"
+  rc=$?
+  if [[ $rc -ne 0 ]]; then pass "zip: a {{#$directive}} fails the export"; else fail "zip: a {{#$directive}} fails the export"; fi
+  expect_contains "zip: the {{#$directive}} error names the page and line" "$out" "{{#$directive in 5-issues.md line 7"
+  expect_no_file "zip: a {{#$directive}} writes no zip" "$tmp_root/export-$directive/report.zip"
+done
+
+# mdbook turns 10\.0\.1\.15 into 10.0.1.15, which the staged scan cannot see.  The scan of the
+# built HTML catches it, names the file and line, and writes no zip.
+bash "$bin/setup-cluster.sh" "$tmp_root/export-built" "$stub_edb" --name export-built >/dev/null 2>&1
+xh="$tmp_root/export-built/docs"
+fixture_docs "$xh" share-book
+printf '\nEscaped: 10\\.0\\.1\\.15\n' >> "$xh/5-issues.md"
+out="$("$exporter" zip "$xh" "$tmp_root/export-built/report.zip" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: an identifier in the built HTML fails the export"; else fail "zip: an identifier in the built HTML fails the export"; fi
+expect_contains "zip: the built HTML error names the page" "$out" "IPv4 address in 5-issues.html line"
+expect_contains "zip: the built HTML error names the print page" "$out" "IPv4 address in print.html line"
+expect_contains "zip: the built HTML error names the search index" "$out" "IPv4 address in searchindex"
+expect_no_file "zip: an identifier in the built HTML writes no zip" "$tmp_root/export-built/report.zip"
+
 ews="$tmp_root/make-empty-title"
 bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
 cp -R "$fixtures/docs-agree/." "$ews/docs/"

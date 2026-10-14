@@ -164,11 +164,12 @@ REDACTION = [
 _NAMES = "|".join(sorted({p for _, _, p in REDACTION}, key=len, reverse=True))
 # A placeholder as redact() writes it, \<kind> or <kind>, or as mdbook writes it, &lt;kind&gt;.
 PLACEHOLDER = re.compile(r"(?:\\?<|&lt;)(?:" + _NAMES + r")(?:>|&gt;)")
-# A link fragment, in markdown ](page.md#frag) or in HTML href="page.html#frag" and id="frag".
+# A link fragment: in markdown ](page.md#frag); in HTML href="page.html#frag" and id="frag"; and
+# in the search index, "page.html#frag".
 # mdbook makes a heading id from the redacted heading, so a fragment can hold a placeholder name
 # such as tunnel-setup.  redact() never changes a fragment; scan() reads a placeholder name in
 # one as a placeholder, and any other identifier in one fails.
-FRAGMENT = re.compile(r"(\]\([^)\s#]*#|\bhref=\"[^\"#]*#|\bid=\")([^)\s\"]+)")
+FRAGMENT = re.compile(r"(\]\([^)\s#]*#|\bhref=\"[^\"#]*#|[\w./-]+\.html#|\bid=\")([^)\s\"]+)")
 FRAGMENT_NAME = re.compile(r"(?<![a-z0-9])(?:" + _NAMES + r")(?![a-z0-9])")
 # The wrapper variables: $EDB, ${EDB}, $EDB_<ARM>, and ${EDB_<ARM>}.  EDB_LAB_BIN is not one.
 WRAPPER = re.compile(r"\$\{EDB(?:_(?!LAB_BIN\b)[A-Z0-9_]+)?\}|\$EDB(?:_(?!LAB_BIN\b)[A-Z0-9_]+)?\b")
@@ -221,14 +222,23 @@ def without_measurements(rel, text):
         yield line, "".join(words)
 
 
-def scan(rel, text):
+def measurements(rel, text):
+    """The text of each measurement cell in the file."""
+    return {line[s:e].strip() for line, spans in measurement_spans(rel, text) for s, e in spans}
+
+
+def scan(rel, text, keep=frozenset()):
     """(kind, line number) for each infrastructure identifier that remains.  A placeholder is
     not an identifier.  It becomes a NUL, not a space, so that "--profile <aws-profile> s3"
-    does not read s3 as the profile."""
+    does not read s3 as the profile.  keep holds measurements from the staged markdown: in the
+    built HTML, where no stats table is markdown, such a number is not an account ID."""
     found = []
+    kept = re.compile(r"(?<!\d)(?:" + "|".join(map(re.escape, sorted(keep))) + r")(?![\d])") if keep else None
     for n, (line, words) in enumerate(without_measurements(rel, text), 1):
         line, words = (FRAGMENT.sub(lambda m: m.group(1) + FRAGMENT_NAME.sub("\x00", m.group(2)), PLACEHOLDER.sub("\x00", t))
                        for t in (line, words))
+        if kept:
+            words = kept.sub("\x00", words)
         for kind, pattern, _ in REDACTION:
             if pattern.spans(words if kind == ACCOUNT else line):
                 found.append((kind, n))

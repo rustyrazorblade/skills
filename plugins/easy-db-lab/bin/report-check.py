@@ -67,6 +67,12 @@ STATS = ["samples", "min", "p50", "mean", "p95", "p99", "max", "total", "rate"]
 MEASUREMENT = re.compile(r"^[+\-−]?\d+(?:\.\d+)?$")
 ACCOUNT = "12-digit account ID"
 _IPV4 = r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?!\d|\.\d)"
+# An IPv6 address: eight groups, or a :: form with a group on at least one side, such as
+# 2600:1f18::1, fe80::, or ::1.  A time such as 12:34:56 and a MAC address have no ::, and the
+# guards keep std::vector and a::before.  An address holds a digit, so Abc::Def in code stays.
+_H6 = r"[0-9a-f]{1,4}"
+_IPV6 = (r"(?<![\w:.])(?=[\w:]*\d)(?:(?:" + _H6 + r":){7}" + _H6 + r"|" + _H6 + r"(?::" + _H6 + r"){0,6}::(?:" + _H6 + r"(?::" + _H6
+         + r"){0,6})?|::" + _H6 + r"(?::" + _H6 + r"){0,6})(?![\w:])")
 _TUNNEL_WORD = r"(?:ssh -[LD](?:\s+[^\s`\"']+)?|tunnel(?:s|ed|ing)?|socks5h?|socks|tailscale|port-forward(?:ing)?)"
 
 
@@ -110,8 +116,11 @@ class PortNumbers:
 # one: a SOCKS URL holds its IPv4 address, and an IPv4 address holds its :port.
 REDACTION = [
     ("SOCKS proxy URL", Pattern(r"\bsocks5h?://[^\s`\"')]+", re.I), "socks-proxy"),
+    # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
+    ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
     ("IPv4 address", IPv4(), "private-ip"),
     ("EC2 host name", Pattern(r"\bip-(?:\d{1,3}-){3}\d{1,3}\b"), "ec2-host"),
+    ("public EC2 DNS name", Pattern(r"\bec2-(?:\d{1,3}-){3}\d{1,3}(?:(?:\.[a-z0-9-]+)*\.amazonaws\.com)?\b", re.I), "ec2-host"),
     # Twelve digits that are not part of a decimal number such as 214748364800.0, and not the
     # last group of a UUID such as a cluster label.
     (ACCOUNT, Pattern(r"(?<!\d)(?<!\d\.)(?<![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-)\d{12}(?!\d)(?!\.\d)", re.I),

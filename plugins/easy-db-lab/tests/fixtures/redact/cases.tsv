@@ -14,3 +14,24 @@ keep-port-prose	page.txt	We port to 5 nodes next.	=
 keep-ports-prose	page.txt	The ports to 3 regions.	=
 port-still	page.txt	on port 1080 and ports 9042 and 7000	on port <port> and ports <port> and <port>
 port-changed	page.txt	port changed from 1080 to 52764	port changed from <port> to <port>
+# IPv6 addresses and public EC2 DNS names; times, MAC addresses, and :: in code stay.
+ipv6-full	page.txt	addr 2600:1f18:0abc:1234:5678:9abc:def0:1234 up	addr <ipv6> up
+ipv6-compressed	page.txt	addr 2600:1f18::1 up	addr <ipv6> up
+ipv6-prefix	page.txt	the 2600:1f18:: block	the <ipv6> block
+ipv6-link-local	page.txt	via fe80::1ff:fe23:4567:890a on eth0	via <ipv6> on eth0
+ipv6-link-local-bare	page.txt	from fe80:: here	from <ipv6> here
+ipv6-loopback	page.txt	listen on ::1 only	listen on <ipv6> only
+ipv6-bracket-port	page.txt	http://[2600:1f18::1]:9042/ now	http://[<ipv6>]:9042/ now
+ipv6-mapped	page.txt	from ::ffff:10.0.1.15 here	from <ipv6> here
+ipv6-md	4-journal.md	Node at 2600:1f18::1 today.	Node at \<ipv6> today.
+ec2-public-dns	page.txt	ssh to ec2-54-12-34-56.compute-1.amazonaws.com now	ssh to <ec2-host> now
+ec2-public-dns-region	page.txt	host ec2-54-12-34-56.us-west-2.compute.amazonaws.com up	host <ec2-host> up
+ec2-public-bare	page.txt	host ec2-54-12-34-56 up	host <ec2-host> up
+keep-time	page.txt	at 12:34:56 UTC and 2026-10-01T10:00:00Z	=
+keep-mac	page.txt	mac 0a:1b:2c:3d:4e:5f	=
+keep-cpp	page.txt	std::vector and a::before and dd::after stay	=
+keep-rust	page.txt	Foo::new() and ::std::fmt stay	=
+keep-hex-words	page.txt	deadbeef: cafe face: bad	=
+keep-ratio	page.txt	a 1:30 ratio and 3:1 odds	=
+ipv6-upper	page.txt	addr 2600:1F18::AB up	addr <ipv6> up
+keep-upper-scope	page.txt	Abc::Def and DD::AFTER stay	=

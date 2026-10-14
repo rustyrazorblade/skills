@@ -19,8 +19,8 @@ Three subcommands:
 
   render  downloads one Grafana panel render to <docs>/images/<name>.png.  It sends one GET to
           /render/d-solo/<UID>/ with panelId, from, to, each var-<NAME>, width, height, tz=UTC,
-          and theme (light by default, so the image matches the report page; --theme dark for
-          the dark theme).  An ISO time goes out as epoch milliseconds; a Grafana relative time
+          and theme (dark by default, so the image matches the report page; --theme light for
+          the light theme).  An ISO time goes out as epoch milliseconds; a Grafana relative time
           such as now-93600s goes out unchanged.  It writes the image only for a status 200 and a
           non-empty PNG body; any other result exits non-zero and leaves the old image as it was.
           It never stores the Grafana URL.
@@ -43,7 +43,7 @@ Usage:
         [--step 30s] --node-label instance [--node VALUE=db0]... [--arm baseline=db0,db1]... \\
         --unit "MB/s" [--scale 1e-6] --name scrape-alloc --docs <docs> [--proxy socks5h://...]
     report-graph.py render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME \\
-        [--var NAME=VALUE]... [--width 1200] [--height 600] [--theme light|dark] \\
+        [--var NAME=VALUE]... [--width 1200] [--height 600] [--theme dark|light] \\
         --name scrape-alloc --docs <docs> [--proxy socks5h://...] [--timeout 60]
     report-graph.py block --csv <docs>/data/a.csv [--csv ...] --image [ARM=]<docs>/images/a.png \\
         [--image ...] --title "..." [--stats samples,min,p50,mean,p99,max] [--arm-windows] \\
@@ -449,8 +449,8 @@ def main():
     r.add_argument("--var", action="append", help="NAME=VALUE; sent as var-NAME=VALUE")
     r.add_argument("--width", type=int, default=1200)
     r.add_argument("--height", type=int, default=600)
-    r.add_argument("--theme", choices=("light", "dark"), default="light",
-                   help="the Grafana theme; light matches the report page")
+    r.add_argument("--theme", choices=("dark", "light"), default="dark",
+                   help="the Grafana theme; dark matches the report page")
     r.add_argument("--name", required=True)
     r.add_argument("--docs", required=True)
     r.add_argument("--proxy", help="for example socks5h://127.0.0.1:1080")

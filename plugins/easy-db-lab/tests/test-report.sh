@@ -111,8 +111,8 @@ expect_contains "scaffold: book.toml src is the docs dir" "$toml" 'src = "."'
 expect_contains "scaffold: book.toml builds into report/" "$toml" 'build-dir = "report"'
 expect_contains "scaffold: book.toml wires lab.css" "$toml" 'additional-css = ["lab.css"]'
 expect_contains "scaffold: book.toml drops section numbers" "$toml" 'no-section-label = true'
-expect_contains "scaffold: book.toml opens in the light theme" "$toml" 'default-theme = "light"'
-expect_contains "scaffold: book.toml keeps the light theme on a dark OS, to match the light renders" "$toml" 'preferred-dark-theme = "light"'
+expect_contains "scaffold: book.toml opens in the coal theme" "$toml" 'default-theme = "coal"'
+expect_contains "scaffold: book.toml keeps the coal theme on a dark OS, to match the dark renders" "$toml" 'preferred-dark-theme = "coal"'
 
 expect_contains "scaffold: Makefile names the plugin bin" "$(cat "$docs/Makefile" 2>/dev/null)" "EDB_LAB_BIN ?= $bin"
 expect_not_contains "scaffold: no placeholder is left in the Makefile" "$(cat "$docs/Makefile" 2>/dev/null)" "@EDB_LAB_BIN@"
@@ -647,7 +647,7 @@ fi
 req="$(cat "$grafana_log" 2>/dev/null)"
 expect_eq "render: one GET per render" "1" "$(grep -c . "$grafana_log" 2>/dev/null)"
 expect_contains "render: the request goes to /render/d-solo/<UID>/" "$req" "/render/d-solo/cassandra-overview/?"
-for p in panelId=7 from=1790848800000 to=1790849400000 var-cluster=graph-1a2b var-job=a+b width=1200 height=600 tz=UTC theme=light; do
+for p in panelId=7 from=1790848800000 to=1790849400000 var-cluster=graph-1a2b var-job=a+b width=1200 height=600 tz=UTC theme=dark; do
   expect_contains "render: the request holds $p" "$req" "$p"
 done
 expect_eq "render: no file in docs/ holds the Grafana URL" "" "$(grep -rl "${grafana_url#http://}" "$gdocs" 2>/dev/null)"
@@ -659,13 +659,13 @@ req="$(cat "$grafana_log" 2>/dev/null)"
 expect_contains "render: now-93600s goes out unchanged" "$req" "from=now-93600s&"
 expect_contains "render: now goes out unchanged" "$req" "to=now&"
 
-# The render matches the light report page by default; --theme dark asks for the dark theme.
+# The render matches the dark report page by default; --theme light asks for the light theme.
 rm -f "$grafana_log"
-out="$(render "$grafana_url" dark --theme dark 2>&1)"
-expect_eq "render: --theme dark exits 0" "0" "$?"
+out="$(render "$grafana_url" light --theme light 2>&1)"
+expect_eq "render: --theme light exits 0" "0" "$?"
 req="$(cat "$grafana_log" 2>/dev/null)"
-expect_contains "render: --theme dark sends theme=dark" "$req" "theme=dark"
-expect_not_contains "render: --theme dark sends no theme=light" "$req" "theme=light"
+expect_contains "render: --theme light sends theme=light" "$req" "theme=light"
+expect_not_contains "render: --theme light sends no theme=dark" "$req" "theme=dark"
 
 rm -f "$grafana_log"
 out="$(render "$grafana_url" bad-theme --theme blue 2>&1)"
@@ -923,7 +923,7 @@ req="$(render_log_line)"
 expect_contains "render step: from is the block JSON's start" "$req" "from=1790848800000&"
 expect_contains "render step: to is the block JSON's end, 24 hours later" "$req" "to=1790935200000&"
 expect_contains "render step: the cluster variable is the run's cluster" "$req" "var-cluster=graph-1a2b"
-expect_contains "render step: the render asks for the light theme" "$req" "theme=light"
+expect_contains "render step: the render asks for the dark theme" "$req" "theme=dark"
 expect_file "render step: the single-cluster step writes the image" "$gdocs/images/day.png"
 stop_grafana
 # The step passes PROXY to render: a dead proxy fails the step, and the request never gets to Grafana.

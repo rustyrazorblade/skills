@@ -62,7 +62,7 @@ Run these on a change, and only where the change touches them:
     Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
     for `render`; both are local HTTP servers on `127.0.0.1`.  A stub SOCKS5 forwarder
     (`fixtures/socks/forwarder.py`) carries the `--proxy` cases of `fetch`, `render`, and the
-    "### Render" block; a dead proxy on port 1 carries the failure cases. Of
+    "### Render" and "### Overlay render" blocks; a dead proxy on port 1 carries the failure cases. Of
     `plugins/easy-db-lab/bin/configure-multi-dc-seeds.sh` it covers only the arms-marker guard. It
     also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
     `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
@@ -74,7 +74,7 @@ Run these on a change, and only where the change touches them:
     text, not the skill behavior. It also runs some `bash` blocks as written, under bash, against
     stubs: in `references/report.md`, the blocks under "### The SOCKS proxy" (against a stub
     wrapper and `.socks5-proxy-state`), "### Render" (the single-cluster render), and
-    "### Overlay render" (window-variable detection and the whole-run fallback), the last two
+    "### Overlay render" (window-variable detection, the whole-run fallback, and `PROXY`), the last two
     against the stub Grafana; in `references/report-upload.md`, the image and CSV probe (against
     a stub binary) and the block under "## The AWS SSO Session" (against a stub `aws` and a temp
     `HOME`). An edit to one of these blocks is covered; the other commands in those files are not. It needs `mdbook`, `uv`,

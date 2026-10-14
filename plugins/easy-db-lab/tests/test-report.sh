@@ -900,12 +900,13 @@ fi
 cp "$fixtures/graph/latency-baseline.json" "$gdocs/data/overlay-baseline.json"
 cp "$fixtures/graph/latency-candidate.json" "$gdocs/data/overlay-candidate.json"
 base_start=1790848800 # 2026-10-01T10:00:00Z, the earlier arm's measured start
-# overlay <dashboard.json or ""> : run the overlay step and set out, rc, and req (the render request).
+# overlay <dashboard.json or ""> [proxy]: run the overlay step and set out, rc, and req (the render
+# request).  The step passes PROXY to the dashboard probe and to render.
 overlay() {
   start_grafana png ${1:+"$1"}
   local t0 t1
   t0="$(date +%s)"
-  out="$(GRAFANA_URL="$grafana_url" PROXY="" DOCS="$gdocs" NAME=overlay ARM=candidate DASHBOARD=ab-comparison \
+  out="$(GRAFANA_URL="$grafana_url" PROXY="${2:-}" DOCS="$gdocs" NAME=overlay ARM=candidate DASHBOARD=ab-comparison \
     PANEL=1001 BASE_CLUSTER=lab-baseline-1a2b CAND_CLUSTER=lab-candidate-3c4d PATH="$bin:$PATH" \
     bash -c "$overlay_step" 2>&1)"
   rc=$?
@@ -961,6 +962,22 @@ overlay ""
 if [[ "$rc" -ne 0 ]]; then pass "overlay step: an unreadable dashboard exits non-zero"; else fail "overlay step: an unreadable dashboard exits non-zero"; fi
 expect_contains "overlay step: an unreadable dashboard names the dashboard" "$out" "cannot read dashboard ab-comparison"
 expect_eq "overlay step: an unreadable dashboard sends no render" "" "$req"
+
+# A dead PROXY fails the probe, so nothing gets to Grafana; a live PROXY carries the probe and render.
+rm -f "$gdocs/images/overlay-overlay-candidate.png"
+overlay "$fixtures/grafana/dashboard-window-vars.json" "$dead_proxy"
+if [[ "$rc" -ne 0 ]]; then pass "overlay step: a dead PROXY fails the step"; else fail "overlay step: a dead PROXY fails the step"; fi
+expect_contains "overlay step: a dead PROXY names the dashboard it cannot read" "$out" "cannot read dashboard ab-comparison"
+expect_not_contains "overlay step: a dead PROXY is not a missing SOCKS dependency" "$out" "Missing dependencies"
+expect_eq "overlay step: a dead PROXY sends no request to Grafana" "" "$(cat "$grafana_log" 2>/dev/null)"
+expect_no_file "overlay step: a dead PROXY writes no image" "$gdocs/images/overlay-overlay-candidate.png"
+start_socks
+overlay "$fixtures/grafana/dashboard-window-vars.json" "$socks_proxy"
+stop_socks
+expect_eq "overlay step: a live PROXY exits 0" "0" "$rc"
+expect_eq "overlay step: a live PROXY sends the probe and the render through the proxy" \
+  "${grafana_url#http://}|${grafana_url#http://}|" "$(tr '\n' '|' < "$socks_log" 2>/dev/null)"
+expect_file "overlay step: a live PROXY writes the image" "$gdocs/images/overlay-overlay-candidate.png"
 rm -f "$gdocs/images/day.png" "$gdocs/images/overlay-overlay-candidate.png"
 
 # The SOCKS proxy step, run as written.  The wrapper's directory holds .socks5-proxy.env, or, from an

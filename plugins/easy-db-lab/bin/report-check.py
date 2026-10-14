@@ -31,11 +31,14 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
   - a Cassandra run (the plan or a journal names `cassandra use` or `cassandra start`) has a
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
-  - redaction: no SOCKS URL, IPv4 address, EC2 host name such as ip-10-0-1-15, 12-digit account
-    ID, vpc-, subnet-, sg-, igw-, or i- ID, port number, or tunnel wording in the customer tiers
-    or in data/*.csv and data/*.json.  A decimal number, the CSV value column, a numeric stats
-    table cell, and the last group of a UUID are not account IDs.  report-export.py
-    loads the same patterns from this file;
+  - redaction: no SOCKS URL, IPv4 or IPv6 address, EC2 host name such as ip-10-0-1-15 or
+    ec2-54-12-34-56.compute-1.amazonaws.com, 12-digit or dashed account ID, vpc-, subnet-, sg-,
+    igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port service URL, local
+    home or key path, AWS profile name, SSO start URL, email address, or S3 URL or bucket name in
+    the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
+    a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
+    version such as JDK 11.0.20.1 is not an address.  report-export.py loads the same patterns
+    from this file;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
 

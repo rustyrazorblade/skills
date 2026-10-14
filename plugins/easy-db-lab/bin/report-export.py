@@ -19,13 +19,15 @@ number, so "(MB/s)" and "+20.8%" stay readable.
 
 zip writes the shareable book.  It stages every page that SUMMARY.md lists, the appendix
 included, every images/ and data/ file they reference, and the theme (book.toml, lab.css, and
-SUMMARY.md) under export/stage/.  In the staged copy it replaces each infrastructure identifier
-with a placeholder that names its kind, such as <private-ip>, and each wrapper variable ($EDB,
-${EDB}, $EDB_<ARM>) with easy-db-lab.  It then scans the whole staged copy with the same
-patterns (report-check.py), builds it with mdbook, and zips the built HTML.  A listed page
-outside docs/, a referenced file that does not exist, or an identifier that remains in the
-staged copy fails the export, and no zip is written.  The local report/ and the docs files keep
-the unredacted record.
+SUMMARY.md) under export/stage/.  In each staged text file, whatever its extension, it replaces
+each infrastructure identifier with a placeholder that names its kind, such as <private-ip>,
+and each wrapper variable ($EDB, ${EDB}, $EDB_<ARM>) with easy-db-lab.  It then scans the whole
+staged copy with the same patterns (report-check.py), builds it with mdbook, scans every text
+file of the built HTML, and zips the built HTML.  The export fails, and writes no zip, on: a
+listed page outside docs/; a referenced file that does not exist, or that is neither text nor a
+png, jpg, gif, or webp image; an identifier in a staged file name; an mdbook include directive
+in a staged page; or an identifier that remains in the staged copy or in the built HTML.  The
+local report/ and the docs files keep the unredacted record.
 """
 
 import argparse

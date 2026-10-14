@@ -58,7 +58,9 @@ Run these on a change, and only where the change touches them:
     `plugins/easy-db-lab/bin/setup-cluster.sh`, `plugins/easy-db-lab/bin/detect-cluster-layout.sh`,
     `plugins/easy-db-lab/bin/report-graph.py`, `plugins/easy-db-lab/bin/report-check.py`,
     `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
-    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Those fixtures include a stub
+    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Its helper
+    `plugins/easy-db-lab/tests/redact-cases.py` runs the one-line redaction cases in
+    `fixtures/redact/cases.tsv` against `report-check.py`. Those fixtures include a stub
     Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
     for `render`; both are local HTTP servers on `127.0.0.1`.  A stub SOCKS5 forwarder
     (`fixtures/socks/forwarder.py`) carries the `--proxy` cases of `fetch`, `render`, and the

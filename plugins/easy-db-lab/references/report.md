@@ -294,14 +294,18 @@ Write report prose in ASD-STE100 Simplified Technical English:
 
 These identifiers never appear in the summary, the evidence tier, or their CSV and JSON files:
 
-- account IDs (12 digits);
-- VPC, subnet, security group, internet gateway, and instance IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`);
-- IP addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`);
-- tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards).
+- account IDs (12 digits, or dashed as `4178-3501-3894`);
+- VPC, subnet, security group, internet gateway, instance, network interface, volume, and image IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`, `eni-`, `vol-`, `ami-`);
+- IPv4 and IPv6 addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`, `ec2-54-12-34-56.compute-1.amazonaws.com`);
+- tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards);
+- `host:port` service URLs (`control0:3000`, `http://control0:3000/d/abc`);
+- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, the path after `-i`);
+- AWS profile names (`--profile X`, `AWS_PROFILE=X`, `AccountUser-…`), SSO start URLs (`*.awsapps.com`), and email addresses;
+- S3 URLs and bucket names (`s3://…`, `easy-db-lab-<uuid>`).
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
 
-A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
+A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  A dotted version such as `JDK 11.0.20.1` is not an address, and "port to 5 nodes" is not a port.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
 
 ### The shareable book
 
@@ -309,11 +313,12 @@ A measurement is not an account ID: a decimal number, the CSV value column, and 
 
 `report-export.py zip` builds it from a redacted copy under `export/stage/`:
 
-1. It copies each listed page, each `images/` and `data/` file that a page references, and `book.toml`, `lab.css`, and `SUMMARY.md`.
-2. In the copy, it replaces each identifier above with a placeholder that names its kind: `<private-ip>`, `<ec2-host>`, `<account-id>`, `<vpc-id>`, `<subnet-id>`, `<sg-id>`, `<igw-id>`, `<instance-id>`, `<port>`, `<socks-proxy>`, and `<tunnel>`.
+1. It copies each listed page, each `images/` and `data/` file that a page references, and `book.toml`, `lab.css`, and `SUMMARY.md`.  A referenced file must be text or a `.png`, `.jpg`, `.gif`, or `.webp` image; any other file fails the export.  An identifier in a file name fails the export too, because the copy keeps each name.
+2. In each text file of the copy, whatever its extension, it replaces each identifier above with a placeholder that names its kind: `<private-ip>`, `<ipv6>`, `<ec2-host>`, `<account-id>`, `<vpc-id>`, `<subnet-id>`, `<sg-id>`, `<igw-id>`, `<instance-id>`, `<eni-id>`, `<volume-id>`, `<ami-id>`, `<port>`, `<socks-proxy>`, `<tunnel>`, `<service-url>`, `<local-path>`, `<aws-profile>`, `<sso-url>`, `<email>`, `<s3-url>`, and `<s3-bucket>`.  Where two matches overlap, one placeholder covers both.  A link fragment stays as written.
 3. It replaces the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with `easy-db-lab`.
-4. It scans the whole copy with the same patterns.  If an identifier remains, the export fails and names the file and the line, and it writes no zip.
-5. It builds the copy with `mdbook` and zips the built HTML.
+4. It scans the whole copy with the same patterns, and it rejects an mdbook include directive (`{{#include`, `{{#rustdoc_include`, `{{#playground`).  If an identifier or a directive remains, the export fails and names the file and the line, and it writes no zip.
+5. It builds the copy with `mdbook`, and it scans every text file of the built HTML: the pages, `print.html`, the search index, and the table of contents.  If an identifier remains, the export fails and names the file and the line, and it writes no zip.
+6. It zips the built HTML.
 
 The export never edits `docs/`.  The local `report/` book and the uploaded tier files keep the unredacted record.
 

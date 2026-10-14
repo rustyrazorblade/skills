@@ -425,7 +425,10 @@ stop_mimir() {
   mimir_pid=""
 }
 socks_pid=""
-# start_socks: start the stub SOCKS5 forwarder and set socks_proxy and socks_log.
+# A dead SOCKS proxy: nothing listens on port 1.
+dead_proxy="socks5h://127.0.0.1:1"
+# start_socks: start the stub SOCKS5 forwarder and set socks_proxy and socks_log.  If the stub does
+# not start, the case fails, and the log holds the cause, so each live case reports it.
 start_socks() {
   local port_file="$tmp_root/socks.port"
   socks_log="$tmp_root/socks.log"
@@ -437,7 +440,13 @@ start_socks() {
     [[ -s "$port_file" ]] && break
     sleep 0.1
   done
-  socks_proxy="socks5h://127.0.0.1:$(cat "$port_file")"
+  if [[ -s "$port_file" ]]; then
+    socks_proxy="socks5h://127.0.0.1:$(cat "$port_file")"
+  else
+    fail "socks: the stub SOCKS5 forwarder starts" "socks stub did not start"
+    echo "socks stub did not start" > "$socks_log"
+    socks_proxy="$dead_proxy"
+  fi
 }
 stop_socks() {
   [[ -z "$socks_pid" ]] || kill "$socks_pid" 2>/dev/null
@@ -445,8 +454,6 @@ stop_socks() {
   socks_pid=""
 }
 trap 'stop_mimir; stop_socks; rm -rf "$tmp_root"' EXIT
-# A dead SOCKS proxy: nothing listens on port 1.
-dead_proxy="socks5h://127.0.0.1:1"
 
 # fetch <mimir-url> <name> [extra args...]: run fetch on the graph workspace with the usual window
 # and fetch_query, which filters on this cluster's label.

@@ -32,10 +32,11 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
   - redaction: no SOCKS URL, IPv4 or IPv6 address, EC2 host name such as ip-10-0-1-15 or
-    ec2-54-12-34-56.compute-1.amazonaws.com, 12-digit or dashed account ID, vpc-, subnet-, sg-,
-    igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port service URL, local
-    home or key path, AWS profile name, SSO start URL, email address, or S3 URL or bucket name in
-    the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
+    ec2-54-12-34-56.compute-1.amazonaws.com, 12-digit, dashed, or spaced account ID, vpc-,
+    subnet-, sg-, igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port
+    service URL, local home or key path, AWS profile name, SSO start URL, email address, S3 URL
+    or bucket name, AWS access key ID or secret key, bearer token, or Grafana service account
+    token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
     a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
     version after jdk, java, or openjdk, such as JDK 11.0.20.1, is not an address, unless it
     is a private address or has a :port.  report-export.py loads the same patterns
@@ -145,7 +146,7 @@ REDACTION = [
                                       r"|\[[0-9a-f:.]*:[0-9a-f:.]*\]):\d{2,5}\b"
                                       r"(?:/" + _REST + r")?", re.I), "service-url"),
     ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
-    ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws)\b/?)" + _REST), "local-path"),
+    ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|easy-db-lab)\b/?)" + _REST), "local-path"),
     # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
     # file.  After ssh, scp, or sftp and their options, any path, but not a placeholder, which
     # scan() makes a NUL.  The -i of sed and grep stays.
@@ -156,6 +157,16 @@ REDACTION = [
     ("AWS profile name", Pattern(r"--profile(?:=|\s+)" + _NAME, 0, 1), "aws-profile"),
     ("AWS_PROFILE value", Pattern(r"\bAWS_PROFILE=" + _NAME, 0, 1), "aws-profile"),
     ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),
+    # Credentials.  A secret is the value after aws_secret_access_key, or 40 base64 characters
+    # after a secret word; a variable such as "$AWS_SECRET" stays.  A bearer token is 16 or more
+    # token characters, so "a Bearer token" stays.
+    ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "aws-access-key"),
+    ("AWS secret access key", Pattern(r"\baws_secret_access_key[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
+     "aws-secret"),
+    ("AWS secret key", Pattern(r"secret[\w-]*[\"']?\s*[=:]?\s*[\"']?([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+])", re.I, 1),
+     "aws-secret"),
+    ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{16,}=*)", re.I, 1), "token"),
+    ("Grafana service account token", Pattern(r"\bglsa_[A-Za-z0-9_]+"), "token"),
     # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
     ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
     ("IPv4 address", IPv4(), "private-ip"),
@@ -167,6 +178,9 @@ REDACTION = [
      "account-id"),
     # The console form of an account ID, such as 4178-3501-3894; not a group of a UUID.
     ("dashed account ID", Pattern(r"(?<![\w-])\d{4}-\d{4}-\d{4}(?![\w-])"), "account-id"),
+    # The spaced form, such as 4178 3501 3894: three groups exactly, so a row of four or more
+    # 4-digit numbers, or one that ends in a decimal, stays.
+    ("spaced account ID", Pattern(r"(?<![\w.-])(?<!\d )\d{4} \d{4} \d{4}(?![\w.-])(?! \d)"), "account-id"),
     ("vpc- ID", Pattern(r"\bvpc-[0-9a-f]{8,17}\b"), "vpc-id"),
     ("subnet- ID", Pattern(r"\bsubnet-[0-9a-f]{8,17}\b"), "subnet-id"),
     ("sg- ID", Pattern(r"\bsg-[0-9a-f]{8,17}\b"), "sg-id"),

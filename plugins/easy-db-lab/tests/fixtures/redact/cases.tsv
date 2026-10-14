@@ -103,6 +103,28 @@ dashed-account	page.txt	account 4178-3501-3894 here	account <account-id> here
 keep-uuid-digits	page.txt	label 896195de-1234-4567-8901-751612345678 here	=
 keep-date	page.txt	on 2026-10-14 at 10:00	=
 profile-then-arg	page.txt	aws --profile lab-admin s3 ls	aws --profile <aws-profile> s3 ls
+# Credentials: AWS key IDs and secrets, bearer and Grafana tokens, spaced account IDs, and ~/.easy-db-lab paths.
+aws-access-key	page.txt	key AKIAIOSFODNN7EXAMPLE here	key <aws-access-key> here
+aws-session-key	page.txt	key ASIAY34FZKBOKMUTVV7A here	key <aws-access-key> here
+keep-akia-word	page.txt	AKIA starts a key ID	=
+aws-secret-env	page.txt	export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY	export AWS_SECRET_ACCESS_KEY=<aws-secret>
+aws-secret-ini	page.txt	aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY	aws_secret_access_key = <aws-secret>
+aws-secret-short	page.txt	aws_secret_access_key=abc123	aws_secret_access_key=<aws-secret>
+aws-secret-40	page.txt	secret wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY here	secret <aws-secret> here
+aws-secret-json	page.txt	"SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"	"SecretAccessKey": "<aws-secret>"
+keep-secret-prose	page.txt	the secret is safe in the vault	=
+keep-secret-var	page.txt	aws_secret_access_key="$AWS_SECRET"	=
+bearer-token	page.txt	Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc123	Authorization: Bearer <token>
+keep-bearer-prose	page.txt	a Bearer token in the header	=
+keep-bearer-var	page.txt	Authorization: Bearer $GRAFANA_TOKEN	=
+grafana-sa-token	page.txt	token glsa_AbCdEf0123456789AbCdEf0123456789_0a1b2c3d set	token <token> set
+spaced-account	page.txt	account 4178 3501 3894 here	account <account-id> here
+keep-four-spaced-groups	page.txt	rows 1234 5678 9012 3456 here	=
+keep-spaced-decimal	page.txt	1024 2048 4096.5 ms	=
+easy-db-lab-home	page.txt	cat ~/.easy-db-lab/profiles/default/sshConfig now	cat <local-path> now
+easy-db-lab-home-var	page.txt	ls $HOME/.easy-db-lab now	ls <local-path> now
+easy-db-lab-users	page.txt	cat /Users/jon/.easy-db-lab/profiles/default/sshConfig now	cat <local-path> now
+bearer-md	4-journal.md	Sent Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0 once.	Sent Bearer \<token> once.
 # A link fragment stays: mdbook makes the heading id from the redacted heading, placeholder names included.
 fragment-placeholder-name	1-summary.md	See [the setup](4-journal.md#tunnel-setup) and [proxy](#proxy-socks-proxy).	=
 fragment-port	1-summary.md	See [it](2-evidence.md#metrics-on-port-port) now.	=

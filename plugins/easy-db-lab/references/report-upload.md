@@ -30,7 +30,7 @@ $EDB commands | awk '{ match($0, /^ */); i = RLENGTH } r && i <= ri { r = 0 } u 
 
 `$EDB commands` prints `report`, `upload`, and the `<FILE>` argument on three lines, each indented below the one before.  The probe reads only the `<FILE>` line inside the `report` and `upload` block.  Support exists only when that line lists both `.png` and `.csv`.  Record the result once in `<journal>`.
 
-- **Not supported:** upload only `.md` files.  Warning: the S3 and Grafana document index then shows broken image and data links in the evidence tier.  The images and the data are in the built `report/` and in `export/report.zip`.
+- **Not supported:** upload only `.md` files.  Warning: the S3 and Grafana document index then shows broken image and data links in the evidence tier.  The images and the data are in the built `report/` and in `export/report.zip`.  To share the report, send `export/report.zip`: the redacted HTML book of every page, the appendix included.
 - **Supported:** also upload every `images/*.png` and `data/*.csv` file that the uploaded tier files reference, by absolute path.
 
 ## The AWS SSO Session

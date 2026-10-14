@@ -5,7 +5,7 @@
 #   "pypandoc-binary>=1.13",
 # ]
 # ///
-"""Export a lab report: the summary tier for JIRA, and the customer tiers as a zip.
+"""Export a lab report: the summary tier for JIRA, and the shareable book as a zip.
 
 Usage:
     report-export.py jira <docs> <out.txt>
@@ -17,18 +17,27 @@ manual attachment, turns links to .md pages into their text, and maps each verdi
 colour.  It removes the writer's escape from a ( that opens no emoticon and from the sign of a
 number, so "(MB/s)" and "+20.8%" stay readable.
 
-zip takes the pages that SUMMARY.md lists before "# Appendix" (the summary, the evidence, and
-nested evidence pages), plus every images/ and data/ file they reference.  The appendix (plan,
-journal, issues) is not in the zip.  A listed page outside docs/, or a referenced file that does
-not exist, fails the export, and no zip is written.
+zip writes the shareable book.  It stages every page that SUMMARY.md lists, the appendix
+included, every images/ and data/ file they reference, and the theme (book.toml, lab.css, and
+SUMMARY.md) under export/stage/.  In the staged copy it replaces each infrastructure identifier
+with a placeholder that names its kind, such as <private-ip>, and each wrapper variable ($EDB,
+${EDB}, $EDB_<ARM>) with easy-db-lab.  It then scans the whole staged copy with the same
+patterns (report_redaction.py), builds it with mdbook, and zips the built HTML.  A listed page
+outside docs/, a referenced file that does not exist, or an identifier that remains in the
+staged copy fails the export, and no zip is written.  The local report/ and the docs files keep
+the unredacted record.
 """
 
 import argparse
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import zipfile
+
+from report_redaction import redact, scan
 
 # Okabe-Ito, the same badge colours as lab.css.
 LUA_FILTER = r"""
@@ -69,6 +78,10 @@ end
 """
 
 LINK_TARGET = re.compile(r"\]\(([^)\s]+)\)")
+# The theme files that the staged book needs besides its pages.
+THEME = ["SUMMARY.md", "book.toml", "lab.css"]
+# The staged files that are text, so the replace step and the scan read them.
+TEXT = (".md", ".csv", ".json", ".toml")
 # The jira writer escapes every ( so that no text becomes a JIRA emoticon such as (i).  Keep the
 # escape only before an emoticon.
 EMOTICON = r"(?:[ixyn/!?*+-]|on|off|flag|flagoff|\*[rgby])\)"
@@ -105,28 +118,28 @@ def jira(docs, out):
     print(f"jira: {out}")
 
 
-def customer_pages(docs):
+def book_pages(docs):
+    """Every page that SUMMARY.md lists, the appendix included, as docs-relative paths."""
     path = os.path.join(docs, "SUMMARY.md")
     if not os.path.exists(path):
         die(f"no SUMMARY.md in {docs}")
     pages = []
     with open(path, encoding="utf-8") as f:
         for line in f:
-            if re.match(r"^#\s+Appendix\b", line):
-                break
             for target in LINK_TARGET.findall(line):
                 target = os.path.normpath(target.split("#")[0])
                 if target.endswith(".md") and target not in pages:
                     pages.append(target)
     outside = [p for p in pages if os.path.isabs(p) or p == os.pardir or p.startswith(os.pardir + os.sep)]
     if outside:
-        die("SUMMARY.md lists customer pages outside docs/: " + ", ".join(outside))
+        die("SUMMARY.md lists pages outside docs/: " + ", ".join(outside))
     return pages
 
 
-def zip_report(docs, out):
+def book_files(docs):
+    """The pages, the images/ and data/ files they reference, and the theme files."""
     files, missing = [], []
-    for page in customer_pages(docs):
+    for page in book_pages(docs):
         path = os.path.join(docs, page)
         if not os.path.exists(path):
             missing.append(page)
@@ -146,13 +159,67 @@ def zip_report(docs, out):
                 files.append(ref)
     if missing:
         die("missing referenced files: " + ", ".join(missing))
-    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    if not os.path.exists(os.path.join(docs, "book.toml")):
+        die(f"no book.toml in {docs}")
+    return files + [t for t in THEME if os.path.exists(os.path.join(docs, t)) and t not in files]
+
+
+def stage(docs, files, dest):
+    """Copy files into dest, with each text file redacted."""
+    shutil.rmtree(dest, ignore_errors=True)
+    for rel in files:
+        src, out = os.path.join(docs, rel), os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        if rel.endswith(TEXT):
+            with open(src, encoding="utf-8") as f:
+                text = redact(rel, f.read())
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(text)
+        else:
+            shutil.copyfile(src, out)
+
+
+def leftovers(dest, files):
+    """One message per identifier that remains in the staged text files."""
+    found = []
+    for rel in files:
+        if rel.endswith(TEXT):
+            with open(os.path.join(dest, rel), encoding="utf-8") as f:
+                found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, f.read())]
+    return found
+
+
+def zip_report(docs, out):
+    files = book_files(docs)
+    export = os.path.dirname(os.path.abspath(out))
+    staged, html = os.path.join(export, "stage"), os.path.join(export, "html")
+    stage(docs, files, staged)
+    found = leftovers(staged, files)
+    if found:
+        die("redaction: identifiers remain in the staged book under " + staged + ": " + "; ".join(found))
+    mdbook = shutil.which("mdbook")
+    if not mdbook:
+        die("mdbook is required but not on PATH")
+    env = dict(os.environ)
+    # make passes the summary H1 as the book title; it is redacted like the pages.
+    if "MDBOOK_BOOK__TITLE" in env:
+        env["MDBOOK_BOOK__TITLE"] = redact("title.md", env["MDBOOK_BOOK__TITLE"]).strip()
+    shutil.rmtree(html, ignore_errors=True)
+    built = subprocess.run([mdbook, "build", "--dest-dir", html, staged], env=env, capture_output=True, text=True)
+    if built.returncode != 0:
+        die("mdbook build of the staged book failed: " + built.stderr.strip())
     tmp = out + ".tmp"
+    count = 0
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
-        for rel in files:
-            z.write(os.path.join(docs, rel), rel)
+        for root, _, names in os.walk(html):
+            for name in sorted(names):
+                path = os.path.join(root, name)
+                z.write(path, os.path.relpath(path, html))
+                count += 1
     os.replace(tmp, out)
-    print(f"zip: {out} ({len(files)} files)")
+    # The built HTML is in the zip; a stale copy under export/ would go into the next local build.
+    shutil.rmtree(html)
+    print(f"zip: {out} ({count} files, {len(files)} staged under {staged})")
 
 
 def main():

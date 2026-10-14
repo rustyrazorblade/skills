@@ -31,10 +31,11 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
   - a Cassandra run (the plan or a journal names `cassandra use` or `cassandra start`) has a
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
-  - redaction: no IPv4 address, EC2 host name such as ip-10-0-1-15, 12-digit account ID, vpc-,
-    subnet-, or sg- ID, or tunnel wording in the customer tiers or in data/*.csv and
-    data/*.json.  A decimal number, the CSV value column, and a numeric stats table cell are
-    measurements, not account IDs;
+  - redaction: no SOCKS URL, IPv4 address, EC2 host name such as ip-10-0-1-15, 12-digit account
+    ID, vpc-, subnet-, sg-, igw-, or i- ID, port number, or tunnel wording in the customer tiers
+    or in data/*.csv and data/*.json.  A decimal number, the CSV value column, a numeric stats
+    table cell, and the last group of a UUID are not account IDs.  The patterns are in
+    report_redaction.py, which report-export.py shares;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
 
@@ -56,8 +57,9 @@ import statistics
 import sys
 from datetime import datetime, timezone
 
+from report_redaction import STATS, scan
+
 UNCHECKED = "⚠ Unchecked: "
-STATS = ["samples", "min", "p50", "mean", "p95", "p99", "max", "total", "rate"]
 VERDICTS = {"Confirmed", "Refuted", "Inconclusive"}
 PARTIAL = re.compile(r"^Partial: stopped after step \d+$")
 COMPARISON = ["Metric", "Baseline", "Candidate", "Delta", "Noise floor", "Verdict"]
@@ -66,18 +68,6 @@ SPAN = re.compile(r'<span class="verdict verdict-([a-z-]+)">([^<]*)</span>')
 LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$")
 NUMBER = re.compile(r"^([+\-−]?)(\d+(?:\.\d+)?)")
-MEASUREMENT = re.compile(r"^[+\-−]?\d+(?:\.\d+)?$")
-ACCOUNT = "12-digit account ID"
-REDACTION = [
-    ("IPv4 address", re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")),
-    # Twelve digits that are not part of a decimal number such as 214748364800.0.
-    (ACCOUNT, re.compile(r"(?<!\d)(?<!\d\.)\d{12}(?!\d)(?!\.\d)")),
-    ("EC2 host name", re.compile(r"\bip-(?:\d{1,3}-){3}\d{1,3}\b")),
-    ("vpc- ID", re.compile(r"\bvpc-[0-9a-f]{8,17}\b")),
-    ("subnet- ID", re.compile(r"\bsubnet-[0-9a-f]{8,17}\b")),
-    ("sg- ID", re.compile(r"\bsg-[0-9a-f]{8,17}\b")),
-    ("tunnel wording", re.compile(r"\b(?:tunnel(?:s|ed|ing)?|socks5h?|socks|tailscale|port-forward(?:ing)?|ssh -[LD])\b", re.I)),
-]
 GRAFANA = re.compile(r"https?://[^\s)]*(?:grafana|/d/[A-Za-z0-9_-]+|/d-solo/|/render/)[^\s)]*", re.I)
 CASSANDRA_RUN = re.compile(r"\bcassandra\s+(?:use|start)\b")
 
@@ -601,44 +591,16 @@ class Checker:
         clean = True
         for rel in files:
             text = read(os.path.join(self.docs, rel))
-            for n, (line, words) in enumerate(without_measurements(rel, text), 1):
-                if rel.endswith(".md") and GRAFANA.search(line):
-                    self.report.fail(f"Grafana link in {rel} line {n}: download the graph with report-graph.py")
-                    clean = False
-                for what, pattern in REDACTION:
-                    if pattern.search(words if what == ACCOUNT else line):
-                        self.report.redact(f"{what} in {rel} line {n}")
+            if rel.endswith(".md"):
+                for n, line in enumerate(text.splitlines(), 1):
+                    if GRAFANA.search(line):
+                        self.report.fail(f"Grafana link in {rel} line {n}: download the graph with report-graph.py")
                         clean = False
+            for what, n in scan(rel, text):
+                self.report.redact(f"{what} in {rel} line {n}")
+                clean = False
         if clean:
             self.report.ok("no Grafana link and no infrastructure identifier in the customer tiers and data/")
-
-
-def without_measurements(rel, text):
-    """Each line, paired with the line less its measurement cells: the numeric value column of a
-    data/*.csv, and the numeric cells under a stat column of a stats table.  A measurement is
-    never an account ID; a Node, Arm, or Unit cell can be one."""
-    lines = text.splitlines()
-    if rel.endswith(".csv"):
-        header = next(csv.reader(lines[:1]), [])
-        col = header.index("value") if "value" in header else None
-        for line in lines:
-            row = next(csv.reader([line]), [])
-            if col is not None and col < len(row) and MEASUREMENT.match(row[col].strip()):
-                row = row[:col] + row[col + 1:]
-            yield line, ",".join(row)
-        return
-    header = None
-    for line in lines:
-        if re.match(r"^\|\s*Node\s*\|\s*Arm\s*\|", line):
-            header = [c.strip() for c in line.split("|")]
-        elif not line.lstrip().startswith("|"):
-            header = None
-        if header:
-            cells = line.split("|")
-            yield line, "|".join(c for i, c in enumerate(cells) if not (
-                i < len(header) and header[i].lower() in STATS and MEASUREMENT.match(c.strip())))
-        else:
-            yield line, line
 
 
 def gate(docs, reasons):

@@ -57,7 +57,8 @@ Run these on a change, and only where the change touches them:
   - `bash plugins/easy-db-lab/tests/test-report.sh` covers the easy-db-lab lab report:
     `plugins/easy-db-lab/bin/setup-cluster.sh`, `plugins/easy-db-lab/bin/detect-cluster-layout.sh`,
     `plugins/easy-db-lab/bin/report-graph.py`, `plugins/easy-db-lab/bin/report-check.py`,
-    `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
+    `plugins/easy-db-lab/bin/report-export.py`, the redaction patterns both share in
+    `plugins/easy-db-lab/bin/report_redaction.py`, every file in `plugins/easy-db-lab/scaffold/`, and
     its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Those fixtures include a stub
     Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
     for `render`; both are local HTTP servers on `127.0.0.1`.  A stub SOCKS5 forwarder

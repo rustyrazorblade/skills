@@ -28,7 +28,7 @@ The report has five tier files.  The number prefix sets the order in the Grafana
 | `4-journal.md` | Appendix | Every command and every finding, in order. |
 | `5-issues.md` | Appendix | Every issue, including tool friction. |
 
-The summary and the evidence are the customer tiers.  The plan, the journal, and the issues file are the appendix.  `SUMMARY.md` puts the appendix under `# Appendix`, so the book shows it last.
+The summary and the evidence are the customer tiers.  The plan, the journal, and the issues file are the appendix.  `SUMMARY.md` puts the appendix under `# Appendix`, so the book shows it last.  The shareable book, `export/report.zip`, holds every tier, the appendix included, redacted; see "The shareable book" under Redaction.
 
 To add an evidence page, write it under `evidence/`, for example `evidence/latency.md`.  Then nest it under Evidence in `SUMMARY.md`:
 
@@ -295,11 +295,27 @@ Write report prose in ASD-STE100 Simplified Technical English:
 These identifiers never appear in the summary, the evidence tier, or their CSV and JSON files:
 
 - account IDs (12 digits);
-- VPC, subnet, and security group IDs (`vpc-`, `subnet-`, `sg-`);
+- VPC, subnet, security group, internet gateway, and instance IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`);
 - IP addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`);
-- tunnel details (SOCKS, Tailscale, SSH port forwards).
+- tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards).
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
+
+A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  The patterns are in `bin/report_redaction.py`; the check and the export share them.
+
+### The shareable book
+
+`export/report.zip` is the book to share.  It holds the rendered HTML of every page that `SUMMARY.md` lists, the appendix included, with the house theme and the images and data that the pages reference.  Extract it and open `index.html`; it works from `file://`.
+
+`report-export.py zip` builds it from a redacted copy under `export/stage/`:
+
+1. It copies each listed page, each `images/` and `data/` file that a page references, and `book.toml`, `lab.css`, and `SUMMARY.md`.
+2. In the copy, it replaces each identifier above with a placeholder that names its kind: `<private-ip>`, `<ec2-host>`, `<account-id>`, `<vpc-id>`, `<subnet-id>`, `<sg-id>`, `<igw-id>`, `<instance-id>`, `<port>`, `<socks-proxy>`, and `<tunnel>`.
+3. It replaces the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with `easy-db-lab`.
+4. It scans the whole copy with the same patterns.  If an identifier remains, the export fails and names the file and the line, and it writes no zip.
+5. It builds the copy with `mdbook` and zips the built HTML.
+
+The export never edits `docs/`.  The local `report/` book and the uploaded tier files keep the unredacted record.
 
 ## The Exit Rule
 
@@ -348,7 +364,7 @@ Finalize is the report part of every exit, in this order:
 4. Build with `make`, or with `make gate` at a teardown gate.
 5. Upload per `report-upload.md`.
 
-`make` (the `all` target) runs `check`, then `build` (the book in `report/`), then `export` (`export/jira.txt` and `export/report.zip`).  `make gate` runs `report-check.py --gate` with the reasons, then `build` and `export`.  Pass the reasons like this:
+`make` (the `all` target) runs `check`, then `build` (the book in `report/`), then `export` (`export/jira.txt`, the summary tier, and `export/report.zip`, the redacted shareable book).  `make gate` runs `report-check.py --gate` with the reasons, then `build` and `export`.  Pass the reasons like this:
 
 ```bash
 make -C <cluster-dir>/docs gate REASONS='--reason "the noise floor does not support the verdict"'

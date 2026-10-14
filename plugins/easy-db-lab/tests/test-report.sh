@@ -1207,11 +1207,16 @@ redact-ec2-host-csv EC2 host name
 redact-account-csv-node account
 redact-account-stats-node account
 redact-account-stats-bare account
+redact-igw igw-
+redact-instance i-
+redact-port port number
+redact-ipv4-period IPv4
 EOF
 
 # Not redaction: a 12-digit metric value in data/*.csv and its stats table, infrastructure IDs in
-# the appendix journal, and a dotted version string in summary prose.
-for name in redact-ok-big-value redact-ok-journal redact-ok-version; do
+# the appendix journal, a dotted version string in summary prose, and a cluster label whose UUID
+# ends in twelve digits.
+for name in redact-ok-big-value redact-ok-journal redact-ok-version redact-ok-cluster-uuid; do
   run_check "$name"
   expect_eq "check: $name exits 0" "0" "$check_rc"
   expect_not_contains "check: $name has no redaction FAIL" "$check_out" "FAIL: redaction"
@@ -1359,17 +1364,6 @@ expect_contains "jira: a negative Delta keeps its plain sign" "$jira_esc" "| -26
 expect_contains "jira: -- stays two escaped hyphens, not an en dash" "$jira_esc" 'block \-\-arm-windows'
 expect_contains "jira: an emoticon such as (i) stays escaped" "$jira_esc" '\(i)'
 
-"$exporter" zip "$xd" "$tmp_root/report.zip" >/dev/null 2>&1
-expect_eq "zip: exits 0" "0" "$?"
-listing="$(unzip -Z1 "$tmp_root/report.zip" 2>/dev/null | sort | tr '\n' ' ')"
-for f in 1-summary.md 2-evidence.md evidence/latency.md images/scrape-alloc.png images/read-latency.png \
-  images/noise-latency.png data/scrape-alloc.csv data/latency-baseline.csv data/latency-candidate.csv data/noise-latency.csv; do
-  expect_contains "zip: holds $f" "$listing" "$f "
-done
-for f in 3-plan.md 4-journal.md 5-issues.md SUMMARY.md; do
-  expect_not_contains "zip: holds no $f" "$listing" "$f"
-done
-
 fixture_docs "$tmp_root/export-missing" missing-image
 out="$("$exporter" zip "$tmp_root/export-missing" "$tmp_root/missing.zip" 2>&1)"
 rc=$?
@@ -1445,6 +1439,103 @@ done
 expect_contains "make: a verdict renders as a badge span" "$(cat "$rep/index.html" 2>/dev/null)" '<span class="verdict verdict-refuted">Refuted</span>'
 expect_contains "make: numeric columns are right-aligned in HTML" "$(cat "$rep/2-evidence.html" 2>/dev/null)" 'text-align: right'
 
+# --- make export: report.zip is the shareable book, built from a redacted copy ---
+
+sws="$tmp_root/make-share"
+bash "$bin/setup-cluster.sh" "$sws" "$stub_edb" --name make-share >/dev/null 2>&1
+fixture_docs "$sws/docs" share-book redact-ok-big-value
+journal_before="$(cksum < "$sws/docs/4-journal.md")"
+make -s -C "$sws/docs" >/dev/null 2>&1
+expect_eq "zip: make builds the shareable book" "0" "$?"
+listing="$(unzip -Z1 "$sws/docs/export/report.zip" 2>/dev/null | sort | tr '\n' ' ')"
+for f in index.html 1-summary.html 2-evidence.html evidence/latency.html 3-plan.html 4-journal.html 5-issues.html \
+  images/scrape-alloc.png images/read-latency.png images/noise-latency.png images/disk-bytes.png \
+  data/scrape-alloc.csv data/latency-baseline.csv data/latency-candidate.csv data/noise-latency.csv data/disk-bytes.csv; do
+  expect_contains "zip: holds $f" " $listing" " $f "
+done
+expect_contains "zip: holds the house theme css" "$listing" " lab"
+expect_not_contains "zip: holds no markdown source" "$listing" ".md "
+sx="$tmp_root/share-extract"
+mkdir -p "$sx"
+unzip -q "$sws/docs/export/report.zip" -d "$sx" 2>/dev/null
+expect_eq "zip: the extracted sidebar lists every page, the appendix included" \
+  "1-summary.html|2-evidence.html|evidence/latency.html|part:Appendix|3-plan.html|4-journal.html|5-issues.html|" \
+  "$(toc_order "$sx")"
+expect_contains "zip: the extracted book opens in the house theme" "$(cat "$sx/index.html" 2>/dev/null)" 'coal'
+# Every relative link and source in the extracted pages resolves inside the tree, so the book
+# works from file://.
+broken=""
+while IFS= read -r page; do
+  dir="$(dirname "$page")"
+  while IFS= read -r ref; do
+    [[ -e "$dir/$ref" ]] || broken="$broken ${page#"$sx/"}:$ref"
+  done < <(grep -oE '(href|src)="[^"#?:]+' "$page" | sed -E 's/^(href|src)="//' | sort -u)
+done < <(find "$sx" -name '*.html')
+expect_eq "zip: every relative link in the extracted book resolves" "" "$broken"
+expect_contains "zip: the evidence page shows its image" "$(cat "$sx/2-evidence.html" 2>/dev/null)" 'src="images/scrape-alloc.png"'
+expect_contains "zip: the evidence page links its data" "$(cat "$sx/2-evidence.html" 2>/dev/null)" 'href="data/scrape-alloc.csv"'
+
+xj="$(cat "$sx/4-journal.html" 2>/dev/null)"
+for p in private-ip ec2-host account-id vpc-id subnet-id sg-id igw-id instance-id port socks-proxy tunnel; do
+  expect_contains "zip: the journal holds the <$p> placeholder" "$xj" "&lt;$p&gt;"
+done
+expect_contains "zip: an issues page port becomes a placeholder" "$(cat "$sx/5-issues.html" 2>/dev/null)" 'changed from &lt;port&gt; to &lt;port&gt;'
+# book_text <dir>: what a reader sees in the extracted book: each page's <main>, the search index,
+# and the data files, less the placeholders and the heading ids.  mdbook's own scripts and styles
+# are not report content; its sidebar script holds 1080 as a screen width.
+book_text() {
+  local page
+  while IFS= read -r page; do sed -n '/<main>/,/<\/main>/p' "$page"; done < <(find "$1" -name '*.html')
+  cat "$1"/searchindex*.js "$1"/data/* 2>/dev/null
+}
+shown="$(book_text "$sx" | sed -E \
+  -e 's/(\\?&lt;|\\?<)(private-ip|ec2-host|account-id|vpc-id|subnet-id|sg-id|igw-id|instance-id|port|socks-proxy|tunnel)(&gt;|>)/ /g' \
+  -e 's/(id|href)="[^"]*"//g' -e 's/#[A-Za-z0-9_-]+//g')"
+expect_contains "zip: the book text holds the journal" "$shown" "Cassandra 5.0.9 on db0"
+for v in 10.0.1.15 10.0.1.20 127.0.0.1 vpc-0abc1234def567890 ip-10-0-1-15 123456789012 417835013894 subnet-0abc1234 \
+  sg-0abc1234 igw-0abc1234 i-0abc1234def567890 1080 52764 socks5h; do
+  expect_not_contains "zip: no $v in the extracted book" "$shown" "$v"
+done
+for w in socks tunnel; do
+  hits="$(printf '%s\n' "$shown" | grep -oiw -- "$w" | sort -u | tr '\n' ' ')"
+  expect_eq "zip: no $w wording in the extracted book" "" "$hits"
+done
+expect_contains "zip: \$EDB becomes the command name" "$xj" 'easy-db-lab status'
+expect_contains "zip: \${EDB} becomes the command name" "$xj" '"easy-db-lab" down --auto-approve'
+expect_contains "zip: \$EDB_BASELINE becomes the command name" "$xj" 'easy-db-lab report upload'
+expect_contains "zip: \${EDB_CANDIDATE} becomes the command name" "$xj" '
+easy-db-lab status'
+hits="$(grep -rlF -- 'EDB' "$sx" 2>/dev/null | sed "s|^$sx/||" | tr '\n' ' ')"
+expect_eq "zip: no EDB variable anywhere in the extracted book" "" "$hits"
+expect_contains "zip: a version string survives" "$xj" 'Cassandra 5.0.9 on db0'
+expect_contains "zip: a cluster label UUID survives" "$xj" 'report-ab-896195de-19a1-43fe-b315-751612345678'
+expect_contains "zip: a 12-digit decimal measurement survives" "$xj" '214748364800.0 bytes'
+expect_contains "zip: a 12-digit stats cell survives" "$(cat "$sx/2-evidence.html" 2>/dev/null)" '>214748364800<'
+expect_contains "zip: a 12-digit CSV value survives" "$(cat "$sx/data/disk-bytes.csv" 2>/dev/null)" ',214748364800'
+expect_eq "zip: the export leaves 4-journal.md unchanged" "$journal_before" "$(cksum < "$sws/docs/4-journal.md")"
+lj="$(cat "$sws/docs/report/4-journal.html" 2>/dev/null)"
+expect_contains "zip: the local report keeps the IPv4 address" "$lj" '10.0.1.15'
+# shellcheck disable=SC2016 # the $EDB is literal page text
+expect_contains "zip: the local report keeps \$EDB" "$lj" '$EDB status'
+
+# A value the replace step misses fails the export, and the error names the file and line.
+lws="$tmp_root/make-share-leftover"
+bash "$bin/setup-cluster.sh" "$lws" "$stub_edb" --name make-share-leftover >/dev/null 2>&1
+fixture_docs "$lws/docs" share-book
+out="$(cd "$lws/docs" && PYTHONPATH="$bin" python3 - "$bin/report-export.py" 2>&1 <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("report_export", sys.argv[1])
+exporter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(exporter)
+exporter.redact = lambda rel, text: text
+exporter.zip_report(".", "export/report.zip")
+PY
+)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: a leftover identifier fails the export"; else fail "zip: a leftover identifier fails the export"; fi
+expect_contains "zip: the leftover error names the file and line" "$out" "4-journal.md line 5"
+expect_no_file "zip: a leftover identifier writes no zip" "$lws/docs/export/report.zip"
+
 ews="$tmp_root/make-empty-title"
 bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
 cp -R "$fixtures/docs-agree/." "$ews/docs/"
@@ -1507,7 +1598,7 @@ expect_contains "make: the arms sidebar lists each arm's journal" "$(toc_order "
 
 ref="$(cat "$plugin/references/report.md" 2>/dev/null)"
 for h in "## File Roles" "## The Tiers" "## The Summary Layout" "### Noise Floor" "## Evidence Blocks" \
-  "### Threats to validity" "## Graphs" "## Prose Rules" "## Redaction" "## The Exit Rule" "## The Check" \
+  "### Threats to validity" "## Graphs" "## Prose Rules" "## Redaction" "### The shareable book" "## The Exit Rule" "## The Check" \
   "### The check subagent prompt" "### The check-failure rule" "### A redaction failure" "## Arms" \
   "### The arm gate" "### Final Finalize" "### Block with --arm-windows" "### Render" "### Block" \
   "### Overlay render" "### Hold and release"; do

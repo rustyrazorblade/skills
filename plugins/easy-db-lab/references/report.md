@@ -299,7 +299,7 @@ These identifiers never appear in the summary, the evidence tier, or their CSV a
 - IPv4 and IPv6 addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`, `ec2-54-12-34-56.compute-1.amazonaws.com`);
 - tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards);
 - `host:port` service URLs (`control0:3000`, `http://control0:3000/d/abc`);
-- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, the path after `-i`);
+- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, and the key file after `-i`: any path after `ssh`, `scp`, or `sftp`, and elsewhere a path that starts with `/`, `~/`, or `./`, or a `.pem`, `.key`, or `id_*` file; the `-i` of `sed` and `grep` stays);
 - AWS profile names (`--profile X`, `AWS_PROFILE=X`, `AccountUser-…`), SSO start URLs (`*.awsapps.com`), and email addresses;
 - S3 URLs and bucket names (`s3://…`, `easy-db-lab-<uuid>`).
 

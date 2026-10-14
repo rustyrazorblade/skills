@@ -55,6 +55,16 @@ aws-dir	page.txt	read $HOME/.aws/config now	read <local-path> now
 key-flag	page.txt	scp -i keys/lab.pem file db0	scp -i <local-path> file db0
 key-flag-pem	page.txt	ssh -i lab-key.pem db0	ssh -i <local-path> db0
 keep-grep-i	page.txt	grep -i error and sort -i words	=
+keep-sed-i-slash	page.txt	sed -i s/old/new/ conf.yaml	=
+keep-grep-i-slash	page.txt	grep -i error/warn app.log	=
+keep-ssh-remote-grep-i	page.txt	ssh db0 grep -i error/warn app.log	=
+key-flag-ssh-relative	page.txt	ssh -i keys/lab db0	ssh -i <local-path> db0
+key-flag-scp-options	page.txt	scp -P 22 -i keys/lab f db0	scp -P 22 -i <local-path> f db0
+key-flag-rsync-e	page.txt	rsync -e "ssh -i keys/lab" a db0	rsync -e "ssh -i <local-path>" a db0
+key-flag-tilde	page.txt	tool -i ~/keys/lab now	tool -i <local-path> now
+key-flag-absolute	page.txt	tool -i /opt/keys/lab now	tool -i <local-path> now
+key-flag-dot	page.txt	tool -i ./keys/lab now	tool -i <local-path> now
+key-flag-id	page.txt	tool -i keys/id_ed25519 now	tool -i <local-path> now
 home-md	4-journal.md	Docs live in /Users/jonathan.haddad/dev/lab.	Docs live in \<local-path>.
 profile-flag	page.txt	aws s3 ls --profile AccountUser-417835013894	aws s3 ls --profile <aws-profile>
 profile-flag-name	page.txt	aws sts get-caller-identity --profile lab-admin	aws sts get-caller-identity --profile <aws-profile>

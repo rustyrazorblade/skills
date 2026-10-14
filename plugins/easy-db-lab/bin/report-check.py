@@ -144,8 +144,13 @@ REDACTION = [
                                       r"(?:/" + _REST + r")?", re.I), "service-url"),
     ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
     ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws)\b/?)" + _REST), "local-path"),
-    ("key file path", Pattern(r"(?<!\S)-i\s+([^\s`\"'<>]*(?:/|\.pem\b|\.key\b|\bid_[a-z0-9]+\b)" + _REST + ")", re.I, 1),
-     "local-path"),
+    # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
+    # file.  After ssh, scp, or sftp and their options, any path, but not a placeholder, which
+    # scan() makes a NUL.  The -i of sed and grep stays.
+    ("key file path", Pattern(r"(?<!\S)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
+                              + _REST + ")", re.I, 1), "local-path"),
+    ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)(?:\s+-[a-z]\S*(?:\s+[^\s-]\S*)?)*?\s+-i\s+([^\s`\"'<>\x00]" + _REST + ")",
+                                  re.I, 1), "local-path"),
     ("AWS profile name", Pattern(r"--profile(?:=|\s+)" + _NAME, 0, 1), "aws-profile"),
     ("AWS_PROFILE value", Pattern(r"\bAWS_PROFILE=" + _NAME, 0, 1), "aws-profile"),
     ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),

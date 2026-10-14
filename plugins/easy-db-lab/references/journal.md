@@ -31,6 +31,7 @@ Both DCs are up.
 - **Result:** exit 0.
 
 ```bash
+EDB=/home/lab/tests/clusters/20260523-1030/easy-db-lab
 $EDB cassandra use 5.0
 ```
 
@@ -93,10 +94,14 @@ Each entry follows these rules, so that it is easy to read in the book:
 - Write one short summary sentence.  Omit it when the bullets say everything.
 - Write one bullet per fact.  Put the outcome first, and the label in bold.
 - Put each command in a fenced block after the bullets, never inline in a sentence.  Shorten long paths through variables, such as `$EDB`, `$DOCS`, and `$TEST_DIR`.
+- The first entry that uses a variable records its value.  Use a `**Vars:**` bullet, or put the assignments at the top of the fenced block.  A value that holds a path goes in the fenced block.
 - Keep each line to 160 characters or fewer.  In a code block, wrap a long command with `\`.
 - A failure gets a `**Result: failed**` bullet with the error.
+- A failure entry also records the values that matter to the failure.  For example, record the proxy port before and after a restart, or the query and the window of a failed fetch.
+- These values can be infrastructure identifiers, such as a tunnel port.  They can stay in the journal, because it is in the appendix.  "Redaction" in `report.md` keeps them out of the summary and the evidence tier.
 - An entry that starts a long step gets its result in the same entry, or in a follow-up entry that names the step.
-- A loop, such as the check passes or the retries of one command, gets one bullet.  For example: "**Check:** 5 passes; the final pass is clean.  Details are in `5-issues.md`."
+- A loop gets one bullet.  The check loop gets the pass count and the result, and its detail goes to `<issues>`.  For example: "**Check:** 5 passes; the final pass is clean.  Details are in `5-issues.md`."
+- The retry loop of one command gets one bullet with the attempt count and each distinct error, or the first and the last error.  If the loop ends in failure, the entry also gets a `**Result: failed**` bullet.
 - Paste raw tool output only in a fenced block.
 
 A failure entry looks like this:
@@ -107,11 +112,16 @@ A failure entry looks like this:
 The fetch through the SOCKS proxy failed.
 
 - **Result: failed** with `cannot reach Mimir: ConnectTimeout`.
-- **Tunnel:** dead; `status` restarted it on a new port.
+- **Retries:** 3 attempts; the first gave `ConnectTimeout`, and the last gave `connection refused`.
+- **Tunnel:** dead on port 1080; `status` restarted it on port 1081.
 
-**Next:** fetch again through the new port.
+**Next:** fetch again through port 1081.
 
 ```bash
+PROXY=socks5h://127.0.0.1:1080
+QUERY='sum(rate(cassandra_client_request_latency_count{cluster="lab-1a2b",request="write"}[1m]))'
+START=2026-05-23T10:25:00Z
+END=2026-05-23T10:55:00Z
 report-graph.py fetch --mimir-url "$MIMIR_URL" --tenant "$TENANT" --query "$QUERY" \
   --start "$START" --end "$END" --step 30s --name throughput --docs "$DOCS" --proxy "$PROXY"
 ```

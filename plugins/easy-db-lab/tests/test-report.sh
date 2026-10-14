@@ -1629,9 +1629,15 @@ expect_contains "docs: a journal example holds a failed result" "$journal_exampl
 expect_contains "docs: a journal example ends with the next step" "$journal_examples" "**Next:**"
 journal_format="$(sed -n '/^## Format/,/^## Measurements/p' "$journal_ref")"
 # shellcheck disable=SC2016 # the backticks and $ names are literal markdown
-for rule in "blank line" "160 characters" '`\`' '`$EDB`' '`$DOCS`' '`$TEST_DIR`' "**Result: failed**" "one bullet" "fenced block"; do
+for rule in "blank line" "160 characters" '`\`' '`$EDB`' '`$DOCS`' '`$TEST_DIR`' "**Result: failed**" "one bullet" "fenced block" \
+  "The first entry that uses a variable records its value" '`**Vars:**`' "values that matter to the failure" \
+  '"Redaction" in `report.md`' "attempt count" "each distinct error"; do
   expect_contains "docs: the journal Format states the rule: $rule" "$journal_format" "$rule"
 done
+expect_contains "docs: a journal example records the value of EDB where it first uses it" "$journal_examples" "EDB=/"
+expect_contains "docs: the failure example records the proxy it used" "$journal_examples" "PROXY=socks5h://"
+expect_contains "docs: the failure example records the query of the failed fetch" "$journal_examples" "QUERY='"
+expect_contains "docs: the failure example gives the retry loop one bullet" "$journal_examples" "**Retries:** 3 attempts"
 # A step's first entry gets its result, in the same entry or a follow-up entry that names the step.
 for f in "$run_skill" "$explore_skill" "$report_ref"; do
   expect_eq "docs: ${f#"$plugin/"} writes no bare starting entry" "" "$(grep -n '+ "starting"' "$f")"

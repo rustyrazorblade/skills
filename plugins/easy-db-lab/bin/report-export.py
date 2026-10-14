@@ -22,13 +22,14 @@ included, every images/ and data/ file they reference, and the theme (book.toml,
 SUMMARY.md) under export/stage/.  In the staged copy it replaces each infrastructure identifier
 with a placeholder that names its kind, such as <private-ip>, and each wrapper variable ($EDB,
 ${EDB}, $EDB_<ARM>) with easy-db-lab.  It then scans the whole staged copy with the same
-patterns (report_redaction.py), builds it with mdbook, and zips the built HTML.  A listed page
+patterns (report-check.py), builds it with mdbook, and zips the built HTML.  A listed page
 outside docs/, a referenced file that does not exist, or an identifier that remains in the
 staged copy fails the export, and no zip is written.  The local report/ and the docs files keep
 the unredacted record.
 """
 
 import argparse
+import importlib.util
 import os
 import re
 import shutil
@@ -37,7 +38,18 @@ import sys
 import tempfile
 import zipfile
 
-from report_redaction import redact, scan
+
+def load_check():
+    """report-check.py, loaded as a module: its redaction rule is the one the export applies."""
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "report-check.py")
+    spec = importlib.util.spec_from_file_location("report_check", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_check = load_check()
+redact, scan = _check.redact, _check.scan
 
 # Okabe-Ito, the same badge colours as lab.css.
 LUA_FILTER = r"""

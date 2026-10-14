@@ -301,7 +301,7 @@ These identifiers never appear in the summary, the evidence tier, or their CSV a
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
 
-A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  The patterns are in `bin/report_redaction.py`; the check and the export share them.
+A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
 
 ### The shareable book
 

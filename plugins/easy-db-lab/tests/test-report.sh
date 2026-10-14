@@ -1522,7 +1522,7 @@ expect_contains "zip: the local report keeps \$EDB" "$lj" '$EDB status'
 lws="$tmp_root/make-share-leftover"
 bash "$bin/setup-cluster.sh" "$lws" "$stub_edb" --name make-share-leftover >/dev/null 2>&1
 fixture_docs "$lws/docs" share-book
-out="$(cd "$lws/docs" && PYTHONPATH="$bin" python3 - "$bin/report-export.py" 2>&1 <<'PY'
+out="$(cd "$lws/docs" && python3 - "$bin/report-export.py" 2>&1 <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("report_export", sys.argv[1])
 exporter = importlib.util.module_from_spec(spec)

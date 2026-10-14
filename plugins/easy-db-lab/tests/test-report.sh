@@ -424,7 +424,29 @@ stop_mimir() {
   wait "$mimir_pid" 2>/dev/null
   mimir_pid=""
 }
-trap 'stop_mimir; rm -rf "$tmp_root"' EXIT
+socks_pid=""
+# start_socks: start the stub SOCKS5 forwarder and set socks_proxy and socks_log.
+start_socks() {
+  local port_file="$tmp_root/socks.port"
+  socks_log="$tmp_root/socks.log"
+  rm -f "$port_file" "$socks_log"
+  python3 "$fixtures/socks/forwarder.py" "$port_file" "$socks_log" &
+  socks_pid=$!
+  local _
+  for _ in $(seq 1 50); do
+    [[ -s "$port_file" ]] && break
+    sleep 0.1
+  done
+  socks_proxy="socks5h://127.0.0.1:$(cat "$port_file")"
+}
+stop_socks() {
+  [[ -z "$socks_pid" ]] || kill "$socks_pid" 2>/dev/null
+  wait "$socks_pid" 2>/dev/null
+  socks_pid=""
+}
+trap 'stop_mimir; stop_socks; rm -rf "$tmp_root"' EXIT
+# A dead SOCKS proxy: nothing listens on port 1.
+dead_proxy="socks5h://127.0.0.1:1"
 
 # fetch <mimir-url> <name> [extra args...]: run fetch on the graph workspace with the usual window
 # and fetch_query, which filters on this cluster's label.
@@ -519,6 +541,27 @@ expect_contains "fetch: the request goes to query_range under the Mimir URL" "$r
 expect_contains "fetch: the request sends the tenant header" "$req" "tenant=lab-tenant"
 expect_contains "fetch: the request sends the step" "$req" "step=30"
 
+# --proxy: the request goes through the proxy.  A dead proxy is a reach failure, not a missing
+# SOCKS dependency, and the request never gets to Mimir.
+start_mimir "$fixtures/mimir/ok.json" 200
+out="$(fetch "$mimir_url" dead-proxy --arm baseline=db0 --arm candidate=db2 --proxy "$dead_proxy" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "fetch: a dead --proxy exits non-zero"; else fail "fetch: a dead --proxy exits non-zero"; fi
+expect_contains "fetch: a dead --proxy gives the reach message" "$out" "cannot reach Mimir"
+expect_not_contains "fetch: a dead --proxy is not a missing SOCKS dependency" "$out" "Missing dependencies"
+expect_not_contains "fetch: a dead --proxy is not an import error" "$out" "ImportError"
+expect_eq "fetch: a dead --proxy sends no request to Mimir" "" "$(cat "$mimir_log" 2>/dev/null)"
+expect_no_file "fetch: a dead --proxy writes no CSV" "$gdocs/data/dead-proxy.csv"
+start_socks
+out="$(fetch "$mimir_url" via-proxy --arm baseline=db0 --arm candidate=db2 --proxy "$socks_proxy" 2>&1)"
+expect_eq "fetch: a live --proxy exits 0" "0" "$?"
+stop_socks
+mimir_hostport="${mimir_url#http://}"
+expect_eq "fetch: a live --proxy connects to Mimir through the proxy" "${mimir_hostport%%/*}" "$(cat "$socks_log" 2>/dev/null)"
+expect_contains "fetch: a live --proxy request gets to Mimir" "$(cat "$mimir_log" 2>/dev/null)" "/api/v1/query_range?"
+stop_mimir
+rm -f "$gdocs/data/via-proxy.csv" "$gdocs/data/via-proxy.json"
+
 # --- report-graph.py render ---
 
 grafana_pid=""
@@ -541,7 +584,7 @@ stop_grafana() {
   wait "$grafana_pid" 2>/dev/null
   grafana_pid=""
 }
-trap 'stop_mimir; stop_grafana; rm -rf "$tmp_root"' EXIT
+trap 'stop_mimir; stop_socks; stop_grafana; rm -rf "$tmp_root"' EXIT
 
 # render <grafana-url> <name> [extra args...]: render panel 7 of one dashboard over the usual window.
 render() {
@@ -617,6 +660,25 @@ render_fails() {
 render_fails 500 "HTTP 500"
 render_fails empty "empty body"
 render_fails notpng "not a PNG"
+
+# --proxy, as for fetch: a dead proxy is a reach failure that never gets to Grafana.
+start_grafana png
+out="$(render "$grafana_url" dead-proxy --proxy "$dead_proxy" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "render: a dead --proxy exits non-zero"; else fail "render: a dead --proxy exits non-zero"; fi
+expect_contains "render: a dead --proxy gives the reach message" "$out" "cannot reach Grafana"
+expect_not_contains "render: a dead --proxy is not a missing SOCKS dependency" "$out" "Missing dependencies"
+expect_not_contains "render: a dead --proxy is not an import error" "$out" "ImportError"
+expect_eq "render: a dead --proxy sends no request to Grafana" "" "$(cat "$grafana_log" 2>/dev/null)"
+expect_no_file "render: a dead --proxy writes no image" "$gdocs/images/dead-proxy.png"
+start_socks
+out="$(render "$grafana_url" via-proxy --proxy "$socks_proxy" 2>&1)"
+expect_eq "render: a live --proxy exits 0" "0" "$?"
+stop_socks
+expect_eq "render: a live --proxy connects to Grafana through the proxy" "${grafana_url#http://}" "$(cat "$socks_log" 2>/dev/null)"
+expect_contains "render: a live --proxy request gets to Grafana" "$(cat "$grafana_log" 2>/dev/null)" "/render/d-solo/cassandra-overview/?"
+stop_grafana
+rm -f "$gdocs/images/via-proxy.png"
 rm -f "$gdocs/images/keep.png" "$gdocs/images/panel.png" "$gdocs/images/relative.png"
 
 # --- report-graph.py block ---
@@ -774,7 +836,9 @@ help="$("$graph" --help 2>&1)"
 subcommands="$(printf '%s\n' "$help" | sed -n 's/^  *{\(.*\)}.*/\1/p' | head -n 1)"
 expect_eq "graph: --help lists fetch, render, and block only" "fetch,render,block" "$subcommands"
 pep723="$(sed -n '/^# \/\/\/ script/,/^# \/\/\/$/p' "$graph")"
-expect_contains "graph: the PEP 723 block declares requests" "$pep723" "requests"
+# The socks extra brings PySocks for --proxy.  A cached uv environment still holds PySocks after the
+# extra goes, so the proxy cases alone stay green locally; this text check does not.
+expect_contains "graph: the PEP 723 block declares requests with the socks extra" "$pep723" '"requests[socks]'
 expect_not_contains "graph: the PEP 723 block holds no matplotlib" "$pep723" "matplotlib"
 
 # --- references/report.md: the render steps, run as written against the stub Grafana ---
@@ -805,6 +869,25 @@ expect_contains "render step: from is the block JSON's start" "$req" "from=17908
 expect_contains "render step: to is the block JSON's end, 24 hours later" "$req" "to=1790935200000&"
 expect_contains "render step: the cluster variable is the run's cluster" "$req" "var-cluster=graph-1a2b"
 expect_file "render step: the single-cluster step writes the image" "$gdocs/images/day.png"
+stop_grafana
+# The step passes PROXY to render: a dead proxy fails the step, and the request never gets to Grafana.
+rm -f "$gdocs/images/day.png"
+start_grafana png
+out="$(GRAFANA_URL="$grafana_url" PROXY="$dead_proxy" DOCS="$gdocs" NAME=day DASHBOARD=cassandra-overview PANEL=7 \
+  CLUSTER=graph-1a2b PATH="$bin:$PATH" bash -c "$single_step" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "render step: a dead PROXY fails the step"; else fail "render step: a dead PROXY fails the step"; fi
+expect_contains "render step: a dead PROXY gives the reach message" "$out" "cannot reach Grafana"
+expect_not_contains "render step: a dead PROXY is not a missing SOCKS dependency" "$out" "Missing dependencies"
+expect_eq "render step: a dead PROXY sends no request to Grafana" "" "$(cat "$grafana_log" 2>/dev/null)"
+expect_no_file "render step: a dead PROXY writes no image" "$gdocs/images/day.png"
+start_socks
+out="$(GRAFANA_URL="$grafana_url" PROXY="$socks_proxy" DOCS="$gdocs" NAME=day DASHBOARD=cassandra-overview PANEL=7 \
+  CLUSTER=graph-1a2b PATH="$bin:$PATH" bash -c "$single_step" 2>&1)"
+expect_eq "render step: a live PROXY exits 0" "0" "$?"
+stop_socks
+expect_eq "render step: a live PROXY connects to Grafana through the proxy" "${grafana_url#http://}" "$(cat "$socks_log" 2>/dev/null)"
+expect_file "render step: a live PROXY writes the image" "$gdocs/images/day.png"
 stop_grafana
 
 # The overlay render: window variables when the dashboard has them, else the whole-run fallback.

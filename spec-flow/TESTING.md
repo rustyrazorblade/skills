@@ -60,7 +60,9 @@ Run these on a change, and only where the change touches them:
     `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
     its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Those fixtures include a stub
     Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
-    for `render`; both are local HTTP servers on `127.0.0.1`. Of
+    for `render`; both are local HTTP servers on `127.0.0.1`.  A stub SOCKS5 forwarder
+    (`fixtures/socks/forwarder.py`) carries the `--proxy` cases of `fetch`, `render`, and the
+    "### Render" block; a dead proxy on port 1 carries the failure cases. Of
     `plugins/easy-db-lab/bin/configure-multi-dc-seeds.sh` it covers only the arms-marker guard. It
     also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
     `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup

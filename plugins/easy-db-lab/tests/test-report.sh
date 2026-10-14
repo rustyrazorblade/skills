@@ -345,11 +345,20 @@ done
 
 # A hand-written marker can name a reserved directory; the refusal prints no EDB_ line at all.
 for reserved in docs Docs bin data images export arms; do
-  make_arms "$tmp_root/arms-reserved" baseline
-  mkdir -p "$tmp_root/arms-reserved/$reserved"
-  printf '#!/bin/sh\n' > "$tmp_root/arms-reserved/$reserved/easy-db-lab"
-  chmod +x "$tmp_root/arms-reserved/$reserved/easy-db-lab"
-  printf '%s\n' "$reserved" >> "$tmp_root/arms-reserved/arms"
+  setup_err="$(
+    {
+      make_arms "$tmp_root/arms-reserved" baseline
+      # arms is the marker file itself, so it cannot hold a wrapper; the marker line alone is refused.
+      if [[ "$reserved" != arms ]]; then
+        mkdir -p "$tmp_root/arms-reserved/$reserved"
+        printf '#!/bin/sh\n' > "$tmp_root/arms-reserved/$reserved/easy-db-lab"
+        chmod +x "$tmp_root/arms-reserved/$reserved/easy-db-lab"
+      fi
+      printf '%s\n' "$reserved" >> "$tmp_root/arms-reserved/arms"
+    } 2>&1
+  )"
+  expect_not_contains "layout: the reserved arm $reserved setup gives no File exists" "$setup_err" "File exists"
+  expect_not_contains "layout: the reserved arm $reserved setup gives no Not a directory" "$setup_err" "Not a directory"
   layout="$(bash "$bin/detect-cluster-layout.sh" "$tmp_root/arms-reserved" 2>&1)"
   expect_eq "layout: the reserved arm $reserved in the marker exits 1" "1" "$?"
   expect_contains "layout: the refusal names the reserved arm $reserved" "$layout" "reserved arm name: $reserved"

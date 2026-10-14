@@ -1518,6 +1518,18 @@ expect_contains "zip: the local report keeps the IPv4 address" "$lj" '10.0.1.15'
 # shellcheck disable=SC2016 # the $EDB is literal page text
 expect_contains "zip: the local report keeps \$EDB" "$lj" '$EDB status'
 
+# The local book holds the report, not the build inputs: a build after an export copies no
+# export/, zip, staging tree, Makefile, or book.toml into report/.
+make -s -C "$sws/docs" build >/dev/null 2>&1
+expect_eq "build: a rebuild after the export exits 0" "0" "$?"
+expect_no_file "build: report/ holds no export/" "$sws/docs/report/export"
+expect_eq "build: report/ holds no .zip" "" "$(find "$sws/docs/report" -name '*.zip')"
+expect_no_file "build: report/ holds no Makefile" "$sws/docs/report/Makefile"
+expect_no_file "build: report/ holds no book.toml" "$sws/docs/report/book.toml"
+expect_file "build: report/ keeps its images" "$sws/docs/report/images/scrape-alloc.png"
+expect_file "build: report/ keeps its data" "$sws/docs/report/data/scrape-alloc.csv"
+expect_no_file "zip: the shareable book holds no book.toml" "$sx/book.toml"
+
 # A value the replace step misses fails the export, and the error names the file and line.
 lws="$tmp_root/make-share-leftover"
 bash "$bin/setup-cluster.sh" "$lws" "$stub_edb" --name make-share-leftover >/dev/null 2>&1

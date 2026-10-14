@@ -28,8 +28,13 @@ all: check build export
 check:
 	$(CHECK) .
 
+# mdbook copies every file under src = "." into report/.  The exports and the build inputs are
+# not part of the book, so remove them.
+BUILD_INPUTS := report/export report/Makefile report/book.toml
+
 build:
 	mdbook build
+	rm -rf $(BUILD_INPUTS)
 
 export:
 	mkdir -p export

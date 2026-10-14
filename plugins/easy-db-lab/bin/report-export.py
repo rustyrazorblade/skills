@@ -220,6 +220,8 @@ def zip_report(docs, out):
     built = subprocess.run([mdbook, "build", "--dest-dir", html, staged], env=env, capture_output=True, text=True)
     if built.returncode != 0:
         die("mdbook build of the staged book failed: " + built.stderr.strip())
+    # mdbook copies book.toml into the built HTML; it is a build input, not part of the book.
+    os.remove(os.path.join(html, "book.toml"))
     tmp = out + ".tmp"
     count = 0
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:

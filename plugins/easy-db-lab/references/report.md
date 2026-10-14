@@ -364,7 +364,7 @@ Finalize is the report part of every exit, in this order:
 4. Build with `make`, or with `make gate` at a teardown gate.
 5. Upload per `report-upload.md`.
 
-`make` (the `all` target) runs `check`, then `build` (the book in `report/`), then `export` (`export/jira.txt`, the summary tier, and `export/report.zip`, the redacted shareable book).  `make gate` runs `report-check.py --gate` with the reasons, then `build` and `export`.  Pass the reasons like this:
+`make` (the `all` target) runs `check`, then `build` (the book in `report/`, without `export/`, the `Makefile`, or `book.toml`), then `export` (`export/jira.txt`, the summary tier, and `export/report.zip`, the redacted shareable book).  `make gate` runs `report-check.py --gate` with the reasons, then `build` and `export`.  Pass the reasons like this:
 
 ```bash
 make -C <cluster-dir>/docs gate REASONS='--reason "the noise floor does not support the verdict"'

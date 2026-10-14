@@ -160,6 +160,9 @@ expect_contains "css: numeric cells use tabular figures" "$css" "font-variant-nu
 expect_contains "css: an evidence block reads as a card" "$css" "h2:has(+ p > img)"
 expect_contains "css: the Window, Query, and Data lines are muted" "$css" ".table-wrapper ~ p"
 expect_contains "css: the dark themes get their own card colours" "$css" ".navy"
+expect_contains "css: coal, the default theme, has its own designed palette" "$css" ".coal {"
+expect_contains "css: fenced blocks sit on one panel colour" "$css" "background: var(--lab-code-bg)"
+expect_contains "css: journal entries are separated by a rule" "$css" ".content main > h3 {"
 expect_contains "css: print keeps a heading with its image" "$css" "break-after: avoid"
 expect_contains "css: print drops shadows" "$css" "box-shadow: none"
 

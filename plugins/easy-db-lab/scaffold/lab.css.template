@@ -1,11 +1,13 @@
 /* House theme for the easy-db-lab lab report.  book.toml loads it through additional-css.
 
-   The theme uses neutral greys and one accent colour.  The greys are mixed from mdbook's own --fg
-   and --bg, so the light, rust, coal, navy, and ayu themes all get matching shades.
+   The report opens in mdbook's coal theme, and this file redesigns coal as the primary look: a
+   near-black neutral page, raised cards, and one blue accent.  Every text colour passes WCAG AA
+   (4.5:1) on the page, the card, and the table header.  The other themes (light, rust, navy, ayu)
+   stay usable: their greys are mixed from mdbook's own --fg and --bg.
 
    Verdict badges use darker shades of the Okabe-Ito palette, which is colour-blind-safe.  Each
    badge also carries its text label and a symbol, so a verdict never depends on colour alone.
-   Every badge text passes WCAG AA (4.5:1) on its badge colour. */
+   Every badge text passes WCAG AA on its badge colour. */
 
 :root {
   --content-max-width: 1100px;
@@ -17,21 +19,69 @@
   --lab-card-pad: 1.5em;
 }
 
+/* The primary look.  mdbook's variables.css sets coal first; this file loads later and wins. */
+.coal {
+  --bg: #0f1113;
+  --fg: #d6dae0;
+
+  --sidebar-bg: #0b0d0f;
+  --sidebar-fg: #aab2bc;
+  --sidebar-non-existant: #5b636d;
+  --sidebar-spacer: #1c2025;
+  --sidebar-header-border-color: #2a2f36;
+  --scrollbar: #3a4048;
+
+  --icons: #7d8691;
+  --icons-hover: #e6e9ee;
+
+  --theme-popup-bg: #16191d;
+  --theme-popup-border: #2a2f36;
+  --theme-hover: #1f2328;
+
+  --quote-bg: #16191d;
+  --quote-border: #2a2f36;
+
+  --searchbar-border-color: #2a2f36;
+  --searchbar-bg: #16191d;
+  --searchbar-fg: #e6e9ee;
+  --searchbar-shadow-color: #000000;
+  --searchresults-header-fg: #9aa3ad;
+  --searchresults-border-color: #2a2f36;
+  --searchresults-li-bg: #16191d;
+  --search-mark-bg: #2f4a6e;
+
+  --lab-accent: #6ea8fe;
+  --lab-strong: #f0f2f5;
+  --lab-muted: #9aa3ad;
+  --lab-border: #2a2f36;
+  --lab-rule: #22272d;
+  --lab-surface: #1c2025;
+  --lab-card-bg: #16191d;
+  --lab-code-bg: #16191d;
+  --lab-zebra: #191c20;
+  --lab-hover: #1d2430;
+  --lab-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
 /* html:not(.js) is mdbook's no-JavaScript fallback to light.  It must not also match a dark theme
-   class, because it is more specific than .navy and would force the light colours onto it. */
+   class, because it is more specific than .coal and would force the light colours onto it. */
 .light,
 .rust,
 html:not(.js):not(.coal, .navy, .ayu) {
   --fg: #1f2328;
   --lab-accent: #2563eb;
+  --lab-card-bg: var(--bg);
+  --lab-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
-.coal,
 .navy,
 .ayu {
   --lab-accent: #60a5fa;
+  --lab-card-bg: color-mix(in srgb, var(--fg) 4%, var(--bg));
+  --lab-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
+/* Shared names.  A theme block above may set any of these first; the fallbacks fill the rest. */
 .light,
 .rust,
 .coal,
@@ -41,15 +91,21 @@ html:not(.js) {
   --links: var(--lab-accent);
   --sidebar-active: var(--lab-accent);
   --inline-code-color: var(--fg);
+}
 
+.light,
+.rust,
+.navy,
+.ayu,
+html:not(.js):not(.coal) {
+  --lab-strong: var(--fg);
   --lab-muted: color-mix(in srgb, var(--fg) 68%, var(--bg));
   --lab-border: color-mix(in srgb, var(--fg) 13%, var(--bg));
   --lab-rule: color-mix(in srgb, var(--fg) 9%, var(--bg));
   --lab-surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
+  --lab-code-bg: color-mix(in srgb, var(--fg) 4%, var(--bg));
   --lab-zebra: color-mix(in srgb, var(--fg) 2%, var(--bg));
   --lab-hover: color-mix(in srgb, var(--lab-accent) 6%, var(--bg));
-  --lab-card-bg: var(--bg);
-  --lab-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
 /* --- Typography --- */
@@ -100,11 +156,81 @@ html {
   margin-block: 1.8em 0.5em;
 }
 
+.content h1,
+.content h2,
+.content h3,
+.content .header:link,
+.content .header:visited {
+  color: var(--lab-strong);
+}
+
+.content strong {
+  color: var(--lab-strong);
+  font-weight: 600;
+}
+
 .content :not(pre) > code {
   padding: 0.12em 0.4em;
   border-radius: 4px;
   background: var(--lab-surface);
   overflow-wrap: anywhere;
+}
+
+/* A fenced block is a quiet panel.  The highlight theme keeps its token colours; only its
+   background goes, so every block sits on the same panel colour. */
+.content pre {
+  margin-block: 0.8em 1.4em;
+  padding: 0.9em 1.1em;
+  border: 1px solid var(--lab-border);
+  border-radius: var(--lab-radius-small);
+  background: var(--lab-code-bg);
+  font-size: 0.92em;
+  line-height: 1.55;
+}
+
+.content pre > code,
+.content pre > code.hljs {
+  padding: 0;
+  background: none;
+}
+
+/* --- Lists and journal entries ---
+
+   A journal entry is an h3 ("### HH:MM action"), a short sentence, bullets with a bold label, a
+   fenced block, and a "Next:" line.  A rule above each entry, except the first in a session,
+   separates entries, and the bullets get an even rhythm. */
+
+.content li {
+  margin-block: 0.3em;
+  line-height: 1.6;
+}
+
+/* A blank line between two bullets makes markdown wrap each item in a p.  The p margins would
+   double the gap, so a loose list keeps the same rhythm as a tight one. */
+.content li > p {
+  margin-block: 0;
+}
+
+.content li::marker {
+  color: var(--lab-muted);
+}
+
+.content main > h3 {
+  margin-block: 2em 0.6em;
+  padding-block-start: 1.4em;
+  border-top: 1px solid var(--lab-rule);
+}
+
+.content main > h2 + h3,
+.content main > h1 + h3 {
+  padding-block-start: 0;
+  border-top: 0;
+  margin-block-start: 1.2em;
+}
+
+.content main > h3 + p,
+.content main > h3 + ul {
+  margin-block-start: 0.4em;
 }
 
 /* --- Summary page: the title and the verdict line lead the page --- */
@@ -129,6 +255,7 @@ html {
   margin-block: 1em 1.4em;
   border: 1px solid var(--lab-border);
   border-radius: var(--lab-radius-small);
+  background: var(--lab-card-bg);
 }
 
 .content table {
@@ -278,7 +405,7 @@ html {
   box-shadow: var(--lab-shadow);
 }
 
-/* A Grafana render (1200px by default) fills the card, with a light frame.  The image is never
+/* A Grafana render (1200px by default) fills the card, with a thin frame.  The image is never
    scaled up past its own width. */
 .content main > p:has(> img) img {
   display: block;
@@ -286,7 +413,6 @@ html {
   height: auto;
   border: 1px solid var(--lab-rule);
   border-radius: var(--lab-radius-small);
-  background: #ffffff;
 }
 
 /* In a card the card draws the frame, so the stats table wrapper draws only the card sides.  The

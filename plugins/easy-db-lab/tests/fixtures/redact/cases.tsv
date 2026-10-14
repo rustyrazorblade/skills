@@ -78,3 +78,12 @@ dashed-account	page.txt	account 4178-3501-3894 here	account <account-id> here
 keep-uuid-digits	page.txt	label 896195de-1234-4567-8901-751612345678 here	=
 keep-date	page.txt	on 2026-10-14 at 10:00	=
 profile-then-arg	page.txt	aws --profile lab-admin s3 ls	aws --profile <aws-profile> s3 ls
+# A link fragment stays: mdbook makes the heading id from the redacted heading, placeholder names included.
+fragment-placeholder-name	1-summary.md	See [the setup](4-journal.md#tunnel-setup) and [proxy](#proxy-socks-proxy).	=
+fragment-port	1-summary.md	See [it](2-evidence.md#metrics-on-port-port) now.	=
+fragment-text-redacted	1-summary.md	See [tunnel 10.0.1.15](4-journal.md#tunnel-setup).	See [\<tunnel> \<private-ip>](4-journal.md#tunnel-setup).
+fragment-identifier	4-journal.md	See [db0](#node-ip-10-0-1-15).	!EC2 host name
+fragment-socks	4-journal.md	See [it](#open-the-socks-tunnel).	!tunnel wording
+html-id-placeholder	4-journal.html	<h2 id="open-the-tunnel"><a href="#open-the-tunnel">Open the &lt;tunnel&gt;</a></h2>	=
+idempotent	4-journal.md	Already \<private-ip> and `<tunnel>` here.	=
+url-with-fragment	1-summary.md	Open [it](http://control0:3000/d/x#panel).	Open [it](\<service-url>).

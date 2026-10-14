@@ -1555,6 +1555,18 @@ if [[ $rc -ne 0 ]]; then pass "zip: a leftover identifier fails the export"; els
 expect_contains "zip: the leftover error names the file and line" "$out" "4-journal.md line 5"
 expect_no_file "zip: a leftover identifier writes no zip" "$lws/docs/export/report.zip"
 
+# A staged file name is not redacted, so an identifier in one fails the export.
+bash "$bin/setup-cluster.sh" "$tmp_root/export-name" "$stub_edb" --name export-name >/dev/null 2>&1
+nd="$tmp_root/export-name/docs"
+fixture_docs "$nd" share-book
+cp "$nd/images/scrape-alloc.png" "$nd/images/db-ip-10-0-1-15.png"
+printf '\n![db0](images/db-ip-10-0-1-15.png)\n' >> "$nd/4-journal.md"
+out="$("$exporter" zip "$nd" "$tmp_root/export-name/report.zip" 2>&1)"
+rc=$?
+if [[ $rc -ne 0 ]]; then pass "zip: an identifier in a file name fails the export"; else fail "zip: an identifier in a file name fails the export"; fi
+expect_contains "zip: the file name error names the kind and the file" "$out" "EC2 host name in the file name images/db-ip-10-0-1-15.png"
+expect_no_file "zip: an identifier in a file name writes no zip" "$tmp_root/export-name/report.zip"
+
 ews="$tmp_root/make-empty-title"
 bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
 cp -R "$fixtures/docs-agree/." "$ews/docs/"

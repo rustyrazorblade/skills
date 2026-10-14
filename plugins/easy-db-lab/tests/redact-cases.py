@@ -6,7 +6,8 @@ Each case line is: name, the file name the text is in, the input text, and the e
 text, separated by tabs.  An expected text of = means the input stays unchanged.  Blank lines and
 lines that begin with # are ignored.  For each case it prints one line, "ok<TAB>name" or
 "bad<TAB>name<TAB>detail": redact() must give the expected text, and scan() must find nothing in
-it.
+it.  An expected text of !<kind> means redact() leaves the input unchanged and scan() finds that
+kind in it, so the export fails.
 """
 
 import importlib.util
@@ -22,10 +23,18 @@ with open(sys.argv[2], encoding="utf-8") as f:
         if not line or line.startswith("#"):
             continue
         name, rel, given, want = line.split("\t")
-        want = given if want == "=" else want
+        flagged = want[1:] if want.startswith("!") else None
+        want = given if want == "=" or flagged else want
         got = check.redact(rel, given)
         left = check.scan(rel, got)
-        if got != want:
+        if flagged:
+            if got != want:
+                print(f"bad\t{name}\tredact gave {got!r}, expected it unchanged")
+            elif flagged not in [kind for kind, _ in left]:
+                print(f"bad\t{name}\tscan finds {left}, expected {flagged!r}")
+            else:
+                print(f"ok\t{name}")
+        elif got != want:
             print(f"bad\t{name}\tredact gave {got!r}, expected {want!r}")
         elif left:
             print(f"bad\t{name}\tscan finds {left} in {got!r}")

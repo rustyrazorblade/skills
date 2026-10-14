@@ -201,8 +201,17 @@ def leftovers(dest, files):
     return found
 
 
+def named(files):
+    """One message per identifier in a staged file's path.  The replace step never renames a
+    file, because a page links to it by that name."""
+    return [f"{kind} in the file name {rel}" for rel in files for kind, _ in scan("name.txt", rel)]
+
+
 def zip_report(docs, out):
     files = book_files(docs)
+    found = named(files)
+    if found:
+        die("redaction: rename these files and their links: " + "; ".join(found))
     export = os.path.dirname(os.path.abspath(out))
     staged, html = os.path.join(export, "stage"), os.path.join(export, "html")
     stage(docs, files, staged)

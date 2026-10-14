@@ -161,7 +161,15 @@ REDACTION = [
     ("port number", PortNumbers(), "port"),
     ("tunnel wording", Pattern(r"\b" + _TUNNEL_WORD + r"\b(?:\s+" + _TUNNEL_WORD + r"\b)*", re.I), "tunnel"),
 ]
-PLACEHOLDER = re.compile(r"\\?<(?:" + "|".join(p for _, _, p in REDACTION) + r")>")
+_NAMES = "|".join(sorted({p for _, _, p in REDACTION}, key=len, reverse=True))
+# A placeholder as redact() writes it, \<kind> or <kind>, or as mdbook writes it, &lt;kind&gt;.
+PLACEHOLDER = re.compile(r"(?:\\?<|&lt;)(?:" + _NAMES + r")(?:>|&gt;)")
+# A link fragment, in markdown ](page.md#frag) or in HTML href="page.html#frag" and id="frag".
+# mdbook makes a heading id from the redacted heading, so a fragment can hold a placeholder name
+# such as tunnel-setup.  redact() never changes a fragment; scan() reads a placeholder name in
+# one as a placeholder, and any other identifier in one fails.
+FRAGMENT = re.compile(r"(\]\([^)\s#]*#|\bhref=\"[^\"#]*#|\bid=\")([^)\s\"]+)")
+FRAGMENT_NAME = re.compile(r"(?<![a-z0-9])(?:" + _NAMES + r")(?![a-z0-9])")
 # The wrapper variables: $EDB, ${EDB}, $EDB_<ARM>, and ${EDB_<ARM>}.  EDB_LAB_BIN is not one.
 WRAPPER = re.compile(r"\$\{EDB(?:_(?!LAB_BIN\b)[A-Z0-9_]+)?\}|\$EDB(?:_(?!LAB_BIN\b)[A-Z0-9_]+)?\b")
 COMMAND = "easy-db-lab"
@@ -219,7 +227,8 @@ def scan(rel, text):
     does not read s3 as the profile."""
     found = []
     for n, (line, words) in enumerate(without_measurements(rel, text), 1):
-        line, words = PLACEHOLDER.sub("\x00", line), PLACEHOLDER.sub("\x00", words)
+        line, words = (FRAGMENT.sub(lambda m: m.group(1) + FRAGMENT_NAME.sub("\x00", m.group(2)), PLACEHOLDER.sub("\x00", t))
+                       for t in (line, words))
         for kind, pattern, _ in REDACTION:
             if pattern.spans(words if kind == ACCOUNT else line):
                 found.append((kind, n))
@@ -230,12 +239,17 @@ def _replace(segment, placeholder, protected, offset):
     """Replace each identifier in segment, in one pass over the original text.  Matches that
     overlap merge, and one placeholder covers the merged text: the placeholder of the widest
     match, or of the earlier kind when two are as wide.  So "ssh -L 9042:10.0.0.1:9042" becomes
-    one <tunnel>.  The account pattern keeps a measurement cell; protected spans are line
-    offsets, and segment starts at offset in the line."""
+    one <tunnel>.  A match inside a placeholder or a link fragment stays, so the replace step
+    can run twice and a fragment keeps pointing at its heading.  The account pattern keeps a
+    measurement cell; protected spans are line offsets, and segment starts at offset in the
+    line."""
+    kept = [m.span() for m in PLACEHOLDER.finditer(segment)] + [m.span(2) for m in FRAGMENT.finditer(segment)]
     found = []
     for rank, (kind, pattern, name) in enumerate(REDACTION):
         for start, end in pattern.spans(segment):
             if kind == ACCOUNT and any(a <= offset + start < b for a, b in protected):
+                continue
+            if any(a <= start and end <= b for a, b in kept):
                 continue
             found.append((start, end, rank, name))
     chosen = []

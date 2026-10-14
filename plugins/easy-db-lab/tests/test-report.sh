@@ -1860,7 +1860,8 @@ fi
 # The SSO session check in report-upload.md, run as written against a stub aws and a temp HOME.
 # The stub answers `configure get sso_session` and `configure get sso_start_url` from STUB_SESSION and
 # STUB_START_URL, and exits 1 for an empty value, as the real aws does for an unset key.  It answers
-# `sts get-caller-identity` with exit STUB_STS_RC.
+# `sts get-caller-identity` with exit STUB_STS_RC; a failure prints a blank line and two error lines on
+# stderr, as the real aws does.
 sso_step="$(first_bash_block "$upload_ref" "## The AWS SSO Session")"
 if [[ "$sso_step" == *"expiresAt"* ]]; then
   pass "upload: report-upload.md holds the SSO session check"
@@ -1873,6 +1874,13 @@ mkdir -p "$sso_bin" "$sso_home/.aws/sso/cache"
 cat >"$sso_bin/aws" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == "sts get-caller-identity --profile $STUB_PROFILE" ]]; then
+  if [[ "${STUB_STS_RC:-0}" -ne 0 ]]; then
+    echo "" >&2
+    echo "An error occurred (ExpiredToken) when calling the GetCallerIdentity operation: The token is expired" >&2
+    echo "second line" >&2
+  else
+    echo '{"Account": "123456789012"}'
+  fi
   exit "${STUB_STS_RC:-0}"
 fi
 [[ "$1 $2 $4 $5" == "configure get --profile $STUB_PROFILE" ]] || exit 2
@@ -1914,8 +1922,8 @@ expect_eq "sso step: no refresh token stops for a login" \
   'SSO: STOP: no refresh token for lab-user; run aws sso login --profile "$AWS_PROFILE"' "$out"
 sso easy-db-lab "" "$in_2h" refresh 255
 # shellcheck disable=SC2016 # a literal $AWS_PROFILE in the step output
-expect_eq "sso step: an sts failure stops for a login" \
-  'SSO: STOP: aws sts get-caller-identity failed for lab-user; run aws sso login --profile "$AWS_PROFILE"' "$out"
+expect_eq "sso step: an sts failure stops for a login and names the first error line" \
+  'SSO: STOP: aws sts get-caller-identity failed for lab-user: An error occurred (ExpiredToken) when calling the GetCallerIdentity operation: The token is expired; run aws sso login --profile "$AWS_PROFILE"' "$out"
 sso easy-db-lab "" ""
 # shellcheck disable=SC2016 # a literal $AWS_PROFILE in the step output
 expect_eq "sso step: no cached token stops for a login" \

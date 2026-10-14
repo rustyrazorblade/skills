@@ -50,14 +50,14 @@ elif [[ ! -f "$cache" ]]; then
   echo "SSO: STOP: no token for $profile; $login"
 elif ! jq -e 'has("refreshToken")' "$cache" >/dev/null; then
   echo "SSO: STOP: no refresh token for $profile; $login"
-elif ! aws sts get-caller-identity --profile "$profile" >/dev/null 2>&1; then
-  echo "SSO: STOP: aws sts get-caller-identity failed for $profile; $login"
+elif ! sts_err="$(aws sts get-caller-identity --profile "$profile" 2>&1 >/dev/null)"; then
+  echo "SSO: STOP: aws sts get-caller-identity failed for $profile: $(printf '%s\n' "$sts_err" | grep -m1 .); $login"
 else
   jq -r '(.expiresAt | sub("\\.[0-9]+"; "") | sub("UTC$"; "Z") | fromdateiso8601) - now | [. / 60 | floor, 0] | max | "SSO: WARN: the access token has \(.) minutes left; the SDK refreshes it from the refresh token"' "$cache"
 fi
 ```
 
-The step reads only the key names and the `expiresAt` field of the cache.  Never print or copy a token value.  Write the output line in `<journal>`.
+The step reads only the key names and the `expiresAt` field of the cache.  Never print or copy a token value.  When `sts` fails, the STOP line holds the first line of its error, so the cause shows.  Write the output line in `<journal>`.
 
 - **WARN:** continue.  A WARN never stops a run on its own.
 - **STOP, interactive:** tell the user to run `aws sso login --profile "$AWS_PROFILE"`.  Run the step again after the login.

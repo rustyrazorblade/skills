@@ -1497,6 +1497,85 @@ for f in "$report_ref" "$journal_ref" "$run_skill" "$explore_skill"; do
     fail "docs: $name points to render and block"
   fi
 done
+# --- journal.md and issues.md: the entry format ---
+
+# journal_lint <file>: print one line per format problem in a journal or issues text, and nothing for
+# a clean text.  The rules are in references/journal.md "Format": a blank line between blocks, so
+# markdown never joins two lines into one paragraph; each line 160 characters or fewer; and no
+# command or absolute path in an inline code span, only in a fenced block.
+journal_lint() {
+  awk -v max=160 '
+    function kind(l) { return l ~ /^#/ ? "heading" : l ~ /^ *([-*]|[0-9]+\.) / ? "list" : "prose" }
+    function inline_commands(l,   s, n) {
+      while (match(l, /`[^`]+`/)) {
+        s = substr(l, RSTART + 1, RLENGTH - 2)
+        l = substr(l, RSTART + RLENGTH)
+        if (s ~ /^(\$[A-Za-z_]+|easy-db-lab|setup-cluster\.sh|detect-cluster-layout\.sh|report-graph\.py|report-check\.py|make|aws|curl|jq|cassandra|nodetool|cqlsh|bash|uv|ssh|cmp|sed) / ||
+            s ~ /(^|[ =])\/[A-Za-z]/) n++
+      }
+      return n
+    }
+    {
+      if (length($0) > max) printf "line %d: longer than %d characters\n", NR, max
+      if (fence != "") { if ($0 == fence) { fence = ""; prev = "fence" }; next }
+      if ($0 ~ /^```/) {
+        if (prev != "" && prev != "blank") printf "line %d: no blank line before the code block\n", NR
+        match($0, /^`+/); fence = substr($0, 1, RLENGTH); prev = "fence"; next
+      }
+      if ($0 ~ /^[ \t]*$/) { prev = "blank"; next }
+      k = kind($0)
+      if (prev == "heading") printf "line %d: no blank line after the heading\n", NR
+      else if (prev == "prose") printf "line %d: joins the line above into one paragraph\n", NR
+      else if (prev == "list" && k != "list") printf "line %d: no blank line after the list\n", NR
+      else if (prev == "fence") printf "line %d: no blank line after the code block\n", NR
+      if (inline_commands($0)) printf "line %d: a command or path in a sentence; put it in a code block\n", NR
+      prev = k
+    }' "$1"
+}
+# markdown_examples <file> <dir>: write each ```markdown or ````markdown block to <dir>/<line>.md,
+# named for the line of its opening fence.
+markdown_examples() {
+  rm -rf "$2" && mkdir -p "$2"
+  awk -v dir="$2" '
+    out == "" && /^```+markdown$/ { match($0, /^`+/); fence = substr($0, 1, RLENGTH); out = dir "/" NR ".md"; next }
+    out != "" && $0 == fence { close(out); out = ""; next }
+    out != "" { print > out }' "$1"
+}
+
+expect_eq "journal lint: the good fixture is clean" "" "$(journal_lint "$fixtures/journal/good.md")"
+bad_lint="$(journal_lint "$fixtures/journal/bad.md")"
+for problem in "no blank line after the heading" "joins the line above into one paragraph" \
+  "longer than 160 characters" "a command or path in a sentence"; do
+  expect_contains "journal lint: the bad fixture (the real 19:13 entry) gives: $problem" "$bad_lint" "$problem"
+done
+
+for f in "$journal_ref" "$issues_ref"; do
+  name="${f#"$plugin/"}"
+  ex_dir="$tmp_root/examples-$(basename "$f" .md)"
+  markdown_examples "$f" "$ex_dir"
+  n=0
+  for ex in "$ex_dir"/*.md; do
+    [[ -e "$ex" ]] || continue
+    n=$((n + 1))
+    expect_eq "docs: $name example at line $(basename "$ex" .md) keeps the entry format" "" "$(journal_lint "$ex")"
+  done
+  if [[ $n -ge 2 ]]; then pass "docs: $name holds the format and an example"; else fail "docs: $name holds the format and an example" "$n examples"; fi
+done
+journal_examples="$(cat "$tmp_root/examples-journal"/*.md 2>/dev/null)"
+expect_contains "docs: a journal example holds a command in a fenced block" "$journal_examples" '```bash'
+expect_contains "docs: a journal example holds a failed result" "$journal_examples" "**Result: failed**"
+expect_contains "docs: a journal example ends with the next step" "$journal_examples" "**Next:**"
+journal_format="$(sed -n '/^## Format/,/^## Measurements/p' "$journal_ref")"
+# shellcheck disable=SC2016 # the backticks and $ names are literal markdown
+for rule in "blank line" "160 characters" '`\`' '`$EDB`' '`$DOCS`' '`$TEST_DIR`' "**Result: failed**" "one bullet" "fenced block"; do
+  expect_contains "docs: the journal Format states the rule: $rule" "$journal_format" "$rule"
+done
+check_ref="$(sed -n '/^## The Check/,/^### The check subagent prompt/p' "$report_ref")"
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: the check logs its passes as one journal bullet" "$check_ref" 'one bullet in `<journal>`'
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "reference: the check puts each pass's details in <issues>" "$check_ref" 'details go to `<issues>`'
+
 arms_rule="$(sed -n '/^\*\*Parallel arms\.\*\*/,/^## /p' "$run_skill")"
 expect_contains "run: Parallel arms renders the overlays before Final Finalize" "$arms_rule" "overlay"
 expect_contains "run: Parallel arms releases the render arm" "$arms_rule" "release"

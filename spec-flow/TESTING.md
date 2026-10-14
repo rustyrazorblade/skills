@@ -67,7 +67,10 @@ Run these on a change, and only where the change touches them:
     also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
     `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
     section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
-    report file names, no plotting instruction, and the required sections. Those checks prove the
+    report file names, no plotting instruction, and the required sections. A `journal_lint`
+    function applies the entry format of `references/journal.md` (blank lines between blocks, 160
+    characters per line, commands only in fenced blocks) to each `markdown` example in `journal.md`
+    and `issues.md`, and to `fixtures/journal/good.md` and `bad.md`. Those checks prove the
     text, not the skill behavior. It also runs some `bash` blocks as written, under bash, against
     stubs: in `references/report.md`, the blocks under "### The SOCKS proxy" (against a stub
     wrapper and `.socks5-proxy-state`), "### Render" (the single-cluster render), and

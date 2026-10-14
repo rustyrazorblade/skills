@@ -25,24 +25,39 @@ Do not add entries for expected failures (e.g. CQL syntax errors from the user's
 ## <YYYY-MM-DD> — <session goal>
 
 ### Issue 1 — <short title>
+
 **What happened:** <one or two sentences describing the confusion or failure>
+
 **Expected:** <what the docs or skill implied would happen>
+
 **Actual:** <what actually happened>
+
 **Suggested fix:** <what should be updated in the skill or reference docs, and where>
 
 ### Issue 2 — <short title>
+
 ...
 ```
 
+Put a blank line after the heading and between the fields.  Markdown joins lines with no blank line between them into one paragraph.  Put a command in a fenced block after the fields, never inline in a sentence.  Keep each line to 160 characters or fewer.
+
 ## Example
 
-```markdown
-### Issue 1 — `cassandra stress start` flag name mismatch
+````markdown
+### Issue 1 — The stress start flag name does not match the CLI
+
 **What happened:** The plan said `--threads` but the CLI rejected it with "unknown flag".
-**Expected:** `cassandra stress start KeyValue --threads 100` to work.
+
+**Expected:** the command below to work.
+
 **Actual:** The correct flag is `--thread-count`.
+
 **Suggested fix:** Update cassandra.md stress section to use `--thread-count`.
+
+```bash
+$EDB cassandra stress start KeyValue --threads 100
 ```
+````
 
 ## What Happens to These Issues
 

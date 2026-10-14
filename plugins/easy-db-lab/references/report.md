@@ -320,6 +320,8 @@ Run the check after you write the summary, and before `make`.  It has four parts
 
 Each concern from the script, the review, or the subagent is a reason.  Fix it, or pass it to the gate as `--reason`.  If you fix a problem and re-check, run all four parts again.
 
+Do not write each pass in `<journal>`.  When the check is done, write all the passes as one bullet in `<journal>`, for example "**Check:** 5 passes; the final pass is clean.  Details are in `5-issues.md`."  The details go to `<issues>`.
+
 ### The check subagent prompt
 
 ```

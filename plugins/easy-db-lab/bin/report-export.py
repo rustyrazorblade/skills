@@ -18,10 +18,9 @@ colour.  It removes the writer's escape from a ( that opens no emoticon and from
 number, so "(MB/s)" and "+20.8%" stay readable.
 
 zip takes the pages that SUMMARY.md lists before "# Appendix" (the summary, the evidence, and
-nested evidence pages), plus every images/ and data/ file they reference.  A listed page outside
-docs/ fails the export.  The appendix (plan,
-journal, issues) is not in the zip.  A referenced file that does not exist fails the export, and
-no zip is written.
+nested evidence pages), plus every images/ and data/ file they reference.  The appendix (plan,
+journal, issues) is not in the zip.  A listed page outside docs/, or a referenced file that does
+not exist, fails the export, and no zip is written.
 """
 
 import argparse

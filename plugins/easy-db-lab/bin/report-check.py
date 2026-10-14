@@ -32,16 +32,18 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
   - redaction: no IPv4 address, EC2 host name such as ip-10-0-1-15, 12-digit account ID, vpc-,
-    subnet-, or sg- ID, or tunnel wording in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value
-    column, and a numeric stats table cell are measurements, not account IDs;
+    subnet-, or sg- ID, or tunnel wording in the customer tiers or in data/*.csv and
+    data/*.json.  A decimal number, the CSV value column, and a numeric stats table cell are
+    measurements, not account IDs;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
 
 Exit codes: 0 no FAIL; 1 a FAIL; 2 a usage or I/O error; 3 a redaction FAIL, in either mode.
 Without --gate it never edits a file.  With --gate, a non-redaction FAIL, or a --reason, writes
 or replaces the one "⚠ Unchecked: <reasons>" line under "## Caveats" in 1-summary.md and exits
-0.  The line numbers each reason: "⚠ Unchecked: (1) <reason> (2) <reason>".  A clean --gate run with no --reason removes a stale Unchecked line.  The rules are in the
-plugin's references/report.md.
+0.  The line numbers each reason: "⚠ Unchecked: (1) <reason> (2) <reason>".  A clean --gate
+run with no --reason removes a stale Unchecked line.  The rules are in the plugin's
+references/report.md.
 """
 
 import argparse

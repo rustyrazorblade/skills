@@ -21,7 +21,6 @@ ipv6-prefix	page.txt	the 2600:1f18:: block	the <ipv6> block
 ipv6-link-local	page.txt	via fe80::1ff:fe23:4567:890a on eth0	via <ipv6> on eth0
 ipv6-link-local-bare	page.txt	from fe80:: here	from <ipv6> here
 ipv6-loopback	page.txt	listen on ::1 only	listen on <ipv6> only
-ipv6-bracket-port	page.txt	http://[2600:1f18::1]:9042/ now	http://[<ipv6>]:9042/ now
 ipv6-mapped	page.txt	from ::ffff:10.0.1.15 here	from <ipv6> here
 ipv6-md	4-journal.md	Node at 2600:1f18::1 today.	Node at \<ipv6> today.
 ec2-public-dns	page.txt	ssh to ec2-54-12-34-56.compute-1.amazonaws.com now	ssh to <ec2-host> now
@@ -35,3 +34,47 @@ keep-hex-words	page.txt	deadbeef: cafe face: bad	=
 keep-ratio	page.txt	a 1:30 ratio and 3:1 odds	=
 ipv6-upper	page.txt	addr 2600:1F18::AB up	addr <ipv6> up
 keep-upper-scope	page.txt	Abc::Def and DD::AFTER stay	=
+# Local paths, AWS profiles, SSO start URLs, email, S3, host:port URLs, eni-/vol-/ami- IDs, dashed account IDs.
+home-mac	page.txt	cd /Users/jonathan.haddad/dev/lab/docs now	cd <local-path> now
+home-mac-bare	page.txt	owner /Users/jonathan.haddad here	owner <local-path> here
+home-linux	page.txt	cat /home/ubuntu/.bashrc now	cat <local-path> now
+ssh-dir	page.txt	ls ~/.ssh/id_ed25519 now	ls <local-path> now
+aws-dir	page.txt	read $HOME/.aws/config now	read <local-path> now
+key-flag	page.txt	scp -i keys/lab.pem file db0	scp -i <local-path> file db0
+key-flag-pem	page.txt	ssh -i lab-key.pem db0	ssh -i <local-path> db0
+keep-grep-i	page.txt	grep -i error and sort -i words	=
+home-md	4-journal.md	Docs live in /Users/jonathan.haddad/dev/lab.	Docs live in \<local-path>.
+profile-flag	page.txt	aws s3 ls --profile AccountUser-417835013894	aws s3 ls --profile <aws-profile>
+profile-flag-name	page.txt	aws sts get-caller-identity --profile lab-admin	aws sts get-caller-identity --profile <aws-profile>
+profile-flag-eq	page.txt	aws s3 ls --profile=lab-admin	aws s3 ls --profile=<aws-profile>
+profile-env	page.txt	export AWS_PROFILE=lab-admin	export AWS_PROFILE=<aws-profile>
+profile-env-quoted	page.txt	AWS_PROFILE="lab-admin" aws s3 ls	AWS_PROFILE="<aws-profile>" aws s3 ls
+keep-profile-var	page.txt	aws sso login --profile "$AWS_PROFILE"	=
+keep-profile-prose	page.txt	set AWS_PROFILE to the plan profile; the `--profile` flag	=
+account-user	page.txt	role AccountUser-417835013894 here	role <aws-profile> here
+sso-url	page.txt	start https://d-90670ab1cd.awsapps.com/start now	start <sso-url> now
+sso-url-bare	page.txt	start d-90670ab1cd.awsapps.com/start#/ now	start <sso-url> now
+email	page.txt	mail jon@example.com now	mail <email> now
+email-plus	page.txt	from jon.haddad+lab@sub.example.co.uk.	from <email>.
+keep-at-words	page.txt	@scope/pkg and a @mention and x @ y	=
+s3-url	page.txt	aws s3 cp s3://easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab/clusters/x/docs .	aws s3 cp <s3-url> .
+s3-bucket	page.txt	bucket easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab in	bucket <s3-bucket> in
+s3-vhost	page.txt	get https://my-bucket.s3.us-west-2.amazonaws.com/key now	get <s3-url> now
+s3-md	4-journal.md	Uploaded to s3://easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab/docs.	Uploaded to \<s3-url>.
+keep-command-name	page.txt	easy-db-lab status and easy-db-lab-docs	=
+service-host-port	page.txt	open control0:3000 now	open <service-url> now
+service-url	page.txt	open http://control0:3000/d/abc?x=1 now	open <service-url> now
+service-url-name	page.txt	open http://grafana:3000 now	open <service-url> now
+service-localhost	page.txt	curl localhost:9090/api now	curl <service-url> now
+service-fqdn	page.txt	at db0.lab.internal:9042 now	at <service-url> now
+service-ipv6	page.txt	http://[2600:1f18::1]:9042/ now	<service-url> now
+service-md	4-journal.md	Grafana at http://control0:3000 opened.	Grafana at \<service-url> opened.
+keep-docker-tag	page.txt	image cassandra:5.0 and postgres:16 and redis:7.2	=
+keep-label	page.txt	Note:30 items; Step 2: 10 nodes	=
+eni-id	page.txt	eni-0abc1234def567890 attached	<eni-id> attached
+vol-id	page.txt	vol-0abc1234def567890 attached	<volume-id> attached
+ami-id	page.txt	ami-0abc1234def567890 booted	<ami-id> booted
+dashed-account	page.txt	account 4178-3501-3894 here	account <account-id> here
+keep-uuid-digits	page.txt	label 896195de-1234-4567-8901-751612345678 here	=
+keep-date	page.txt	on 2026-10-14 at 10:00	=
+profile-then-arg	page.txt	aws --profile lab-admin s3 ls	aws --profile <aws-profile> s3 ls

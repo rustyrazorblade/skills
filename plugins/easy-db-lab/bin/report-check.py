@@ -74,16 +74,22 @@ _H6 = r"[0-9a-f]{1,4}"
 _IPV6 = (r"(?<![\w:.])(?=[\w:]*\d)(?:(?:" + _H6 + r":){7}" + _H6 + r"|" + _H6 + r"(?::" + _H6 + r"){0,6}::(?:" + _H6 + r"(?::" + _H6
          + r"){0,6})?|::" + _H6 + r"(?::" + _H6 + r"){0,6})(?![\w:])")
 _TUNNEL_WORD = r"(?:ssh -[LD](?:\s+[^\s`\"']+)?|tunnel(?:s|ed|ing)?|socks5h?|socks|tailscale|port-forward(?:ing)?)"
+# The rest of a path or a URL: no space, quote, or bracket, and no sentence stop at the end.
+_REST = r"(?:[^\s`\"'<>()\[\]]*[^\s`\"'<>()\[\].,;:!?])?"
+# A profile value that is a name, not a variable such as "$AWS_PROFILE", a flag, or a placeholder
+# that scan() has removed.
+_NAME = r"[\"']?((?![$<\-\x00])[^\s\"'`;)]+)"
 
 
 class Pattern:
-    """A regular expression: each match is one identifier."""
+    """A regular expression: each match is one identifier, or its group when group is set."""
 
-    def __init__(self, pattern, flags=0):
+    def __init__(self, pattern, flags=0, group=0):
         self.regex = re.compile(pattern, flags)
+        self.group = group
 
     def spans(self, text):
-        return [m.span() for m in self.regex.finditer(text)]
+        return [m.span(self.group) for m in self.regex.finditer(text)]
 
 
 class IPv4:
@@ -116,6 +122,23 @@ class PortNumbers:
 # one: a SOCKS URL holds its IPv4 address, and an IPv4 address holds its :port.
 REDACTION = [
     ("SOCKS proxy URL", Pattern(r"\bsocks5h?://[^\s`\"')]+", re.I), "socks-proxy"),
+    ("SSO start URL", Pattern(r"(?:https?://)?[\w-]+(?:\.[\w-]+)*\.awsapps\.com\b(?:/" + _REST + ")?", re.I), "sso-url"),
+    ("S3 URL", Pattern(r"\bs3://" + _REST + r"|(?:https?://)?[\w.-]+\.s3(?:[.-][\w-]+)*\.amazonaws\.com\b(?:/" + _REST + ")?",
+                       re.I), "s3-url"),
+    ("S3 bucket name", Pattern(r"\beasy-db-lab-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "s3-bucket"),
+    # A URL with a port, such as http://control0:3000/d/abc, or a host with a port: a host name
+    # with a digit or a dot, such as control0:3000 or db0.lab.internal:9042, or localhost.  A
+    # docker tag such as postgres:16 and a label such as Note:30 stay.
+    ("host:port service URL", Pattern(r"\b[a-z][a-z0-9+.-]*://(?:\[[0-9a-f:.]+\]|[\w.-]+):\d{1,5}\b(?:/" + _REST + r")?"
+                                      r"|(?<![\w.:/@-])(?:localhost|[a-z][\w-]*\d[\w-]*|[a-z][\w-]*(?:\.[\w-]+)+):\d{2,5}\b"
+                                      r"(?:/" + _REST + r")?", re.I), "service-url"),
+    ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
+    ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws)\b/?)" + _REST), "local-path"),
+    ("key file path", Pattern(r"(?<!\S)-i\s+([^\s`\"'<>]*(?:/|\.pem\b|\.key\b|\bid_[a-z0-9]+\b)" + _REST + ")", re.I, 1),
+     "local-path"),
+    ("AWS profile name", Pattern(r"--profile(?:=|\s+)" + _NAME, 0, 1), "aws-profile"),
+    ("AWS_PROFILE value", Pattern(r"\bAWS_PROFILE=" + _NAME, 0, 1), "aws-profile"),
+    ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),
     # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
     ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
     ("IPv4 address", IPv4(), "private-ip"),
@@ -125,11 +148,16 @@ REDACTION = [
     # last group of a UUID such as a cluster label.
     (ACCOUNT, Pattern(r"(?<!\d)(?<!\d\.)(?<![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-)\d{12}(?!\d)(?!\.\d)", re.I),
      "account-id"),
+    # The console form of an account ID, such as 4178-3501-3894; not a group of a UUID.
+    ("dashed account ID", Pattern(r"(?<![\w-])\d{4}-\d{4}-\d{4}(?![\w-])"), "account-id"),
     ("vpc- ID", Pattern(r"\bvpc-[0-9a-f]{8,17}\b"), "vpc-id"),
     ("subnet- ID", Pattern(r"\bsubnet-[0-9a-f]{8,17}\b"), "subnet-id"),
     ("sg- ID", Pattern(r"\bsg-[0-9a-f]{8,17}\b"), "sg-id"),
     ("igw- ID", Pattern(r"\bigw-[0-9a-f]{8,17}\b"), "igw-id"),
     ("i- ID", Pattern(r"\bi-[0-9a-f]{8,17}\b"), "instance-id"),
+    ("eni- ID", Pattern(r"\beni-[0-9a-f]{8,17}\b"), "eni-id"),
+    ("vol- ID", Pattern(r"\bvol-[0-9a-f]{8,17}\b"), "volume-id"),
+    ("ami- ID", Pattern(r"\bami-[0-9a-f]{8,17}\b"), "ami-id"),
     ("port number", PortNumbers(), "port"),
     ("tunnel wording", Pattern(r"\b" + _TUNNEL_WORD + r"\b(?:\s+" + _TUNNEL_WORD + r"\b)*", re.I), "tunnel"),
 ]
@@ -187,10 +215,11 @@ def without_measurements(rel, text):
 
 def scan(rel, text):
     """(kind, line number) for each infrastructure identifier that remains.  A placeholder is
-    not an identifier."""
+    not an identifier.  It becomes a NUL, not a space, so that "--profile <aws-profile> s3"
+    does not read s3 as the profile."""
     found = []
     for n, (line, words) in enumerate(without_measurements(rel, text), 1):
-        line, words = PLACEHOLDER.sub(" ", line), PLACEHOLDER.sub(" ", words)
+        line, words = PLACEHOLDER.sub("\x00", line), PLACEHOLDER.sub("\x00", words)
         for kind, pattern, _ in REDACTION:
             if pattern.spans(words if kind == ACCOUNT else line):
                 found.append((kind, n))

@@ -1847,7 +1847,8 @@ fi
 
 # The SSO session check in report-upload.md, run as written against a stub aws and a temp HOME.
 # The stub answers `configure get sso_session` and `configure get sso_start_url` from STUB_SESSION and
-# STUB_START_URL, and exits 1 for an empty value, as the real aws does for an unset key.
+# STUB_START_URL, and exits 1 for an empty value, as the real aws does for an unset key.  It answers
+# `sts get-caller-identity` with exit STUB_STS_RC.
 sso_step="$(first_bash_block "$upload_ref" "## The AWS SSO Session")"
 if [[ "$sso_step" == *"expiresAt"* ]]; then
   pass "upload: report-upload.md holds the SSO session check"
@@ -1859,6 +1860,9 @@ sso_home="$tmp_root/sso-home"
 mkdir -p "$sso_bin" "$sso_home/.aws/sso/cache"
 cat >"$sso_bin/aws" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$*" == "sts get-caller-identity --profile $STUB_PROFILE" ]]; then
+  exit "${STUB_STS_RC:-0}"
+fi
 [[ "$1 $2 $4 $5" == "configure get --profile $STUB_PROFILE" ]] || exit 2
 case "$3" in
   sso_session) v="${STUB_SESSION:-}" ;;
@@ -1869,37 +1873,64 @@ esac
 echo "$v"
 EOF
 chmod +x "$sso_bin/aws"
-# sso <session> <start url> <expiresAt or ""> : write the token cache for the key, run the step.
+# sso <session> <start url> <expiresAt or ""> [refresh|norefresh] [sts rc]: write the token cache
+# for the key, with secret token values, and run the step.
 sso() {
   rm -f "$sso_home/.aws/sso/cache/"*.json
-  local key="${1:-$2}"
-  [[ -z "$3" ]] || printf '{"expiresAt": "%s"}\n' "$3" \
+  local key="${1:-$2}" refresh=""
+  [[ "${4:-refresh}" == norefresh ]] || refresh=', "refreshToken": "SECRET-REFRESH-VALUE"'
+  [[ -z "$3" ]] || printf '{"accessToken": "SECRET-ACCESS-VALUE", "expiresAt": "%s"%s}\n' "$3" "$refresh" \
     >"$sso_home/.aws/sso/cache/$(printf %s "$key" | shasum -a 1 | cut -d' ' -f1).json"
   out="$(HOME="$sso_home" AWS_PROFILE=lab-user STUB_PROFILE=lab-user STUB_SESSION="$1" STUB_START_URL="$2" \
-    PATH="$sso_bin:$PATH" bash -c "$sso_step" 2>&1)"
+    STUB_STS_RC="${5:-0}" PATH="$sso_bin:$PATH" bash -c "$sso_step" 2>&1)"
 }
+sso_warn() { echo "SSO: WARN: the access token has $1 minutes left; the SDK refreshes it from the refresh token"; }
 in_2h="$(jq -nr 'now + 7230 | todate')"
 sso easy-db-lab "" "$in_2h"
-expect_eq "sso step: an sso_session profile gives the minutes left" "SSO: 120 minutes left" "$out"
+expect_eq "sso step: a refreshable session warns with the minutes left" "$(sso_warn 120)" "$out"
 sso easy-db-lab "" "${in_2h%Z}.220061Z"
-expect_eq "sso step: fractional seconds parse" "SSO: 120 minutes left" "$out"
+expect_eq "sso step: fractional seconds parse" "$(sso_warn 120)" "$out"
 sso "" "https://example.awsapps.com/start" "${in_2h%Z}UTC"
-expect_eq "sso step: a legacy start URL profile and a UTC suffix parse" "SSO: 120 minutes left" "$out"
+expect_eq "sso step: a legacy start URL profile and a UTC suffix parse" "$(sso_warn 120)" "$out"
+sso easy-db-lab "" "$(jq -nr 'now + 630 | todate')"
+expect_eq "sso step: 10 minutes left with a refresh token is a warning, not a stop" "$(sso_warn 10)" "$out"
 sso easy-db-lab "" "$(jq -nr 'now - 600 | todate')"
-expect_eq "sso step: an expired token gives 0 minutes" "SSO: 0 minutes left" "$out"
+expect_eq "sso step: an expired access token with a refresh token is a warning" "$(sso_warn 0)" "$out"
+sso easy-db-lab "" "$in_2h" norefresh
+# shellcheck disable=SC2016 # a literal $AWS_PROFILE in the step output
+expect_eq "sso step: no refresh token stops for a login" \
+  'SSO: STOP: no refresh token for lab-user; run aws sso login --profile "$AWS_PROFILE"' "$out"
+sso easy-db-lab "" "$in_2h" refresh 255
+# shellcheck disable=SC2016 # a literal $AWS_PROFILE in the step output
+expect_eq "sso step: an sts failure stops for a login" \
+  'SSO: STOP: aws sts get-caller-identity failed for lab-user; run aws sso login --profile "$AWS_PROFILE"' "$out"
 sso easy-db-lab "" ""
-expect_eq "sso step: no cached token gives 0 minutes" "SSO: no token for lab-user; 0 minutes left" "$out"
+# shellcheck disable=SC2016 # a literal $AWS_PROFILE in the step output
+expect_eq "sso step: no cached token stops for a login" \
+  'SSO: STOP: no token for lab-user; run aws sso login --profile "$AWS_PROFILE"' "$out"
 sso "" "" ""
 expect_eq "sso step: a profile with no SSO is named" "SSO: lab-user is not an SSO profile" "$out"
+sso easy-db-lab "" "$in_2h"
+expect_not_contains "sso step: prints no token value" "$out" "SECRET"
+sso easy-db-lab "" "$in_2h" norefresh
+expect_not_contains "sso step: a stop prints no token value" "$out" "SECRET"
 sso_ref="$(sed -n '/^## The AWS SSO Session/,/^## /p' "$upload_ref")"
 # shellcheck disable=SC2016 # a literal $AWS_PROFILE in the skill text
 expect_contains "upload: the SSO check names the login command" "$sso_ref" 'aws sso login --profile "$AWS_PROFILE"'
-expect_contains "upload: the SSO check says sts can pass on cached credentials" "$sso_ref" "get-caller-identity"
+expect_contains "upload: the SSO check names sts" "$sso_ref" "get-caller-identity"
+expect_contains "upload: a WARN never stops a run" "$sso_ref" "A WARN never stops a run"
+expect_contains "upload: an expired-token failure before an upload or a teardown stops with the cluster up" "$sso_ref" \
+  "Before each upload and each teardown"
+expect_contains "upload: the expired-token rule names ExpiredToken" "$sso_ref" "ExpiredToken"
+expect_contains "upload: an unattended expired-token stop reports CLUSTER STILL UP" "$sso_ref" "CLUSTER STILL UP"
+expect_contains "upload: the run resumes at the gate after the login" "$sso_ref" "resume at the gate"
+expect_not_contains "upload: no minutes-left stop rule" "$sso_ref" "If fewer minutes remain"
 # shellcheck disable=SC2016 # a literal $AWS_PROFILE in the reference text
 expect_eq "upload: every aws sso login names the profile" "" \
   "$(grep -n 'aws sso login' "$upload_ref" | grep -v 'aws sso login --profile "$AWS_PROFILE"')"
 for f in "$run_skill" "$explore_skill"; do
   expect_contains "docs: ${f#"$plugin/"} runs the SSO session check" "$(cat "$f")" '"The AWS SSO Session"'
+  expect_not_contains "docs: ${f#"$plugin/"} has no minutes-left stop" "$(cat "$f")" "real expiry"
 done
 
 mk="$(cat "$docs/Makefile" 2>/dev/null)"

@@ -71,7 +71,7 @@ Each `help <topic>` guide gives the intended command sequence for a topic.  Use 
 
 In the same `$EDB commands` output, check whether `report upload` is listed.  Record the result once.  If it is absent, follow the "Support Check" section of `../../references/report-upload.md`.  If there is no `docs/` directory, tell the user instead of writing the journal note.
 
-**Check the AWS SSO session.**  Before you provision or run a long workload, follow "The AWS SSO Session" in `../../references/report-upload.md`.  An expired token blocks the upload, and the upload gates teardown.  If there is no `docs/` directory, tell the user the minutes left instead of writing the journal note.
+**Check the AWS SSO session.**  Before you provision or run a long workload, follow "The AWS SSO Session" in `../../references/report-upload.md`.  A WARN line never stops the session; a STOP line needs `aws sso login`.  An expired session blocks the upload, and the upload gates teardown.  If there is no `docs/` directory, tell the user the output line instead of writing the journal note.
 
 **2. Check the directory state:**
 ```bash

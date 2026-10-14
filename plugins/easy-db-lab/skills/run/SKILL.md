@@ -171,7 +171,7 @@ If `STATE=provisioned`, run `$EDB status` to find the actual cluster state — i
 
 Read `<plan>` and display a numbered summary of all steps. If the user specified a starting step, confirm which step that is and skip to it.
 
-**Check the AWS SSO session.**  Before the first step runs, follow "The AWS SSO Session" in `../../references/report-upload.md`.  It reads the token's real expiry, and tells you when to ask for `aws sso login` before a long run.  Do this in a first run and in a resume.
+**Check the AWS SSO session.**  Before the first step runs, follow "The AWS SSO Session" in `../../references/report-upload.md`.  It warns with the access token's minutes left and never stops a run for them.  It stops only when the session cannot refresh or `sts` fails; then ask for `aws sso login`.  Before each upload and each teardown, an expired-session error stops the run with the cluster up, as that section says.  Do this in a first run and in a resume.
 
 **Set terminal context indicators.** After the cluster directory and layout are known, run these three commands to orient the user's terminal for the session:
 

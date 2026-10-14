@@ -35,31 +35,47 @@ $EDB commands | awk '{ match($0, /^ */); i = RLENGTH } r && i <= ri { r = 0 } u 
 
 ## The AWS SSO Session
 
-The upload needs a live AWS SSO token.  If the token expires during a run, the upload fails, and the gate keeps the cluster up.  `aws sts get-caller-identity` is not a valid check: it can pass on cached role credentials after the token expires.
+The upload needs a live AWS SSO session.  The cached access token lasts about one hour, but the SDK refreshes it from the refresh token for the whole Identity Center session, often 8 hours.  So the access token's minutes left do not limit a run.  `aws sts get-caller-identity` alone is not enough either: it can pass on cached role credentials.
 
-Before a run, read the token's real expiry from the SSO cache.  Use the profile that the session uses.  If `AWS_PROFILE` is not set, set it to the profile that the plan names.
+At the start of a run, run this step.  Use the profile that the session uses.  If `AWS_PROFILE` is not set, set it to the profile that the plan names.
 
 ```bash
 profile="${AWS_PROFILE:-default}"
 key="$(aws configure get sso_session --profile "$profile" || aws configure get sso_start_url --profile "$profile")"
 cache="$HOME/.aws/sso/cache/$(printf %s "$key" | shasum -a 1 | cut -d' ' -f1).json"
+login='run aws sso login --profile "$AWS_PROFILE"'
 if [[ -z "$key" ]]; then
   echo "SSO: $profile is not an SSO profile"
 elif [[ ! -f "$cache" ]]; then
-  echo "SSO: no token for $profile; 0 minutes left"
+  echo "SSO: STOP: no token for $profile; $login"
+elif ! jq -e 'has("refreshToken")' "$cache" >/dev/null; then
+  echo "SSO: STOP: no refresh token for $profile; $login"
+elif ! aws sts get-caller-identity --profile "$profile" >/dev/null 2>&1; then
+  echo "SSO: STOP: aws sts get-caller-identity failed for $profile; $login"
 else
-  jq -r '(.expiresAt | sub("\\.[0-9]+"; "") | sub("UTC$"; "Z") | fromdateiso8601) - now | [. / 60 | floor, 0] | max | "SSO: \(.) minutes left"' "$cache"
+  jq -r '(.expiresAt | sub("\\.[0-9]+"; "") | sub("UTC$"; "Z") | fromdateiso8601) - now | [. / 60 | floor, 0] | max | "SSO: WARN: the access token has \(.) minutes left; the SDK refreshes it from the refresh token"' "$cache"
 fi
 ```
 
-The step reads only the `expiresAt` field.  Never print or copy the token.  Write the minutes left in `<journal>`.
+The step reads only the key names and the `expiresAt` field of the cache.  Never print or copy a token value.  Write the output line in `<journal>`.
 
-Estimate the run time from the plan: add the step durations, then add 30 minutes for Finalize, the upload, and teardown.  If fewer minutes remain than that:
+- **WARN:** continue.  A WARN never stops a run on its own.
+- **STOP, interactive:** tell the user to run `aws sso login --profile "$AWS_PROFILE"`.  Run the step again after the login.
+- **STOP, unattended:** do not provision.  Report the STOP line to the launcher, and stop.
 
-- **Interactive:** tell the user to run `aws sso login --profile "$AWS_PROFILE"` before the run starts.  Run the step again after the login.
-- **Unattended:** do not provision.  Report "SSO token expires in N minutes" to the launcher, and stop.
+A legacy profile, with `sso_start_url` and no `sso_session`, gets no refresh token, so the step stops for it after every login.  Tell the user to configure an `sso-session` for the profile.
 
 If the profile is not an SSO profile, write that in `<journal>`, and skip this check.
+
+### An expired session at an upload or a teardown
+
+Before each upload and each teardown, watch the AWS calls.  If one fails with `ExpiredToken`, `ExpiredTokenException`, "Token has expired", or "The SSO session associated with this profile has expired", the session has ended:
+
+1. Stop with the cluster up.  Do not run `down`.
+2. Write the failure to `<journal>` and `<issues>`.
+3. Interactive: tell the user to run `aws sso login --profile "$AWS_PROFILE"`.
+4. Unattended: report "CLUSTER STILL UP: the AWS SSO session expired" to the launcher, with the workspace path.
+5. After the login, resume at the gate: run the upload again, then the teardown.  Do not re-run the check.
 
 ## Choose the Files
 
@@ -192,7 +208,7 @@ The CLI has two failure messages.  Both exit non-zero.
 
 Common causes:
 
-- **Expired AWS SSO session.**  The CLI retries before it fails, so this failure can be slow.  Tell the user to run `aws sso login --profile "$AWS_PROFILE"` and then retry.
+- **Expired AWS SSO session.**  The CLI retries before it fails, so this failure can be slow.  Follow "An expired session at an upload or a teardown", above.
 - **Invalid file name.**  A name must end in `.md` and use only letters, numbers, `.`, `_`, and `-`.
 - **Missing file.**  A file in the list does not exist.
 - **Stray `index.md`.**  The CLI reserves the name `index.md` for the index, so it rejects the batch.

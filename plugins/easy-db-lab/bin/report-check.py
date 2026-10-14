@@ -37,7 +37,8 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     home or key path, AWS profile name, SSO start URL, email address, or S3 URL or bucket name in
     the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
     a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
-    version such as JDK 11.0.20.1 is not an address.  report-export.py loads the same patterns
+    version after jdk, java, or openjdk, such as JDK 11.0.20.1, is not an address, unless it
+    is a private address or has a :port.  report-export.py loads the same patterns
     from this file;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
@@ -96,14 +97,20 @@ class Pattern:
 
 
 class IPv4:
-    """An IPv4 address, with its :port.  A dotted version such as JDK 11.0.20.1, v1.2.3.4, or
-    openjdk-11.0.20.1 is not one."""
+    """An IPv4 address, with its :port.  A dotted version such as JDK 11.0.20.1, java version
+    17.0.8.1, v1.2.3.4, or openjdk-11.0.20.1 is not one.  A quad after any other word, such as
+    cassandra or kernel, is an address.  A private address (10/8, 172.16/12, 192.168/16) and a
+    quad with a :port are always addresses, after a JDK word too."""
 
     ADDRESS = re.compile(r"(?<![\w.-])" + _IPV4 + r"(?::\d{1,5}\b)?")
-    VERSION = re.compile(r"\b(?:jdk|jre|java|openjdk|version|ver|release|build|kernel|python|cassandra)\s*[:=]?\s*$", re.I)
+    VERSION = re.compile(r"\b(?:jdk|java|openjdk)(?:\s+version)?\s+$", re.I)
+    PRIVATE = re.compile(r"^(?:10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.)")
+
+    def version(self, text, m):
+        return ":" not in m.group(0) and not self.PRIVATE.match(m.group(0)) and self.VERSION.search(text[:m.start()])
 
     def spans(self, text):
-        return [m.span() for m in self.ADDRESS.finditer(text) if not self.VERSION.search(text[:m.start()])]
+        return [m.span() for m in self.ADDRESS.finditer(text) if not self.version(text, m)]
 
 
 class PortNumbers:

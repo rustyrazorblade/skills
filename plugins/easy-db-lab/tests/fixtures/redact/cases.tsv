@@ -10,6 +10,18 @@ keep-openjdk-dash	page.txt	openjdk-11.0.20.1 here	=
 keep-v-version	page.txt	tool v1.2.3.4 here	=
 keep-version-md	1-summary.md	Cassandra 5.0.2 and JDK 11.0.20.1 ran.	=
 ipv4-still	page.txt	node at 10.0.1.15 now	node at <private-ip> now
+ipv4-after-cassandra	page.txt	seed node cassandra 10.0.1.15 is down	seed node cassandra <private-ip> is down
+ipv4-after-cassandra-colon	page.txt	Cassandra: 10.0.1.15	Cassandra: <private-ip>
+ipv4-after-restarted-cassandra	page.txt	Restarted cassandra 10.0.1.12 after the change	Restarted cassandra <private-ip> after the change
+ipv4-after-build	page.txt	The build 10.0.0.5 failed	The build <private-ip> failed
+ipv4-port-after-cassandra	page.txt	cqlsh reached cassandra 10.3.1.10:9042	cqlsh reached cassandra <private-ip>
+ipv4-public-after-release	page.txt	The release 44.248.231.207	The release <private-ip>
+ipv4-after-jdk-version	page.txt	JDK 11.0.20.1 on 10.0.1.15	JDK 11.0.20.1 on <private-ip>
+ipv4-private-after-jdk	page.txt	jdk 10.0.1.15	jdk <private-ip>
+ipv4-port-after-java	page.txt	java 54.12.34.56:9042	java <private-ip>
+ipv4-after-jdk-colon	page.txt	JDK: 11.0.20.1	JDK: <private-ip>
+ipv4-after-kernel	page.txt	kernel 5.15.0.1	kernel <private-ip>
+ipv4-after-python	page.txt	python 3.10.12.1	python <private-ip>
 keep-port-prose	page.txt	We port to 5 nodes next.	=
 keep-ports-prose	page.txt	The ports to 3 regions.	=
 port-still	page.txt	on port 1080 and ports 9042 and 7000	on port <port> and ports <port> and <port>

@@ -1570,6 +1570,18 @@ journal_format="$(sed -n '/^## Format/,/^## Measurements/p' "$journal_ref")"
 for rule in "blank line" "160 characters" '`\`' '`$EDB`' '`$DOCS`' '`$TEST_DIR`' "**Result: failed**" "one bullet" "fenced block"; do
   expect_contains "docs: the journal Format states the rule: $rule" "$journal_format" "$rule"
 done
+# A step's first entry gets its result, in the same entry or a follow-up entry that names the step.
+for f in "$run_skill" "$explore_skill" "$report_ref"; do
+  expect_eq "docs: ${f#"$plugin/"} writes no bare starting entry" "" "$(grep -n '+ "starting"' "$f")"
+done
+# shellcheck disable=SC2016 # the backticks are literal markdown
+run_step_journal="$(sed -n '/^\*\*2\. Write to `<journal>`/,/^\*\*3\. Execute/p' "$run_skill")"
+expect_contains "run: the step entry gets its result" "$run_step_journal" "follow-up entry that names the step"
+# shellcheck disable=SC2016 # the backticks are literal markdown
+expect_contains "run: the step entry points to journal.md" "$run_step_journal" '`../../references/journal.md`'
+# shellcheck disable=SC2016 # the backticks are literal markdown
+run_outcome="$(sed -n '/^\*\*5\. Update `<journal>` with outcome/,/^\*\*6\./p' "$run_skill")"
+expect_contains "run: the outcome names the step" "$run_outcome" "names the step"
 check_ref="$(sed -n '/^## The Check/,/^### The check subagent prompt/p' "$report_ref")"
 # shellcheck disable=SC2016 # the backticks are literal markdown
 expect_contains "reference: the check logs its passes as one journal bullet" "$check_ref" 'one bullet in `<journal>`'

@@ -229,7 +229,7 @@ Wait for the user to confirm before proceeding, unless the user has asked to ski
 
 **2. Write to `<journal>` — before running any commands**
 
-Immediately append a new entry: timestamp + step name + "starting". See `../../references/journal.md` for format.
+Immediately append a new entry with the timestamp and the step name, in the entry format of `../../references/journal.md`.  This entry starts the step, so it must get its result: in the same entry, or in a follow-up entry that names the step.
 
 **This is not part of the confirmation flow. It is required whether or not the user skips confirmations. Do not run any commands until this entry is written.**
 
@@ -268,7 +268,7 @@ Confirm the step succeeded. Always use `$EDB` (the full path wrapper), not the b
 
 **5. Update `<journal>` with outcome**
 
-Update the journal entry with the final outcome and any relevant output. If the step measured something (throughput, latency, compaction), run `report-graph.py fetch` and then `render` while the cluster is up, then `block`, and append the evidence block per `../../references/report.md`, before the next step.
+Write the final outcome and any relevant output, in the step's entry or in a follow-up entry that names the step. If the step measured something (throughput, latency, compaction), run `report-graph.py fetch` and then `render` while the cluster is up, then `block`, and append the evidence block per `../../references/report.md`, before the next step.
 
 **6. Proceed**
 

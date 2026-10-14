@@ -262,6 +262,8 @@ report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --p
 
 If the dashboard's cluster variable has another name, change `cluster=` to that name.
 
+`render` asks Grafana for the light theme, so the image matches the report page.  Do not add `--theme dark` to a report image.
+
 The image window is the block's measured window: the `start` and `end` in `data/<name>.json`, as absolute times.  A 24-hour test gets a 24-hour image.  Never use a fixed or default range.  Never use a relative range for a single-cluster render; only an overlay render uses one.
 
 `render` writes `images/<name>.png` only for a status 200 and a PNG body.  On any other result it exits non-zero, names the cause, and leaves an existing `images/<name>.png` as it was.

@@ -46,7 +46,7 @@ All paths are under `plugins/easy-db-lab/` unless stated.  Write each test befor
 
 - [x] 5.1 Write harness cases for `make` on the scaffold and on `docs-agree`: `report/index.html` is the summary; the sidebar shows Evidence, nested pages, and an Appendix with Plan, Journal, and Issues; the title is the summary H1; an empty H1 falls back; `lab.css` is linked and holds the sticky, zebra, badge, width, and print rules; all three outputs exist; `make` works with `EDB_LAB_BIN` and no plugin `bin/` on `PATH`; `make gate` runs.
 - [x] 5.2 Fix the Makefile template until 5.1 passes.
-- [ ] 5.3 Do one manual visual check of a built evidence page (right-aligned numbers, sticky header, zebra rows, verdict badge, print preview) and record the result in the PR.
+- [x] 5.3 Do one manual visual check of a built evidence page (right-aligned numbers, sticky header, zebra rows, verdict badge, print preview) and record the result in the PR.
 
 ## 6. Shared reference: references/report.md
 

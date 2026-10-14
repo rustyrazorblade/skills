@@ -1519,7 +1519,8 @@ done
 # journal_lint <file>: print one line per format problem in a journal or issues text, and nothing for
 # a clean text.  The rules are in references/journal.md "Format": a blank line between blocks, so
 # markdown never joins two lines into one paragraph; each line 160 characters or fewer; and no
-# command or absolute path in an inline code span, only in a fenced block.
+# command or absolute path in an inline code span, only in a fenced block.  A fence can be indented,
+# and closes on a line of at least as many backticks; a fence open at the end is a problem.
 journal_lint() {
   awk -v max=160 '
     function kind(l) { return l ~ /^#/ ? "heading" : l ~ /^ *([-*]|[0-9]+\.) / ? "list" : "prose" }
@@ -1534,10 +1535,10 @@ journal_lint() {
     }
     {
       if (length($0) > max) printf "line %d: longer than %d characters\n", NR, max
-      if (fence != "") { if ($0 == fence) { fence = ""; prev = "fence" }; next }
-      if ($0 ~ /^```/) {
+      if (fence != "") { if ($0 ~ "^ *" fence "`*[ \t]*$") { fence = ""; prev = "fence" }; next }
+      if ($0 ~ /^ *```/) {
         if (prev != "" && prev != "blank") printf "line %d: no blank line before the code block\n", NR
-        match($0, /^`+/); fence = substr($0, 1, RLENGTH); prev = "fence"; next
+        match($0, /`+/); fence = substr($0, RSTART, RLENGTH); fence_line = NR; prev = "fence"; next
       }
       if ($0 ~ /^[ \t]*$/) { prev = "blank"; next }
       k = kind($0)
@@ -1547,7 +1548,8 @@ journal_lint() {
       else if (prev == "fence") printf "line %d: no blank line after the code block\n", NR
       if (inline_commands($0)) printf "line %d: a command or path in a sentence; put it in a code block\n", NR
       prev = k
-    }' "$1"
+    }
+    END { if (fence != "") printf "line %d: unclosed code block\n", fence_line }' "$1"
 }
 # markdown_examples <file> <dir>: write each ```markdown or ````markdown block to <dir>/<line>.md,
 # named for the line of its opening fence.
@@ -1565,6 +1567,17 @@ for problem in "no blank line after the heading" "joins the line above into one 
   "longer than 160 characters" "a command or path in a sentence"; do
   expect_contains "journal lint: the bad fixture (the real 19:13 entry) gives: $problem" "$bad_lint" "$problem"
 done
+# A fence closes on a line of at least as many backticks, with leading and trailing spaces.  A fence
+# can be indented under a list item.  A fence still open at the end is a problem.
+while IFS='|' read -r fixture want; do
+  expect_eq "journal lint: bad-fence-$fixture.md gives: $want" "$want" \
+    "$(journal_lint "$fixtures/journal/bad-fence-$fixture.md")"
+done <<'EOF'
+trailing-space|line 6: no blank line after the code block
+longer-close|line 6: no blank line after the code block
+indented|line 9: no blank line after the code block
+unclosed|line 5: unclosed code block
+EOF
 
 for f in "$journal_ref" "$issues_ref"; do
   name="${f#"$plugin/"}"

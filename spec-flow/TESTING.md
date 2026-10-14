@@ -69,8 +69,9 @@ Run these on a change, and only where the change touches them:
     section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
     report file names, no plotting instruction, and the required sections. A `journal_lint`
     function applies the entry format of `references/journal.md` (blank lines between blocks, 160
-    characters per line, commands only in fenced blocks) to each `markdown` example in `journal.md`
-    and `issues.md`, and to `fixtures/journal/good.md` and `bad.md`. Those checks prove the
+    characters per line, commands only in fenced blocks, every fence closed) to each `markdown`
+    example in `journal.md` and `issues.md`, and to `fixtures/journal/good.md`, `bad.md`, and the
+    `bad-fence-*.md` fixtures. Those checks prove the
     text, not the skill behavior. It also runs some `bash` blocks as written, under bash, against
     stubs: in `references/report.md`, the blocks under "### The SOCKS proxy" (against a stub
     wrapper and `.socks5-proxy-state`), "### Render" (the single-cluster render), and

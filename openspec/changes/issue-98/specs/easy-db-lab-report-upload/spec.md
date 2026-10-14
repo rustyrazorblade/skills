@@ -282,3 +282,27 @@ In `LAYOUT=arms`, each arm's gate SHALL upload `3-plan-<arm>.md`, `4-journal-<ar
 - **WHEN** the coordinator runs `run <test-dir> --finalize`
 - **THEN** the upload holds `1-summary.md`, `2-evidence.md`, `3-plan.md`, every `3-plan-<arm>.md`, `4-journal.md`, `5-issues.md`, and every `4-journal-<arm>.md` and `5-issues-<arm>.md`, minus scaffold-only files
 - **AND** it runs through every arm's wrapper
+
+### Requirement: The AWS SSO session check warns and never strands a cluster
+
+Before it provisions, the skill SHALL run the SSO session check in `references/report-upload.md`.  The check SHALL read only key names and `expiresAt` from the profile's SSO cache entry, and SHALL NOT print or store any token value.  Because the SDK refreshes the cached access token from its refresh token for the whole Identity Center session, a short `expiresAt` SHALL produce a warning and SHALL NOT stop a run.  The check SHALL stop the run, and ask for `aws sso login --profile "$AWS_PROFILE"`, only when there is no cached token, no refresh token, or `aws sts get-caller-identity` fails; the stop line SHALL include the first line of the `sts` error.  Before each upload and each teardown, an expired-token or expired-SSO error SHALL stop the run with the cluster up: an interactive run asks for the login, and an unattended run reports CLUSTER STILL UP with the workspace path.  After the login, the run SHALL resume at the gate.
+
+#### Scenario: A short token with a refresh token only warns
+
+- **WHEN** the cached access token has 10 minutes left and the cache entry holds a refresh token
+- **THEN** the check prints a warning with the minutes left and the run continues
+
+#### Scenario: No refresh token stops the run
+
+- **WHEN** the cache entry holds no refresh token
+- **THEN** the check stops the run and asks for `aws sso login --profile "$AWS_PROFILE"`
+
+#### Scenario: An sts failure stops the run with its cause
+
+- **WHEN** `aws sts get-caller-identity` fails
+- **THEN** the check stops the run and its stop line includes the first line of the error
+
+#### Scenario: An expired session at the upload keeps the cluster up
+
+- **WHEN** an upload fails with an expired-token error in an unattended run
+- **THEN** the skill runs no `down` and reports CLUSTER STILL UP with the workspace path

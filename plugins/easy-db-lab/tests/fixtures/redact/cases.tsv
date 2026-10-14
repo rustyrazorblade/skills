@@ -90,6 +90,9 @@ service-url-name	page.txt	open http://grafana:3000 now	open <service-url> now
 service-localhost	page.txt	curl localhost:9090/api now	curl <service-url> now
 service-fqdn	page.txt	at db0.lab.internal:9042 now	at <service-url> now
 service-ipv6	page.txt	http://[2600:1f18::1]:9042/ now	<service-url> now
+service-ipv6-loopback-bracket	page.txt	listen on [::1]:9042 now	listen on <service-url> now
+service-ipv6-bracket	page.txt	peer [2600:1f18::1]:7000 up	peer <service-url> up
+ipv6-bracket-no-port	page.txt	bind [::1] only	bind [<ipv6>] only
 service-md	4-journal.md	Grafana at http://control0:3000 opened.	Grafana at \<service-url> opened.
 keep-docker-tag	page.txt	image cassandra:5.0 and postgres:16 and redis:7.2	=
 keep-label	page.txt	Note:30 items; Step 2: 10 nodes	=

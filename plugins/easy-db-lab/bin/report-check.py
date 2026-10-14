@@ -137,10 +137,12 @@ REDACTION = [
                        re.I), "s3-url"),
     ("S3 bucket name", Pattern(r"\beasy-db-lab-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "s3-bucket"),
     # A URL with a port, such as http://control0:3000/d/abc, or a host with a port: a host name
-    # with a digit or a dot, such as control0:3000 or db0.lab.internal:9042, or localhost.  A
-    # docker tag such as postgres:16 and a label such as Note:30 stay.
+    # with a digit or a dot, such as control0:3000 or db0.lab.internal:9042, localhost, or a
+    # bracketed IPv6 address such as [::1]:9042.  A docker tag such as postgres:16 and a label
+    # such as Note:30 stay.
     ("host:port service URL", Pattern(r"\b[a-z][a-z0-9+.-]*://(?:\[[0-9a-f:.]+\]|[\w.-]+):\d{1,5}\b(?:/" + _REST + r")?"
-                                      r"|(?<![\w.:/@-])(?:localhost|[a-z][\w-]*\d[\w-]*|[a-z][\w-]*(?:\.[\w-]+)+):\d{2,5}\b"
+                                      r"|(?<![\w.:/@-])(?:localhost|[a-z][\w-]*\d[\w-]*|[a-z][\w-]*(?:\.[\w-]+)+"
+                                      r"|\[[0-9a-f:.]*:[0-9a-f:.]*\]):\d{2,5}\b"
                                       r"(?:/" + _REST + r")?", re.I), "service-url"),
     ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
     ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws)\b/?)" + _REST), "local-path"),

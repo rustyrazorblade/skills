@@ -1,65 +1,324 @@
 /* House theme for the easy-db-lab lab report.  book.toml loads it through additional-css.
-   Badge colours are Okabe-Ito, a colour-blind-safe palette. */
+
+   The theme uses neutral greys and one accent colour.  The greys are mixed from mdbook's own --fg
+   and --bg, so the light, rust, coal, navy, and ayu themes all get matching shades.
+
+   Verdict badges use darker shades of the Okabe-Ito palette, which is colour-blind-safe.  Each
+   badge also carries its text label and a symbol, so a verdict never depends on colour alone.
+   Every badge text passes WCAG AA (4.5:1) on its badge colour. */
 
 :root {
   --content-max-width: 1100px;
+  --mono-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --code-font-size: 0.875em;
+
+  --lab-radius: 12px;
+  --lab-radius-small: 8px;
+  --lab-card-pad: 1.5em;
 }
 
+/* html:not(.js) is mdbook's no-JavaScript fallback to light.  It must not also match a dark theme
+   class, because it is more specific than .navy and would force the light colours onto it. */
+.light,
+.rust,
+html:not(.js):not(.coal, .navy, .ayu) {
+  --fg: #1f2328;
+  --lab-accent: #2563eb;
+}
+
+.coal,
+.navy,
+.ayu {
+  --lab-accent: #60a5fa;
+}
+
+.light,
+.rust,
+.coal,
+.navy,
+.ayu,
+html:not(.js) {
+  --links: var(--lab-accent);
+  --sidebar-active: var(--lab-accent);
+  --inline-code-color: var(--fg);
+
+  --lab-muted: color-mix(in srgb, var(--fg) 68%, var(--bg));
+  --lab-border: color-mix(in srgb, var(--fg) 13%, var(--bg));
+  --lab-rule: color-mix(in srgb, var(--fg) 9%, var(--bg));
+  --lab-surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
+  --lab-zebra: color-mix(in srgb, var(--fg) 2%, var(--bg));
+  --lab-hover: color-mix(in srgb, var(--lab-accent) 6%, var(--bg));
+  --lab-card-bg: var(--bg);
+  --lab-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+/* --- Typography --- */
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.content main {
+  line-height: 1.65;
+  padding-block-end: 4em;
+}
+
+.content p,
+.content ol,
+.content ul {
+  line-height: 1.65;
+}
+
+/* Prose keeps a readable line length; tables and evidence cards use the full column. */
+.content main > p,
+.content main > ul,
+.content main > ol {
+  max-width: 78ch;
+}
+
+.content h1 {
+  font-size: 2.1em;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-block: 1.2em 0.5em;
+}
+
+.content h2 {
+  font-size: 1.45em;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-block: 2.2em 0.6em;
+}
+
+.content h3 {
+  font-size: 1.15em;
+  font-weight: 650;
+  margin-block: 1.8em 0.5em;
+}
+
+.content :not(pre) > code {
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  background: var(--lab-surface);
+  overflow-wrap: anywhere;
+}
+
+/* --- Summary page: the title and the verdict line lead the page --- */
+
+.content main > h1 + p:has(> .verdict) {
+  font-size: 1.15em;
+  max-width: none;
+  margin-block: 0 1.6em;
+  padding: 0.9em 1.1em;
+  border: 1px solid var(--lab-border);
+  border-radius: var(--lab-radius);
+  background: var(--lab-surface);
+}
+
+/* --- Tables --- */
+
 /* mdbook wraps each table in .table-wrapper.  A bounded wrapper scrolls on its own, so the
-   sticky header stays in view on a long stats table. */
+   sticky header stays in view on a long stats table.  The wrapper also clips the round corners. */
 .content .table-wrapper {
   max-height: 75vh;
   overflow: auto;
+  margin-block: 1em 1.4em;
+  border: 1px solid var(--lab-border);
+  border-radius: var(--lab-radius-small);
 }
 
 .content table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.92em;
   font-variant-numeric: tabular-nums;
 }
 
-/* The whole thead sticks, so mdbook's collapsed thead row border sticks with it. */
+/* Thin horizontal rules only, no vertical lines. */
+.content table td,
+.content table th {
+  padding: 0.55em 0.9em;
+  border: 0;
+  border-bottom: 1px solid var(--lab-rule);
+  vertical-align: baseline;
+}
+
+.content tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The whole thead sticks.  A collapsed border does not stick, so the header rule is a shadow. */
 .content thead {
   position: sticky;
   top: 0;
   z-index: 1;
+  background: none;
+}
+
+.content thead tr {
+  border: 0;
 }
 
 .content thead th {
-  background: var(--table-header-bg);
-}
-
-.content tbody tr:nth-child(even) {
-  background: var(--table-alternate-bg);
-}
-
-.verdict {
-  display: inline-block;
-  padding: 0.1em 0.6em;
-  border-radius: 0.8em;
+  background: var(--lab-surface);
+  box-shadow: inset 0 -1px 0 var(--lab-border);
+  color: var(--lab-muted);
+  font-size: 0.82em;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
+/* A faint stripe, so the eye can follow a long row. */
+.content tbody tr:nth-child(even) {
+  background: var(--lab-zebra);
+}
+
+.content tbody tr:hover {
+  background: var(--lab-hover);
+}
+
+/* --- Verdict badges --- */
+
+.verdict {
+  display: inline-block;
+  padding: 0.12em 0.7em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.verdict::before {
+  margin-inline-end: 0.35em;
+}
+
 .verdict-confirmed {
-  background: #009E73;
+  background: #007A5E;
   color: #ffffff;
 }
 
+.verdict-confirmed::before {
+  content: "\2713";
+}
+
 .verdict-refuted {
-  background: #D55E00;
+  background: #B5470B;
   color: #ffffff;
+}
+
+.verdict-refuted::before {
+  content: "\2715";
 }
 
 .verdict-inconclusive {
   background: #E69F00;
-  color: #000000;
+  color: #1f2328;
+}
+
+.verdict-inconclusive::before {
+  content: "?";
 }
 
 .verdict-partial {
-  background: #999999;
-  color: #000000;
+  background: #D1D5DB;
+  color: #1f2328;
 }
 
+.verdict-partial::before {
+  content: "\25D0";
+}
+
+/* --- Evidence blocks as cards ---
+
+   mdbook writes an evidence block as flat siblings: an h2, one image paragraph per image, a
+   .table-wrapper, then the Window, Query, and Data paragraphs.  CSS cannot wrap siblings, so each
+   sibling draws its part of one card: the h2 draws the top, every member draws the sides, and the
+   last member draws the bottom.
+
+   An evidence heading is an h2 with an image paragraph right after it.  A member is a sibling
+   after the first evidence heading, up to the trailing sections (such as Threats to validity):
+   an h2 with no evidence heading at or after it. */
+
+.content main > h2:has(+ p > img),
+.content main > h2:has(+ p > img) ~ h2:has(~ h2 + p > img) {
+  margin: 2em 0 0;
+  /* The heading font is 1.3 times larger, so its side pad is divided by 1.3 to line up. */
+  padding: 0.8em calc(var(--lab-card-pad) / 1.3) 0.4em;
+  border: 1px solid var(--lab-border);
+  border-bottom: 0;
+  border-radius: var(--lab-radius) var(--lab-radius) 0 0;
+  background: var(--lab-card-bg);
+  font-size: 1.3em;
+}
+
+.content main > h2:has(+ p > img) ~ :not(h1, h2):not(main > h2:not(:has(+ p > img)):not(:has(~ h2 + p > img)) ~ *) {
+  max-width: none;
+  margin: 0;
+  padding: 0.4em var(--lab-card-pad);
+  border-inline: 1px solid var(--lab-border);
+  border-radius: 0;
+  background: var(--lab-card-bg);
+}
+
+.content main > h2:has(+ p > img) ~ :not(h1, h2):not(main > h2:not(:has(+ p > img)):not(:has(~ h2 + p > img)) ~ *):is(:has(+ h2), :last-child) {
+  padding-block-end: 1.2em;
+  border-bottom: 1px solid var(--lab-border);
+  border-radius: 0 0 var(--lab-radius) var(--lab-radius);
+  box-shadow: var(--lab-shadow);
+}
+
+/* A Grafana render (1200px by default) fills the card, with a light frame.  The image is never
+   scaled up past its own width. */
+.content main > p:has(> img) img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-radius-small);
+  background: #ffffff;
+}
+
+/* In a card the card draws the frame, so the stats table wrapper draws only the card sides.  The
+   member rule above holds only type selectors, so this rule must repeat the margin and radius to
+   beat .content .table-wrapper. */
+.content main > h2:has(+ p > img) ~ .table-wrapper:not(main > h2:not(:has(+ p > img)):not(:has(~ h2 + p > img)) ~ *) {
+  margin: 0;
+  border-block: 0;
+  border-radius: 0;
+  padding-block: 0.6em 0.4em;
+}
+
+/* The Window, Query, and Data lines are quiet: smaller, muted, and tight. */
+.content main > h2:has(+ p > img) ~ .table-wrapper ~ p:not(main > h2:not(:has(+ p > img)):not(:has(~ h2 + p > img)) ~ *) {
+  padding-block: 0.1em;
+  color: var(--lab-muted);
+  font-size: 0.85em;
+  line-height: 1.55;
+}
+
+.content main > h2:has(+ p > img) ~ .table-wrapper + p:not(main > h2:not(:has(+ p > img)):not(:has(~ h2 + p > img)) ~ *) {
+  padding-block-start: 0.5em;
+}
+
+/* --- Print --- */
+
 @media print {
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .content .table-wrapper {
     max-height: none;
     overflow: visible;
@@ -69,11 +328,16 @@
     position: static;
   }
 
+  .content tbody tr:hover {
+    background: none;
+  }
+
   /* A stats table must fit the page width, so print cells are tighter and smaller. */
   .content table {
     width: 100%;
     font-size: 0.8em;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .content table td,
@@ -84,6 +348,22 @@
   .content img {
     max-width: 100%;
     page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* No shadows on paper.  A card heading stays with its image, and an image with its table. */
+  .content main > * {
+    box-shadow: none !important;
+  }
+
+  .content main > h2:has(+ p > img) ~ :not(h1, h2) {
+    break-inside: avoid;
+  }
+
+  .content main > h2,
+  .content main > p:has(> img) {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .verdict {

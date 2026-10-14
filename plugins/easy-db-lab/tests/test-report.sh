@@ -111,6 +111,8 @@ expect_contains "scaffold: book.toml src is the docs dir" "$toml" 'src = "."'
 expect_contains "scaffold: book.toml builds into report/" "$toml" 'build-dir = "report"'
 expect_contains "scaffold: book.toml wires lab.css" "$toml" 'additional-css = ["lab.css"]'
 expect_contains "scaffold: book.toml drops section numbers" "$toml" 'no-section-label = true'
+expect_contains "scaffold: book.toml opens in the light theme" "$toml" 'default-theme = "light"'
+expect_contains "scaffold: book.toml keeps the light theme on a dark OS, to match the light renders" "$toml" 'preferred-dark-theme = "light"'
 
 expect_contains "scaffold: Makefile names the plugin bin" "$(cat "$docs/Makefile" 2>/dev/null)" "EDB_LAB_BIN ?= $bin"
 expect_not_contains "scaffold: no placeholder is left in the Makefile" "$(cat "$docs/Makefile" 2>/dev/null)" "@EDB_LAB_BIN@"
@@ -153,6 +155,13 @@ for v in confirmed refuted inconclusive partial; do
 done
 expect_contains "css: wider content column" "$css" "--content-max-width"
 expect_contains "css: print styles" "$css" "@media print"
+expect_contains "css: system UI font stack" "$css" "-apple-system, BlinkMacSystemFont"
+expect_contains "css: numeric cells use tabular figures" "$css" "font-variant-numeric: tabular-nums"
+expect_contains "css: an evidence block reads as a card" "$css" "h2:has(+ p > img)"
+expect_contains "css: the Window, Query, and Data lines are muted" "$css" ".table-wrapper ~ p"
+expect_contains "css: the dark themes get their own card colours" "$css" ".navy"
+expect_contains "css: print keeps a heading with its image" "$css" "break-after: avoid"
+expect_contains "css: print drops shadows" "$css" "box-shadow: none"
 
 # --- setup-cluster.sh: --docs-only, wrapper guards, and the source-checkout guard ---
 

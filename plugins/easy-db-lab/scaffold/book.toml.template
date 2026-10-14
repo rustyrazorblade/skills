@@ -8,3 +8,6 @@ build-dir = "report"
 [output.html]
 additional-css = ["lab.css"]
 no-section-label = true
+# The Grafana renders are light, so the report opens light, also on a dark OS.  The reader can still pick a dark theme.
+default-theme = "light"
+preferred-dark-theme = "light"

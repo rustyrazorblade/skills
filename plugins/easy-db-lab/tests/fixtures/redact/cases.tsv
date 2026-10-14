@@ -3,3 +3,14 @@
 overlap-ssh-ipv4	page.txt	ssh -L 9042:10.0.0.1:9042 db0	<tunnel> db0
 overlap-ssh-localhost	page.txt	ssh -L 8080:localhost:9042 db0	<tunnel> db0
 overlap-ssh-md	4-journal.md	Ran ssh -L 9042:10.0.0.1:9042 db0 once.	Ran \<tunnel> db0 once.
+# A version string and prose about porting stay; a real address and port still go.
+keep-jdk-version	page.txt	JDK 11.0.20.1 on every node	=
+keep-java-version	page.txt	java version 17.0.8.1 here	=
+keep-openjdk-dash	page.txt	openjdk-11.0.20.1 here	=
+keep-v-version	page.txt	tool v1.2.3.4 here	=
+keep-version-md	1-summary.md	Cassandra 5.0.2 and JDK 11.0.20.1 ran.	=
+ipv4-still	page.txt	node at 10.0.1.15 now	node at <private-ip> now
+keep-port-prose	page.txt	We port to 5 nodes next.	=
+keep-ports-prose	page.txt	The ports to 3 regions.	=
+port-still	page.txt	on port 1080 and ports 9042 and 7000	on port <port> and ports <port> and <port>
+port-changed	page.txt	port changed from 1080 to 52764	port changed from <port> to <port>

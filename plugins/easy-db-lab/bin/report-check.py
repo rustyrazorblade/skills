@@ -80,12 +80,25 @@ class Pattern:
         return [m.span() for m in self.regex.finditer(text)]
 
 
+class IPv4:
+    """An IPv4 address, with its :port.  A dotted version such as JDK 11.0.20.1, v1.2.3.4, or
+    openjdk-11.0.20.1 is not one."""
+
+    ADDRESS = re.compile(r"(?<![\w.-])" + _IPV4 + r"(?::\d{1,5}\b)?")
+    VERSION = re.compile(r"\b(?:jdk|jre|java|openjdk|version|ver|release|build|kernel|python|cassandra)\s*[:=]?\s*$", re.I)
+
+    def spans(self, text):
+        return [m.span() for m in self.ADDRESS.finditer(text) if not self.VERSION.search(text[:m.start()])]
+
+
 class PortNumbers:
     """Each number in a port phrase: "port 1080", "localhost:1080", and "port changed from 1080
-    to 52764".  Only the numbers are identifiers; the words stay."""
+    to 52764".  Only the numbers are identifiers; the words stay.  A phrase starts with a number
+    or a LEAD word, so "port to 5 nodes" is prose, not a port."""
 
-    FILLER = r"(?:changed|moved|went|from|to|and|or|was|is|now|then|number|before|after)"
-    PHRASE = re.compile(r"\bports?(?:\s+(?:" + FILLER + r"|\d{1,5})\b)+|\blocalhost:\d{1,5}\b", re.I)
+    LEAD = r"(?:changed|moved|went|was|is|now|then|number|before|after)"
+    FILLER = r"(?:" + LEAD + r"|from|to|and|or)"
+    PHRASE = re.compile(r"\bports?(?=\s+(?:" + LEAD + r"|\d{1,5})\b)(?:\s+(?:" + FILLER + r"|\d{1,5})\b)+|\blocalhost:\d{1,5}\b", re.I)
     NUMBER = re.compile(r"\d+")
 
     def spans(self, text):
@@ -97,7 +110,7 @@ class PortNumbers:
 # one: a SOCKS URL holds its IPv4 address, and an IPv4 address holds its :port.
 REDACTION = [
     ("SOCKS proxy URL", Pattern(r"\bsocks5h?://[^\s`\"')]+", re.I), "socks-proxy"),
-    ("IPv4 address", Pattern(_IPV4 + r"(?::\d{1,5}\b)?"), "private-ip"),
+    ("IPv4 address", IPv4(), "private-ip"),
     ("EC2 host name", Pattern(r"\bip-(?:\d{1,3}-){3}\d{1,3}\b"), "ec2-host"),
     # Twelve digits that are not part of a decimal number such as 214748364800.0, and not the
     # last group of a UUID such as a cluster label.

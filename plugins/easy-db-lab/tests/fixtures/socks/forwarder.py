@@ -4,8 +4,8 @@ Usage: python3 forwarder.py <port-file> <connect-log>
 
 It binds 127.0.0.1 on a free port and writes the port to <port-file>.  It appends one line per
 CONNECT to <connect-log>: the target as host:port.  It accepts only the no-auth method and the
-CONNECT command, with an IPv4 or a domain-name target, as socks5h sends.  Stdlib only, so it needs
-no uv environment.
+CONNECT command, with an IPv4 or a domain-name target, as socks5h sends.  A CONNECT that cannot
+reach its target gets reply 05, connection refused.  Stdlib only, so it needs no uv environment.
 """
 
 import socket
@@ -63,7 +63,11 @@ class Handler(socketserver.BaseRequestHandler):
             return
         with open(log_path, "a") as log:
             log.write(f"{host}:{port}\n")
-        upstream = socket.create_connection((host, port))
+        try:
+            upstream = socket.create_connection((host, port))
+        except OSError:
+            client.sendall(b"\x05\x05\x00\x01" + b"\x00" * 6)
+            return
         client.sendall(b"\x05\x00\x00\x01" + b"\x00" * 6)
         t = threading.Thread(target=pipe, args=(upstream, client), daemon=True)
         t.start()

@@ -578,6 +578,22 @@ expect_contains "fetch: a live --proxy request gets to Mimir" "$(cat "$mimir_log
 stop_mimir
 rm -f "$gdocs/data/via-proxy.csv" "$gdocs/data/via-proxy.json"
 
+# The stub forwarder refuses a CONNECT to a closed port with SOCKS5 reply 05, connection refused,
+# and does not drop the client.  The client prints the reply field, or "closed" for no reply.
+start_socks
+reply="$(python3 - "${socks_proxy##*:}" <<'EOF' 2>&1
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5)
+s.sendall(b"\x05\x01\x00")
+s.recv(2)
+s.sendall(b"\x05\x01\x00\x01" + socket.inet_aton("127.0.0.1") + (1).to_bytes(2, "big"))
+r = s.recv(10)
+print(f"{r[1]:02x}" if len(r) >= 2 else "closed")
+EOF
+)"
+stop_socks
+expect_eq "socks stub: a CONNECT to a closed port gets reply 05, connection refused" "05" "$reply"
+
 # --- report-graph.py render ---
 
 grafana_pid=""

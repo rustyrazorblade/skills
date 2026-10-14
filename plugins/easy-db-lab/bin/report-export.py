@@ -285,9 +285,10 @@ def zip_report(docs, out):
     if not mdbook:
         die("mdbook is required but not on PATH")
     env = dict(os.environ)
-    # make passes the summary H1 as the book title; it is redacted like the pages.
+    # make passes the summary H1 as the book title; it is redacted like the pages.  mdbook
+    # escapes the title as plain text, so the placeholder takes no markdown escape.
     if "MDBOOK_BOOK__TITLE" in env:
-        env["MDBOOK_BOOK__TITLE"] = redact("title.md", env["MDBOOK_BOOK__TITLE"]).strip()
+        env["MDBOOK_BOOK__TITLE"] = redact("title.txt", env["MDBOOK_BOOK__TITLE"]).strip()
     shutil.rmtree(html, ignore_errors=True)
     built = subprocess.run([mdbook, "build", "--dest-dir", html, staged], env=env, capture_output=True, text=True)
     if built.returncode != 0:

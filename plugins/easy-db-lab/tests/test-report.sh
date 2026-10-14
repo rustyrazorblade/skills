@@ -1486,6 +1486,10 @@ xj="$(cat "$sx/4-journal.html" 2>/dev/null)"
 for p in private-ip ec2-host account-id vpc-id subnet-id sg-id igw-id instance-id port socks-proxy tunnel; do
   expect_contains "zip: the journal holds the <$p> placeholder" "$xj" "&lt;$p&gt;"
 done
+# In a code block mdbook shows text as written, so a placeholder there takes no markdown escape.
+xj_code="$(sed -n '/<pre>/,/<\/pre>/p' "$sx/4-journal.html" 2>/dev/null)"
+expect_contains "zip: the journal code block holds PROXY=<socks-proxy>" "$xj_code" 'PROXY=&lt;socks-proxy&gt;'
+expect_not_contains "zip: no code block placeholder has a backslash" "$xj_code" '\&lt;'
 expect_contains "zip: an issues page port becomes a placeholder" "$(cat "$sx/5-issues.html" 2>/dev/null)" 'changed from &lt;port&gt; to &lt;port&gt;'
 # book_text <dir>: what a reader sees in the extracted book: each page's <main>, the search index,
 # and the data files, less the placeholders and the heading ids.  mdbook's own scripts and styles
@@ -1536,6 +1540,22 @@ expect_no_file "build: report/ holds no book.toml" "$sws/docs/report/book.toml"
 expect_file "build: report/ keeps its images" "$sws/docs/report/images/scrape-alloc.png"
 expect_file "build: report/ keeps its data" "$sws/docs/report/data/scrape-alloc.csv"
 expect_no_file "zip: the shareable book holds no book.toml" "$sx/book.toml"
+
+# make passes the summary H1 to mdbook as the book title, so the title is redacted too.  The
+# check fails such an H1, so this runs build and export without it.
+tws="$tmp_root/make-share-title"
+bash "$bin/setup-cluster.sh" "$tws" "$stub_edb" --name make-share-title >/dev/null 2>&1
+fixture_docs "$tws/docs" share-book
+perl -pi -e 's/^# .*/# Scrape allocation rises on 10.0.1.15/ if $. == 1' "$tws/docs/1-summary.md"
+make -s -C "$tws/docs" build export >/dev/null 2>&1
+expect_eq "zip: a summary H1 with an identifier exports" "0" "$?"
+twx="$tmp_root/make-share-title-extract"
+mkdir -p "$twx"
+unzip -q "$tws/docs/export/report.zip" -d "$twx" 2>/dev/null
+expect_eq "zip: the extracted <title> shows the placeholder" "<title>Summary - Scrape allocation rises on &lt;private-ip&gt;</title>" \
+  "$(grep -o '<title>[^<]*</title>' "$twx/index.html" 2>/dev/null)"
+expect_eq "zip: the extracted menu title shows the placeholder" 'menu-title">Scrape allocation rises on &lt;private-ip&gt;' \
+  "$(grep -o 'menu-title">[^<]*' "$twx/index.html" 2>/dev/null)"
 
 # A value the replace step misses fails the export, and the error names the file and line.
 lws="$tmp_root/make-share-leftover"

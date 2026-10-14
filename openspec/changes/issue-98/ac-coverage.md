@@ -14,7 +14,8 @@ Spec files: `L` = `specs/easy-db-lab-lab-report/spec.md`, `U` = `specs/easy-db-l
 | AC: Scaffold | Printing uses the print styles | L: "Printing uses the print styles" | ✅ Covered |
 | AC: Exports | `make` on a sample tree produces `export/jira.txt` and `export/report.zip` | L: "make produces the exports" | ✅ Covered |
 | AC: Exports | `jira.txt` holds the summary tier in wiki markup; images by file name | L: "jira.txt holds the summary tier" | ✅ Covered |
-| AC: Exports | `report.zip` holds summary, evidence, nested pages, images, CSV; no plan, journal, issues | L: "report.zip holds only the customer tiers" | ✅ Covered |
+| AC: Exports (changed by redirect 4) | `report.zip` is the shareable themed HTML book of every page, the appendix included, built from a redacted copy | L: "report.zip is the shareable book", "The shareable book is redacted", "A value the redaction misses fails the export" | ✅ Covered |
+| Owner (redirect 4) | The shareable book shows `easy-db-lab` in place of `$EDB`, `${EDB}`, and `$EDB_<ARM>` | L: "The shareable book names the command plainly" | ✅ Covered |
 | AC: Graph (changed by redirect 2) | The image in `docs/images/` is a Grafana panel render that `render` downloads, for the same metric and window, through the render API | L: "A render writes the panel PNG", "An ISO window becomes epoch milliseconds", "A relative range passes through", "The block cites the rendered image" | ✅ Covered |
 | AC: Graph (removed by redirect 2) | Baseline and candidate arms get their fixed role colours | None | ⚠️ Excluded: the owner removed custom rendering at Seam 1 (redirect 2); the colours are the Grafana panel's own |
 | AC: Graph | Mimir unreachable or no series: non-zero exit, clear message, no empty PNG | L: "Mimir is unreachable", "The query returns no series", "Empty input prints no block" | ✅ Covered |

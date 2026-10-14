@@ -489,7 +489,7 @@ When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, S
 
 ### Requirement: make builds the book and the exports
 
-`Makefile.template` SHALL define `all: check build export`, plus `build`, `check`, `export`, `gate`, `serve`, and `clean`.  `setup-cluster.sh` SHALL write `EDB_LAB_BIN ?= <absolute plugin bin>` into the Makefile, with `PATH` as the fallback.  `make` SHALL produce `report/index.html`, `export/jira.txt`, and `export/report.zip`.  `bin/report-export.py` SHALL be a uv-runnable PEP 723 script.  `jira` SHALL write the summary tier in Atlassian wiki markup, through pandoc from `pypandoc-binary`, with each image referenced by file name for manual attachment, `.md` links turned into text, and the verdict span mapped to a colour.  `zip` SHALL take the summary and evidence pages listed before `# Appendix` in `SUMMARY.md`, plus every `images/` and `data/` file they reference.  It SHALL exclude the appendix.  A missing referenced file SHALL fail the build.
+`Makefile.template` SHALL define `all: check build export`, plus `build`, `check`, `export`, `gate`, `serve`, and `clean`.  `setup-cluster.sh` SHALL write `EDB_LAB_BIN ?= <absolute plugin bin>` into the Makefile, with `PATH` as the fallback.  `make` SHALL produce `report/index.html`, `export/jira.txt`, and `export/report.zip`.  `bin/report-export.py` SHALL be a uv-runnable PEP 723 script.  `jira` SHALL write the summary tier in Atlassian wiki markup, through pandoc from `pypandoc-binary`, with each image referenced by file name for manual attachment, `.md` links turned into text, and the verdict span mapped to a colour.  `zip` SHALL produce the shareable book: the rendered HTML book of every page that `SUMMARY.md` lists, the appendix included, built with the house theme from a redacted copy.  It SHALL copy every listed page, and every `images/` and `data/` file they reference, into a staging tree under `export/`.  In the staged copy, it SHALL replace each infrastructure identifier (IPv4 addresses, EC2 host names such as `ip-10-0-1-15`, 12-digit account IDs, `vpc-`, `subnet-`, `sg-`, `igw-`, and `i-` IDs, and tunnel and SOCKS details) with a fixed placeholder that names its kind, for example `<private-ip>` or `<vpc-id>`.  In the same step, it SHALL replace the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with the plain command name `easy-db-lab`.  It SHALL then run the redaction check over the whole staged copy, and SHALL fail the build if any identifier remains.  It SHALL build the book from the staged copy with mdbook and zip the built HTML as `export/report.zip`, so that opening `index.html` from the extracted zip shows the themed book with working images and links.  The local `report/` book and the uploaded tier files SHALL keep the unredacted record.  A missing referenced file SHALL fail the build.
 
 #### Scenario: make produces the exports
 
@@ -502,11 +502,28 @@ When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, S
 - **THEN** it holds the summary tier in Atlassian wiki markup
 - **AND** each image is referenced by file name, for example `!scrape-alloc.png!`
 
-#### Scenario: report.zip holds only the customer tiers
+#### Scenario: report.zip is the shareable book
 
-- **WHEN** `report.zip` is listed
-- **THEN** it holds `1-summary.md`, `2-evidence.md`, any nested evidence pages, and their images and CSV
-- **AND** it holds no `3-plan.md`, `4-journal.md`, or `5-issues.md`
+- **WHEN** `report.zip` is extracted and its `index.html` is opened
+- **THEN** it shows the themed HTML book with every page that `SUMMARY.md` lists, the appendix included
+- **AND** every image and data link in it resolves inside the extracted tree
+
+#### Scenario: The shareable book is redacted
+
+- **WHEN** a journal page holds an IPv4 address, an EC2 host name, a VPC ID, and a SOCKS port
+- **THEN** the pages in `report.zip` hold the placeholders, for example `<private-ip>` and `<vpc-id>`, and none of the original values
+- **AND** the local `report/` book and `4-journal.md` still hold the original values
+
+#### Scenario: The shareable book names the command plainly
+
+- **WHEN** a journal page holds `$EDB status`, `"${EDB}" down --auto-approve`, and `$EDB_BASELINE report upload`
+- **THEN** the pages in `report.zip` show `easy-db-lab status`, `"easy-db-lab" down --auto-approve`, and `easy-db-lab report upload`
+- **AND** the local `report/` book still holds the variables
+
+#### Scenario: A value the redaction misses fails the export
+
+- **WHEN** the staged copy still holds an infrastructure identifier after the replacement step
+- **THEN** `make export` exits non-zero and names the file and the line
 
 #### Scenario: A missing referenced image fails the build
 

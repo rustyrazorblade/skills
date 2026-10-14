@@ -1222,6 +1222,13 @@ for name in redact-ok-big-value redact-ok-journal redact-ok-version redact-ok-cl
   expect_not_contains "check: $name has no redaction FAIL" "$check_out" "FAIL: redaction"
 done
 
+# The replace step, one line at a time: each kind, the overlap rule, and the text that stays.
+cases_out="$(python3 "$here/redact-cases.py" "$checker" "$fixtures/redact/cases.tsv" 2>&1)"
+[[ -n "$cases_out" ]] || fail "redact: the cases ran" "no output"
+while IFS=$'\t' read -r verdict name detail; do
+  if [[ "$verdict" == ok ]]; then pass "redact: $name"; else fail "redact: $name" "$verdict $detail"; fi
+done <<<"$cases_out"
+
 # SUMMARY.md: a customer page outside docs/ is a FAIL, and ./page and page are one page.
 outside_docs="$tmp_root/outside/docs"
 fixture_docs "$outside_docs" summary-outside

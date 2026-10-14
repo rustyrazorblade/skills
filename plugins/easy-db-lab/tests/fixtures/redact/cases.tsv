@@ -1,0 +1,5 @@
+# name	file	input	expected (= for unchanged).  Run by redact-cases.py.
+# Overlapping matches: one placeholder covers the whole overlap.
+overlap-ssh-ipv4	page.txt	ssh -L 9042:10.0.0.1:9042 db0	<tunnel> db0
+overlap-ssh-localhost	page.txt	ssh -L 8080:localhost:9042 db0	<tunnel> db0
+overlap-ssh-md	4-journal.md	Ran ssh -L 9042:10.0.0.1:9042 db0 once.	Ran \<tunnel> db0 once.

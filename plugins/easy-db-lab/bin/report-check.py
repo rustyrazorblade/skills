@@ -93,8 +93,8 @@ class PortNumbers:
                 for m in self.PHRASE.finditer(text) for n in self.NUMBER.finditer(m.group(0))]
 
 
-# (kind, pattern, placeholder).  An earlier kind wins an overlap: a SOCKS URL holds its IPv4
-# address, and an IPv4 address holds its :port.
+# (kind, pattern, placeholder).  Matches that overlap merge under the placeholder of the widest
+# one: a SOCKS URL holds its IPv4 address, and an IPv4 address holds its :port.
 REDACTION = [
     ("SOCKS proxy URL", Pattern(r"\bsocks5h?://[^\s`\"')]+", re.I), "socks-proxy"),
     ("IPv4 address", Pattern(_IPV4 + r"(?::\d{1,5}\b)?"), "private-ip"),
@@ -176,20 +176,28 @@ def scan(rel, text):
 
 
 def _replace(segment, placeholder, protected, offset):
-    """Replace each identifier in segment, in one pass over the original text.  An earlier kind
-    wins an overlap, so a SOCKS URL keeps its IPv4 address inside one placeholder.  The account
-    pattern keeps a measurement cell; protected spans are line offsets, and segment starts at
-    offset in the line."""
-    chosen = []
-    for kind, pattern, name in REDACTION:
+    """Replace each identifier in segment, in one pass over the original text.  Matches that
+    overlap merge, and one placeholder covers the merged text: the placeholder of the widest
+    match, or of the earlier kind when two are as wide.  So "ssh -L 9042:10.0.0.1:9042" becomes
+    one <tunnel>.  The account pattern keeps a measurement cell; protected spans are line
+    offsets, and segment starts at offset in the line."""
+    found = []
+    for rank, (kind, pattern, name) in enumerate(REDACTION):
         for start, end in pattern.spans(segment):
             if kind == ACCOUNT and any(a <= offset + start < b for a, b in protected):
                 continue
-            if any(start < e and s < end for s, e, _ in chosen):
-                continue
-            chosen.append((start, end, name))
+            found.append((start, end, rank, name))
+    chosen = []
+    for start, end, rank, name in sorted(found):
+        if chosen and start < chosen[-1][1]:
+            s, e, widest = chosen[-1]
+            if (end - start, -rank) > widest[0]:
+                widest = ((end - start, -rank), name)
+            chosen[-1] = (s, max(e, end), widest)
+        else:
+            chosen.append((start, end, ((end - start, -rank), name)))
     out, last = [], 0
-    for start, end, name in sorted(chosen):
+    for start, end, (_, name) in chosen:
         out.append(WRAPPER.sub(COMMAND, segment[last:start]))
         out.append(placeholder(name))
         last = end

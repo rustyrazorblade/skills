@@ -1226,6 +1226,9 @@ AWS access key ID|data/latency-baseline.json|AWS access key ID|AKIAIOSFODNN7EXAM
 bearer token|1-summary.md|bearer token|eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0|- The probe sent `Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0`.
 Basic token|2-evidence.md|Basic auth credentials|YWRtaW46c2VjcmV0|The probe sent `Authorization: Basic YWRtaW46c2VjcmV0`.
 Grafana token|evidence/latency.md|Grafana service account token|glsa_AbCdEf0123456789|The probe used `glsa_AbCdEf0123456789`.
+CQL password|1-summary.md|CQL password|s3cr3t-role|- The setup ran `CREATE USER lab WITH PASSWORD 's3cr3t-role'`.
+clickhouse password|2-evidence.md|clickhouse password|s3cr3t-ch|The probe ran `clickhouse-client --password s3cr3t-ch`.
+password pair in a CSV|data/scrape-alloc.csv|password pair|s3cr3t-csv|GF_SECURITY_ADMIN_PASSWORD=s3cr3t-csv
 EOF
 
 # A secret in an evidence Query line is a redaction FAIL too.
@@ -1255,6 +1258,20 @@ expect_contains "check: the s3:// URL WARN names the kind, the file, and the lin
 expect_contains "check: the bucket WARN names the kind, the file, and the line" "$out" "WARN: redaction: S3 bucket name in data/scrape-alloc.json line $jline"
 expect_not_contains "check: the bucket WARN does not show the value" "$out" "$bucket"
 expect_not_contains "check: a bucket name is no FAIL" "$out" "FAIL"
+
+# A secret and a bucket name in one summary: the secret is a FAIL and exits 3, and the bucket is
+# still a WARN.
+d="$tmp_root/check-secret-and-bucket"
+rm -rf "$d"
+fixture_docs "$d"
+# shellcheck disable=SC2016 # the backticks are a literal markdown code span
+printf '\n- The report is in s3://%s/docs.\n- The probe ran `cqlsh -p s3cr3t-both db0`.\n' "$bucket" >> "$d/1-summary.md"
+bline="$(grep -nF -- "$bucket" "$d/1-summary.md" | cut -d: -f1)"
+pline="$(grep -nF -- s3cr3t-both "$d/1-summary.md" | cut -d: -f1)"
+out="$("$checker" "$d" 2>&1)"
+expect_eq "check: a secret and a bucket name in the summary exit 3" "3" "$?"
+expect_contains "check: the secret is a FAIL beside the bucket" "$out" "FAIL: redaction: cqlsh password in 1-summary.md line $pline"
+expect_contains "check: the bucket is a WARN beside the secret" "$out" "WARN: redaction: S3 URL in 1-summary.md line $bline"
 
 # Infrastructure identifiers are not redacted: in the summary, an evidence Query line, and data/,
 # they are no finding, and the files keep them as written.
@@ -1648,6 +1665,20 @@ expect_contains "zip: the leftover warning names a secret kind" "$out" "WARN: re
 expect_contains "zip: the built HTML leftover is a warning too" "$out" "WARN: redaction: cqlsh password in 4-journal.html line"
 expect_not_contains "zip: the leftover warning does not show the value" "$out" "s3cr3t-cql"
 expect_file "zip: a leftover secret still writes the zip" "$lws/docs/export/report.zip"
+
+# A CQL password in the summary: the export redacts it in the shareable book.
+bash "$bin/setup-cluster.sh" "$tmp_root/export-cql" "$stub_edb" --name export-cql >/dev/null 2>&1
+cd_docs="$tmp_root/export-cql/docs"
+fixture_docs "$cd_docs" share-book
+printf "\n- The setup ran \`CREATE USER lab WITH PASSWORD 's3cr3t-role'\`.\n" >> "$cd_docs/1-summary.md"
+out="$("$exporter" zip "$cd_docs" "$tmp_root/export-cql/report.zip" 2>&1)"
+expect_eq "zip: a summary with a CQL password exports" "0" "$?"
+cqx="$tmp_root/export-cql/extract"
+mkdir -p "$cqx"
+unzip -q "$tmp_root/export-cql/report.zip" -d "$cqx" 2>/dev/null
+expect_contains "zip: the CQL password becomes the placeholder" "$(cat "$cqx/1-summary.html" 2>/dev/null)" \
+  "CREATE USER lab WITH PASSWORD '&lt;password&gt;'"
+expect_not_contains "zip: no CQL password in the extracted book" "$(book_text "$cqx")" "s3cr3t-role"
 
 # A staged file name is not redacted, so a bucket name in one is a warning, and the zip is written.
 bash "$bin/setup-cluster.sh" "$tmp_root/export-name" "$stub_edb" --name export-name >/dev/null 2>&1

@@ -7,6 +7,11 @@ overlap-bearer-glsa	page.txt	Authorization: Bearer glsa_AbCdEf0123456789AbCdEf01
 # S3 bucket names and URLs.
 s3-bucket	page.txt	bucket easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab in	bucket <s3-bucket> in
 s3-vhost	page.txt	get https://my-bucket.s3.us-west-2.amazonaws.com/key now	get <s3-url> now
+s3-path-style	page.txt	get https://s3.us-west-2.amazonaws.com/my-bucket/key now	get <s3-url> now
+s3-path-style-global	page.txt	get s3.amazonaws.com/my-bucket/key now	get <s3-url> now
+keep-s3-endpoint	page.txt	the endpoint https://s3.us-west-2.amazonaws.com is up	=
+s3-arn	page.txt	grant arn:aws:s3:::my-bucket/docs/* to the role	grant arn:aws:s3:::<s3-bucket>/docs/* to the role
+s3-arn-bare	page.txt	"Resource": "arn:aws:s3:::my-bucket"	"Resource": "arn:aws:s3:::<s3-bucket>"
 keep-command-name	page.txt	easy-db-lab status and easy-db-lab-docs	=
 # Infrastructure identifiers are not redacted: each one stays as written.
 keep-ipv4	page.txt	node at 10.0.1.15 now	=
@@ -45,10 +50,18 @@ aws-secret-ini	page.txt	aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEX
 aws-secret-short	page.txt	aws_secret_access_key=abc123	aws_secret_access_key=<aws-secret>
 aws-secret-40	page.txt	secret wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY here	secret <aws-secret> here
 aws-secret-json	page.txt	"SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"	"SecretAccessKey": "<aws-secret>"
+aws-secret-json-short	page.txt	"SecretAccessKey": "abc123short",	"SecretAccessKey": "<aws-secret>",
+aws-access-key-json	page.txt	"AccessKeyId": "ASIAY34FZKBOKMUTVV7A",	"AccessKeyId": "<aws-access-key>",
+aws-secret-s3a	page.txt	--conf spark.hadoop.fs.s3a.secret.key=abc123short	--conf spark.hadoop.fs.s3a.secret.key=<aws-secret>
+aws-access-key-s3a	page.txt	fs.s3a.access.key=lab-key-id	fs.s3a.access.key=<aws-access-key>
+keep-s3a-var	page.txt	fs.s3a.secret.key=$AWS_SECRET fs.s3a.access.key=${KEY}	=
 keep-secret-prose	page.txt	the secret is safe in the vault	=
 keep-secret-var	page.txt	aws_secret_access_key="$AWS_SECRET"	=
 aws-session-token-env	page.txt	export AWS_SESSION_TOKEN=IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLXdlc3QtMiJHMEUCIQ+abc=	export AWS_SESSION_TOKEN=<aws-session-token>
 aws-session-token-ini	page.txt	aws_session_token = IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLXdlc3QtMiJHMEUCIQ+abc=	aws_session_token = <aws-session-token>
+aws-session-token-json	page.txt	"SessionToken": "IQoJb3JpZ2luX2VjEJr//abc=",	"SessionToken": "<aws-session-token>",
+aws-session-token-s3a	page.txt	fs.s3a.session.token=IQoJb3JpZ2luX2VjEJr//abc=	fs.s3a.session.token=<aws-session-token>
+keep-session-token-prose	page.txt	the SessionToken field expires	=
 keep-session-token-var	page.txt	aws_session_token="$AWS_SESSION_TOKEN"	=
 # Bearer, Basic, and Grafana service account tokens.
 bearer-token	page.txt	Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc123	Authorization: Bearer <token>
@@ -79,6 +92,20 @@ nodetool-pw-quoted-space	page.txt	nodetool -u cassandra -pw "my s3cr3t" status	n
 nodetool-password	page.txt	nodetool --password s3cr3t status	nodetool --password <password> status
 keep-nodetool-port	page.txt	nodetool -p 7199 status	=
 keep-nodetool-pw-var	page.txt	nodetool -pw "$JMX_PASSWORD" status	=
+# CQL passwords: CREATE or ALTER USER or ROLE, with PASSWORD 'x' or PASSWORD = 'x', in any case.
+cql-create-user	page.txt	CREATE USER lab WITH PASSWORD 's3cr3t' SUPERUSER;	CREATE USER lab WITH PASSWORD '<password>' SUPERUSER;
+cql-alter-user	page.txt	ALTER USER lab WITH PASSWORD 'my s3cr3t';	ALTER USER lab WITH PASSWORD '<password>';
+cql-create-role	page.txt	CREATE ROLE r WITH LOGIN = true AND PASSWORD = 's3cr3t';	CREATE ROLE r WITH LOGIN = true AND PASSWORD = '<password>';
+cql-alter-role	page.txt	ALTER ROLE r WITH PASSWORD = 's3cr3t';	ALTER ROLE r WITH PASSWORD = '<password>';
+cql-lowercase	page.txt	create user lab with password 's3cr3t';	create user lab with password '<password>';
+cql-md	1-summary.md	Ran `CREATE USER lab WITH PASSWORD 's3cr3t'` once.	Ran `CREATE USER lab WITH PASSWORD '<password>'` once.
+keep-cql-placeholder	page.txt	ALTER ROLE r WITH PASSWORD = '<password>';	=
+keep-cql-prose	page.txt	Create a user and set a password with the role.	=
+# clickhouse-client passwords: --password VALUE and --password=VALUE.
+clickhouse-client-password	page.txt	clickhouse-client --host db0 --password s3cr3t --query 'SELECT 1'	clickhouse-client --host db0 --password <password> --query 'SELECT 1'
+clickhouse-client-subcommand	page.txt	clickhouse client --password s3cr3t	clickhouse client --password <password>
+clickhouse-client-password-eq	page.txt	clickhouse-client --password=s3cr3t	clickhouse-client --password=<password>
+keep-clickhouse-password-var	page.txt	clickhouse-client --password "$CH_PASSWORD"	=
 # curl and URL credentials: the user stays and the password goes.
 curl-u	page.txt	curl -u admin:s3cr3t http://grafana/api	curl -u admin:<password> http://grafana/api
 curl-u-quoted	page.txt	curl -u "admin:s3cr3t" http://grafana/api	curl -u "admin:<password>" http://grafana/api

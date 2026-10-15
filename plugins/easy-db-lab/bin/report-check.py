@@ -32,11 +32,13 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
   - redaction, in the customer tiers and in data/*.csv and data/*.json: a secret is a redaction
-    FAIL, and an S3 bucket name or s3:// URL is a WARN.  A secret is a password (cqlsh -p or
-    --password, nodetool -pw or --password, curl -u or --user, the user info of a URL, or a
-    password= or password: pair), an AWS access key ID, secret key, or session token, or a
-    Bearer, Basic, or Grafana service account token.  Each FAIL and WARN names the kind, the
-    file, and the line, and not the value.  IP addresses and other infrastructure identifiers
+    FAIL, and an S3 bucket name, an S3 ARN, or an S3 URL is a WARN.  A secret is a password
+    (cqlsh -p or --password, nodetool -pw or --password, clickhouse-client --password, curl -u
+    or --user, the user info of a URL, CQL WITH PASSWORD 'x', or a password= or password:
+    pair), an AWS access key ID, secret key, or session token (also as aws sts JSON or Spark
+    fs.s3a keys), or a Bearer, Basic, or Grafana service account token.  Each FAIL and WARN
+    names the kind, the file, and the line, and not the value; every FAIL and WARN is redacted
+    before it is printed.  IP addresses and other infrastructure identifiers
     are not redacted and are no finding.  The appendix is not scanned.  report-export.py loads
     the same patterns from this file;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
@@ -82,6 +84,8 @@ _VALUE = (r"(?:\"" + _NOT_SECRET + r"([^\"\n]+)\"|'" + _NOT_SECRET + r"([^'\n]+)
 # The key of a password pair: password, passwd, or a name that ends in one, such as
 # GF_SECURITY_ADMIN_PASSWORD or adminPassword.
 _KEY = r"[\w.-]*(?:password|passwd)"
+# The value of an AWS key: KEY=VALUE, KEY: VALUE, or "KEY": "VALUE".
+_AWS_VALUE = r"[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)"
 
 
 class Pattern:
@@ -104,18 +108,24 @@ class Pattern:
 # (kind, pattern, placeholder).  Matches that overlap merge under the placeholder of the widest
 # one: an s3:// URL holds its bucket name.
 BUCKETS = [
-    ("S3 URL", Pattern(r"\bs3://" + _REST + r"|(?:https?://)?[\w.-]+\.s3(?:[.-][\w-]+)*\.amazonaws\.com\b(?:/" + _REST + ")?",
-                       re.I), "s3-url"),
-    ("S3 bucket name", Pattern(r"\beasy-db-lab-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "s3-bucket"),
+    # An s3:// URL, a virtual-hosted URL, and a path-style URL, whose path starts with the bucket.
+    # A bare regional endpoint holds no bucket and stays.
+    ("S3 URL", Pattern(r"\bs3://" + _REST + r"|(?:https?://)?[\w.-]+\.s3(?:[.-][\w-]+)*\.amazonaws\.com\b(?:/" + _REST + ")?"
+                       r"|(?:https?://)?(?<![\w.-])s3(?:[.-][\w-]+)*\.amazonaws\.com/" + _REST, re.I), "s3-url"),
+    # An easy-db-lab bucket name, and the bucket of an S3 ARN, such as arn:aws:s3:::my-bucket/key.
+    ("S3 bucket name", Pattern(r"\beasy-db-lab-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
+                               r"|\barn:aws[\w-]*:s3:::([a-z0-9][a-z0-9.-]*[a-z0-9])", re.I, 1), "s3-bucket"),
 ]
 SECRETS = [
     # A secret is the value after aws_secret_access_key, or 40 base64 characters after a secret
     # word; a session token is the value after aws_session_token.  A bearer token is 16 or more
     # token characters, so "a Bearer token" stays, and it does not end in a period.
-    ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "aws-access-key"),
-    ("AWS secret access key", Pattern(r"\baws_secret_access_key[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
+    # Each key has three names: the CLI and env name, the JSON name of aws sts, and the Spark
+    # (Hadoop S3A) name.
+    ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bfs\.s3a\.access\.key" + _AWS_VALUE, 0, 1), "aws-access-key"),
+    ("AWS secret access key", Pattern(r"\b(?:aws_secret_access_key|SecretAccessKey|fs\.s3a\.secret\.key)" + _AWS_VALUE, re.I, 1),
      "aws-secret"),
-    ("AWS session token", Pattern(r"\baws_session_token[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
+    ("AWS session token", Pattern(r"\b(?:aws_session_token|SessionToken|fs\.s3a\.session\.token)" + _AWS_VALUE, re.I, 1),
      "aws-session-token"),
     ("AWS secret key", Pattern(r"secret[\w-]*[\"']?\s*[=:]?\s*[\"']?([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+])", re.I, 1),
      "aws-secret"),
@@ -126,6 +136,11 @@ SECRETS = [
     # The -p of nodetool is a port.
     ("cqlsh password", Pattern(r"\bcqlsh\b[^\n|;&]*?(?<!\S)(?:-p\s*|--password(?:=|\s+))" + _VALUE, 0, 1), "password"),
     ("nodetool password", Pattern(r"\bnodetool\b[^\n|;&]*?(?<!\S)(?:-pw\s+|--password(?:=|\s+))" + _VALUE, 0, 1), "password"),
+    ("clickhouse password", Pattern(r"\bclickhouse(?:-client|\s+client)\b[^\n|;&]*?(?<!\S)--password(?:=|\s+)" + _VALUE, 0, 1),
+     "password"),
+    # The quoted password of CQL CREATE or ALTER USER or ROLE: WITH PASSWORD 'x', or
+    # AND PASSWORD = 'x'.  The prose "set a password" stays.
+    ("CQL password", Pattern(r"\b(?:WITH|AND)\s+PASSWORD\s*=?\s*'" + _NOT_SECRET + r"([^'\n]+)'", re.I, 1), "password"),
     # The password of curl -u user:pass and --user user:pass, quoted or bare.  The user stays.
     ("curl password", Pattern(r"\bcurl\b[^\n|;&]*?(?<!\S)(?:-u\s*|--user(?:=|\s+))(?:\"[^\s:\"$]*:" + _NOT_SECRET + r"([^\"\n]+)\""
                               r"|'[^\s:'$]*:" + _NOT_SECRET + r"([^'\n]+)'|[^\s:\"'$]+:" + _NOT_SECRET + r"([^\s\"'`]+))", 0, 1),
@@ -260,7 +275,10 @@ class Report:
     def ok(self, msg):
         print(f"PASS: {msg}")
 
+    # A FAIL or WARN can quote a cell or a line of the report, so it is redacted before it is
+    # shown: the check output never holds a secret.
     def fail(self, msg):
+        msg = redact("message.txt", msg)
         print(f"FAIL: {msg}")
         self.fails.append(msg)
 
@@ -269,6 +287,7 @@ class Report:
         self.redactions.append(msg)
 
     def warn(self, msg):
+        msg = redact("message.txt", msg)
         print(f"WARN: {msg}")
         self.warns.append(msg)
 

@@ -221,24 +221,42 @@ Report prose SHALL have no hard wrap and short sentences.  Each number SHALL be 
 - **WHEN** a stats table names a node in an arm
 - **THEN** it shows the node with its role, for example "db0 (baseline)"
 
-### Requirement: Infrastructure identifiers never appear in the customer tiers
+### Requirement: Secrets and S3 bucket names never appear in the customer tiers
 
-Account IDs, VPC, subnet, and security group IDs, IPs, and tunnel details SHALL NOT appear in the summary or evidence tiers, or in their CSV and JSON files.  They SHALL stay in the appendix journal.  `report.md` SHALL tell the writer to select nodes by host name (for example `instance=~"db.*"`), never by IP.  `report-graph.py fetch` SHALL refuse an IPv4-looking node value with no `--node` mapping.  Branch names and unreleased bug details SHALL be the owner's call for each report.  A redaction failure SHALL make `report-check.py` exit 3.
+Redaction SHALL cover two kinds only: secrets, and S3 bucket names.  A secret is a password in any form, an AWS secret access key, an AWS session token, an AWS access key ID, or a Bearer, Basic, or Grafana service account (`glsa_`) token.  The password forms SHALL include the cqlsh `-p` and `--password` value, the nodetool `-pw` and `--password` value, the curl `-u` and `--user` password, the password in the user info of a URL such as `user:pass@host`, and a `password=` or `password:` key-value pair.  The bucket kind SHALL cover S3 bucket names and `s3://` URLs.
 
-#### Scenario: Customer tiers hold no infrastructure identifiers
+Secrets SHALL NOT appear in the summary or evidence tiers, or in their CSV and JSON files.  `report-check.py` SHALL fail on a secret there and exit 3, because a password must be redacted and `jira.txt` and the uploaded customer tiers are not redacted.  An S3 bucket name or an `s3://` URL there SHALL be a WARN, not a FAIL, because redaction is best effort.  Each FAIL and WARN SHALL name the kind, the file, and the line, and SHALL NOT show the value.  The check SHALL NOT scan the appendix: the plan, the journals, and the issues files keep the raw record, and the shareable book redacts them.
 
-- **WHEN** the summary and evidence tiers are searched for account IDs, VPC IDs, IPs, and tunnel details
+IPv4 and IPv6 addresses, EC2 host names, AWS resource IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`, `eni-`, `vol-`, and `ami-`), account IDs, home and key paths, AWS profile names, SSO start URLs, email addresses, ports, and tunnel and SOCKS details are not redacted.  They SHALL NOT be a check finding, and they MAY appear in every tier.  `report-graph.py fetch` SHALL accept an IP-like node label with no `--node` mapping and write it as it is.  The `fetch` JSON SHALL NOT hold a `node_mapped_from_ip` field.  Branch names and unreleased bug details SHALL be the owner's call for each report.
+
+#### Scenario: Customer tiers hold no secrets
+
+- **WHEN** the summary and evidence tiers and `data/` are searched for passwords, AWS keys, session tokens, and Bearer, Basic, and Grafana tokens
 - **THEN** none are found
 
-#### Scenario: An IP in the Query line or JSON fails
+#### Scenario: A secret in the customer tiers fails the check
 
-- **WHEN** an evidence Query line or a `data/*.json` file holds an IPv4 address
+- **WHEN** an evidence Query line or a `data/*.json` file holds a `cqlsh -p` password or an AWS secret access key
 - **THEN** `report-check.py` exits 3
+- **AND** the message names the kind, the file, and the line, and not the value
 
-#### Scenario: Fetch refuses an unmapped IP node label
+#### Scenario: A bucket name in the customer tiers is a warning
+
+- **WHEN** the summary holds an `s3://` URL
+- **THEN** `report-check.py` prints a WARN that names the kind, the file, and the line, and not the value
+- **AND** the URL alone does not make it exit 1 or 3
+
+#### Scenario: Infrastructure identifiers stay as written
+
+- **WHEN** the summary and an evidence Query line hold an IPv4 address, a VPC ID, and a home path such as `/Users/<name>/`
+- **THEN** `report-check.py` reports no redaction finding for them
+- **AND** the files keep them as written
+
+#### Scenario: Fetch keeps an IP node label
 
 - **WHEN** `report-graph.py fetch` gets a series whose node label looks like an IPv4 address and no `--node` mapping covers it
-- **THEN** it exits non-zero with a clear message and writes no CSV
+- **THEN** it writes the CSV with the label as it is and exits 0
+- **AND** `data/<name>.json` holds no `node_mapped_from_ip` field
 
 ### Requirement: Both skills write the evidence after each measuring step and the summary at every exit
 
@@ -407,7 +425,7 @@ The `block` subcommand of `bin/report-graph.py` SHALL replace `plot`.  `plot` SH
 
 ### Requirement: The check step compares every summary claim with its evidence before make
 
-`bin/report-check.py <docs>` SHALL be a uv-runnable PEP 723 script that reads files only and uses no network.  It SHALL print PASS, FAIL, or WARN per check.  It SHALL exit 0 with no FAIL, 1 with a FAIL, 2 on a usage or I/O error, and 3 on a redaction FAIL.  For each comparison row it SHALL follow the Metric anchor (by mdbook's slug rule, including nested `evidence/` pages) to the Data links, merge the CSVs, key the rows by (Node, Arm), recompute the arm rollups and the delta `(cand - base) / base` in percent, and compare sign, size, and unit with the row.  A size mismatch is a difference beyond the displayed precision, or a delta off by more than 0.1 percentage points.  A unit mismatch is a unit that differs from the JSON.  Before `make`, the skill SHALL also run a check subagent with the prompt in `report.md`, and, for a Cassandra run, `cassandra-expert` for a reasoning review of confounds, the choice of metric, and whether the noise floor supports the verdict.  When `cassandra-expert` is not installed, the skill SHALL say so plainly.  The writer SHALL fix every mismatch before the build, except where the gate rule applies.
+`bin/report-check.py <docs>` SHALL be a uv-runnable PEP 723 script that reads files only and uses no network.  It SHALL print PASS, FAIL, or WARN per check.  It SHALL exit 0 with no FAIL, 1 with a FAIL, 2 on a usage or I/O error, and 3 on a redaction FAIL.  A redaction FAIL is a secret in the customer tiers or `data/`, per the secrets requirement; a bucket name there is a WARN.  For each comparison row it SHALL follow the Metric anchor (by mdbook's slug rule, including nested `evidence/` pages) to the Data links, merge the CSVs, key the rows by (Node, Arm), recompute the arm rollups and the delta `(cand - base) / base` in percent, and compare sign, size, and unit with the row.  A size mismatch is a difference beyond the displayed precision, or a delta off by more than 0.1 percentage points.  A unit mismatch is a unit that differs from the JSON.  Before `make`, the skill SHALL also run a check subagent with the prompt in `report.md`, and, for a Cassandra run, `cassandra-expert` for a reasoning review of confounds, the choice of metric, and whether the noise floor supports the verdict.  When `cassandra-expert` is not installed, the skill SHALL say so plainly.  The writer SHALL fix every mismatch before the build, except where the gate rule applies.
 
 #### Scenario: Wrong sign (the metrics21667 pattern)
 
@@ -470,7 +488,7 @@ At a teardown gate, a non-redaction check failure SHALL NOT block the build, the
 
 ### Requirement: A redaction failure blocks the upload but not the down
 
-When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, SHALL log the failure to `<journal>` and `<issues>`, and SHALL run the `down`.  An unattended run SHALL report "report not uploaded: redaction" to the launcher.  The run skill SHALL offer `run <cluster-dir> --finalize`, which writes the summary, checks, makes, and uploads, and SHALL NOT run `down`.  The entry point SHALL work after `down` and in every layout.
+A redaction failure SHALL be a secret in the customer tiers or `data/` only, which makes `report-check.py` exit 3.  An S3 bucket name there is a WARN, and an infrastructure identifier such as an IP is not a finding, so neither blocks the upload.  When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, SHALL log the failure to `<journal>` and `<issues>`, and SHALL run the `down`.  An unattended run SHALL report "report not uploaded: redaction" to the launcher.  The run skill SHALL offer `run <cluster-dir> --finalize`, which writes the summary, checks, makes, and uploads, and SHALL NOT run `down`.  The entry point SHALL work after `down` and in every layout.
 
 #### Scenario: Redaction failure at a teardown gate
 
@@ -489,7 +507,7 @@ When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, S
 
 ### Requirement: make builds the book and the exports
 
-`Makefile.template` SHALL define `all: check build export`, plus `build`, `check`, `export`, `gate`, `serve`, and `clean`.  `setup-cluster.sh` SHALL write `EDB_LAB_BIN ?= <absolute plugin bin>` into the Makefile, with `PATH` as the fallback.  `make` SHALL produce `report/index.html`, `export/jira.txt`, and `export/report.zip`.  `bin/report-export.py` SHALL be a uv-runnable PEP 723 script.  `jira` SHALL write the summary tier in Atlassian wiki markup, through pandoc from `pypandoc-binary`, with each image referenced by file name for manual attachment, `.md` links turned into text, and the verdict span mapped to a colour.  `zip` SHALL produce the shareable book: the rendered HTML book of every page that `SUMMARY.md` lists, the appendix included, built with the house theme from a redacted copy.  It SHALL copy every listed page, and every `images/` and `data/` file they reference, into a staging tree under `export/`.  In the staged copy, it SHALL replace each infrastructure identifier (IPv4 addresses, EC2 host names such as `ip-10-0-1-15`, 12-digit account IDs, `vpc-`, `subnet-`, `sg-`, `igw-`, and `i-` IDs, and tunnel and SOCKS details) with a fixed placeholder that names its kind, for example `<private-ip>` or `<vpc-id>`.  The kinds SHALL also cover IPv6 addresses, public EC2 DNS names such as `ec2-54-12-34-56.compute-1.amazonaws.com`, `eni-`, `vol-`, and `ami-` IDs, dashed account IDs, local home and key paths such as `/Users/<name>/…`, AWS profile names, SSO start URLs, email addresses, S3 bucket names and `s3://` URLs, and `host:port` service URLs.  Where matches overlap, the replacement SHALL cover the whole overlapping text with one placeholder.  The replacement SHALL NOT change link fragments, and SHALL NOT change version strings or ordinary prose.  In the same step, it SHALL replace the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with the plain command name `easy-db-lab`.  It SHALL redact every staged file that is text, whatever its extension, and SHALL fail on a referenced file that is neither text nor a known image type.  It SHALL reject mdbook include directives in staged pages.  It SHALL then run the redaction check over the whole staged copy and over every text file of the built HTML, the search index and print page included, and SHALL fail the build if any identifier remains.  Image pixels are not text and SHALL NOT be scanned.  `report-graph.py fetch` SHALL record `node_mapped_from_ip` in the block's `data/<name>.json`, true when any node label was IP-like and mapped with `--node`.  For each image whose block data has `node_mapped_from_ip: true`, the staged copy SHALL replace the image with a placeholder that reads "image withheld: its legend shows IP addresses", and SHALL keep the stats table and the data link.  The local `report/` book SHALL keep the rendered image, and the check SHALL treat such a block as complete.  It SHALL build the book from the staged copy with mdbook and zip the built HTML as `export/report.zip`, so that opening `index.html` from the extracted zip shows the themed book with working images and links.  The local `report/` book and the uploaded tier files SHALL keep the unredacted record.  A missing referenced file SHALL fail the build.
+`Makefile.template` SHALL define `all: check build export`, plus `build`, `check`, `export`, `gate`, `serve`, and `clean`.  `setup-cluster.sh` SHALL write `EDB_LAB_BIN ?= <absolute plugin bin>` into the Makefile, with `PATH` as the fallback.  `make` SHALL produce `report/index.html`, `export/jira.txt`, and `export/report.zip`.  `bin/report-export.py` SHALL be a uv-runnable PEP 723 script.  `jira` SHALL write the summary tier in Atlassian wiki markup, through pandoc from `pypandoc-binary`, with each image referenced by file name for manual attachment, `.md` links turned into text, and the verdict span mapped to a colour.  `zip` SHALL produce the shareable book: the rendered HTML book of every page that `SUMMARY.md` lists, the appendix included, built with the house theme from a redacted copy.  It SHALL copy every listed page, and every `images/` and `data/` file they reference, into a staging tree under `export/`.  In the staged copy, it SHALL replace each secret and each S3 bucket name or `s3://` URL, the two kinds of the secrets requirement, with a fixed placeholder that names its kind, for example `<password>` or `<s3-bucket>`.  It SHALL NOT replace IP addresses, EC2 host names, AWS resource IDs, account IDs, home and key paths, profile names, SSO start URLs, email addresses, ports, or tunnel and SOCKS details.  Where matches overlap, the replacement SHALL cover the whole overlapping text with one placeholder.  The replacement SHALL NOT change link fragments, and SHALL NOT change version strings or ordinary prose.  In the same step, it SHALL replace the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with the plain command name `easy-db-lab`.  It SHALL redact every staged file that is text, whatever its extension, and SHALL fail on a referenced file that is neither text nor a known image type.  It SHALL reject mdbook include directives in staged pages.  Redaction SHALL be best effort.  It SHALL then run the redaction check over the whole staged copy and over every text file of the built HTML, the search index and print page included, and SHALL print a warning that names the kind, the file, and the line for any secret or bucket name that remains, without its value.  A remaining secret or bucket name SHALL NOT fail the build.  Image pixels are not text and SHALL NOT be scanned.  The shareable book SHALL hold every rendered image, and SHALL NOT withhold or replace an image.  It SHALL build the book from the staged copy with mdbook and zip the built HTML as `export/report.zip`, so that opening `index.html` from the extracted zip shows the themed book with working images and links.  The local `report/` book and the uploaded tier files SHALL keep the unredacted record.  A missing referenced file SHALL fail the build.
 
 #### Scenario: make produces the exports
 
@@ -508,11 +526,21 @@ When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, S
 - **THEN** it shows the themed HTML book with every page that `SUMMARY.md` lists, the appendix included
 - **AND** every image and data link in it resolves inside the extracted tree
 
-#### Scenario: The shareable book is redacted
+#### Scenario: The shareable book redacts secrets and bucket names
 
-- **WHEN** a journal page holds an IPv4 address, an EC2 host name, a VPC ID, and a SOCKS port
-- **THEN** the pages in `report.zip` hold the placeholders, for example `<private-ip>` and `<vpc-id>`, and none of the original values
+- **WHEN** a journal page holds a `cqlsh -p` password, a `curl -u user:pass` password, an AWS secret access key, and an `s3://` URL
+- **THEN** the pages in `report.zip` hold kind placeholders, for example `<password>` and `<s3-bucket>`, and none of the original values
 - **AND** the local `report/` book and `4-journal.md` still hold the original values
+
+#### Scenario: The shareable book keeps infrastructure identifiers
+
+- **WHEN** a journal page holds an IPv4 address, an EC2 host name, a VPC ID, and a home path such as `/Users/<name>/`
+- **THEN** the pages in `report.zip` hold each of them as written
+
+#### Scenario: The shareable book keeps every image
+
+- **WHEN** an evidence block's image is a Grafana render whose legend shows IP addresses
+- **THEN** `report.zip` holds the image unchanged, with no placeholder in its place
 
 #### Scenario: The shareable book names the command plainly
 
@@ -520,16 +548,11 @@ When `report-check.py` exits 3 at a teardown gate, the skill SHALL NOT upload, S
 - **THEN** the pages in `report.zip` show `easy-db-lab status`, `"easy-db-lab" down --auto-approve`, and `easy-db-lab report upload`
 - **AND** the local `report/` book still holds the variables
 
-#### Scenario: An image whose legend shows IP addresses is withheld from the shareable book
+#### Scenario: A value the redaction misses is a warning
 
-- **WHEN** an evidence block's `data/<name>.json` has `node_mapped_from_ip: true`
-- **THEN** the local `report/` book shows the rendered image and the check passes
-- **AND** in `report.zip` the image is replaced by a placeholder that reads "image withheld: its legend shows IP addresses", and the block's stats table and data link stay
-
-#### Scenario: A value the redaction misses fails the export
-
-- **WHEN** the staged copy still holds an infrastructure identifier after the replacement step
-- **THEN** `make export` exits non-zero and names the file and the line
+- **WHEN** the staged copy still holds a secret or a bucket name after the replacement step
+- **THEN** `make export` prints a warning that names the kind, the file, and the line, and not the value
+- **AND** it still writes `report.zip`
 
 #### Scenario: A missing referenced image fails the build
 

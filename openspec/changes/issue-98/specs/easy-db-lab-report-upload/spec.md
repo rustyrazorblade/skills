@@ -79,7 +79,7 @@ At Completion, the run skill SHALL write `1-summary.md` and run the check step p
 
 ### Requirement: Every real top-level down is gated on a successful upload
 
-Immediately before every real top-level `$EDB down` that a skill runs, the skill SHALL run Finalize and then the upload procedure.  Finalize SHALL be, in order: write `1-summary.md`; run the check (script, subagent, and `cassandra-expert` for a Cassandra run); on a non-redaction failure, apply the check-failure rule of `references/report.md`; run `make gate`.  The skill SHALL run `$EDB down --auto-approve` only if the upload exits 0, with two exceptions: a non-redaction check failure SHALL NOT block the `down`, and a redaction failure (`report-check.py` exit 3) SHALL skip the upload, be logged, and let the `down` run.  An upload retry SHALL re-upload only and SHALL NOT re-run the check.  A `down --dry-run` SHALL NOT need an upload.  `spark down` SHALL NOT be gated.  Each `down` attempt SHALL get its own upload first.
+Immediately before every real top-level `$EDB down` that a skill runs, the skill SHALL run Finalize and then the upload procedure.  Finalize SHALL be, in order: write `1-summary.md`; run the check (script, subagent, and `cassandra-expert` for a Cassandra run); on a non-redaction failure, apply the check-failure rule of `references/report.md`; run `make gate`.  The skill SHALL run `$EDB down --auto-approve` only if the upload exits 0, with two exceptions: a non-redaction check failure SHALL NOT block the `down`, and a redaction failure (`report-check.py` exit 3) SHALL skip the upload, be logged, and let the `down` run.  A redaction failure SHALL be a secret (a password, an AWS key or session token, or a Bearer, Basic, or Grafana token) in the customer tiers or `data/` only.  An S3 bucket name there is a check WARN, and an IP address or another infrastructure identifier is not a finding, so neither skips the upload.  An upload retry SHALL re-upload only and SHALL NOT re-run the check.  A `down --dry-run` SHALL NOT need an upload.  `spark down` SHALL NOT be gated.  Each `down` attempt SHALL get its own upload first.
 
 #### Scenario: Completion Option 2
 
@@ -118,6 +118,12 @@ Immediately before every real top-level `$EDB down` that a skill runs, the skill
 
 - **WHEN** `report-check.py` exits 3 at the gate
 - **THEN** the skill does not upload, logs the failure, and runs `$EDB down --auto-approve`
+
+#### Scenario: An IP or a bucket name does not skip the upload
+
+- **WHEN** the customer tiers hold an IPv4 address and an `s3://` URL, and no secret
+- **THEN** `report-check.py` does not exit 3
+- **AND** the skill uploads the report before the `down`
 
 #### Scenario: Upload retry does not re-check
 

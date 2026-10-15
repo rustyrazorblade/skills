@@ -30,7 +30,7 @@ The architect prototyped the mechanics against mdbook v0.5.3, uv, and pandoc thr
 
 ## Decisions
 
-The owner accepted D1 to D8 as the architect recommended (decision 1), the minor fixes m1 to m8 (decision 6), and the architect addendum in full (decision 10).  Two owner redirects at Seam 1 changed the graph design after that.  Redirect 1: a query difference in the `cluster` label matcher only is not a mismatch.  Redirect 2: Grafana panel renders replace local plotting (see "Redirect 2" below).  Where an earlier entry here disagrees with a redirect, the redirect wins.
+The owner accepted D1 to D8 as the architect recommended (decision 1), the minor fixes m1 to m8 (decision 6), and the architect addendum in full (decision 10).  Two owner redirects at Seam 1 changed the graph design after that.  Redirect 1: a query difference in the `cluster` label matcher only is not a mismatch.  Redirect 2: Grafana panel renders replace local plotting (see "Redirect 2" below).  Redirect 7 narrows redaction to secrets and S3 bucket names (see "Redirect 7" below).  Where an earlier entry here disagrees with a redirect, the redirect wins.
 
 ### Pipeline
 
@@ -60,7 +60,7 @@ The Makefile exports `MDBOOK_BOOK__TITLE` from the first `# ` line of `1-summary
 
 ### D3a, D3b, D3c: graph script
 
-One PEP 723 file.  Redirect 2 changed its subcommands to `fetch`, `render`, and `block`; the `fetch` contract below is unchanged.  `fetch` takes `--mimir-url`, `--tenant`, `--query`, `--start`, `--end`, `[--step 30s]`, `--node-label`, `[--node VALUE=db0]...`, `--arm`, `--unit`, `[--scale]`, `--name`, `--docs`, and an optional `--proxy socks5h://...` (m6).  It writes `data/<name>.csv` (long form: `timestamp_utc,node,arm,value`) and `data/<name>.json` (`query, start, end, step, unit, scale, arms`).  It never stores the URL or the tenant.  It fails on a connection error, a non-success status, zero series, or an IPv4-looking node value with no `--node` mapping.  The skill derives the Mimir URL and tenant from `$EDB help observability` and `$EDB status`, per DC wrapper, and never reads `state.json`.
+One PEP 723 file.  Redirect 2 changed its subcommands to `fetch`, `render`, and `block`; the `fetch` contract below is unchanged.  `fetch` takes `--mimir-url`, `--tenant`, `--query`, `--start`, `--end`, `[--step 30s]`, `--node-label`, `[--node VALUE=db0]...`, `--arm`, `--unit`, `[--scale]`, `--name`, `--docs`, and an optional `--proxy socks5h://...` (m6).  It writes `data/<name>.csv` (long form: `timestamp_utc,node,arm,value`) and `data/<name>.json` (`query, start, end, step, unit, scale, arms`).  It never stores the URL or the tenant.  It fails on a connection error, a non-success status, or zero series.  ~~It also fails on an IPv4-looking node value with no `--node` mapping.~~ (superseded by redirect 7: an IP-like node label is written as it is.)  The skill derives the Mimir URL and tenant from `$EDB help observability` and `$EDB status`, per DC wrapper, and never reads `state.json`.
 
 ~~`plot` takes one or more `--csv`, `--style`, `--title`, `[--stats ...]`, `[--align elapsed]`, and `--docs`.  It writes `images/<name>.png`.  Role colours come from an explicit map keyed by arm name (m5).  Nodes in an arm differ by line style.~~ (superseded by redirect 2)
 
@@ -70,7 +70,7 @@ One PEP 723 file.  Redirect 2 changed its subcommands to `fetch`, `render`, and 
 
 `report-check.py` is the mechanical gate and also `make check`.  A general-purpose subagent, with its prompt in the `report.md` "Check" section, reviews the prose.  For a Cassandra run, `cassandra-expert` reviews the reasoning.  When `cassandra-expert` is not installed, the summary carries "Reasoning review: not run (cassandra-expert not installed)" (m8).  `make all` is `check build export`; `make build` stays for debugging.
 
-The comparison row contract: the Metric cell links to an evidence anchor and names the statistic and the unit, for example `[Scrape allocation mean (MB/s)](2-evidence.md#scrape-allocation)`.  The checker follows the anchor to the Data link, then to the CSV and the JSON, recomputes the arm rollups, and recomputes the delta as `(cand - base) / base` in percent.  It uses mdbook's slug rule (lowercase, strip punctuation, spaces to hyphens) and resolves nested `evidence/` paths (m4).  It scans the Query line and the JSON for IPs (m2).
+The comparison row contract: the Metric cell links to an evidence anchor and names the statistic and the unit, for example `[Scrape allocation mean (MB/s)](2-evidence.md#scrape-allocation)`.  The checker follows the anchor to the Data link, then to the CSV and the JSON, recomputes the arm rollups, and recomputes the delta as `(cand - base) / base` in percent.  It uses mdbook's slug rule (lowercase, strip punctuation, spaces to hyphens) and resolves nested `evidence/` paths (m4).  ~~It scans the Query line and the JSON for IPs (m2).~~ (superseded by redirect 7: it scans the customer tiers and `data/` for secrets and S3 bucket names only.)
 
 ### D5: verdict badge
 
@@ -94,7 +94,7 @@ The check runs in full at every exit.  There are no relaxed Partial rules.  At a
 
 ### Gate mechanics (addendum F4, F13)
 
-`report-check.py [--gate [--reason TEXT]...] <docs>`.  Exit 0: no failure.  Exit 1: failure.  Exit 2: usage or I/O error.  Exit 3: redaction failure, in either mode.  Without `--gate` it never edits files.  With `--gate`, a non-redaction failure writes or replaces the one "⚠ Unchecked: <reasons>" line under `## Caveats`, merges `--reason` from the subagent and `cassandra-expert`, and exits 0.  A clean `--gate` run removes a stale Unchecked line.  The numeral-in-prose warning ignores the Unchecked line.  The Makefile has `gate: ; $(CHECK) --gate $(REASONS) . && $(MAKE) build export`; `all` is unchanged.
+`report-check.py [--gate [--reason TEXT]...] <docs>`.  Exit 0: no failure.  Exit 1: failure.  Exit 2: usage or I/O error.  Exit 3: redaction failure, in either mode; after redirect 7, only a secret in the customer tiers or `data/` is a redaction failure.  Without `--gate` it never edits files.  With `--gate`, a non-redaction failure writes or replaces the one "⚠ Unchecked: <reasons>" line under `## Caveats`, merges `--reason` from the subagent and `cassandra-expert`, and exits 0.  A clean `--gate` run removes a stale Unchecked line.  The numeral-in-prose warning ignores the Unchecked line.  The Makefile has `gate: ; $(CHECK) --gate $(REASONS) . && $(MAKE) build export`; `all` is unchanged.
 
 Interactive gate order: write the summary; check (script, subagent, expert); on failure, show the reasons and offer one choice (fix now and re-check once, or proceed unchecked); `make gate`; upload; on upload failure, the existing menu (a retry re-uploads only, with no re-check).  The unattended gate skips the choice.  Unattended Completion with no teardown: on failure, no build and no upload; log; report the reasons to the launcher; the cluster stays up; the later gated teardown applies the Unchecked rule.
 
@@ -142,6 +142,19 @@ Hold and release.  The existing rules already give the mechanism.  No agent deci
 Per-arm fallback.  For a metric with no overlay panel, each arm agent renders its own regular dashboard panel to `images/<metric>-<arm>.png` at the same point as its fetch.  Arm agents now also write `images/*-<arm>.png`; the `-<arm>` suffix keeps the no-two-writers rule.  The coordinator passes those images as `--image <arm>=<path>`.
 
 The check is unchanged.  Its evidence-block rule already needs an image file under `images/` and refuses a linked image, so a Grafana render that was not downloaded fails it.
+
+### Redirect 7: redaction covers secrets and S3 bucket names only (owner override of Q3's identifier list)
+
+The owner narrowed redaction at Seam 1: "IPs don't actually tell anyone anything, they're all ephemeral"; "none of my infra has secret IPs it's just not a problem.  They're all in 1 VPC IP block, always the same"; "the S3 bucket sure, but that's about it."; "Yes, passwords must be redacted"; "redaction should be best effort, I am ok if a few slip through".  This overrides Q3's identifier list (account IDs, VPC, subnet, and security group IDs, IPs, and tunnel details) and the kinds that redirects 4 and 5 added.  It supersedes redirect 6.
+
+The rule:
+
+- **Two kinds only.**  Secrets: passwords in every form (cqlsh and nodetool `-p`, `-pw`, `--password`; curl `-u` and `--user`; `user:pass@` URL user info; `password=` and `password:` pairs), AWS secret access keys, AWS session tokens, AWS access key IDs, and Bearer, Basic, and Grafana (`glsa_`) tokens.  Buckets: S3 bucket names and `s3://` URLs.
+- **Not redacted.**  IPv4 and IPv6 addresses, EC2 host names, AWS resource IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`, `eni-`, `vol-`, `ami-`), account IDs, home and key paths, profile names, SSO start URLs, email addresses, ports, and tunnel and SOCKS details.  They are not findings anywhere.
+- **The export is best effort.**  `report-export.py zip` replaces the two kinds in the staged copy.  A leftover is a warning that names the kind, the file, and the line, never the value, and never fails the build.
+- **The check keeps exit 3 for a secret only.**  `report-check.py` fails with exit 3 on a secret in the customer tiers or `data/`.  The reason: "passwords must be redacted", and `jira.txt` and the uploaded customer tiers are not redacted, so the check is the only guard there.  A bucket name in the customer tiers is a WARN, because redaction is best effort.  The check does not scan the appendix: the appendix keeps the raw record in `report/` and in the upload, and the shareable book redacts it.  Scanning the journal would block the upload of every run that logs a `cqlsh -p` command.
+- **Dropped.**  The `fetch` refusal of an IP-like node label, `render --require-named-nodes`, the `node_mapped_from_ip` field, and the image withholding of redirect 6.  Image pixels are not scanned, and the shareable book holds every image.
+- **Kept.**  `$EDB`, `${EDB}`, and `$EDB_<ARM>` become `easy-db-lab` in the shareable book.  The book holds every page, the appendix included.  Overlap merging, no change to link fragments, version strings, or prose, all-text staging, and the rejection of include directives stay.  A redaction failure (exit 3) still blocks the upload but not the `down`.
 
 ### File roles (addendum F6)
 
@@ -239,6 +252,15 @@ Each entry gives the option and why it was rejected.  "Owner override" marks a p
 - **Q2 (a): one render per arm always, and no combined image.**  Rejected: the reader must compare two images by eye, and the comparison dashboards already put both runs on one axis from a common start.
 - **Q3 (b): restrict cross-cluster claims to metrics that have an overlay panel.**  Rejected: it limits what a test can measure to the panels that exist today.
 - **Q3 (c): add an overlay panel to a dashboard during the run.**  Rejected: it changes a shared dashboard during a test, and a hand-made panel is custom rendering again.
+
+### Redirect 7 (redaction scope)
+
+- **Full identifier redaction: IPs, EC2 hosts, AWS resource IDs, account IDs, paths, profiles, SSO URLs, emails, ports, and tunnel details (Q3 and redirects 4 and 5).**  Rejected by the owner: the IPs are ephemeral and sit in one fixed VPC block, so they tell a reader nothing.  The kind list also grew a long tail of false positives, such as version strings read as IPs.
+- **Withhold an image whose legend shows IP addresses from the shareable book (redirect 6).**  Rejected: IPs are no longer sensitive, so the image is safe to share.
+- **`render --require-named-nodes`: refuse a render for a fetch that mapped an IP-like node label (round 10).**  Rejected: same reason; it also blocked evidence for a reason the owner does not care about.
+- **The `fetch` refusal of an unmapped IP-like node label.**  Rejected: same reason.  `--node` stays for role names, not for redaction.
+- **Make every redaction finding in `report-check.py` a warning, secrets included.**  Rejected: the owner said "passwords must be redacted", and the customer tiers reach JIRA and the upload unredacted.
+- **Scan the appendix for secrets and fail with exit 3.**  Rejected: the journal logs commands with passwords as a normal record, so most uploads would be blocked; the shareable book redacts the appendix instead.
 
 ## Migration Plan
 

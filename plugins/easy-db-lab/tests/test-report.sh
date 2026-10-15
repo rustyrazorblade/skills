@@ -1197,44 +1197,99 @@ run_check numeral-in-prose
 expect_eq "check: a numeral in prose exits 0" "0" "$check_rc"
 expect_contains "check: a numeral in prose is a WARN" "$check_out" "WARN: numeral in summary prose"
 
-while read -r name word; do
-  run_check "$name"
-  expect_eq "check: $name exits 3" "3" "$check_rc"
-  if printf '%s\n' "$check_out" | grep '^FAIL' | grep -qi -- "$word"; then
-    pass "check: $name FAIL names the $word"
+# A secret in a customer tier or in data/ is a redaction FAIL: exit 3.  The FAIL names the kind,
+# the file, and the line, and never the value.
+# name|file|kind|value|text, where the text holds the value.  A .json file gets the text as a field.
+while IFS='|' read -r name file kind value text; do
+  d="$tmp_root/check-secret-$name"
+  rm -rf "$d"
+  fixture_docs "$d"
+  if [[ "$file" == *.json ]]; then
+    jq --arg t "$text" '.note = $t' "$d/$file" > "$d/$file.new" && mv "$d/$file.new" "$d/$file"
   else
-    fail "check: $name FAIL names the $word" "$(printf '%s\n' "$check_out" | grep '^FAIL' | head -3)"
+    printf '\n%s\n' "$text" >> "$d/$file"
   fi
+  line="$(grep -nF -- "$value" "$d/$file" | head -n 1 | cut -d: -f1)"
+  out="$("$checker" "$d" 2>&1)"
+  expect_eq "check: a $name in $file exits 3" "3" "$?"
+  expect_contains "check: the $name FAIL names the kind, the file, and the line" "$out" "FAIL: redaction: $kind in $file line $line"
+  expect_not_contains "check: the $name FAIL does not show the value" "$out" "$value"
 done <<'EOF'
-redact-ipv4-summary IPv4
-redact-account account
-redact-vpc vpc-
-redact-subnet subnet-
-redact-sg sg-
-redact-tunnel tunnel
-redact-query-ip IPv4
-redact-json-ip IPv4
-redact-account-period account
-redact-ec2-host EC2 host name
-redact-ec2-host-csv EC2 host name
-redact-account-csv-node account
-redact-account-stats-node account
-redact-account-stats-bare account
-redact-igw igw-
-redact-instance i-
-redact-port port number
-redact-ipv4-period IPv4
+cqlsh password|1-summary.md|cqlsh password|s3cr3t-cql|- The probe ran `cqlsh -u cassandra -p s3cr3t-cql db0`.
+nodetool password|2-evidence.md|nodetool password|s3cr3t-jmx|The probe ran `nodetool -u cassandra -pw s3cr3t-jmx status`.
+curl password|evidence/latency.md|curl password|s3cr3t-curl|The probe ran `curl -u admin:s3cr3t-curl http://grafana/api`.
+URL password|1-summary.md|URL password|s3cr3t-url|- Grafana is at https://admin:s3cr3t-url@grafana.example/api.
+password pair|data/scrape-alloc.json|password pair|s3cr3t-pair|GF_SECURITY_ADMIN_PASSWORD=s3cr3t-pair
+AWS secret access key|data/scrape-alloc.json|AWS secret access key|wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY|aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS session token|2-evidence.md|AWS session token|IQoJb3JpZ2luX2VjEJr|`aws_session_token = IQoJb3JpZ2luX2VjEJr`
+AWS access key ID|data/latency-baseline.json|AWS access key ID|AKIAIOSFODNN7EXAMPLE|key AKIAIOSFODNN7EXAMPLE
+bearer token|1-summary.md|bearer token|eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0|- The probe sent `Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0`.
+Basic token|2-evidence.md|Basic auth credentials|YWRtaW46c2VjcmV0|The probe sent `Authorization: Basic YWRtaW46c2VjcmV0`.
+Grafana token|evidence/latency.md|Grafana service account token|glsa_AbCdEf0123456789|The probe used `glsa_AbCdEf0123456789`.
 EOF
 
-# Not redaction: a 12-digit metric value in data/*.csv and its stats table, infrastructure IDs in
-# the appendix journal, a dotted version string in summary prose, and a cluster label whose UUID
-# ends in twelve digits.
-for name in redact-ok-big-value redact-ok-journal redact-ok-version redact-ok-cluster-uuid; do
+# A secret in an evidence Query line is a redaction FAIL too.
+d="$tmp_root/check-secret-query"
+rm -rf "$d"
+fixture_docs "$d"
+perl -pi -e 's/^(Query: `.*)`$/$1 # cqlsh -p s3cr3t-query`/' "$d/2-evidence.md"
+line="$(grep -nF -- s3cr3t-query "$d/2-evidence.md" | head -n 1 | cut -d: -f1)"
+out="$("$checker" "$d" 2>&1)"
+expect_eq "check: a password in an evidence Query line exits 3" "3" "$?"
+expect_contains "check: the Query line FAIL names the kind, the file, and the line" "$out" \
+  "FAIL: redaction: cqlsh password in 2-evidence.md line $line"
+
+# An S3 bucket name or an s3:// URL in a customer tier is a WARN that names the kind, the file, and
+# the line, not the value.  Redaction is best effort, so it does not fail the check.
+bucket=easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab
+d="$tmp_root/check-bucket"
+rm -rf "$d"
+fixture_docs "$d"
+printf '\n- The report is in s3://%s/docs.\n' "$bucket" >> "$d/1-summary.md"
+line="$(grep -nF -- "$bucket" "$d/1-summary.md" | cut -d: -f1)"
+jq --arg b "$bucket" '.note = $b' "$d/data/scrape-alloc.json" > "$d/data/scrape-alloc.json.new" && mv "$d/data/scrape-alloc.json.new" "$d/data/scrape-alloc.json"
+jline="$(grep -nF -- "$bucket" "$d/data/scrape-alloc.json" | cut -d: -f1)"
+out="$("$checker" "$d" 2>&1)"
+expect_eq "check: an s3:// URL in the summary exits 0" "0" "$?"
+expect_contains "check: the s3:// URL WARN names the kind, the file, and the line" "$out" "WARN: redaction: S3 URL in 1-summary.md line $line"
+expect_contains "check: the bucket WARN names the kind, the file, and the line" "$out" "WARN: redaction: S3 bucket name in data/scrape-alloc.json line $jline"
+expect_not_contains "check: the bucket WARN does not show the value" "$out" "$bucket"
+expect_not_contains "check: a bucket name is no FAIL" "$out" "FAIL"
+
+# Infrastructure identifiers are not redacted: in the summary, an evidence Query line, and data/,
+# they are no finding, and the files keep them as written.
+d="$tmp_root/check-infra"
+rm -rf "$d"
+fixture_docs "$d"
+infra='10.0.1.15 2600:1f18::1 ip-10-0-1-15 vpc-0abc1234def567890 123456789012 /Users/someone/lab --profile lab-admin jon@example.com port 1080 SOCKS tunnel'
+printf '\n- Node db0 was %s.\n' "$infra" >> "$d/1-summary.md"
+perl -pi -e 's/^(Query: `.*)`$/$1 # 10.0.1.15 vpc-0abc1234def567890 \/Users\/someone\/lab`/' "$d/2-evidence.md"
+jq --arg t "$infra" '.note = $t' "$d/data/scrape-alloc.json" > "$d/data/scrape-alloc.json.new" && mv "$d/data/scrape-alloc.json.new" "$d/data/scrape-alloc.json"
+before="$(tree_sum "$d")"
+out="$("$checker" "$d" 2>&1)"
+expect_eq "check: infrastructure identifiers in the customer tiers exit 0" "0" "$?"
+expect_not_contains "check: infrastructure identifiers are no redaction finding" "$out" "redaction:"
+expect_contains "check: the Query line keeps the IPv4 address, the VPC ID, and the home path" "$(grep '^Query: ' "$d/2-evidence.md")" \
+  '10.0.1.15 vpc-0abc1234def567890 /Users/someone/lab'
+expect_eq "check: the check leaves the identifiers as written" "$before" "$(tree_sum "$d")"
+
+# The check does not scan the appendix: a password in the journal is no check finding.
+d="$tmp_root/check-journal-secret"
+rm -rf "$d"
+fixture_docs "$d"
+# shellcheck disable=SC2016 # the backticks are a literal markdown fence
+printf '\n```bash\ncqlsh -u cassandra -p s3cr3t db0\ns3://%s/docs\n```\n' "$bucket" >> "$d/4-journal.md"
+out="$("$checker" "$d" 2>&1)"
+expect_eq "check: a password in 4-journal.md exits 0" "0" "$?"
+expect_not_contains "check: a password in 4-journal.md is no finding" "$out" "redaction:"
+
+# Not redaction: a 12-digit metric value in data/*.csv and its stats table, and a cluster label
+# whose UUID is not an easy-db-lab bucket name.
+for name in redact-ok-big-value redact-ok-cluster-uuid; do
   run_check "$name"
   expect_eq "check: $name exits 0" "0" "$check_rc"
-  expect_not_contains "check: $name has no redaction FAIL" "$check_out" "FAIL: redaction"
+  expect_not_contains "check: $name has no redaction finding" "$check_out" "redaction:"
 done
-
 # The replace step, one line at a time: each kind, the overlap rule, and the text that stays.
 cases_out="$(python3 "$here/redact-cases.py" "$checker" "$fixtures/redact/cases.tsv" 2>&1)"
 [[ -n "$cases_out" ]] || fail "redact: the cases ran" "no output"
@@ -1340,7 +1395,7 @@ expect_eq "gate: numbered reasons keep a ; and fold a newline on one line" \
   "$(grep '^⚠ Unchecked: ' "$check_dir/1-summary.md")"
 expect_eq "gate: a reason with a newline still writes one line" "1" "$(grep -c 'Unchecked\|^lines' "$check_dir/1-summary.md")"
 
-fixture_docs "$tmp_root/gate-redact" redact-tunnel
+fixture_docs "$tmp_root/gate-redact" redact-secret
 before="$(tree_sum "$tmp_root/gate-redact")"
 "$checker" --gate "$tmp_root/gate-redact" >/dev/null 2>&1
 expect_eq "gate: a redaction FAIL with --gate exits 3" "3" "$?"
@@ -1496,34 +1551,37 @@ expect_contains "zip: the evidence page shows its image" "$(cat "$sx/2-evidence.
 expect_contains "zip: the evidence page links its data" "$(cat "$sx/2-evidence.html" 2>/dev/null)" 'href="data/scrape-alloc.csv"'
 
 xj="$(cat "$sx/4-journal.html" 2>/dev/null)"
-for p in private-ip ec2-host account-id vpc-id subnet-id sg-id igw-id instance-id port socks-proxy tunnel; do
+for p in password aws-secret s3-url s3-bucket; do
   expect_contains "zip: the journal holds the <$p> placeholder" "$xj" "&lt;$p&gt;"
 done
 # In a code block mdbook shows text as written, so a placeholder there takes no markdown escape.
 xj_code="$(sed -n '/<pre>/,/<\/pre>/p' "$sx/4-journal.html" 2>/dev/null)"
-expect_contains "zip: the journal code block holds PROXY=<socks-proxy>" "$xj_code" 'PROXY=&lt;socks-proxy&gt;'
+expect_contains "zip: the journal code block holds cqlsh -p <password>" "$xj_code" 'cqlsh -u cassandra -p &lt;password&gt; 10.0.1.15'
+expect_contains "zip: the journal code block keeps the curl user" "$xj_code" 'curl -u admin:&lt;password&gt; http://control0:3000/api/health'
+expect_contains "zip: the journal code block holds a password pair placeholder" "$xj_code" 'GF_SECURITY_ADMIN_PASSWORD=&lt;password&gt;'
 expect_not_contains "zip: no code block placeholder has a backslash" "$xj_code" '\&lt;'
-expect_contains "zip: an issues page port becomes a placeholder" "$(cat "$sx/5-issues.html" 2>/dev/null)" 'changed from &lt;port&gt; to &lt;port&gt;'
 # book_text <dir>: what a reader sees in the extracted book: each page's <main>, the search index,
-# and the data files, less the placeholders and the heading ids.  mdbook's own scripts and styles
-# are not report content; its sidebar script holds 1080 as a screen width.
+# and the data files.  mdbook's own scripts and styles are not report content.
 book_text() {
   local page
   while IFS= read -r page; do sed -n '/<main>/,/<\/main>/p' "$page"; done < <(find "$1" -name '*.html')
   cat "$1"/searchindex*.js "$1"/data/* 2>/dev/null
 }
-shown="$(book_text "$sx" | sed -E \
-  -e 's/(\\?&lt;|\\?<)(private-ip|ec2-host|account-id|vpc-id|subnet-id|sg-id|igw-id|instance-id|port|socks-proxy|tunnel)(&gt;|>)/ /g' \
-  -e 's/(id|href)="[^"]*"//g' -e 's/#[A-Za-z0-9_-]+//g')"
+shown="$(book_text "$sx")"
 expect_contains "zip: the book text holds the journal" "$shown" "Cassandra 5.0.9 on db0"
-for v in 10.0.1.15 10.0.1.20 127.0.0.1 vpc-0abc1234def567890 ip-10-0-1-15 123456789012 417835013894 subnet-0abc1234 \
-  sg-0abc1234 igw-0abc1234 i-0abc1234def567890 1080 52764 socks5h; do
+for v in s3cr3t-cql s3cr3t-curl s3cr3t-gf wJalrXUtnFEMI easy-db-lab-d779bb37 s3://; do
   expect_not_contains "zip: no $v in the extracted book" "$shown" "$v"
 done
-for w in socks tunnel; do
-  hits="$(printf '%s\n' "$shown" | grep -oiw -- "$w" | sort -u | tr '\n' ' ')"
-  expect_eq "zip: no $w wording in the extracted book" "" "$hits"
+# IP addresses and other infrastructure identifiers are not redacted: the book shows them as written.
+for v in 10.0.1.15 10.0.1.20 127.0.0.1 vpc-0abc1234def567890 ip-10-0-1-15 123456789012 AccountUser-417835013894 subnet-0abc1234 \
+  sg-0abc1234 igw-0abc1234 i-0abc1234def567890 socks5h://127.0.0.1:1080 control0:3000 /Users/someone/lab "port 1080" "SOCKS tunnel"; do
+  expect_contains "zip: $v stays as written in the extracted book" "$shown" "$v"
 done
+expect_contains "zip: an issues page port stays as written" "$(cat "$sx/5-issues.html" 2>/dev/null)" 'changed from 1080 to 52764'
+# The shareable book holds every image unchanged; the export does not scan pixels or withhold an image.
+expect_eq "zip: an evidence image is in the zip unchanged" "$(cksum < "$sws/docs/images/scrape-alloc.png")" \
+  "$(cksum < "$sx/images/scrape-alloc.png" 2>/dev/null)"
+expect_not_contains "zip: no image is withheld" "$shown" "withheld"
 expect_contains "zip: \$EDB becomes the command name" "$xj" 'easy-db-lab status'
 expect_contains "zip: \${EDB} becomes the command name" "$xj" '"easy-db-lab" down --auto-approve'
 expect_contains "zip: \$EDB_BASELINE becomes the command name" "$xj" 'easy-db-lab report upload'
@@ -1554,23 +1612,24 @@ expect_file "build: report/ keeps its images" "$sws/docs/report/images/scrape-al
 expect_file "build: report/ keeps its data" "$sws/docs/report/data/scrape-alloc.csv"
 expect_no_file "zip: the shareable book holds no book.toml" "$sx/book.toml"
 
-# make passes the summary H1 to mdbook as the book title, so the title is redacted too.  The
-# check fails such an H1, so this runs build and export without it.
+# make passes the summary H1 to mdbook as the book title, so the title is redacted too, and an IP
+# in it stays.  The check warns on a bucket name in the H1; this runs build and export without it.
 tws="$tmp_root/make-share-title"
 bash "$bin/setup-cluster.sh" "$tws" "$stub_edb" --name make-share-title >/dev/null 2>&1
 fixture_docs "$tws/docs" share-book
-perl -pi -e 's/^# .*/# Scrape allocation rises on 10.0.1.15/ if $. == 1' "$tws/docs/1-summary.md"
+perl -pi -e 's/^# .*/# Scrape allocation rises on 10.0.1.15 in easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab/ if $. == 1' "$tws/docs/1-summary.md"
 make -s -C "$tws/docs" build export >/dev/null 2>&1
-expect_eq "zip: a summary H1 with an identifier exports" "0" "$?"
+expect_eq "zip: a summary H1 with a bucket name exports" "0" "$?"
 twx="$tmp_root/make-share-title-extract"
 mkdir -p "$twx"
 unzip -q "$tws/docs/export/report.zip" -d "$twx" 2>/dev/null
-expect_eq "zip: the extracted <title> shows the placeholder" "<title>Summary - Scrape allocation rises on &lt;private-ip&gt;</title>" \
+expect_eq "zip: the extracted <title> shows the placeholder" "<title>Summary - Scrape allocation rises on 10.0.1.15 in &lt;s3-bucket&gt;</title>" \
   "$(grep -o '<title>[^<]*</title>' "$twx/index.html" 2>/dev/null)"
-expect_eq "zip: the extracted menu title shows the placeholder" 'menu-title">Scrape allocation rises on &lt;private-ip&gt;' \
+expect_eq "zip: the extracted menu title shows the placeholder" 'menu-title">Scrape allocation rises on 10.0.1.15 in &lt;s3-bucket&gt;' \
   "$(grep -o 'menu-title">[^<]*' "$twx/index.html" 2>/dev/null)"
 
-# A value the replace step misses fails the export, and the error names the file and line.
+# Redaction is best effort.  A value the replace step misses is a warning that names the kind, the
+# file, and the line, never the value, and the export still writes the zip.
 lws="$tmp_root/make-share-leftover"
 bash "$bin/setup-cluster.sh" "$lws" "$stub_edb" --name make-share-leftover >/dev/null 2>&1
 fixture_docs "$lws/docs" share-book
@@ -1583,40 +1642,45 @@ exporter.redact = lambda rel, text: text
 exporter.zip_report(".", "export/report.zip")
 PY
 )"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "zip: a leftover identifier fails the export"; else fail "zip: a leftover identifier fails the export"; fi
-expect_contains "zip: the leftover error names the file and line" "$out" "4-journal.md line 5"
-expect_no_file "zip: a leftover identifier writes no zip" "$lws/docs/export/report.zip"
+expect_eq "zip: a leftover secret does not fail the export" "0" "$?"
+expect_contains "zip: the leftover warning names the kind, the file, and the line" "$out" "WARN: redaction: S3 URL in 4-journal.md line 28"
+expect_contains "zip: the leftover warning names a secret kind" "$out" "WARN: redaction: cqlsh password in 4-journal.md line 32"
+expect_contains "zip: the built HTML leftover is a warning too" "$out" "WARN: redaction: cqlsh password in 4-journal.html line"
+expect_not_contains "zip: the leftover warning does not show the value" "$out" "s3cr3t-cql"
+expect_file "zip: a leftover secret still writes the zip" "$lws/docs/export/report.zip"
 
-# A staged file name is not redacted, so an identifier in one fails the export.
+# A staged file name is not redacted, so a bucket name in one is a warning, and the zip is written.
 bash "$bin/setup-cluster.sh" "$tmp_root/export-name" "$stub_edb" --name export-name >/dev/null 2>&1
 nd="$tmp_root/export-name/docs"
 fixture_docs "$nd" share-book
-cp "$nd/images/scrape-alloc.png" "$nd/images/db-ip-10-0-1-15.png"
-printf '\n![db0](images/db-ip-10-0-1-15.png)\n' >> "$nd/4-journal.md"
+cp "$nd/images/scrape-alloc.png" "$nd/images/easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab.png"
+printf '\n![db0](images/easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab.png)\n' >> "$nd/4-journal.md"
 out="$("$exporter" zip "$nd" "$tmp_root/export-name/report.zip" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "zip: an identifier in a file name fails the export"; else fail "zip: an identifier in a file name fails the export"; fi
-expect_contains "zip: the file name error names the kind and the file" "$out" "EC2 host name in the file name images/db-ip-10-0-1-15.png"
-expect_no_file "zip: an identifier in a file name writes no zip" "$tmp_root/export-name/report.zip"
+expect_eq "zip: a bucket name in a file name does not fail the export" "0" "$?"
+expect_contains "zip: the file name warning names the kind and the file" "$out" \
+  "WARN: redaction: S3 bucket name in the file name images/easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab.png"
+expect_file "zip: a bucket name in a file name still writes the zip" "$tmp_root/export-name/report.zip"
 
 # Every referenced text file is redacted, whatever its extension; an SVG gets the entity form so
-# it stays valid XML.  A referenced file that is neither text nor a known image fails the export.
+# it stays valid XML.  An IP and a home path in them stay.  A referenced file that is neither text
+# nor a known image fails the export.
 bash "$bin/setup-cluster.sh" "$tmp_root/export-text" "$stub_edb" --name export-text >/dev/null 2>&1
 xt="$tmp_root/export-text/docs"
 fixture_docs "$xt" share-book
-printf 'node 10.0.1.15 at /Users/someone/lab\n' > "$xt/data/notes.txt"
-printf 'host: control0:3000\n' > "$xt/data/conf.yaml"
-printf '<svg xmlns="http://www.w3.org/2000/svg"><text>10.0.1.15</text></svg>\n' > "$xt/images/diagram.svg"
+printf 'node 10.0.1.15 at /Users/someone/lab, CASSANDRA_PASSWORD=s3cr3t\n' > "$xt/data/notes.txt"
+printf 'host: control0:3000\npassword: s3cr3t\n' > "$xt/data/conf.yaml"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><text>10.0.1.15 s3://easy-db-lab-d779bb37-1234-4abc-9def-0123456789ab/x</text></svg>\n' \
+  > "$xt/images/diagram.svg"
 printf '\n[notes](data/notes.txt), [conf](data/conf.yaml), and ![diagram](images/diagram.svg)\n' >> "$xt/5-issues.md"
 out="$("$exporter" zip "$xt" "$tmp_root/export-text/report.zip" 2>&1)"
 expect_eq "zip: text files of any extension export" "0" "$?"
 xtx="$tmp_root/export-text/extract"
 mkdir -p "$xtx"
 unzip -q "$tmp_root/export-text/report.zip" -d "$xtx" 2>/dev/null
-expect_eq "zip: a .txt data file is redacted" "node <private-ip> at <local-path>" "$(cat "$xtx/data/notes.txt" 2>/dev/null)"
-expect_eq "zip: a .yaml data file is redacted" "host: <service-url>" "$(cat "$xtx/data/conf.yaml" 2>/dev/null)"
-expect_contains "zip: an SVG is redacted with the entity form" "$(cat "$xtx/images/diagram.svg" 2>/dev/null)" '<text>&lt;private-ip&gt;</text>'
+expect_eq "zip: a .txt data file is redacted" "node 10.0.1.15 at /Users/someone/lab, CASSANDRA_PASSWORD=<password>" "$(cat "$xtx/data/notes.txt" 2>/dev/null)"
+expect_eq "zip: a .yaml data file is redacted" "host: control0:3000
+password: <password>" "$(cat "$xtx/data/conf.yaml" 2>/dev/null)"
+expect_contains "zip: an SVG is redacted with the entity form" "$(cat "$xtx/images/diagram.svg" 2>/dev/null)" '<text>10.0.1.15 &lt;s3-url&gt;</text>'
 expect_eq "zip: a PNG is copied unchanged" "$(cksum < "$xt/images/scrape-alloc.png")" "$(cksum < "$xtx/images/scrape-alloc.png" 2>/dev/null)"
 
 bash "$bin/setup-cluster.sh" "$tmp_root/export-binary" "$stub_edb" --name export-binary >/dev/null 2>&1
@@ -1655,19 +1719,19 @@ if [[ $rc -ne 0 ]]; then pass "zip: a {{ #include }} with spaces fails the expor
 expect_contains "zip: the {{ #include }} error names the page and line" "$out" "{{#include in 5-issues.md line 7"
 expect_no_file "zip: a {{ #include }} with spaces writes no zip" "$tmp_root/export-include-space/report.zip"
 
-# mdbook turns 10\.0\.1\.15 into 10.0.1.15, which the staged scan cannot see.  The scan of the
-# built HTML catches it, names the file and line, and writes no zip.
+# mdbook turns cqlsh \-p into cqlsh -p, which the staged scan cannot see.  The scan of the built
+# HTML finds it and warns with the file and the line, and the export still writes the zip.
 bash "$bin/setup-cluster.sh" "$tmp_root/export-built" "$stub_edb" --name export-built >/dev/null 2>&1
 xh="$tmp_root/export-built/docs"
 fixture_docs "$xh" share-book
-printf '\nEscaped: 10\\.0\\.1\\.15\n' >> "$xh/5-issues.md"
+printf '\nEscaped: cqlsh \\-p s3cr3t-esc db0\n' >> "$xh/5-issues.md"
 out="$("$exporter" zip "$xh" "$tmp_root/export-built/report.zip" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "zip: an identifier in the built HTML fails the export"; else fail "zip: an identifier in the built HTML fails the export"; fi
-expect_contains "zip: the built HTML error names the page" "$out" "IPv4 address in 5-issues.html line"
-expect_contains "zip: the built HTML error names the print page" "$out" "IPv4 address in print.html line"
-expect_contains "zip: the built HTML error names the search index" "$out" "IPv4 address in searchindex"
-expect_no_file "zip: an identifier in the built HTML writes no zip" "$tmp_root/export-built/report.zip"
+expect_eq "zip: a secret in the built HTML does not fail the export" "0" "$?"
+expect_contains "zip: the built HTML warning names the page" "$out" "WARN: redaction: cqlsh password in 5-issues.html line"
+expect_contains "zip: the built HTML warning names the print page" "$out" "WARN: redaction: cqlsh password in print.html line"
+expect_contains "zip: the built HTML warning names the search index" "$out" "WARN: redaction: cqlsh password in searchindex"
+expect_not_contains "zip: the built HTML warning does not show the value" "$out" "s3cr3t-esc"
+expect_file "zip: a secret in the built HTML still writes the zip" "$tmp_root/export-built/report.zip"
 
 ews="$tmp_root/make-empty-title"
 bash "$bin/setup-cluster.sh" "$ews" "$stub_edb" --name fallback-name >/dev/null 2>&1
@@ -1704,7 +1768,7 @@ expect_contains "make: gate writes the Unchecked line on bad data" "$(grep '^⚠
 
 rws="$tmp_root/make-redact"
 bash "$bin/setup-cluster.sh" "$rws" "$stub_edb" --name make-redact >/dev/null 2>&1
-fixture_docs "$rws/docs" redact-tunnel
+fixture_docs "$rws/docs" redact-secret
 make -s -C "$rws/docs" gate >/dev/null 2>&1
 rc=$?
 if [[ $rc -ne 0 ]]; then pass "make: gate stops on a redaction FAIL"; else fail "make: gate stops on a redaction FAIL"; fi

@@ -7,7 +7,7 @@ text, separated by tabs.  An expected text of = means the input stays unchanged.
 lines that begin with # are ignored.  For each case it prints one line, "ok<TAB>name" or
 "bad<TAB>name<TAB>detail": redact() must give the expected text, and scan() must find nothing in
 it.  An expected text of !<kind> means redact() leaves the input unchanged and scan() finds that
-kind in it, so the export fails.
+kind in it, so the export warns.
 """
 
 import importlib.util
@@ -26,7 +26,7 @@ with open(sys.argv[2], encoding="utf-8") as f:
         flagged = want[1:] if want.startswith("!") else None
         want = given if want == "=" or flagged else want
         got = check.redact(rel, given)
-        left = check.scan(rel, got)
+        left = check.scan(got)
         if flagged:
             if got != want:
                 print(f"bad\t{name}\tredact gave {got!r}, expected it unchanged")

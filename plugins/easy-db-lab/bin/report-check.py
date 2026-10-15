@@ -31,20 +31,19 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
   - a Cassandra run (the plan or a journal names `cassandra use` or `cassandra start`) has a
     "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)" line;
   - no Grafana link in the customer tiers;
-  - redaction: no SOCKS URL, IPv4 or IPv6 address, EC2 host name such as ip-10-0-1-15 or
-    ec2-54-12-34-56.compute-1.amazonaws.com, 12-digit, dashed, or spaced account ID, vpc-,
-    subnet-, sg-, igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port
-    service URL, local home or key path, AWS profile name, SSO start URL, email address, S3 URL
-    or bucket name, AWS access key ID, secret key, or session token, bearer token, Basic auth
-    credentials, cqlsh, nodetool, curl, or URL password, or Grafana service account token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
-    a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
-    version after jdk, java, or openjdk, such as JDK 11.0.20.1, is not an address, unless it
-    is a private address or has a :port.  report-export.py loads the same patterns
-    from this file;
+  - redaction, in the customer tiers and in data/*.csv and data/*.json: a secret is a redaction
+    FAIL, and an S3 bucket name or s3:// URL is a WARN.  A secret is a password (cqlsh -p or
+    --password, nodetool -pw or --password, curl -u or --user, the user info of a URL, or a
+    password= or password: pair), an AWS access key ID, secret key, or session token, or a
+    Bearer, Basic, or Grafana service account token.  Each FAIL and WARN names the kind, the
+    file, and the line, and not the value.  IP addresses and other infrastructure identifiers
+    are not redacted and are no finding.  The appendix is not scanned.  report-export.py loads
+    the same patterns from this file;
   - WARN for a numeral in summary prose outside the table, the Partial token, and the Unchecked
     line.
 
-Exit codes: 0 no FAIL; 1 a FAIL; 2 a usage or I/O error; 3 a redaction FAIL, in either mode.
+Exit codes: 0 no FAIL; 1 a FAIL; 2 a usage or I/O error; 3 a redaction FAIL (a secret), in either
+mode.
 Without --gate it never edits a file.  With --gate, a non-redaction FAIL, or a --reason, writes
 or replaces the one "⚠ Unchecked: <reasons>" line under "## Caveats" in 1-summary.md and exits
 0.  The line numbers each reason: "⚠ Unchecked: (1) <reason> (2) <reason>".  A clean --gate
@@ -64,126 +63,54 @@ from datetime import datetime, timezone
 
 # --- redaction: one list for the check and for report-export.py zip ---
 
-# REDACTION names each kind of infrastructure identifier, the pattern that finds it, and the
-# placeholder that replaces it.  scan() finds what redact() would replace, so the check and the
-# replace step of report-export.py, which loads this file, cannot drift.
+# Redaction covers two kinds: secrets and S3 bucket names.  REDACTION names each kind, the
+# pattern that finds it, and the placeholder that replaces it.  scan() finds what redact() would
+# replace, so the check and the replace step of report-export.py, which loads this file, cannot
+# drift.  IP addresses, host names, AWS resource and account IDs, paths, profiles, emails, ports,
+# and tunnel details are not redacted.
 
 STATS = ["samples", "min", "p50", "mean", "p95", "p99", "max", "total", "rate"]
-MEASUREMENT = re.compile(r"^[+\-−]?\d+(?:\.\d+)?$")
-ACCOUNT = "12-digit account ID"
-_IPV4 = r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?!\d|\.\d)"
-# An IPv6 address: eight groups, or a :: form with a group on at least one side, such as
-# 2600:1f18::1, fe80::, or ::1.  A time such as 12:34:56 and a MAC address have no ::, and the
-# guards keep std::vector and a::before.  An address holds a digit, so Abc::Def in code stays.
-_H6 = r"[0-9a-f]{1,4}"
-_IPV6 = (r"(?<![\w:.])(?=[\w:]*\d)(?:(?:" + _H6 + r":){7}" + _H6 + r"|" + _H6 + r"(?::" + _H6 + r"){0,6}::(?:" + _H6 + r"(?::" + _H6
-         + r"){0,6})?|::" + _H6 + r"(?::" + _H6 + r"){0,6})(?![\w:])")
-_TUNNEL_WORD = r"(?:ssh -[LD](?:\s+[^\s`\"']+)?|tunnel(?:s|ed|ing)?|socks5h?|socks|tailscale|port-forward(?:ing)?)"
-# The rest of a path or a URL: no space, quote, or bracket, and no sentence stop at the end.
+# The rest of a URL: no space, quote, or bracket, and no sentence stop at the end.
 _REST = r"(?:[^\s`\"'<>()\[\]]*[^\s`\"'<>()\[\].,;:!?])?"
-# The options of ssh, scp, or sftp, each with its argument, which can be quoted, such as
-# -o "StrictHostKeyChecking no".
-_SSH_OPTS = r"(?:\s+-[a-z]\S*(?:\s+(?:\"[^\"]*\"|'[^']*'|[^\s-]\S*))?)*?"
-# A profile value that is a name, not a variable such as "$AWS_PROFILE", a flag, or a placeholder
-# that scan() has removed.
-_NAME = r"[\"']?((?![$<\-\x00])[^\s\"'`;)]+)"
+# A variable such as "$CQL_PASSWORD" or ${PW}, or a placeholder, which scan() makes a NUL, is not
+# a secret.
+_NOT_SECRET = r"(?![$<\x00])"
+# A secret value: double-quoted or single-quoted, with spaces, or bare.  A bare value is not a
+# flag, and it stops at a separator such as ; or &.
+_VALUE = (r"(?:\"" + _NOT_SECRET + r"([^\"\n]+)\"|'" + _NOT_SECRET + r"([^'\n]+)'"
+          r"|(?![$<\x00\"'-])([^\s\"'`;),}&]+))")
+# The key of a password pair: password, passwd, or a name that ends in one, such as
+# GF_SECURITY_ADMIN_PASSWORD or adminPassword.
+_KEY = r"[\w.-]*(?:password|passwd)"
 
 
 class Pattern:
-    """A regular expression: each match is one identifier, or its group when group is set."""
+    """A regular expression.  Each match is one value: the whole match, or, when group is set,
+    the first group from that one on that took part in the match, so that one pattern can offer
+    a quoted and a bare form of a value."""
 
     def __init__(self, pattern, flags=0, group=0):
         self.regex = re.compile(pattern, flags)
         self.group = group
 
     def spans(self, text):
-        return [m.span(self.group) for m in self.regex.finditer(text)]
-
-
-class EmailAddress:
-    """An email address, but not the password and host of a URL's user info, such as
-    https://user:pass@host, which the URL password kind covers."""
-
-    ADDRESS = re.compile(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I)
-    USER_INFO = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:\$?$", re.I)
-
-    def spans(self, text):
-        return [m.span() for m in self.ADDRESS.finditer(text) if not self.USER_INFO.search(text[:m.start()])]
-
-
-class KeyFlag(Pattern):
-    """The key file of -i, but not the -i of sed or grep, after any of its options."""
-
-    SED_GREP = re.compile(r"\b(?:sed|grep)(?:\s+(?:-\S+|'[^']*'|\"[^\"]*\"))*\s+$")
-
-    def spans(self, text):
-        return [m.span(self.group) for m in self.regex.finditer(text) if not self.SED_GREP.search(text[:m.start()])]
-
-
-class IPv4:
-    """An IPv4 address, with its :port.  A dotted version such as JDK 11.0.20.1, java version
-    17.0.8.1, v1.2.3.4, or openjdk-11.0.20.1 is not one.  A quad after any other word, such as
-    cassandra or kernel, is an address.  A private address (10/8, 172.16/12, 192.168/16) and a
-    quad with a :port are always addresses, after a JDK word too."""
-
-    ADDRESS = re.compile(r"(?<![\w.-])" + _IPV4 + r"(?::\d{1,5}\b)?")
-    VERSION = re.compile(r"\b(?:jdk|java|openjdk)(?:\s+version)?\s+$", re.I)
-    PRIVATE = re.compile(r"^(?:10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.)")
-
-    def version(self, text, m):
-        return ":" not in m.group(0) and not self.PRIVATE.match(m.group(0)) and self.VERSION.search(text[:m.start()])
-
-    def spans(self, text):
-        return [m.span() for m in self.ADDRESS.finditer(text) if not self.version(text, m)]
-
-
-class PortNumbers:
-    """Each number in a port phrase: "port 1080", "localhost:1080", and "port changed from 1080
-    to 52764".  Only the numbers are identifiers; the words stay.  A phrase starts with a number
-    or a LEAD word, so "port to 5 nodes" is prose, not a port."""
-
-    LEAD = r"(?:changed|moved|went|was|is|now|then|number|before|after)"
-    FILLER = r"(?:" + LEAD + r"|from|to|and|or)"
-    PHRASE = re.compile(r"\bports?(?=\s+(?:" + LEAD + r"|\d{1,5})\b)(?:\s+(?:" + FILLER + r"|\d{1,5})\b)+|\blocalhost:\d{1,5}\b", re.I)
-    NUMBER = re.compile(r"\d+")
-
-    def spans(self, text):
-        return [(m.start() + n.start(), m.start() + n.end())
-                for m in self.PHRASE.finditer(text) for n in self.NUMBER.finditer(m.group(0))]
+        out = []
+        for m in self.regex.finditer(text):
+            groups = range(self.group, len(m.groups()) + 1) if self.group else ()
+            out.append(m.span(next((g for g in groups if m.group(g) is not None), 0)))
+        return out
 
 
 # (kind, pattern, placeholder).  Matches that overlap merge under the placeholder of the widest
-# one: a SOCKS URL holds its IPv4 address, and an IPv4 address holds its :port.
-REDACTION = [
-    ("SOCKS proxy URL", Pattern(r"\bsocks5h?://[^\s`\"')]+", re.I), "socks-proxy"),
-    ("SSO start URL", Pattern(r"(?:https?://)?[\w-]+(?:\.[\w-]+)*\.awsapps\.com\b(?:/" + _REST + ")?", re.I), "sso-url"),
+# one: an s3:// URL holds its bucket name.
+BUCKETS = [
     ("S3 URL", Pattern(r"\bs3://" + _REST + r"|(?:https?://)?[\w.-]+\.s3(?:[.-][\w-]+)*\.amazonaws\.com\b(?:/" + _REST + ")?",
                        re.I), "s3-url"),
     ("S3 bucket name", Pattern(r"\beasy-db-lab-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "s3-bucket"),
-    # A URL with a port, such as http://control0:3000/d/abc, or a host with a port: a host name
-    # with a digit or a dot, such as control0:3000 or db0.lab.internal:9042, localhost, or a
-    # bracketed IPv6 address such as [::1]:9042.  A docker tag such as postgres:16 and a label
-    # such as Note:30 stay.
-    ("host:port service URL", Pattern(r"\b[a-z][a-z0-9+.-]*://(?:\[[0-9a-f:.]+\]|[\w.-]+):\d{1,5}\b(?:/" + _REST + r")?"
-                                      r"|(?<![\w.:/@-])(?:localhost|[a-z][\w-]*\d[\w-]*|[a-z][\w-]*(?:\.[\w-]+)+"
-                                      r"|\[[0-9a-f:.]*:[0-9a-f:.]*\]):\d{2,5}\b"
-                                      r"(?:/" + _REST + r")?", re.I), "service-url"),
-    ("email address", EmailAddress(), "email"),
-    ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|easy-db-lab)\b/?)" + _REST), "local-path"),
-    # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
-    # file.  After ssh, scp, or sftp, their options, and the host, any path, but not a
-    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays, after other options
-    # too, as in sed -E -i /pat/d.
-    ("key file path", KeyFlag(r"(?<!\S)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
-                              + _REST + ")", re.I, 1), "local-path"),
-    ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)" + _SSH_OPTS + r"(?:\s+[^\s-]\S*" + _SSH_OPTS + r")?\s+-i\s+([^\s`\"'<>\x00]"
-                                  + _REST + ")", re.I, 1), "local-path"),
-    ("AWS profile name", Pattern(r"--profile(?:=|\s+)" + _NAME, 0, 1), "aws-profile"),
-    ("AWS_PROFILE value", Pattern(r"\bAWS_PROFILE=" + _NAME, 0, 1), "aws-profile"),
-    ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),
-    # Credentials.  A secret is the value after aws_secret_access_key, or 40 base64 characters
-    # after a secret word; a session token is the value after aws_session_token.  A variable
-    # such as "$AWS_SECRET" stays.  A bearer token is 16 or more
+]
+SECRETS = [
+    # A secret is the value after aws_secret_access_key, or 40 base64 characters after a secret
+    # word; a session token is the value after aws_session_token.  A bearer token is 16 or more
     # token characters, so "a Bearer token" stays, and it does not end in a period.
     ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "aws-access-key"),
     ("AWS secret access key", Pattern(r"\baws_secret_access_key[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
@@ -195,51 +122,34 @@ REDACTION = [
     ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{15,}[\w~+/-]=*)", re.I, 1), "token"),
     ("Basic auth credentials", Pattern(r"\bAuthorization:\s*Basic\s+([A-Za-z0-9+/]{4,}={0,2})", re.I, 1), "token"),
     ("Grafana service account token", Pattern(r"\bglsa_[A-Za-z0-9_]+"), "token"),
-    # The password of cqlsh (-p, --password) and of nodetool (-pw, --password), but not a
-    # variable.  The -p of nodetool is a port.
-    ("cqlsh password", Pattern(r"\bcqlsh\b[^\n|;&]*?(?<!\S)(?:-p\s+|--password(?:=|\s+))" + _NAME, 0, 1), "password"),
-    ("nodetool password", Pattern(r"\bnodetool\b[^\n|;&]*?(?<!\S)(?:-pw\s+|--password(?:=|\s+))" + _NAME, 0, 1), "password"),
-    # The password of curl -u user:pass and --user user:pass, and of a URL such as
-    # https://user:pass@host.  The user stays.
-    ("curl password", Pattern(r"\bcurl\b[^\n|;&]*?(?<!\S)(?:-u\s*|--user(?:=|\s+))[\"']?[^\s:\"'$]+:((?![$<\x00])[^\s\"'`]+)", 0, 1),
+    # The password of cqlsh (-p VALUE, -pVALUE, --password) and of nodetool (-pw, --password).
+    # The -p of nodetool is a port.
+    ("cqlsh password", Pattern(r"\bcqlsh\b[^\n|;&]*?(?<!\S)(?:-p\s*|--password(?:=|\s+))" + _VALUE, 0, 1), "password"),
+    ("nodetool password", Pattern(r"\bnodetool\b[^\n|;&]*?(?<!\S)(?:-pw\s+|--password(?:=|\s+))" + _VALUE, 0, 1), "password"),
+    # The password of curl -u user:pass and --user user:pass, quoted or bare.  The user stays.
+    ("curl password", Pattern(r"\bcurl\b[^\n|;&]*?(?<!\S)(?:-u\s*|--user(?:=|\s+))(?:\"[^\s:\"$]*:" + _NOT_SECRET + r"([^\"\n]+)\""
+                              r"|'[^\s:'$]*:" + _NOT_SECRET + r"([^'\n]+)'|[^\s:\"'$]+:" + _NOT_SECRET + r"([^\s\"'`]+))", 0, 1),
      "password"),
-    ("URL password", Pattern(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:((?![$<\x00])[^\s/@]+)@", re.I, 1), "password"),
-    # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
-    ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
-    ("IPv4 address", IPv4(), "private-ip"),
-    ("EC2 host name", Pattern(r"\bip-(?:\d{1,3}-){3}\d{1,3}\b"), "ec2-host"),
-    ("public EC2 DNS name", Pattern(r"\bec2-(?:\d{1,3}-){3}\d{1,3}(?:(?:\.[a-z0-9-]+)*\.amazonaws\.com)?\b", re.I), "ec2-host"),
-    # Twelve digits that are not part of a decimal number such as 214748364800.0, and not the
-    # last group of a UUID such as a cluster label.
-    (ACCOUNT, Pattern(r"(?<!\d)(?<!\d\.)(?<![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-)\d{12}(?!\d)(?!\.\d)", re.I),
-     "account-id"),
-    # The console form of an account ID, such as 4178-3501-3894; not a group of a UUID.
-    ("dashed account ID", Pattern(r"(?<![\w-])\d{4}-\d{4}-\d{4}(?![\w-])"), "account-id"),
-    # The spaced form, such as 4178 3501 3894: three groups exactly, at most three words after
-    # an account cue (account, acct, AWS, or owner), so "heap 1024 2048 4096" stays.  A row of
-    # four or more 4-digit numbers, or one that ends in a decimal, stays.  A sentence period
-    # can end it.
-    ("spaced account ID", Pattern(r"\b(?:accounts?|acct|aws|owner)\b(?:[^\w\n]+\w+){0,3}?[^\w\n]+"
-                                  r"((?<![\w.-])(?<!\d )\d{4} \d{4} \d{4}(?![\w-]|\.\d)(?! \d))", re.I, 1), "account-id"),
-    ("vpc- ID", Pattern(r"\bvpc-[0-9a-f]{8,17}\b"), "vpc-id"),
-    ("subnet- ID", Pattern(r"\bsubnet-[0-9a-f]{8,17}\b"), "subnet-id"),
-    ("sg- ID", Pattern(r"\bsg-[0-9a-f]{8,17}\b"), "sg-id"),
-    ("igw- ID", Pattern(r"\bigw-[0-9a-f]{8,17}\b"), "igw-id"),
-    ("i- ID", Pattern(r"\bi-[0-9a-f]{8,17}\b"), "instance-id"),
-    ("eni- ID", Pattern(r"\beni-[0-9a-f]{8,17}\b"), "eni-id"),
-    ("vol- ID", Pattern(r"\bvol-[0-9a-f]{8,17}\b"), "volume-id"),
-    ("ami- ID", Pattern(r"\bami-[0-9a-f]{8,17}\b"), "ami-id"),
-    ("port number", PortNumbers(), "port"),
-    ("tunnel wording", Pattern(r"\b" + _TUNNEL_WORD + r"\b(?:\s+" + _TUNNEL_WORD + r"\b)*", re.I), "tunnel"),
+    # The password in the user info of a URL, such as https://user:pass@host.  The user can be
+    # empty, and the password can hold an @: the last @ before the host ends it.
+    ("URL password", Pattern(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]*:" + _NOT_SECRET + r"([^\s/?#]+)@", re.I, 1), "password"),
+    # A password pair: KEY=VALUE anywhere, as in an env file or --from-literal=password=x;
+    # "KEY": VALUE, as in JSON; and KEY: VALUE at the start of a line, as in YAML, so that the
+    # prose "the password: see the vault" stays.
+    ("password pair", Pattern(r"(?:(?<![\w.-])" + _KEY + r"\s*=\s*|[\"']" + _KEY + r"[\"']\s*:\s*|^\s*(?:-\s+)?" + _KEY + r":\s+)"
+                              + _VALUE, re.I, 1), "password"),
 ]
+REDACTION = BUCKETS + SECRETS
+# A secret that remains in a customer tier is a redaction FAIL; a bucket name there is a WARN.
+SECRET_KINDS = frozenset(kind for kind, _, _ in SECRETS)
 _NAMES = "|".join(sorted({p for _, _, p in REDACTION}, key=len, reverse=True))
 # A placeholder as redact() writes it, \<kind> or <kind>, or as mdbook writes it, &lt;kind&gt;.
 PLACEHOLDER = re.compile(r"(?:\\?<|&lt;)(?:" + _NAMES + r")(?:>|&gt;)")
 # A link fragment: in markdown ](page.md#frag); in HTML href="page.html#frag" and id="frag"; and
 # in the search index, "page.html#frag".
 # mdbook makes a heading id from the redacted heading, so a fragment can hold a placeholder name
-# such as tunnel-setup.  redact() never changes a fragment; scan() reads a placeholder name in
-# one as a placeholder, and any other identifier in one fails.
+# such as reset-the-password.  redact() never changes a fragment; scan() reads a placeholder name
+# in one as a placeholder, and finds any other secret in one.
 FRAGMENT = re.compile(r"(\]\([^)\s#]*#|\bhref=\"[^\"#]*#|[\w./-]+\.html#|\bid=\")([^)\s\"]+)")
 FRAGMENT_NAME = re.compile(r"(?<![a-z0-9])(?:" + _NAMES + r")(?![a-z0-9])")
 # The wrapper variables: $EDB, ${EDB}, $EDB_<ARM>, and ${EDB_<ARM>}.  EDB_LAB_BIN is not one.
@@ -249,90 +159,31 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 CODE_SPAN = re.compile(r"(`+)(.+?)\1")
 
 
-def measurement_spans(rel, text):
-    """Each line, paired with the (start, end) spans of its measurement cells: the numeric value
-    column of a data/*.csv, and the numeric cells under a stat column of a stats table.  A
-    measurement is never an account ID; a Node, Arm, or Unit cell can be one."""
-    lines = text.splitlines()
-    if rel.endswith(".csv"):
-        header = next(csv.reader(lines[:1]), [])
-        col = header.index("value") if "value" in header else None
-        for line in lines:
-            row = next(csv.reader([line]), [])
-            cells = line.split(",")
-            if col is not None and len(cells) == len(row) and col < len(row) and MEASUREMENT.match(row[col].strip()):
-                start = sum(len(c) + 1 for c in cells[:col])
-                yield line, [(start, start + len(cells[col]))]
-            else:
-                yield line, []
-        return
-    header = None
-    for line in lines:
-        if re.match(r"^\|\s*Node\s*\|\s*Arm\s*\|", line):
-            header = [c.strip() for c in line.split("|")]
-        elif not line.lstrip().startswith("|"):
-            header = None
-        spans = []
-        if header:
-            start = 0
-            for i, cell in enumerate(line.split("|")):
-                if i < len(header) and header[i].lower() in STATS and MEASUREMENT.match(cell.strip()):
-                    spans.append((start, start + len(cell)))
-                start += len(cell) + 1
-        yield line, spans
-
-
-def without_measurements(rel, text):
-    """Each line, paired with the line less its measurement cells."""
-    for line, spans in measurement_spans(rel, text):
-        words, last = [], 0
-        for start, end in spans:
-            words.append(line[last:start])
-            last = end
-        words.append(line[last:])
-        yield line, "".join(words)
-
-
-def measurements(rel, text):
-    """The text of each measurement cell in the file."""
-    return {line[s:e].strip() for line, spans in measurement_spans(rel, text) for s, e in spans}
-
-
-def scan(rel, text, keep=frozenset()):
-    """(kind, line number) for each infrastructure identifier that remains.  A placeholder is
-    not an identifier.  It becomes a NUL, not a space, so that "--profile <aws-profile> s3"
-    does not read s3 as the profile.  keep holds measurements from the staged markdown: in the
-    built HTML, where no stats table is markdown, such a number is not an account ID."""
+def scan(text):
+    """(kind, line number) for each secret or bucket name that remains.  A placeholder is not
+    one.  It becomes a NUL, not a space, so that "-p <password> db0" does not read db0 as the
+    password."""
     found = []
-    kept = re.compile(r"(?<!\d)(?:" + "|".join(map(re.escape, sorted(keep))) + r")(?![\d])") if keep else None
-    for n, (line, words) in enumerate(without_measurements(rel, text), 1):
-        line, words = (FRAGMENT.sub(lambda m: m.group(1) + FRAGMENT_NAME.sub("\x00", m.group(2)), PLACEHOLDER.sub("\x00", t))
-                       for t in (line, words))
-        if kept:
-            words = kept.sub("\x00", words)
+    for n, line in enumerate(text.splitlines(), 1):
+        line = FRAGMENT.sub(lambda m: m.group(1) + FRAGMENT_NAME.sub("\x00", m.group(2)), PLACEHOLDER.sub("\x00", line))
         for kind, pattern, _ in REDACTION:
-            if pattern.spans(words if kind == ACCOUNT else line):
+            if pattern.spans(line):
                 found.append((kind, n))
     return found
 
 
-def _replace(segment, placeholder, protected, offset):
-    """Replace each identifier in segment, in one pass over the original text.  Matches that
-    overlap merge, and one placeholder covers the merged text: the placeholder of the widest
-    match, or of the earlier kind when two are as wide.  So "ssh -L 9042:10.0.0.1:9042" becomes
-    one <tunnel>.  A match inside a placeholder or a link fragment stays, so the replace step
-    can run twice and a fragment keeps pointing at its heading.  The account pattern keeps a
-    measurement cell; protected spans are line offsets, and segment starts at offset in the
-    line."""
+def _replace(segment, placeholder):
+    """Replace each secret and bucket name in segment, in one pass over the original text.
+    Matches that overlap merge, and one placeholder covers the merged text: the placeholder of
+    the widest match, or of the earlier kind when two are as wide.  So an s3:// URL that holds a
+    bucket name becomes one <s3-url>.  A match inside a placeholder or a link fragment stays, so
+    the replace step can run twice and a fragment keeps pointing at its heading."""
     kept = [m.span() for m in PLACEHOLDER.finditer(segment)] + [m.span(2) for m in FRAGMENT.finditer(segment)]
     found = []
-    for rank, (kind, pattern, name) in enumerate(REDACTION):
+    for rank, (_, pattern, name) in enumerate(REDACTION):
         for start, end in pattern.spans(segment):
-            if kind == ACCOUNT and any(a <= offset + start < b for a, b in protected):
-                continue
-            if any(a <= start and end <= b for a, b in kept):
-                continue
-            found.append((start, end, rank, name))
+            if not any(a <= start and end <= b for a, b in kept):
+                found.append((start, end, rank, name))
     chosen = []
     for start, end, rank, name in sorted(found):
         if chosen and start < chosen[-1][1]:
@@ -352,33 +203,33 @@ def _replace(segment, placeholder, protected, offset):
 
 
 def redact(rel, text):
-    """The text with each identifier replaced by its <kind> placeholder and each wrapper variable
-    by the command name.  In a markdown page, a placeholder outside code is escaped as \\<kind>,
-    so that mdbook shows it rather than read it as an HTML tag.  In an SVG, HTML, or XML file it
-    is &lt;kind&gt;, so that the file stays well formed."""
+    """The text with each secret and bucket name replaced by its <kind> placeholder and each
+    wrapper variable by the command name.  In a markdown page, a placeholder outside code is
+    escaped as \\<kind>, so that mdbook shows it rather than read it as an HTML tag.  In an SVG,
+    HTML, or XML file it is &lt;kind&gt;, so that the file stays well formed."""
     raw = lambda name: f"<{name}>"
     if rel.lower().endswith((".svg", ".html", ".htm", ".xml")):
         raw = lambda name: f"&lt;{name}&gt;"
     escaped = lambda name: f"\\<{name}>"
     markdown = rel.endswith(".md")
     out, fenced = [], False
-    for line, spans in measurement_spans(rel, text):
+    for line in text.splitlines():
         if not markdown:
-            out.append(_replace(line, raw, spans, 0))
+            out.append(_replace(line, raw))
             continue
         if FENCE.match(line):
             fenced = not fenced
-            out.append(_replace(line, raw, spans, 0))
+            out.append(_replace(line, raw))
             continue
         if fenced:
-            out.append(_replace(line, raw, spans, 0))
+            out.append(_replace(line, raw))
             continue
         parts, last = [], 0
         for m in CODE_SPAN.finditer(line):
-            parts.append(_replace(line[last:m.start()], escaped, spans, last))
-            parts.append(_replace(m.group(0), raw, spans, m.start()))
+            parts.append(_replace(line[last:m.start()], escaped))
+            parts.append(_replace(m.group(0), raw))
             last = m.end()
-        parts.append(_replace(line[last:], escaped, spans, last))
+        parts.append(_replace(line[last:], escaped))
         out.append("".join(parts))
     return "\n".join(out) + ("\n" if text.endswith("\n") else "")
 
@@ -922,11 +773,14 @@ class Checker:
                     if GRAFANA.search(line):
                         self.report.fail(f"Grafana link in {rel} line {n}: download the graph with report-graph.py")
                         clean = False
-            for what, n in scan(rel, text):
-                self.report.redact(f"{what} in {rel} line {n}")
-                clean = False
+            for what, n in scan(text):
+                if what in SECRET_KINDS:
+                    self.report.redact(f"{what} in {rel} line {n}")
+                    clean = False
+                else:
+                    self.report.warn(f"redaction: {what} in {rel} line {n}; the shareable book replaces it, JIRA and the upload keep it")
         if clean:
-            self.report.ok("no Grafana link and no infrastructure identifier in the customer tiers and data/")
+            self.report.ok("no Grafana link and no secret in the customer tiers and data/")
 
 
 def gate(docs, reasons):
@@ -992,7 +846,7 @@ def main():
 
     print(f"report-check: {len(report.fails) + len(report.redactions)} failed ({len(report.redactions)} redaction), {len(report.warns)} warnings")
     if report.redactions:
-        print("report-check: a redaction FAIL blocks the upload; fix the customer tiers and data/", file=sys.stderr)
+        print("report-check: a redaction FAIL blocks the upload; remove the secret from the customer tiers and data/", file=sys.stderr)
         sys.exit(3)
     if args.gate:
         gate(docs, report.fails + args.reason)

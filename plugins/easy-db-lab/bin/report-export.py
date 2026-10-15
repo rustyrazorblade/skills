@@ -20,14 +20,16 @@ number, so "(MB/s)" and "+20.8%" stay readable.
 zip writes the shareable book.  It stages every page that SUMMARY.md lists, the appendix
 included, every images/ and data/ file they reference, and the theme (book.toml, lab.css, and
 SUMMARY.md) under export/stage/.  In each staged text file, whatever its extension, it replaces
-each infrastructure identifier with a placeholder that names its kind, such as <private-ip>,
-and each wrapper variable ($EDB, ${EDB}, $EDB_<ARM>) with easy-db-lab.  It then scans the whole
-staged copy with the same patterns (report-check.py), builds it with mdbook, scans every text
-file of the built HTML, and zips the built HTML.  The export fails, and writes no zip, on: a
-listed page outside docs/; a referenced file that does not exist, or that is neither text nor a
-png, jpg, gif, or webp image; an identifier in a staged file name; an mdbook include directive
-in a staged page; or an identifier that remains in the staged copy or in the built HTML.  The
-local report/ and the docs files keep the unredacted record.
+each secret and each S3 bucket name or s3:// URL with a placeholder that names its kind, such as
+<password> or <s3-bucket>, and each wrapper variable ($EDB, ${EDB}, $EDB_<ARM>) with
+easy-db-lab.  IP addresses and other infrastructure identifiers stay as written.  It then scans
+the staged copy and the file names with the same patterns (report-check.py), builds it with
+mdbook, scans every text file of the built HTML, and zips the built HTML.  Redaction is best
+effort: a secret or a bucket name that remains is a warning that names the kind, the file, and
+the line, never the value, and the zip is still written.  The export fails, and writes no zip,
+on: a listed page outside docs/; a referenced file that does not exist, or that is neither text
+nor a png, jpg, gif, or webp image; or an mdbook include directive in a staged page.  The local
+report/ and the docs files keep the unredacted record.
 """
 
 import argparse
@@ -51,7 +53,7 @@ def load_check():
 
 
 _check = load_check()
-redact, scan, measurements = _check.redact, _check.scan, _check.measurements
+redact, scan = _check.redact, _check.scan
 
 # Okabe-Ito, the same badge colours as lab.css.
 LUA_FILTER = r"""
@@ -216,12 +218,19 @@ def stage(docs, files, text_files, dest):
             shutil.copyfile(src, out)
 
 
+def warn(found):
+    """Print one warning per secret or bucket name that remains.  Redaction is best effort, so a
+    leftover never fails the export."""
+    for message in found:
+        print(f"WARN: redaction: {message}; it remains in the shareable book", file=sys.stderr)
+
+
 def leftovers(dest, text_files):
-    """One message per identifier that remains in the staged text files."""
+    """One message per secret or bucket name that remains in the staged text files."""
     found = []
     for rel in text_files:
         with open(os.path.join(dest, rel), encoding="utf-8") as f:
-            found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, f.read())]
+            found += [f"{kind} in {rel} line {n}" for kind, n in scan(f.read())]
     return found
 
 
@@ -237,19 +246,10 @@ def includes(dest, text_files):
     return found
 
 
-def measured(dest, text_files):
-    """The measurement cells of the staged files, which the built HTML shows outside markdown."""
-    out = set()
-    for rel in text_files:
-        with open(os.path.join(dest, rel), encoding="utf-8") as f:
-            out |= measurements(rel, f.read())
-    return out
-
-
-def built_leftovers(html, keep):
-    """One message per identifier in a text file of the built HTML: the pages, print.html, the
-    search index, and the table of contents.  mdbook can turn text that the staged scan cannot
-    read, such as 10\\.0\\.1\\.15, into an identifier."""
+def built_leftovers(html):
+    """One message per secret or bucket name in a text file of the built HTML: the pages,
+    print.html, the search index, and the table of contents.  mdbook can turn text that the
+    staged scan cannot read, such as cqlsh \\-p, into a secret."""
     found = []
     for root, _, names in os.walk(html):
         for name in sorted(names):
@@ -262,28 +262,27 @@ def built_leftovers(html, keep):
                     text = f.read().decode("utf-8")
                 except UnicodeDecodeError:
                     continue
-            found += [f"{kind} in {rel} line {n}" for kind, n in scan(rel, text, keep)]
+            found += [f"{kind} in {rel} line {n}" for kind, n in scan(text)]
     return found
 
 
 def named(files):
-    """One message per identifier in a staged file's path.  The replace step never renames a
-    file, because a page links to it by that name."""
-    return [f"{kind} in the file name {rel}" for rel in files for kind, _ in scan("name.txt", rel)]
+    """One message per secret or bucket name in a staged file's path.  The replace step never
+    renames a file, because a page links to it by that name."""
+    return [f"{kind} in the file name {rel}" for rel in files for kind, _ in scan(rel)]
 
 
 def zip_report(docs, out):
     files = book_files(docs)
-    found = named(files)
-    if found:
-        die("redaction: rename these files and their links: " + "; ".join(found))
+    warn(named(files))
     export = os.path.dirname(os.path.abspath(out))
     staged, html = os.path.join(export, "stage"), os.path.join(export, "html")
     text_files = texts(docs, files)
     stage(docs, files, text_files, staged)
-    found = leftovers(staged, text_files) + includes(staged, text_files)
+    found = includes(staged, text_files)
     if found:
-        die("redaction: identifiers remain in the staged book under " + staged + ": " + "; ".join(found))
+        die("mdbook include directives in the staged book under " + staged + ": " + "; ".join(found))
+    warn(leftovers(staged, text_files))
     mdbook = shutil.which("mdbook")
     if not mdbook:
         die("mdbook is required but not on PATH")
@@ -298,9 +297,7 @@ def zip_report(docs, out):
         die("mdbook build of the staged book failed: " + built.stderr.strip())
     # mdbook copies book.toml into the built HTML; it is a build input, not part of the book.
     os.remove(os.path.join(html, "book.toml"))
-    found = built_leftovers(html, measured(staged, text_files))
-    if found:
-        die("redaction: identifiers remain in the built book under " + html + ": " + "; ".join(found))
+    warn(built_leftovers(html))
     tmp = out + ".tmp"
     count = 0
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:

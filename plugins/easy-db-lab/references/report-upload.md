@@ -135,7 +135,7 @@ Immediately before every real top-level `$EDB down`:
 Two exceptions to step 4's rule:
 
 - **A non-redaction check failure** never blocks the `down`.  `make gate` writes the "⚠ Unchecked: <reasons>" line under Caveats, the failure goes to `<issues>`, and the report uploads.  The `down` runs after a successful upload.
-- **A redaction failure** (`report-check.py` exits 3) skips the upload.  Write the failure to `<journal>` and `<issues>`, and run `$EDB down --auto-approve`.  An unattended run reports "report not uploaded: redaction" to the launcher.  The owner fixes the report and uploads later with `run <cluster-dir> --finalize`, which runs no `down`.
+- **A redaction failure** (`report-check.py` exits 3) skips the upload.  A redaction failure is a secret, such as a password, an AWS key or session token, or a Bearer, Basic, or Grafana token, in the customer tiers or `data/`.  A bucket name there is a check WARN, and an IP address or another infrastructure identifier is not a finding, so neither skips the upload.  Write the failure to `<journal>` and `<issues>`, and run `$EDB down --auto-approve`.  An unattended run reports "report not uploaded: redaction" to the launcher.  The owner fixes the report and uploads later with `run <cluster-dir> --finalize`, which runs no `down`.
 
 Each `down` attempt gets its own Finalize and upload first.  An earlier successful upload does not cover a later `down`, because the journal has changed since then.
 

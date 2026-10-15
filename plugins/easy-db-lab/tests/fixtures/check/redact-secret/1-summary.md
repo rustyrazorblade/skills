@@ -13,4 +13,4 @@ The canary does not cut scrape allocation.  It raises it on every node, so the c
 
 ## Caveats
 
-- Metrics came through a SOCKS tunnel.  The scrape allocation row has no noise floor measurement.
+- The probe ran `cqlsh -u cassandra -p s3cr3t db0`.  The scrape allocation row has no noise floor measurement.

@@ -98,7 +98,7 @@ Each entry follows these rules, so that it is easy to read in the book:
 - Keep each line to 160 characters or fewer.  In a code block, wrap a long command with `\`.
 - A failure gets a `**Result: failed**` bullet with the error.
 - A failure entry also records the values that matter to the failure.  For example, record the proxy port before and after a restart, or the query and the window of a failed fetch.
-- These values can be infrastructure identifiers, such as a tunnel port.  They can stay in the journal, because it is in the appendix.  "Redaction" in `report.md` keeps them out of the summary and the evidence tier.
+- These values can be infrastructure identifiers, such as an IP or a tunnel port.  They are not redacted, and they can appear in every tier.  A secret, such as a `cqlsh -p` password, can stay in the journal, because the check does not scan the appendix and the shareable book redacts it; see "Redaction" in `report.md`.
 - An entry that starts a long step gets its result in the same entry, or in a follow-up entry that names the step.
 - A loop gets one bullet.  The check loop gets the pass count and the result, and its detail goes to `<issues>`.  For example: "**Check:** 5 passes; the final pass is clean.  Details are in `5-issues.md`."
 - The retry loop of one command gets one bullet with the attempt count and each distinct error, or the first and the last error.  If the loop ends in failure, the entry also gets a `**Result: failed**` bullet.

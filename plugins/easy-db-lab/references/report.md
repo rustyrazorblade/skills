@@ -292,21 +292,16 @@ Write report prose in ASD-STE100 Simplified Technical English:
 
 ## Redaction
 
-These identifiers never appear in the summary, the evidence tier, or their CSV and JSON files:
+Redaction covers two kinds only: secrets, and S3 bucket names.
 
-- account IDs (12 digits, dashed as `4178-3501-3894`, or spaced as `4178 3501 3894` at most three words after `account`, `acct`, `AWS`, or `owner`);
-- VPC, subnet, security group, internet gateway, instance, network interface, volume, and image IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`, `eni-`, `vol-`, `ami-`);
-- IPv4 and IPv6 addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`, `ec2-54-12-34-56.compute-1.amazonaws.com`);
-- tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards);
-- `host:port` service URLs (`control0:3000`, `[::1]:9042`, `http://control0:3000/d/abc`);
-- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, `~/.easy-db-lab/…`, and the key file after `-i`: any path after `ssh`, `scp`, or `sftp`, their options, or the host, and elsewhere a path that starts with `/`, `~/`, or `./`, or a `.pem`, `.key`, or `id_*` file; the `-i` of `sed` and `grep` stays, after other options too, as in `sed -E -i /x/d`);
-- AWS profile names (`--profile X`, `AWS_PROFILE=X`, `AccountUser-…`), SSO start URLs (`*.awsapps.com`), and email addresses;
-- S3 URLs and bucket names (`s3://…`, `easy-db-lab-<uuid>`);
-- credentials: AWS access key IDs (`AKIA…`, `ASIA…`), AWS secret keys (the value of `aws_secret_access_key`, or 40 base64 characters after a secret word), AWS session tokens (the value of `aws_session_token` or `AWS_SESSION_TOKEN`), `Bearer` tokens, `Authorization: Basic` credentials, `cqlsh` passwords (`-p`, `--password`), `nodetool` passwords (`-pw`, `--password`), the password of `curl -u user:pass` and `--user user:pass`, the password of a URL such as `https://user:pass@host` (the user stays), and Grafana service account tokens (`glsa_…`).
+- **Secrets:** passwords in every form: `cqlsh -p`, `-pVALUE`, and `--password`; `nodetool -pw` and `--password`; the password of `curl -u user:pass` and `--user user:pass`; the password in the user info of a URL, such as `https://user:pass@host`; and a `password=` or `password:` pair, such as `GF_SECURITY_ADMIN_PASSWORD=x`, `--from-literal=password=x`, or `"password": "x"`.  A quoted value with spaces is a secret too.  Also AWS access key IDs (`AKIA…`, `ASIA…`), AWS secret keys (the value of `aws_secret_access_key`, or 40 base64 characters after a secret word), AWS session tokens (the value of `aws_session_token` or `AWS_SESSION_TOKEN`), `Bearer` tokens, `Authorization: Basic` credentials, and Grafana service account tokens (`glsa_…`).  A variable such as `"$CQL_PASSWORD"` is not a secret.
+- **S3 bucket names:** `s3://…` URLs, S3 host names such as `my-bucket.s3.us-west-2.amazonaws.com`, and `easy-db-lab-<uuid>` bucket names.
 
-They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
+A secret never appears in the summary, the evidence tier, or their CSV and JSON files.  `report-check.py` fails on a secret there and exits 3, because `jira.txt` and the uploaded tier files are not redacted.  A bucket name there is a WARN, not a FAIL.  Each FAIL and WARN names the kind, the file, and the line, and not the value.  The check does not scan the appendix: `<plan>`, `<journal>`, and `<issues>` keep the raw record, and the shareable book redacts them.
 
-A measurement is not an account ID: a decimal number, the CSV value column, a numeric stats table cell, and three spaced 4-digit numbers with no account word before them, such as `heap 1024 2048 4096`.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  A dotted version after `jdk`, `java`, or `openjdk`, such as `JDK 11.0.20.1`, is not an address.  After any other word, such as `cassandra` or `kernel`, a dotted quad is an address.  A private address (`10/8`, `172.16/12`, `192.168/16`) and a quad with a `:port` are always addresses.  The phrase "port to 5 nodes" is not a port.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
+IP addresses and other infrastructure identifiers are not redacted.  They can appear in every tier, and they are not a check finding.  This covers IPv4 and IPv6 addresses, EC2 host names, AWS resource IDs (`vpc-`, `subnet-`, `sg-`, `i-`, and others), account IDs, home and key paths, AWS profile names, SSO start URLs, email addresses, ports, and tunnel and SOCKS details.
+
+Redaction is best effort.  A pattern can miss a secret in an unusual form, so do not put a secret in a report on purpose.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
 
 ### The shareable book
 
@@ -339,7 +334,7 @@ A partial exit is any exit before every plan step has finished: a pause, or a te
 
 Run the check after you write the summary, and before `make`.  It has four parts, in this order.  The subagent runs last, because it reads `<issues>`.
 
-1. **The script.**  `report-check.py <cluster-dir>/docs`.  `make check` runs the same command.  It prints PASS, FAIL, or WARN per check.  Exit 0 means no FAIL, 1 a FAIL, 2 a usage or I/O error, and 3 a redaction FAIL.  Malformed evidence data, such as a CSV value that is not a number, is a FAIL that names the data file.  It treats a run as a Cassandra run when `<plan>` or a journal names `cassandra use` or `cassandra start`.
+1. **The script.**  `report-check.py <cluster-dir>/docs`.  `make check` runs the same command.  It prints PASS, FAIL, or WARN per check.  Exit 0 means no FAIL, 1 a FAIL, 2 a usage or I/O error, and 3 a redaction FAIL.  A redaction FAIL is a secret in the customer tiers or `data/`; a bucket name there is a WARN, and an IP is not a finding (see "Redaction").  Malformed evidence data, such as a CSV value that is not a number, is a FAIL that names the data file.  It treats a run as a Cassandra run when `<plan>` or a journal names `cassandra use` or `cassandra start`.
 2. **The reasoning review.**  For a Cassandra run only.  Ask `cassandra-expert` to review the reasoning: confounds, the choice of metric, and whether the noise floor supports the verdict.  When it has run, write `Reasoning review: done`.  `cassandra-expert` ships as a separate plugin.  When it is not installed, write `Reasoning review: not run (cassandra-expert not installed)`, and tell the user or the launcher plainly.
 3. **Write the issues.**  Write each FAIL from the script and each concern from the review to `<issues>`.  If one affects the result, also put it under `## Threats to validity`.
 4. **The check subagent.**  Run a general-purpose subagent with the prompt below.  It reads `<issues>` with the issues from step 3 in it.  Write each problem it names to `<issues>` too.
@@ -395,7 +390,7 @@ make -C <cluster-dir>/docs gate REASONS='--reason "the noise floor does not supp
 
 ### A redaction failure
 
-When `report-check.py` exits 3 at a teardown gate:
+A redaction failure is a secret in the customer tiers or `data/`.  A bucket name or an IP address there does not make the check exit 3.  When `report-check.py` exits 3 at a teardown gate:
 
 1. Do not upload.  The report stays local.
 2. Write the failure to `<journal>` and `<issues>`.
@@ -481,8 +476,7 @@ The step does this:
 1. It reads the dashboard JSON through `/api/dashboards/uid/<UID>`.  If it cannot, it renders nothing and exits non-zero.
 2. It looks for the window variables `base_from`, `base_to`, `cand_from`, and `cand_to` (rustyrazorblade/easy-db-lab#1015).  When all four exist, it sets them to each arm's measured `start` and `end` from `data/<metric>-<arm>.json`, in epoch milliseconds, so the image shows the measured windows.
 3. It renders with a relative range, `--from now-<N>s --to now`, where N is the number of seconds from the earlier arm's measured start to now.  Each overlay panel sets its own range, and an absolute dashboard range turns that off.  Never use a fixed range.  The dashboard moves each run to a common start, so do not align the windows yourself.
-4. It refuses the render when either arm's fetch mapped an IP-like node label, as in "Render" above.
-5. It writes `images/<metric>-overlay-<arm>.png`.
+4. It writes `images/<metric>-overlay-<arm>.png`.
 
 **The whole-run fallback.**  When the dashboard has no window variables, the overlay covers each cluster's whole run, from its first `up` sample to its last.  The step renders it anyway and prints two lines.  Copy the `journal:` line to `4-journal.md`.  Copy the text after `caveat: ` as a line under `## Caveats` in `1-summary.md`, when Final Finalize writes the summary.
 

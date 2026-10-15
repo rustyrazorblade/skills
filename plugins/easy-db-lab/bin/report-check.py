@@ -159,13 +159,13 @@ REDACTION = [
     ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),
     # Credentials.  A secret is the value after aws_secret_access_key, or 40 base64 characters
     # after a secret word; a variable such as "$AWS_SECRET" stays.  A bearer token is 16 or more
-    # token characters, so "a Bearer token" stays.
+    # token characters, so "a Bearer token" stays, and it does not end in a period.
     ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "aws-access-key"),
     ("AWS secret access key", Pattern(r"\baws_secret_access_key[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
      "aws-secret"),
     ("AWS secret key", Pattern(r"secret[\w-]*[\"']?\s*[=:]?\s*[\"']?([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+])", re.I, 1),
      "aws-secret"),
-    ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{16,}=*)", re.I, 1), "token"),
+    ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{15,}[\w~+/-]=*)", re.I, 1), "token"),
     ("Grafana service account token", Pattern(r"\bglsa_[A-Za-z0-9_]+"), "token"),
     # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
     ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),

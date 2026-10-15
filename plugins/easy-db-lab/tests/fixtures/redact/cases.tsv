@@ -143,3 +143,4 @@ spaced-account-id-colon	page.txt	AWS account ID: 4178 3501 3894, in us-west-2	AW
 spaced-account-owner	page.txt	owner id 4178 3501 3894 here	owner id <account-id> here
 keep-spaced-rates	page.txt	Rates 1000 2000 3000 ops/s	=
 keep-spaced-heap	page.txt	heap 1024 2048 4096	=
+bearer-period	page.txt	Sent Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123def.	Sent Authorization: Bearer <token>.

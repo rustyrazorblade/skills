@@ -160,12 +160,9 @@ Install `easy-db-lab` from the plugins section:
 | `/easy-db-lab:run` | Execute a plan step by step in a cluster workspace, confirming each step and journaling as it goes.  Uploads the report before every teardown |
 | `/easy-db-lab:create-kit` | Author a new kit (kit.yaml, K8s manifests, metrics, dashboards, docs) for any database or workload |
 
-#### Agent
+#### Networking
 
-An `easy-db-lab operator` agent handles live-cluster work that isn't a scripted plan — provisioning,
-configuring, benchmarking, and tearing down clusters via the `easy-db-lab` binary. Note that Grafana
-and the rest of the observability stack are only reachable over Tailscale, so the operator always
-hands you private IPs; public IPs will not work.
+Grafana and the rest of the observability stack are reachable only over Tailscale, so use private IPs; public IPs do not work.
 
 #### Usage Examples
 
@@ -189,11 +186,17 @@ hands you private IPs; public IPs will not work.
 
 - Skills run from a lab workspace directory; `explore` will walk you through `easy-db-lab init --up` if none exists
 - Each DC in a multi-DC setup gets its own subdirectory and binary wrapper (`<cluster-dir>/dc1/easy-db-lab`) with independent state
-- `plan` writes to `plan.md` in the current directory unless `--output` says otherwise; `run` reads the plan from `<cluster-dir>/docs/plan.md`
-- Every command and observation is journaled to `<cluster-dir>/docs/journal.md` as it happens, and friction is logged to `docs/issues.md` — this is what lets `run` resume a plan and `plan --previous` learn from a past run
+- `plan` writes to `plan.md` in the current directory unless `--output` says otherwise; `run` reads the plan from `<cluster-dir>/docs/3-plan.md`
+- Every command and observation is journaled to `<cluster-dir>/docs/4-journal.md` as it happens, and friction is logged to `docs/5-issues.md` — this is what lets `run` resume a plan and `plan --previous` learn from a past run
+- The lab report in `docs/` is tiered in five files: `1-summary.md` (the verdict first), `2-evidence.md`, then `3-plan.md`, `4-journal.md`, and `5-issues.md` as an appendix.  Each evidence block holds a Grafana panel render, a stats table, and the CSV downloaded from Mimir
+- A cross-cluster test (`setup-cluster.sh --arm <arm>=<plan.md>`, one cluster per arm) writes one report; each arm gets its own plan, journal, and issues page
+- `make -C <cluster-dir>/docs` checks every summary claim against its evidence, builds the book into `report/`, and writes `export/jira.txt` and `export/report.zip`
+- `export/report.zip` is the shareable report: the themed HTML book of every page, the appendix too.  The book opens in the dark (coal) theme, and the Grafana renders default to the dark theme to match
+- Redaction is best effort and covers secrets and S3 bucket names only.  The zip export replaces each one with a placeholder that names its kind, such as `<password>` or `<s3-bucket>`.  IP addresses and other infrastructure identifiers stay as written.  The local `report/` and `docs/` keep the unredacted record
 - `explore`, `plan`, and `run` need the `easy-db-lab` binary.  Each one looks for it in a set order, for example `--binary`, `bin/easy-db-lab`, then `easy-db-lab` on `PATH`.  If no binary resolves, a skill asks for a path in an interactive session; otherwise it stops and reports the paths searched
 - These skills discover the command surface from the binary, help-first: `easy-db-lab help`, then `easy-db-lab help <topic>`, then `easy-db-lab commands` and `--help`.  The plugin ships no static command reference
-- `run` and `explore` upload `docs/*.md` with `easy-db-lab report upload` before every real `down`, so the report shows in the Grafana Tests dashboard.  If the upload fails, they do not tear down.  If the binary has no `report upload`, they skip the upload
+- `run` and `explore` upload the report's tier files with `easy-db-lab report upload` before every real `down`, so the report shows in the Grafana Tests dashboard.  If the upload fails, they do not tear down.  If the binary has no `report upload`, they skip the upload
+- `run` and `explore` check the AWS SSO session before they start.  A token that expires soon is a warning only; they stop only when the session cannot refresh, and then ask for `aws sso login`
 
 ### spec-flow
 

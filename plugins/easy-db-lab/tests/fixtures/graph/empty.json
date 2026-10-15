@@ -1,0 +1,13 @@
+{
+  "query": "sum by (instance) (rate(jvm_gc_memory_allocated_bytes_total{instance=~\"db.*\"}[1m]))",
+  "start": "2026-10-01T10:00:00Z",
+  "end": "2026-10-01T10:10:00Z",
+  "step": "30s",
+  "unit": "MB/s",
+  "scale": 1e-06,
+  "arms": {
+    "baseline": [
+      "db0"
+    ]
+  }
+}

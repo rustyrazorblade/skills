@@ -1,0 +1,9 @@
+### 19:13 Coordinator: discovery, plans, and scaffold
+Unattended run.  The launcher stated a shutdown intent: tear down every arm through its arm gate when done.
+Binary: `/home/lab/easy-db-lab/bin/easy-db-lab`.  `aws ec2 describe-vpcs` (profile `AccountUser-000000000000`) works: the SSO session is valid.  Before the run: 0 running instances in us-west-2; 5 VPCs, none named `arms122-*`.
+`$EDB commands`: `report upload` is listed, so uploads are supported.  Image and CSV support: not supported (the `<FILE>` line names `.md` only).  Upload `.md` files only.
+`help` read: index, observability.
+Template: `tests/plans/arms122-template.md`, from `arms-template.md` with the cluster name `arms122-{{ARM}}`, the per-arm memtable render, and a second metric, write p99, which has an overlay panel (`ab-comparison` 1003).  Generated `arms122-baseline.md` (1024MiB) and `arms122-candidate.md` (32MiB) with `sed`.  Proof: each arm plan, with its arm name and value put back to the placeholders, is byte-identical to the template (`cmp`: IDENTICAL for both).
+`setup-cluster.sh <test-dir> <binary> --name "Small memtable heap space, cross-cluster A/B (12.2)" --plan arms122-template.md --arm baseline=arms122-baseline.md --arm candidate=arms122-candidate.md`: exit 0.  `arms` marker, one wrapper per arm, shared `docs/`, `SUMMARY.md` Appendix lists coordinator files then each arm's files.
+`detect-cluster-layout.sh <test-dir>`: LAYOUT=arms, ARMS="baseline candidate", both unprovisioned.
+Dashboard source check (`easy-db-lab/dashboards/cassandra/ab-comparison.json`): variables `baseline_cluster` and `candidate_cluster` take the full `cluster` label value (name plus cluster ID; the regex keeps the whole label as the value and the name as the text).  No variables named `base_from`, `base_to`, `cand_from`, `cand_to`; the dashboard has `base_start`, `base_end`, `cand_start`, `cand_end`, derived from `up`.  The live dashboard is checked again before the overlay render.

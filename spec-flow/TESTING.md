@@ -54,6 +54,35 @@ Run these on a change, and only where the change touches them:
     that scripts directory: not `init-explain.sh`, not `preview.sh`, and not the fixture's `src/`,
     `baseline-src/`, `docs/`, `fake-gh/`, or `explain-map.json`, which are `preview.sh`'s own
     inputs. Editing one of those and getting a green run proves nothing about the edit.
+  - `bash plugins/easy-db-lab/tests/test-report.sh` covers the easy-db-lab lab report:
+    `plugins/easy-db-lab/bin/setup-cluster.sh`, `plugins/easy-db-lab/bin/detect-cluster-layout.sh`,
+    `plugins/easy-db-lab/bin/report-graph.py`, `plugins/easy-db-lab/bin/report-check.py`,
+    `plugins/easy-db-lab/bin/report-export.py`, every file in `plugins/easy-db-lab/scaffold/`, and
+    its own fixtures under `plugins/easy-db-lab/tests/fixtures/`. Its helper
+    `plugins/easy-db-lab/tests/redact-cases.py` runs the one-line redaction cases in
+    `fixtures/redact/cases.tsv` against `report-check.py`. Those fixtures include a stub
+    Mimir (`fixtures/mimir/stub.py`) for `fetch` and a stub Grafana (`fixtures/grafana/stub.py`)
+    for `render`; both are local HTTP servers on `127.0.0.1`.  A stub SOCKS5 forwarder
+    (`fixtures/socks/forwarder.py`) carries the `--proxy` cases of `fetch`, `render`, and the
+    "### Render" and "### Overlay render" blocks; a dead proxy on port 1 carries the failure cases. Of
+    `plugins/easy-db-lab/bin/configure-multi-dc-seeds.sh` it covers only the arms-marker guard. It
+    also runs text checks on `plugins/easy-db-lab/skills/{run,explore,plan}/SKILL.md`,
+    `plugins/easy-db-lab/references/{report,report-upload,journal,issues}.md`, the Multi-DC Setup
+    section of `plugins/easy-db-lab/references/cassandra.md`, and the repo `README.md`: no old
+    report file names, no plotting instruction, and the required sections. A `journal_lint`
+    function applies the entry format of `references/journal.md` (blank lines between blocks, 160
+    characters per line, commands only in fenced blocks, every fence closed) to each `markdown`
+    example in `journal.md` and `issues.md`, and to `fixtures/journal/good.md`, `bad.md`, and the
+    `bad-fence-*.md` fixtures. Those checks prove the
+    text, not the skill behavior. It also runs some `bash` blocks as written, under bash, against
+    stubs: in `references/report.md`, the blocks under "### The SOCKS proxy" (against a stub
+    wrapper and `.socks5-proxy-state`), "### Render" (the single-cluster render), and
+    "### Overlay render" (window-variable detection, the whole-run fallback, and `PROXY`), the last two
+    against the stub Grafana; in `references/report-upload.md`, the image and CSV probe (against
+    a stub binary) and the block under "## The AWS SSO Session" (against a stub `aws` and a temp
+    `HOME`). An edit to one of these blocks is covered; the other commands in those files are not. It needs `mdbook`, `uv`,
+    `jq`, and `curl` on `PATH`; the first run needs network for uv to fetch pypandoc-binary and
+    requests.
   - `bash plugins/easy-db-lab/bin/export-workload-metrics.test.sh` covers `plugins/easy-db-lab/bin/export-workload-metrics` and `plugins/easy-db-lab/bin/metrics-catalog.jq`.  These two files and the harness are verbatim copies of easy-db-lab's `bin/`: re-copy them, do not edit them, until easy-db-lab replaces them with a first-class command.
 
   `plugins/dev-skills/lib/html_shell.py` is **shared**: both generators import it. A change to it

@@ -10,12 +10,20 @@
 #   4. Merges cluster_name and seed_provider into cassandra.patch.yaml
 #   5. Pushes the config via the DC's easy-db-lab wrapper
 #
+# Exits 1 when <cluster-dir>/arms exists: the arms layout is not multi-DC.
+#
 # Requires: python3 (for YAML merge)
 
 set -euo pipefail
 
 CLUSTER_DIR="${1:?Usage: $0 <cluster-dir> --name <cluster-name> --dc <dc1> --dc <dc2> ...}"
 shift
+
+# A cross-cluster arms test is one cluster per arm, not one cluster with many DCs.
+if [[ -f "$CLUSTER_DIR/arms" ]]; then
+  echo "error: $CLUSTER_DIR holds an arms marker; each arm is its own cluster, so cross-DC seeds do not apply" >&2
+  exit 1
+fi
 
 CLUSTER_NAME=""
 DCS=()

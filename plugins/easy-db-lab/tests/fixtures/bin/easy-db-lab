@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stub easy-db-lab binary for test-report.sh.  `commands` prints the file that STUB_COMMANDS names
+# (default: commands-md-only.txt next to this stub).  Every other command echoes its arguments.
+here="$(cd "$(dirname "$0")" && pwd)"
+case "${1:-}" in
+  commands) cat "${STUB_COMMANDS:-$here/commands-md-only.txt}" ;;
+  *) echo "stub easy-db-lab: $*" ;;
+esac

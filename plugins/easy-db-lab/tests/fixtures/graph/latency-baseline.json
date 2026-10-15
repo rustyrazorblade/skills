@@ -1,0 +1,15 @@
+{
+  "query": "histogram_quantile(0.99, sum by (instance, le) (rate(cassandra_read_latency_seconds_bucket{instance=~\"db.*\"}[1m])))",
+  "start": "2026-10-01T10:00:00Z",
+  "end": "2026-10-01T10:10:00Z",
+  "step": "30s",
+  "unit": "ms",
+  "scale": 1000,
+  "arms": {
+    "baseline": [
+      "db0",
+      "db1"
+    ]
+  },
+  "node_mapped_from_ip": false
+}

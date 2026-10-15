@@ -198,6 +198,8 @@ confirm it is present on the treatment arm and absent (or default) on the contro
 
 ## Multi-DC Setup
 
+This section applies to `LAYOUT=multi` only.  A cross-cluster arms test (`LAYOUT=arms`) is one cluster per arm, not one cluster with many DCs: never run this procedure or `configure-multi-dc-seeds.sh` on it.
+
 This is the only correct procedure for multi-DC Cassandra. Follow it exactly — do not deviate.
 
 ### Prerequisites

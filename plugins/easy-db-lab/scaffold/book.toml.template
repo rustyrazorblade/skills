@@ -1,0 +1,13 @@
+[book]
+title = "@CLUSTER_NAME@"
+src = "."
+
+[build]
+build-dir = "report"
+
+[output.html]
+additional-css = ["lab.css"]
+no-section-label = true
+# The Grafana renders are dark, so the report opens in coal, also on a light OS.  The reader can still pick another theme.
+default-theme = "coal"
+preferred-dark-theme = "coal"

@@ -17,10 +17,11 @@ Load `../../references/environment.md` for details on the AWS environment, k3s, 
 
 If `--previous <cluster-dir>` was provided, read the following files before asking any planning questions:
 
-- `<cluster-dir>/docs/journal.md` — what was done, what was observed, what worked and what didn't
-- `<cluster-dir>/docs/issues.md` — friction, undocumented behavior, or gaps discovered during the run
+- `<cluster-dir>/docs/1-summary.md` — the verdict, the result table, and what the result means
+- `<cluster-dir>/docs/4-journal.md` — what was done, what was observed, what worked and what didn't
+- `<cluster-dir>/docs/5-issues.md` — friction, undocumented behavior, or gaps discovered during the run
 
-Use these to inform the new plan: incorporate steps that were added ad-hoc, avoid approaches that failed, and address known issues.  Do not carry a teardown step into the new plan, even if the previous journal records one; teardown belongs to the run skill's Completion gate. Load `../../references/journal.md` and `../../references/issues.md` for the format these files follow.
+Use these to inform the new plan: incorporate steps that were added ad-hoc, avoid approaches that failed, and address known issues.  Do not carry a teardown step into the new plan, even if the previous journal records one; teardown belongs to the run skill's Completion gate. Load `../../references/report.md`, `../../references/journal.md`, and `../../references/issues.md` for the format these files follow.
 
 ## Discover Before You Plan
 
@@ -232,11 +233,11 @@ Do not add a teardown step.  Teardown belongs to the run skill's Completion gate
 
 **The run skill handles all workspace scaffolding** (cluster directory, wrapper, docs) before executing any plan step. The first step in the plan must be provisioning (`easy-db-lab init ... --up`). Never include wrapper creation, directory setup, or `EDB=` assignments — those are handled automatically and must not appear in the plan.
 
-**The run skill also owns the entire reporting apparatus. Never reinvent it in a plan.** It maintains `docs/journal.md` (every command and finding, written as it happens), `docs/issues.md` (friction, written immediately), `docs/results.md` (written at Completion, in a fixed structure: Goal, Results, Key Findings, Performance Results, Configuration Notes, Issues Encountered, Recommendations), `docs/images/` for Grafana screenshots embedded inline, and `make -C <cluster-dir>/docs`, which builds the browsable report at `docs/report/index.html`.
+**The run skill also owns the entire reporting apparatus. Never reinvent it in a plan.** It writes the tiered lab report in `docs/`, by the rules in `../../references/report.md`: `1-summary.md` (the verdict first, at every exit), `2-evidence.md` (one evidence block per measured claim, with a graph and its CSV downloaded from Mimir through `report-graph.py`), and the appendix `3-plan.md`, `4-journal.md`, and `5-issues.md`.  `make -C <cluster-dir>/docs` checks the report, builds the browsable book at `docs/report/index.html`, and writes `export/jira.txt` and `export/report.zip`.
 
-A plan therefore must **not** contain steps that create a results file, define a report format, invent directories for screenshots or metrics exports, upload the report (`report upload`), or set up cross-session coordination files. Plans say what to do to the cluster; the run skill records what happened.
+A plan therefore must **not** contain steps that create a summary or results file, define a report format, invent directories for graphs or metrics exports, upload the report (`report upload`), or set up cross-session coordination files. Plans say what to do to the cluster; the run skill records what happened.
 
-When the user asks for something the apparatus does not do by default — a fixed screenshot cadence, extra raw-metric exports, a particular statistic — express it in `## Notes` as a constraint layered onto the existing files (for example: "render dashboards to `docs/images/` every 15 minutes, named `<arm>-<dashboard>-<UTC>.png`; report p95/p99 distributions under Performance Results"). Never as a parallel mechanism beside them.
+When the user asks for something the apparatus does not do by default — an extra metric, a particular statistic, a noise floor measurement — express it in `## Notes` as a constraint layered onto the existing report (for example: "graph p95 and p99 read latency per arm as evidence blocks; use `--stats samples,p50,p95,p99`"). Never as a parallel mechanism beside it.
 
 **Validate every command before presenting the plan.** The "Discover Before You Plan" discipline of never guessing flags applies to every command in the draft, not just `kit install` lines — a flag can look plausible (borrowed from another CLI's conventions, like `--name` instead of a positional argument) and still be wrong. For each command:
 

@@ -1,0 +1,10 @@
+{
+  "query": "sum by (instance) (rate(cassandra_client_request_latency_count{cluster=\"graph-1a2b\",instance=~\"db.*\"}[1m]))",
+  "start": "2026-10-01T10:00:00Z",
+  "end": "2026-10-02T10:00:00Z",
+  "step": "60s",
+  "unit": "op/s",
+  "scale": 1.0,
+  "arms": {},
+  "node_mapped_from_ip": false
+}

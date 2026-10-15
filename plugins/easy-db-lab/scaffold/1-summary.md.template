@@ -1,0 +1,15 @@
+# <!-- Title: a plain-words statement of the result, for example "Scrape allocation drops with the fix". -->
+
+<!-- Verdict line: "Verdict: " plus a verdict badge and one sentence.  The layout rules are in the plugin's references/report.md. -->
+
+<!-- Table: the comparison table for an A/B run, else the Findings table. -->
+
+<!-- Cassandra run: "Reasoning review: done" or "Reasoning review: not run (cassandra-expert not installed)". -->
+
+## What this means
+
+<!-- Two to four sentences for a customer.  State no number here; numbers live in the table and the evidence. -->
+
+## Caveats
+
+<!-- The limits of the result.  The check writes its Unchecked line here. -->

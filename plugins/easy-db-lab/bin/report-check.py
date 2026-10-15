@@ -35,8 +35,8 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     ec2-54-12-34-56.compute-1.amazonaws.com, 12-digit, dashed, or spaced account ID, vpc-,
     subnet-, sg-, igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port
     service URL, local home or key path, AWS profile name, SSO start URL, email address, S3 URL
-    or bucket name, AWS access key ID or secret key, bearer token, or Grafana service account
-    token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
+    or bucket name, AWS access key ID, secret key, or session token, bearer token, Basic auth
+    credentials, cqlsh password, or Grafana service account token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
     a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
     version after jdk, java, or openjdk, such as JDK 11.0.20.1, is not an address, unless it
     is a private address or has a :port.  report-export.py loads the same patterns
@@ -81,6 +81,9 @@ _IPV6 = (r"(?<![\w:.])(?=[\w:]*\d)(?:(?:" + _H6 + r":){7}" + _H6 + r"|" + _H6 + 
 _TUNNEL_WORD = r"(?:ssh -[LD](?:\s+[^\s`\"']+)?|tunnel(?:s|ed|ing)?|socks5h?|socks|tailscale|port-forward(?:ing)?)"
 # The rest of a path or a URL: no space, quote, or bracket, and no sentence stop at the end.
 _REST = r"(?:[^\s`\"'<>()\[\]]*[^\s`\"'<>()\[\].,;:!?])?"
+# The options of ssh, scp, or sftp, each with its argument, which can be quoted, such as
+# -o "StrictHostKeyChecking no".
+_SSH_OPTS = r"(?:\s+-[a-z]\S*(?:\s+(?:\"[^\"]*\"|'[^']*'|[^\s-]\S*))?)*?"
 # A profile value that is a name, not a variable such as "$AWS_PROFILE", a flag, or a placeholder
 # that scan() has removed.
 _NAME = r"[\"']?((?![$<\-\x00])[^\s\"'`;)]+)"
@@ -148,25 +151,31 @@ REDACTION = [
     ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
     ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|easy-db-lab)\b/?)" + _REST), "local-path"),
     # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
-    # file.  After ssh, scp, or sftp and their options, any path, but not a placeholder, which
-    # scan() makes a NUL.  The -i of sed and grep stays.
+    # file.  After ssh, scp, or sftp, their options, and the host, any path, but not a
+    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays.
     ("key file path", Pattern(r"(?<!\S)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
                               + _REST + ")", re.I, 1), "local-path"),
-    ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)(?:\s+-[a-z]\S*(?:\s+[^\s-]\S*)?)*?\s+-i\s+([^\s`\"'<>\x00]" + _REST + ")",
-                                  re.I, 1), "local-path"),
+    ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)" + _SSH_OPTS + r"(?:\s+[^\s-]\S*" + _SSH_OPTS + r")?\s+-i\s+([^\s`\"'<>\x00]"
+                                  + _REST + ")", re.I, 1), "local-path"),
     ("AWS profile name", Pattern(r"--profile(?:=|\s+)" + _NAME, 0, 1), "aws-profile"),
     ("AWS_PROFILE value", Pattern(r"\bAWS_PROFILE=" + _NAME, 0, 1), "aws-profile"),
     ("AccountUser role", Pattern(r"\bAccountUser-[\w-]+"), "aws-profile"),
     # Credentials.  A secret is the value after aws_secret_access_key, or 40 base64 characters
-    # after a secret word; a variable such as "$AWS_SECRET" stays.  A bearer token is 16 or more
+    # after a secret word; a session token is the value after aws_session_token.  A variable
+    # such as "$AWS_SECRET" stays.  A bearer token is 16 or more
     # token characters, so "a Bearer token" stays, and it does not end in a period.
     ("AWS access key ID", Pattern(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "aws-access-key"),
     ("AWS secret access key", Pattern(r"\baws_secret_access_key[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
      "aws-secret"),
+    ("AWS session token", Pattern(r"\baws_session_token[\"']?\s*[=:]\s*[\"']?((?![$<\x00])[^\s\"'`<>\x00]+)", re.I, 1),
+     "aws-session-token"),
     ("AWS secret key", Pattern(r"secret[\w-]*[\"']?\s*[=:]?\s*[\"']?([A-Za-z0-9/+]{40})(?![A-Za-z0-9/+])", re.I, 1),
      "aws-secret"),
     ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{15,}[\w~+/-]=*)", re.I, 1), "token"),
+    ("Basic auth credentials", Pattern(r"\bAuthorization:\s*Basic\s+([A-Za-z0-9+/]{4,}={0,2})", re.I, 1), "token"),
     ("Grafana service account token", Pattern(r"\bglsa_[A-Za-z0-9_]+"), "token"),
+    # The password of cqlsh: -p, --password, or --password=, but not a variable.
+    ("cqlsh password", Pattern(r"\bcqlsh\b[^\n|;&]*?(?<!\S)(?:-p\s+|--password(?:=|\s+))" + _NAME, 0, 1), "password"),
     # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
     ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
     ("IPv4 address", IPv4(), "private-ip"),

@@ -144,3 +144,16 @@ spaced-account-owner	page.txt	owner id 4178 3501 3894 here	owner id <account-id>
 keep-spaced-rates	page.txt	Rates 1000 2000 3000 ops/s	=
 keep-spaced-heap	page.txt	heap 1024 2048 4096	=
 bearer-period	page.txt	Sent Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123def.	Sent Authorization: Bearer <token>.
+# Session tokens, Basic auth, and cqlsh passwords.
+aws-session-token-env	page.txt	export AWS_SESSION_TOKEN=IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLXdlc3QtMiJHMEUCIQ+abc=	export AWS_SESSION_TOKEN=<aws-session-token>
+aws-session-token-ini	page.txt	aws_session_token = IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLXdlc3QtMiJHMEUCIQ+abc=	aws_session_token = <aws-session-token>
+keep-session-token-var	page.txt	aws_session_token="$AWS_SESSION_TOKEN"	=
+basic-auth	page.txt	curl -H "Authorization: Basic YWRtaW46c2VjcmV0" http://grafana	curl -H "Authorization: Basic <token>" http://grafana
+keep-basic-prose	page.txt	Basic settings stay on	=
+cqlsh-p	page.txt	cqlsh -u cassandra -p s3cr3t db0	cqlsh -u cassandra -p <password> db0
+cqlsh-password	page.txt	cqlsh db0 --password s3cr3t -u admin	cqlsh db0 --password <password> -u admin
+cqlsh-password-eq	page.txt	cqlsh --password=s3cr3t db0	cqlsh --password=<password> db0
+keep-mkdir-p	page.txt	mkdir -p conf and ssh -p 22 db0	mkdir -p conf and ssh -p 22 db0
+keep-cqlsh-password-var	page.txt	cqlsh -p "$CQL_PASSWORD" db0	=
+ssh-host-then-key	page.txt	ssh db0 -i keys/lab	ssh db0 -i <local-path>
+ssh-quoted-option-key	page.txt	ssh -o "StrictHostKeyChecking no" -i keys/lab db0	ssh -o "StrictHostKeyChecking no" -i <local-path> db0

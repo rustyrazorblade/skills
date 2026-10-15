@@ -135,3 +135,6 @@ html-id-placeholder	4-journal.html	<h2 id="open-the-tunnel"><a href="#open-the-t
 idempotent	4-journal.md	Already \<private-ip> and `<tunnel>` here.	=
 url-with-fragment	1-summary.md	Open [it](http://control0:3000/d/x#panel).	Open [it](\<service-url>).
 svg-entity	images/d.svg	<text>10.0.1.15</text>	<text>&lt;private-ip&gt;</text>
+# Round 10: a sentence period ends a spaced account ID.
+spaced-account-period	page.txt	Account 4178 3501 3894.	Account <account-id>.
+keep-spaced-account-decimal	page.txt	account 1024 2048 4096.5 ms	=

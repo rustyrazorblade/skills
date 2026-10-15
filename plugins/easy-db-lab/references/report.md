@@ -302,10 +302,10 @@ These identifiers never appear in the summary, the evidence tier, or their CSV a
 - IPv4 and IPv6 addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`, `ec2-54-12-34-56.compute-1.amazonaws.com`);
 - tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards);
 - `host:port` service URLs (`control0:3000`, `[::1]:9042`, `http://control0:3000/d/abc`);
-- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, `~/.easy-db-lab/…`, and the key file after `-i`: any path after `ssh`, `scp`, or `sftp`, their options, or the host, and elsewhere a path that starts with `/`, `~/`, or `./`, or a `.pem`, `.key`, or `id_*` file; the `-i` of `sed` and `grep` stays);
+- local home and key paths (`/Users/<name>/…`, `/home/<name>/…`, `~/.ssh/…`, `~/.easy-db-lab/…`, and the key file after `-i`: any path after `ssh`, `scp`, or `sftp`, their options, or the host, and elsewhere a path that starts with `/`, `~/`, or `./`, or a `.pem`, `.key`, or `id_*` file; the `-i` of `sed` and `grep` stays, after other options too, as in `sed -E -i /x/d`);
 - AWS profile names (`--profile X`, `AWS_PROFILE=X`, `AccountUser-…`), SSO start URLs (`*.awsapps.com`), and email addresses;
 - S3 URLs and bucket names (`s3://…`, `easy-db-lab-<uuid>`);
-- credentials: AWS access key IDs (`AKIA…`, `ASIA…`), AWS secret keys (the value of `aws_secret_access_key`, or 40 base64 characters after a secret word), AWS session tokens (the value of `aws_session_token` or `AWS_SESSION_TOKEN`), `Bearer` tokens, `Authorization: Basic` credentials, `cqlsh` passwords (`-p`, `--password`), and Grafana service account tokens (`glsa_…`).
+- credentials: AWS access key IDs (`AKIA…`, `ASIA…`), AWS secret keys (the value of `aws_secret_access_key`, or 40 base64 characters after a secret word), AWS session tokens (the value of `aws_session_token` or `AWS_SESSION_TOKEN`), `Bearer` tokens, `Authorization: Basic` credentials, `cqlsh` passwords (`-p`, `--password`), `nodetool` passwords (`-pw`, `--password`), the password of `curl -u user:pass` and `--user user:pass`, the password of a URL such as `https://user:pass@host` (the user stays), and Grafana service account tokens (`glsa_…`).
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
 

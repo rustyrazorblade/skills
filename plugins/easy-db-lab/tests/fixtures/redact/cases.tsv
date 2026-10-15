@@ -164,3 +164,27 @@ ipv4-private-192-after-java-version	page.txt	java version 192.168.1.4	java versi
 keep-jdk-172-32-version	page.txt	jdk 172.32.0.1	=
 keep-sed-i-rooted	page.txt	sed -i /pat/d conf.yaml	=
 keep-ssh-remote-sed-i-rooted	page.txt	ssh db0 sed -i /pat/d conf.yaml	=
+# curl and URL credentials: the user stays and the password goes.
+curl-u	page.txt	curl -u admin:s3cr3t http://grafana/api	curl -u admin:<password> http://grafana/api
+curl-u-quoted	page.txt	curl -u "admin:s3cr3t" http://grafana/api	curl -u "admin:<password>" http://grafana/api
+curl-user	page.txt	curl --user admin:s3cr3t http://grafana/api	curl --user admin:<password> http://grafana/api
+curl-user-eq	page.txt	curl --user=admin:s3cr3t http://grafana/api	curl --user=admin:<password> http://grafana/api
+keep-curl-u-var	page.txt	curl -u "$GRAFANA_USER:$GRAFANA_PASS" http://grafana/api	=
+keep-curl-u-user-only	page.txt	curl -u admin http://grafana/api	=
+url-userinfo	page.txt	open https://admin:s3cr3t@grafana.example/api now	open https://admin:<password>@grafana.example/api now
+keep-url-userinfo-var	page.txt	open https://admin:$PASS@grafana.example/api now	=
+keep-mailto-email	page.txt	mailto:jon@example.com	mailto:<email>
+# nodetool JMX credentials.
+nodetool-pw	page.txt	nodetool -u cassandra -pw s3cr3t status	nodetool -u cassandra -pw <password> status
+nodetool-password	page.txt	nodetool --password s3cr3t status	nodetool --password <password> status
+keep-nodetool-port	page.txt	nodetool -p 7199 status	=
+keep-nodetool-pw-var	page.txt	nodetool -pw "$JMX_PASSWORD" status	=
+nodetool-password-file-home	page.txt	nodetool --password-file /home/ubuntu/jmx.pw status	nodetool --password-file <local-path> status
+# A system path is not a home path, so it stays.
+keep-nodetool-password-file-etc	page.txt	nodetool --password-file /etc/cassandra/jmxremote.password status	=
+# Options before -i: the -i of sed and grep stays.
+keep-sed-E-i	page.txt	sed -E -i /x/d conf.yaml	=
+keep-sed-n-E-i	page.txt	sed -n -E -i /x/p conf.yaml	=
+keep-grep-r-i	page.txt	grep -r -i /error/ app.log	=
+keep-ssh-remote-sed-E-i	page.txt	ssh db0 sed -E -i /x/d conf.yaml	=
+key-after-sed-command	page.txt	sed -n p f; scp -i /tmp/k.pem a db0	sed -n p f; scp -i <local-path> a db0

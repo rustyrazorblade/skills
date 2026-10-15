@@ -36,7 +36,7 @@ The customer tiers are the pages that docs/SUMMARY.md lists before "# Appendix":
     subnet-, sg-, igw-, i-, eni-, vol-, or ami- ID, port number, tunnel wording, host:port
     service URL, local home or key path, AWS profile name, SSO start URL, email address, S3 URL
     or bucket name, AWS access key ID, secret key, or session token, bearer token, Basic auth
-    credentials, cqlsh password, or Grafana service account token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
+    credentials, cqlsh, nodetool, curl, or URL password, or Grafana service account token in the customer tiers or in data/*.csv and data/*.json.  A decimal number, the CSV value column,
     a numeric stats table cell, and the last group of a UUID are not account IDs; a dotted
     version after jdk, java, or openjdk, such as JDK 11.0.20.1, is not an address, unless it
     is a private address or has a :port.  report-export.py loads the same patterns
@@ -100,6 +100,26 @@ class Pattern:
         return [m.span(self.group) for m in self.regex.finditer(text)]
 
 
+class EmailAddress:
+    """An email address, but not the password and host of a URL's user info, such as
+    https://user:pass@host, which the URL password kind covers."""
+
+    ADDRESS = re.compile(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I)
+    USER_INFO = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:\$?$", re.I)
+
+    def spans(self, text):
+        return [m.span() for m in self.ADDRESS.finditer(text) if not self.USER_INFO.search(text[:m.start()])]
+
+
+class KeyFlag(Pattern):
+    """The key file of -i, but not the -i of sed or grep, after any of its options."""
+
+    SED_GREP = re.compile(r"\b(?:sed|grep)(?:\s+(?:-\S+|'[^']*'|\"[^\"]*\"))*\s+$")
+
+    def spans(self, text):
+        return [m.span(self.group) for m in self.regex.finditer(text) if not self.SED_GREP.search(text[:m.start()])]
+
+
 class IPv4:
     """An IPv4 address, with its :port.  A dotted version such as JDK 11.0.20.1, java version
     17.0.8.1, v1.2.3.4, or openjdk-11.0.20.1 is not one.  A quad after any other word, such as
@@ -148,12 +168,13 @@ REDACTION = [
                                       r"|(?<![\w.:/@-])(?:localhost|[a-z][\w-]*\d[\w-]*|[a-z][\w-]*(?:\.[\w-]+)+"
                                       r"|\[[0-9a-f:.]*:[0-9a-f:.]*\]):\d{2,5}\b"
                                       r"(?:/" + _REST + r")?", re.I), "service-url"),
-    ("email address", Pattern(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.I), "email"),
+    ("email address", EmailAddress(), "email"),
     ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|easy-db-lab)\b/?)" + _REST), "local-path"),
     # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
     # file.  After ssh, scp, or sftp, their options, and the host, any path, but not a
-    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays, as in sed -i /pat/d.
-    ("key file path", Pattern(r"(?<!\S)(?<!\bsed\s)(?<!\bgrep\s)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
+    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays, after other options
+    # too, as in sed -E -i /pat/d.
+    ("key file path", KeyFlag(r"(?<!\S)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
                               + _REST + ")", re.I, 1), "local-path"),
     ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)" + _SSH_OPTS + r"(?:\s+[^\s-]\S*" + _SSH_OPTS + r")?\s+-i\s+([^\s`\"'<>\x00]"
                                   + _REST + ")", re.I, 1), "local-path"),
@@ -174,8 +195,15 @@ REDACTION = [
     ("bearer token", Pattern(r"\bBearer\s+([\w.~+/-]{15,}[\w~+/-]=*)", re.I, 1), "token"),
     ("Basic auth credentials", Pattern(r"\bAuthorization:\s*Basic\s+([A-Za-z0-9+/]{4,}={0,2})", re.I, 1), "token"),
     ("Grafana service account token", Pattern(r"\bglsa_[A-Za-z0-9_]+"), "token"),
-    # The password of cqlsh: -p, --password, or --password=, but not a variable.
+    # The password of cqlsh (-p, --password) and of nodetool (-pw, --password), but not a
+    # variable.  The -p of nodetool is a port.
     ("cqlsh password", Pattern(r"\bcqlsh\b[^\n|;&]*?(?<!\S)(?:-p\s+|--password(?:=|\s+))" + _NAME, 0, 1), "password"),
+    ("nodetool password", Pattern(r"\bnodetool\b[^\n|;&]*?(?<!\S)(?:-pw\s+|--password(?:=|\s+))" + _NAME, 0, 1), "password"),
+    # The password of curl -u user:pass and --user user:pass, and of a URL such as
+    # https://user:pass@host.  The user stays.
+    ("curl password", Pattern(r"\bcurl\b[^\n|;&]*?(?<!\S)(?:-u\s*|--user(?:=|\s+))[\"']?[^\s:\"'$]+:((?![$<\x00])[^\s\"'`]+)", 0, 1),
+     "password"),
+    ("URL password", Pattern(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:((?![$<\x00])[^\s/@]+)@", re.I, 1), "password"),
     # Before IPv4, so that ::ffff:10.0.1.15 is one <ipv6>.
     ("IPv6 address", Pattern(_IPV6, re.I), "ipv6"),
     ("IPv4 address", IPv4(), "private-ip"),

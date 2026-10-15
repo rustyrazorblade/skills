@@ -178,9 +178,12 @@ REDACTION = [
      "account-id"),
     # The console form of an account ID, such as 4178-3501-3894; not a group of a UUID.
     ("dashed account ID", Pattern(r"(?<![\w-])\d{4}-\d{4}-\d{4}(?![\w-])"), "account-id"),
-    # The spaced form, such as 4178 3501 3894: three groups exactly, so a row of four or more
-    # 4-digit numbers, or one that ends in a decimal, stays.  A sentence period can end it.
-    ("spaced account ID", Pattern(r"(?<![\w.-])(?<!\d )\d{4} \d{4} \d{4}(?![\w-]|\.\d)(?! \d)"), "account-id"),
+    # The spaced form, such as 4178 3501 3894: three groups exactly, at most three words after
+    # an account cue (account, acct, AWS, or owner), so "heap 1024 2048 4096" stays.  A row of
+    # four or more 4-digit numbers, or one that ends in a decimal, stays.  A sentence period
+    # can end it.
+    ("spaced account ID", Pattern(r"\b(?:accounts?|acct|aws|owner)\b(?:[^\w\n]+\w+){0,3}?[^\w\n]+"
+                                  r"((?<![\w.-])(?<!\d )\d{4} \d{4} \d{4}(?![\w-]|\.\d)(?! \d))", re.I, 1), "account-id"),
     ("vpc- ID", Pattern(r"\bvpc-[0-9a-f]{8,17}\b"), "vpc-id"),
     ("subnet- ID", Pattern(r"\bsubnet-[0-9a-f]{8,17}\b"), "subnet-id"),
     ("sg- ID", Pattern(r"\bsg-[0-9a-f]{8,17}\b"), "sg-id"),

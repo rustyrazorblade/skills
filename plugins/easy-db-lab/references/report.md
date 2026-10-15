@@ -294,7 +294,7 @@ Write report prose in ASD-STE100 Simplified Technical English:
 
 These identifiers never appear in the summary, the evidence tier, or their CSV and JSON files:
 
-- account IDs (12 digits, dashed as `4178-3501-3894`, or spaced as `4178 3501 3894`);
+- account IDs (12 digits, dashed as `4178-3501-3894`, or spaced as `4178 3501 3894` at most three words after `account`, `acct`, `AWS`, or `owner`);
 - VPC, subnet, security group, internet gateway, instance, network interface, volume, and image IDs (`vpc-`, `subnet-`, `sg-`, `igw-`, `i-`, `eni-`, `vol-`, `ami-`);
 - IPv4 and IPv6 addresses, and EC2 host names that hold one (`ip-10-0-1-15`, `ip-10-0-1-15.ec2.internal`, `ec2-54-12-34-56.compute-1.amazonaws.com`);
 - tunnel details (SOCKS URLs, port numbers, Tailscale, SSH port forwards);
@@ -306,7 +306,7 @@ These identifiers never appear in the summary, the evidence tier, or their CSV a
 
 They stay in `<journal>`, in the appendix.  Select nodes by host name, never by IP.  Branch names and details of unreleased bugs are the owner's call for each report; ask the owner before you put them in a customer tier.  `report-check.py` exits 3 on a redaction failure.
 
-A measurement is not an account ID: a decimal number, the CSV value column, and a numeric stats table cell.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  A dotted version after `jdk`, `java`, or `openjdk`, such as `JDK 11.0.20.1`, is not an address.  After any other word, such as `cassandra` or `kernel`, a dotted quad is an address.  A private address (`10/8`, `172.16/12`, `192.168/16`) and a quad with a `:port` are always addresses.  The phrase "port to 5 nodes" is not a port.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
+A measurement is not an account ID: a decimal number, the CSV value column, a numeric stats table cell, and three spaced 4-digit numbers with no account word before them, such as `heap 1024 2048 4096`.  The last group of a UUID, such as the one in a cluster label, is not an account ID either.  A dotted version after `jdk`, `java`, or `openjdk`, such as `JDK 11.0.20.1`, is not an address.  After any other word, such as `cassandra` or `kernel`, a dotted quad is an address.  A private address (`10/8`, `172.16/12`, `192.168/16`) and a quad with a `:port` are always addresses.  The phrase "port to 5 nodes" is not a port.  The patterns are in `bin/report-check.py`; `report-export.py` loads them from there, so the check and the export share one list.
 
 ### The shareable book
 

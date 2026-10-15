@@ -138,3 +138,8 @@ svg-entity	images/d.svg	<text>10.0.1.15</text>	<text>&lt;private-ip&gt;</text>
 # Round 10: a sentence period ends a spaced account ID.
 spaced-account-period	page.txt	Account 4178 3501 3894.	Account <account-id>.
 keep-spaced-account-decimal	page.txt	account 1024 2048 4096.5 ms	=
+# A spaced triple needs an account cue, so a row of benchmark numbers stays.
+spaced-account-id-colon	page.txt	AWS account ID: 4178 3501 3894, in us-west-2	AWS account ID: <account-id>, in us-west-2
+spaced-account-owner	page.txt	owner id 4178 3501 3894 here	owner id <account-id> here
+keep-spaced-rates	page.txt	Rates 1000 2000 3000 ops/s	=
+keep-spaced-heap	page.txt	heap 1024 2048 4096	=

@@ -17,7 +17,8 @@ manual attachment, turns links to .md pages into their text, and maps each verdi
 colour.  It removes the writer's escape from a ( that opens no emoticon and from the sign of a
 number, so "(MB/s)" and "+20.8%" stay readable.
 
-zip writes the shareable book.  It stages every page that SUMMARY.md lists, the appendix
+zip writes the shareable book: the themed HTML book of every page, which opens in the dark
+(coal) theme to match the dark Grafana renders.  It stages every page that SUMMARY.md lists, the appendix
 included, every images/ and data/ file they reference, and the theme (book.toml, lab.css, and
 SUMMARY.md) under export/stage/.  In each staged text file, whatever its extension, it replaces
 each secret and each S3 bucket name or s3:// URL with a placeholder that names its kind, such as

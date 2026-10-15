@@ -157,3 +157,8 @@ keep-mkdir-p	page.txt	mkdir -p conf and ssh -p 22 db0	mkdir -p conf and ssh -p 2
 keep-cqlsh-password-var	page.txt	cqlsh -p "$CQL_PASSWORD" db0	=
 ssh-host-then-key	page.txt	ssh db0 -i keys/lab	ssh db0 -i <local-path>
 ssh-quoted-option-key	page.txt	ssh -o "StrictHostKeyChecking no" -i keys/lab db0	ssh -o "StrictHostKeyChecking no" -i <local-path> db0
+# A private address after a JDK word is an address.
+ipv4-private-172-after-jdk	page.txt	jdk 172.20.0.5	jdk <private-ip>
+ipv4-private-192-after-java-version	page.txt	java version 192.168.1.4	java version <private-ip>
+# 172.32.0.1 is outside 172.16/12, so after jdk it reads as a version and stays.
+keep-jdk-172-32-version	page.txt	jdk 172.32.0.1	=

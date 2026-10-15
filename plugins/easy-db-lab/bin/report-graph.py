@@ -13,10 +13,9 @@ Three subcommands:
           timestamp_utc,node,arm,value) and <docs>/data/<name>.json (query, start, end, step,
           unit, scale, arms).  It never stores the Mimir URL or the tenant.  It refuses a query
           with no cluster="..." or cluster=~"..." matcher before it sends it, because one tenant
-          holds many clusters.  It fails on a connection error, a non-success status, zero
-          series, and a node value that looks like an IPv4 address or an EC2 host name
-          (ip-10-0-1-15) with no --node mapping.  The JSON records node_mapped_from_ip: true
-          when a --node mapping replaced such a value.
+          holds many clusters.  It fails on a connection error, a non-success status, and zero
+          series.  It writes each node label as it is, an IP-like label too; --node VALUE=NAME
+          maps a label to a role name.
 
   render  downloads one Grafana panel render to <docs>/images/<name>.png.  It sends one GET to
           /render/d-solo/<UID>/ with panelId, from, to, each var-<NAME>, width, height, tz=UTC,
@@ -24,9 +23,7 @@ Three subcommands:
           the light theme).  An ISO time goes out as epoch milliseconds; a Grafana relative time
           such as now-93600s goes out unchanged.  It writes the image only for a status 200 and a
           non-empty PNG body; any other result exits non-zero and leaves the old image as it was.
-          It never stores the Grafana URL.  With --require-named-nodes <docs>/data/<name>.json,
-          it refuses the render, before the request, when that fetch mapped an IP-like node
-          label: the panel legend can show the IP, and the export does not scan image pixels.
+          It never stores the Grafana URL.
 
   block   reads one or more CSVs from <docs>/data and one or more images from <docs>/images, and
           prints the full evidence block (heading, image, stats table, Window, Query, Data) on
@@ -47,7 +44,6 @@ Usage:
         --unit "MB/s" [--scale 1e-6] --name scrape-alloc --docs <docs> [--proxy socks5h://...]
     report-graph.py render --grafana-url URL --dashboard UID --panel ID --from TIME --to TIME \\
         [--var NAME=VALUE]... [--width 1200] [--height 600] [--theme dark|light] \\
-        [--require-named-nodes <docs>/data/<name>.json]... \\
         --name scrape-alloc --docs <docs> [--proxy socks5h://...] [--timeout 60]
     report-graph.py block --csv <docs>/data/a.csv [--csv ...] --image [ARM=]<docs>/images/a.png \\
         [--image ...] --title "..." [--stats samples,min,p50,mean,p99,max] [--arm-windows] \\
@@ -75,9 +71,6 @@ STAT_TITLES = {
     "p99": "p99", "max": "Max", "total": "Total", "rate": "Rate",
 }
 DEFAULT_STATS = "samples,min,p50,mean,p99,max"
-IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$")
-# An EC2 host name holds the IP: ip-10-0-1-15, ip-10-0-1-15.ec2.internal, ...compute.internal.
-EC2_HOST = re.compile(r"^ip-\d{1,3}(-\d{1,3}){3}(\.[A-Za-z0-9.-]+)?(:\d+)?$")
 # --name becomes a file name under data/ or images/, so it holds no path.
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 # A Mimir tenant holds many clusters, so each arm's query selects its own cluster label.
@@ -163,19 +156,12 @@ def fetch(args):
     if not result:
         die("the query returned no series; check the query, the node selector, and the window")
 
-    rows, seen, mapped_from_ip = [], set(), False
+    rows, seen = [], set()
     for series in result:
         value = series.get("metric", {}).get(args.node_label)
         if value is None:
             die(f"a series has no {args.node_label} label; aggregate by {args.node_label}")
-        if value in node_map:
-            node = node_map[value]
-            mapped_from_ip = mapped_from_ip or bool(IPV4.match(value) or EC2_HOST.match(value))
-        elif IPV4.match(value) or EC2_HOST.match(value):
-            die("a node value looks like an IPv4 address or an EC2 host name; select nodes by "
-                "host name, or map it with --node VALUE=NAME")
-        else:
-            node = value
+        node = node_map.get(value, value)
         if node in seen:
             die(f"the query returned more than one series for node {node}; "
                 f"aggregate by {args.node_label}")
@@ -196,7 +182,7 @@ def fetch(args):
         w.writerow(["timestamp_utc", "node", "arm", "value"])
         w.writerows(rows)
     meta = {"query": args.query, "start": iso(start), "end": iso(end), "step": f"{step}s",
-            "unit": args.unit, "scale": args.scale, "arms": arms, "node_mapped_from_ip": mapped_from_ip}
+            "unit": args.unit, "scale": args.scale, "arms": arms}
     with open(os.path.join(data, f"{args.name}.json"), "w") as f:
         json.dump(meta, f, indent=2)
         f.write("\n")
@@ -214,27 +200,9 @@ def grafana_time(text):
     return str(int(t.timestamp() * 1000))
 
 
-def require_named_nodes(path):
-    """Refuse a render for a fetch that mapped an IP-like node label: the panel legend shows
-    the label, and the export does not scan image pixels."""
-    try:
-        with open(path) as f:
-            meta = json.load(f)
-    except (OSError, ValueError) as e:
-        die(f"--require-named-nodes: no fetch JSON at {path}: {e.__class__.__name__}")
-    if "node_mapped_from_ip" not in meta:
-        die(f"--require-named-nodes: {path} does not record node_mapped_from_ip; fetch it again")
-    if meta["node_mapped_from_ip"]:
-        die(f"--require-named-nodes: the fetch for {os.path.basename(path)} mapped IP-like node labels "
-            "with --node, so the panel legend can show an IP, and the export does not scan image "
-            "pixels; render no panel for this metric")
-
-
 def render(args):
     import requests
 
-    for path in args.require_named_nodes or []:
-        require_named_nodes(path)
     params = [("panelId", args.panel), ("from", grafana_time(args.from_)),
               ("to", grafana_time(args.to))]
     params += [(f"var-{k}", v) for k, v in pairs(args.var, "--var")]
@@ -474,8 +442,6 @@ def main():
     r.add_argument("--height", type=int, default=600)
     r.add_argument("--theme", choices=("dark", "light"), default="dark",
                    help="the Grafana theme; dark matches the report page")
-    r.add_argument("--require-named-nodes", action="append", metavar="JSON",
-                   help="a fetch's data/<name>.json; refuse the render if that fetch mapped IP-like node labels")
     r.add_argument("--name", required=True)
     r.add_argument("--docs", required=True)
     r.add_argument("--proxy", help="for example socks5h://127.0.0.1:1080")

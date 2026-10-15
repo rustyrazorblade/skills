@@ -201,7 +201,7 @@ If `.socks5-proxy.env` says `EDL_TAILSCALE_ACTIVE=true`, the cluster needs no tu
 2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Mimir URL.  Do not assume a tenant per DC or per arm; several clusters can share one tenant, such as `default`.
 3. Find this cluster's `cluster` label value.  It is the cluster name and the cluster ID from `$EDB status`, for example `lab-ab-1c9bbb2f-aab1-4478-ac8d-35cb6ca31790`.  Confirm it in the list from `api/v1/label/cluster/values`.  Write it in `<journal>`.
 4. Filter every fetch query on `cluster="<value>"`.  A tenant holds the series of many clusters, so a query with no `cluster` filter can return another cluster's data.  `fetch` refuses a query with no `cluster` matcher.
-5. Select nodes by host name, for example `instance=~"db.*"`.  Never select by IP.  If the node label holds an IP, map each value to a host name with `--node <value>=db0`.  `fetch` refuses an IPv4-looking node value with no mapping.  A mapping removes the IP from the CSV only: the Grafana panel legend still shows the label.  So `fetch` records `node_mapped_from_ip` in `data/<name>.json`, and "Render" renders no panel for that metric.
+5. Select the nodes of the cluster, for example `instance=~"db.*"`.  `fetch` writes each node label as it is, an IP too.  To name a node by its role in the stats table, map its label with `--node <value>=db0`.
 6. Run `fetch`:
 
 ```bash
@@ -257,13 +257,10 @@ proxy=()
 [[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
 report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
   --from "$(jq -r .start "$DOCS/data/$NAME.json")" --to "$(jq -r .end "$DOCS/data/$NAME.json")" \
-  --var "cluster=$CLUSTER" --require-named-nodes "$DOCS/data/$NAME.json" \
-  --name "$NAME" --docs "$DOCS" "${proxy[@]}"
+  --var "cluster=$CLUSTER" --name "$NAME" --docs "$DOCS" "${proxy[@]}"
 ```
 
 If the dashboard's cluster variable has another name, change `cluster=` to that name.
-
-`--require-named-nodes` refuses the render, before the request, when the fetch mapped an IP-like node label with `--node`.  The panel legend then shows the IP.  Do not remove the flag.  Treat the refusal as a failed render: the block gets no image.
 
 `render` asks Grafana for the dark theme, so the image matches the report page.  Do not add `--theme light` to a report image.
 
@@ -317,14 +314,14 @@ A measurement is not an account ID: a decimal number, the CSV value column, a nu
 
 `report-export.py zip` builds it from a redacted copy under `export/stage/`:
 
-1. It copies each listed page, each `images/` and `data/` file that a page references, and `book.toml`, `lab.css`, and `SUMMARY.md`.  A referenced file must be text or a `.png`, `.jpg`, `.gif`, or `.webp` image; any other file fails the export.  An identifier in a file name fails the export too, because the copy keeps each name.
-2. In each text file of the copy, whatever its extension, it replaces each identifier above with a placeholder that names its kind: `<private-ip>`, `<ipv6>`, `<ec2-host>`, `<account-id>`, `<vpc-id>`, `<subnet-id>`, `<sg-id>`, `<igw-id>`, `<instance-id>`, `<eni-id>`, `<volume-id>`, `<ami-id>`, `<port>`, `<socks-proxy>`, `<tunnel>`, `<service-url>`, `<local-path>`, `<aws-profile>`, `<sso-url>`, `<email>`, `<s3-url>`, `<s3-bucket>`, `<aws-access-key>`, `<aws-secret>`, `<aws-session-token>`, `<token>`, and `<password>`.  Where two matches overlap, one placeholder covers both.  A link fragment stays as written.
+1. It copies each listed page, each `images/` and `data/` file that a page references, and `book.toml`, `lab.css`, and `SUMMARY.md`.  A referenced file must be text or a `.png`, `.jpg`, `.gif`, or `.webp` image; any other file fails the export.  The copy keeps each file name, so a bucket name in a file name gets a warning.
+2. In each text file of the copy, whatever its extension, it replaces each secret and each bucket name with a placeholder that names its kind: `<password>`, `<aws-access-key>`, `<aws-secret>`, `<aws-session-token>`, `<token>`, `<s3-url>`, and `<s3-bucket>`.  Where two matches overlap, one placeholder covers both.  A link fragment stays as written.  IP addresses and the other infrastructure identifiers stay as written.
 3. It replaces the wrapper variables `$EDB`, `${EDB}`, and `$EDB_<ARM>` with `easy-db-lab`.
-4. It scans the whole copy with the same patterns, and it rejects an mdbook include directive (`{{#include`, `{{#rustdoc_include`, `{{#playground`).  If an identifier or a directive remains, the export fails and names the file and the line, and it writes no zip.
-5. It builds the copy with `mdbook`, and it scans every text file of the built HTML: the pages, `print.html`, the search index, and the table of contents.  If an identifier remains, the export fails and names the file and the line, and it writes no zip.
+4. It rejects an mdbook include directive (`{{#include`, `{{#rustdoc_include`, `{{#playground`).  If a directive remains, the export fails, names the file and the line, and writes no zip.
+5. It scans the whole copy with the same patterns.  Then it builds the copy with `mdbook` and scans every text file of the built HTML: the pages, `print.html`, the search index, and the table of contents.  If a secret or a bucket name remains, the export prints a warning that names the kind, the file, and the line, and not the value.  A warning does not stop the export.
 6. It zips the built HTML.
 
-The export copies each image byte for byte.  It does not scan the pixels of an image, so text that Grafana draws in a panel, such as a legend entry `instance=10.0.1.15:9500`, goes into the zip unchanged.  That is why "Render" uses `--require-named-nodes`: a panel for a metric whose fetch mapped an IP-like node label is never rendered.
+The export copies each image byte for byte, and the zip holds every image.  It does not scan the pixels of an image, so text that Grafana draws in a panel, such as a legend entry `instance=10.0.1.15:9500`, goes into the zip unchanged.
 
 The export never edits `docs/`.  The local `report/` book and the uploaded tier files keep the unredacted record.
 
@@ -475,7 +472,6 @@ else
   report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
     --from "now-${n}s" --to now \
     --var "baseline_cluster=$BASE_CLUSTER" --var "candidate_cluster=$CAND_CLUSTER" "${window[@]}" \
-    --require-named-nodes "$base" --require-named-nodes "$cand" \
     --name "$NAME-overlay-$ARM" --docs "$DOCS" "${proxy[@]}"
 fi
 ```

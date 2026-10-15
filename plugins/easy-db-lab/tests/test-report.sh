@@ -522,28 +522,23 @@ if [[ $rc -ne 0 ]]; then pass "fetch: a non-success status exits non-zero"; else
 expect_contains "fetch: a non-success status shows the Mimir error" "$out" "parse error"
 expect_no_file "fetch: a non-success status writes no CSV" "$gdocs/data/bad-query.csv"
 
+# An IP is not redacted, so fetch writes an IP-like node label as it is.  --node maps a label to a
+# role name.
 start_mimir "$fixtures/mimir/ip-node.json" 200
-out="$(fetch "$mimir_url" ip-node --arm baseline=db0 --arm candidate=db2 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "fetch: an unmapped IPv4 node value is refused"; else fail "fetch: an unmapped IPv4 node value is refused"; fi
-expect_contains "fetch: the refusal says to map the node" "$out" "--node"
-expect_no_file "fetch: the refusal writes no CSV" "$gdocs/data/ip-node.csv"
+out="$(fetch "$mimir_url" ip-node --arm baseline=10.0.1.15:9500 --arm candidate=db2 2>&1)"
+expect_eq "fetch: an unmapped IPv4 node value exits 0" "0" "$?"
+expect_contains "fetch: the CSV holds the IPv4 node label as it is" "$(cat "$gdocs/data/ip-node.csv" 2>/dev/null)" ",10.0.1.15:9500,baseline,"
+expect_eq "fetch: the JSON holds no node_mapped_from_ip field" "false" "$(jq 'has("node_mapped_from_ip")' "$gdocs/data/ip-node.json" 2>/dev/null)"
 out="$(fetch "$mimir_url" ip-node --node 10.0.1.15:9500=db0 --arm baseline=db0 --arm candidate=db2 2>&1)"
 expect_eq "fetch: a --node mapping covers an IPv4 node value" "0" "$?"
-expect_not_contains "fetch: the mapped CSV holds no IP" "$(cat "$gdocs/data/ip-node.csv" 2>/dev/null)" "10.0.1.15"
-expect_eq "fetch: an IPv4 node mapping is recorded in the JSON" "true" "$(jq -r .node_mapped_from_ip "$gdocs/data/ip-node.json" 2>/dev/null)"
+expect_contains "fetch: the mapped CSV holds the role name" "$(cat "$gdocs/data/ip-node.csv" 2>/dev/null)" ",db0,baseline,"
+expect_eq "fetch: a mapped fetch JSON holds no node_mapped_from_ip field" "false" "$(jq 'has("node_mapped_from_ip")' "$gdocs/data/ip-node.json" 2>/dev/null)"
 stop_mimir
 
 start_mimir "$fixtures/mimir/ec2-node.json" 200
-out="$(fetch "$mimir_url" ec2-node --arm baseline=db0 --arm candidate=db2 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "fetch: an unmapped EC2 host name node value is refused"; else fail "fetch: an unmapped EC2 host name node value is refused"; fi
-expect_contains "fetch: the EC2 refusal says to map the node" "$out" "--node"
-expect_no_file "fetch: the EC2 refusal writes no CSV" "$gdocs/data/ec2-node.csv"
-out="$(fetch "$mimir_url" ec2-node --node ip-10-0-1-15.us-west-2.compute.internal:9500=db0 --arm baseline=db0 --arm candidate=db2 2>&1)"
-expect_eq "fetch: a --node mapping covers an EC2 host name node value" "0" "$?"
-expect_not_contains "fetch: the mapped CSV holds no EC2 host name" "$(cat "$gdocs/data/ec2-node.csv" 2>/dev/null)" "ip-10-0-1-15"
-expect_eq "fetch: an EC2 host name node mapping is recorded in the JSON" "true" "$(jq -r .node_mapped_from_ip "$gdocs/data/ec2-node.json" 2>/dev/null)"
+out="$(fetch "$mimir_url" ec2-node --arm baseline=ip-10-0-1-15.us-west-2.compute.internal:9500 --arm candidate=db2 2>&1)"
+expect_eq "fetch: an unmapped EC2 host name node value exits 0" "0" "$?"
+expect_contains "fetch: the CSV holds the EC2 host name as it is" "$(cat "$gdocs/data/ec2-node.csv" 2>/dev/null)" ",ip-10-0-1-15.us-west-2.compute.internal:9500,baseline,"
 stop_mimir
 
 start_mimir "$fixtures/mimir/ok.json" 200
@@ -563,7 +558,7 @@ for key in query start end step unit scale arms; do
   expect_contains "fetch: the JSON holds $key" "$json" "\"$key\""
 done
 expect_contains "fetch: the JSON holds the unit" "$json" '"MB/s"'
-expect_eq "fetch: host-name nodes record no IP mapping" "false" "$(jq -r .node_mapped_from_ip "$gdocs/data/scrape-alloc.json" 2>/dev/null)"
+expect_eq "fetch: a host-name fetch JSON holds no node_mapped_from_ip field" "false" "$(jq 'has("node_mapped_from_ip")' "$gdocs/data/scrape-alloc.json" 2>/dev/null)"
 expect_not_contains "fetch: the JSON holds no Mimir URL" "$json" "127.0.0.1"
 expect_not_contains "fetch: the JSON holds no tenant" "$json" "lab-tenant"
 expect_not_contains "fetch: the CSV holds no tenant" "$csv" "lab-tenant"
@@ -722,31 +717,14 @@ render_fails 500 "HTTP 500"
 render_fails empty "empty body"
 render_fails notpng "not a PNG"
 
-# The export does not scan image pixels, so a panel legend could show the IP that the fetch
-# mapped away.  --require-named-nodes refuses the render after an IP-mapped fetch.
-# refuses_named <json> <desc> <message>: render with --require-named-nodes <json> is refused before the request.
-refuses_named() {
-  start_grafana png
-  out="$(render "$grafana_url" named-guard --require-named-nodes "$1" 2>&1)"
-  rc=$?
-  if [[ $rc -ne 0 ]]; then pass "render: $2 is refused"; else fail "render: $2 is refused" "$out"; fi
-  expect_contains "render: the refusal for $2 says why" "$out" "$3"
-  expect_eq "render: the refusal for $2 sends no request" "" "$(cat "$grafana_log" 2>/dev/null)"
-  expect_no_file "render: the refusal for $2 writes no image" "$gdocs/images/named-guard.png"
-  stop_grafana
-}
-refuses_named "$gdocs/data/ip-node.json" "an IPv4-mapped fetch" "node labels"
-refuses_named "$gdocs/data/ec2-node.json" "an EC2-mapped fetch" "node labels"
-jq 'del(.node_mapped_from_ip)' "$gdocs/data/scrape-alloc.json" > "$gdocs/data/no-mapping-field.json"
-refuses_named "$gdocs/data/no-mapping-field.json" "a fetch JSON with no mapping field" "fetch it again"
-rm -f "$gdocs/data/no-mapping-field.json"
-refuses_named "$gdocs/data/missing.json" "a missing fetch JSON" "no fetch JSON"
+# IPs are not redacted, so render has no --require-named-nodes guard: the flag is not an option.
 start_grafana png
 out="$(render "$grafana_url" named-guard --require-named-nodes "$gdocs/data/scrape-alloc.json" 2>&1)"
-expect_eq "render: a host-name fetch passes --require-named-nodes" "0" "$?"
-expect_file "render: the host-name render writes the image" "$gdocs/images/named-guard.png"
+expect_eq "render: --require-named-nodes is a usage error" "2" "$?"
+expect_contains "render: --require-named-nodes is not an option" "$out" "unrecognized arguments: --require-named-nodes"
+expect_eq "render: --require-named-nodes sends no request" "" "$(cat "$grafana_log" 2>/dev/null)"
 stop_grafana
-rm -f "$gdocs/images/named-guard.png"
+expect_not_contains "render: the usage text names no --require-named-nodes" "$("$bin/report-graph.py" render --help 2>&1)" "require-named-nodes"
 
 # --proxy, as for fetch: a dead proxy is a reach failure that never gets to Grafana.
 start_grafana png
@@ -981,19 +959,7 @@ stop_socks
 expect_eq "render step: a live PROXY connects to Grafana through the proxy" "${grafana_url#http://}" "$(cat "$socks_log" 2>/dev/null)"
 expect_file "render step: a live PROXY writes the image" "$gdocs/images/day.png"
 stop_grafana
-# After a fetch that mapped an IP-like node label, the step renders nothing: the legend could show the IP.
-rm -f "$gdocs/images/day.png"
-jq '.node_mapped_from_ip = true' "$fixtures/grafana/day.json" > "$gdocs/data/day-ip.json"
-start_grafana png
-out="$(GRAFANA_URL="$grafana_url" PROXY="" DOCS="$gdocs" NAME=day-ip DASHBOARD=cassandra-overview PANEL=7 \
-  CLUSTER=graph-1a2b PATH="$bin:$PATH" bash -c "$single_step" 2>&1)"
-rc=$?
-if [[ $rc -ne 0 ]]; then pass "render step: an IP-mapped fetch fails the step"; else fail "render step: an IP-mapped fetch fails the step"; fi
-expect_contains "render step: the IP-mapped refusal says why" "$out" "node labels"
-expect_eq "render step: an IP-mapped fetch sends no request to Grafana" "" "$(cat "$grafana_log" 2>/dev/null)"
-expect_no_file "render step: an IP-mapped fetch writes no image" "$gdocs/images/day-ip.png"
-stop_grafana
-rm -f "$gdocs/data/day-ip.json"
+
 
 # The overlay render: window variables when the dashboard has them, else the whole-run fallback.
 overlay_step="$(first_bash_block "$report_ref" "### Overlay render")"
@@ -1068,16 +1034,6 @@ if [[ "$rc" -ne 0 ]]; then pass "overlay step: an unreadable dashboard exits non
 expect_contains "overlay step: an unreadable dashboard names the dashboard" "$out" "cannot read dashboard ab-comparison"
 expect_eq "overlay step: an unreadable dashboard sends no render" "" "$req"
 
-# After an arm fetch that mapped an IP-like node label, the overlay renders nothing.
-rm -f "$gdocs/images/overlay-overlay-candidate.png"
-cp "$gdocs/data/overlay-candidate.json" "$tmp_root/overlay-candidate.json"
-jq '.node_mapped_from_ip = true' "$tmp_root/overlay-candidate.json" > "$gdocs/data/overlay-candidate.json"
-overlay "$fixtures/grafana/dashboard-window-vars.json"
-cp "$tmp_root/overlay-candidate.json" "$gdocs/data/overlay-candidate.json"
-if [[ "$rc" -ne 0 ]]; then pass "overlay step: an IP-mapped arm fetch fails the step"; else fail "overlay step: an IP-mapped arm fetch fails the step"; fi
-expect_contains "overlay step: the IP-mapped refusal says why" "$out" "node labels"
-expect_eq "overlay step: an IP-mapped arm fetch sends no render" "" "$req"
-expect_no_file "overlay step: an IP-mapped arm fetch writes no image" "$gdocs/images/overlay-overlay-candidate.png"
 
 # A dead PROXY fails the probe, so nothing gets to Grafana; a live PROXY carries the probe and render.
 rm -f "$gdocs/images/overlay-overlay-candidate.png"

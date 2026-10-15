@@ -144,7 +144,7 @@ A measurement that the report states goes to the evidence tier, not to the journ
 ```bash
 report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard cassandra-overview --panel 7 \
   --from 2026-05-23T11:00:00Z --to 2026-05-23T11:30:00Z --var "cluster=$CLUSTER" \
-  --require-named-nodes "$DOCS/data/throughput.json" --name throughput --docs "$DOCS" --proxy "$PROXY"
+  --name throughput --docs "$DOCS" --proxy "$PROXY"
 ```
 ````
 

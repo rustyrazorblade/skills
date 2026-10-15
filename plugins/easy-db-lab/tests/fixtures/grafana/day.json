@@ -5,5 +5,6 @@
   "step": "60s",
   "unit": "op/s",
   "scale": 1.0,
-  "arms": {}
+  "arms": {},
+  "node_mapped_from_ip": false
 }

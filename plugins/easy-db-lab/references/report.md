@@ -201,7 +201,7 @@ If `.socks5-proxy.env` says `EDL_TAILSCALE_ACTIVE=true`, the cluster needs no tu
 2. In a multi-DC or arms layout, do this for each wrapper: each DC and each arm has its own Mimir URL.  Do not assume a tenant per DC or per arm; several clusters can share one tenant, such as `default`.
 3. Find this cluster's `cluster` label value.  It is the cluster name and the cluster ID from `$EDB status`, for example `lab-ab-1c9bbb2f-aab1-4478-ac8d-35cb6ca31790`.  Confirm it in the list from `api/v1/label/cluster/values`.  Write it in `<journal>`.
 4. Filter every fetch query on `cluster="<value>"`.  A tenant holds the series of many clusters, so a query with no `cluster` filter can return another cluster's data.  `fetch` refuses a query with no `cluster` matcher.
-5. Select nodes by host name, for example `instance=~"db.*"`.  Never select by IP.  If the node label holds an IP, map each value to a host name with `--node <value>=db0`.  `fetch` refuses an IPv4-looking node value with no mapping.
+5. Select nodes by host name, for example `instance=~"db.*"`.  Never select by IP.  If the node label holds an IP, map each value to a host name with `--node <value>=db0`.  `fetch` refuses an IPv4-looking node value with no mapping.  A mapping removes the IP from the CSV only: the Grafana panel legend still shows the label.  So `fetch` records `node_mapped_from_ip` in `data/<name>.json`, and "Render" renders no panel for that metric.
 6. Run `fetch`:
 
 ```bash
@@ -227,7 +227,7 @@ If `fetch` fails, write the command and the error to `<journal>` and `<issues>`,
 
 ### Pick a panel
 
-Pick a panel on a regular dashboard that shows the same metric as the block's query.  List the dashboards:
+Pick a panel on a regular dashboard that shows the same metric as the block's query.  The panel legend must show node names, such as `db0`, and never an IP.  List the dashboards:
 
 ```bash
 proxy=()
@@ -257,10 +257,13 @@ proxy=()
 [[ -z "$PROXY" ]] || proxy=(--proxy "$PROXY")
 report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
   --from "$(jq -r .start "$DOCS/data/$NAME.json")" --to "$(jq -r .end "$DOCS/data/$NAME.json")" \
-  --var "cluster=$CLUSTER" --name "$NAME" --docs "$DOCS" "${proxy[@]}"
+  --var "cluster=$CLUSTER" --require-named-nodes "$DOCS/data/$NAME.json" \
+  --name "$NAME" --docs "$DOCS" "${proxy[@]}"
 ```
 
 If the dashboard's cluster variable has another name, change `cluster=` to that name.
+
+`--require-named-nodes` refuses the render, before the request, when the fetch mapped an IP-like node label with `--node`.  The panel legend then shows the IP.  Do not remove the flag.  Treat the refusal as a failed render: the block gets no image.
 
 `render` asks Grafana for the dark theme, so the image matches the report page.  Do not add `--theme light` to a report image.
 
@@ -320,6 +323,8 @@ A measurement is not an account ID: a decimal number, the CSV value column, a nu
 4. It scans the whole copy with the same patterns, and it rejects an mdbook include directive (`{{#include`, `{{#rustdoc_include`, `{{#playground`).  If an identifier or a directive remains, the export fails and names the file and the line, and it writes no zip.
 5. It builds the copy with `mdbook`, and it scans every text file of the built HTML: the pages, `print.html`, the search index, and the table of contents.  If an identifier remains, the export fails and names the file and the line, and it writes no zip.
 6. It zips the built HTML.
+
+The export copies each image byte for byte.  It does not scan the pixels of an image, so text that Grafana draws in a panel, such as a legend entry `instance=10.0.1.15:9500`, goes into the zip unchanged.  That is why "Render" uses `--require-named-nodes`: a panel for a metric whose fetch mapped an IP-like node label is never rendered.
 
 The export never edits `docs/`.  The local `report/` book and the uploaded tier files keep the unredacted record.
 
@@ -470,6 +475,7 @@ else
   report-graph.py render --grafana-url "$GRAFANA_URL" --dashboard "$DASHBOARD" --panel "$PANEL" \
     --from "now-${n}s" --to now \
     --var "baseline_cluster=$BASE_CLUSTER" --var "candidate_cluster=$CAND_CLUSTER" "${window[@]}" \
+    --require-named-nodes "$base" --require-named-nodes "$cand" \
     --name "$NAME-overlay-$ARM" --docs "$DOCS" "${proxy[@]}"
 fi
 ```
@@ -479,7 +485,8 @@ The step does this:
 1. It reads the dashboard JSON through `/api/dashboards/uid/<UID>`.  If it cannot, it renders nothing and exits non-zero.
 2. It looks for the window variables `base_from`, `base_to`, `cand_from`, and `cand_to` (rustyrazorblade/easy-db-lab#1015).  When all four exist, it sets them to each arm's measured `start` and `end` from `data/<metric>-<arm>.json`, in epoch milliseconds, so the image shows the measured windows.
 3. It renders with a relative range, `--from now-<N>s --to now`, where N is the number of seconds from the earlier arm's measured start to now.  Each overlay panel sets its own range, and an absolute dashboard range turns that off.  Never use a fixed range.  The dashboard moves each run to a common start, so do not align the windows yourself.
-4. It writes `images/<metric>-overlay-<arm>.png`.
+4. It refuses the render when either arm's fetch mapped an IP-like node label, as in "Render" above.
+5. It writes `images/<metric>-overlay-<arm>.png`.
 
 **The whole-run fallback.**  When the dashboard has no window variables, the overlay covers each cluster's whole run, from its first `up` sample to its last.  The step renders it anyway and prints two lines.  Copy the `journal:` line to `4-journal.md`.  Copy the text after `caveat: ` as a line under `## Caveats` in `1-summary.md`, when Final Finalize writes the summary.
 

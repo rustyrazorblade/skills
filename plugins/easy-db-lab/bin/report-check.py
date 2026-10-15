@@ -152,8 +152,8 @@ REDACTION = [
     ("local path", Pattern(r"(?<![\w.~$/-])(?:/(?:Users|home)/|(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|easy-db-lab)\b/?)" + _REST), "local-path"),
     # The key file of -i: a path that starts with /, ~/, ./, or ../, or a .pem, .key, or id_*
     # file.  After ssh, scp, or sftp, their options, and the host, any path, but not a
-    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays.
-    ("key file path", Pattern(r"(?<!\S)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
+    # placeholder, which scan() makes a NUL.  The -i of sed and grep stays, as in sed -i /pat/d.
+    ("key file path", Pattern(r"(?<!\S)(?<!\bsed\s)(?<!\bgrep\s)-i\s+((?:~|\.\.?)?/" + _REST + r"|[^\s`\"'<>]*(?:\.pem\b|\.key\b|\bid_[a-z0-9]+\b)"
                               + _REST + ")", re.I, 1), "local-path"),
     ("ssh key file path", Pattern(r"\b(?:ssh|scp|sftp)" + _SSH_OPTS + r"(?:\s+[^\s-]\S*" + _SSH_OPTS + r")?\s+-i\s+([^\s`\"'<>\x00]"
                                   + _REST + ")", re.I, 1), "local-path"),

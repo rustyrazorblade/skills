@@ -162,3 +162,5 @@ ipv4-private-172-after-jdk	page.txt	jdk 172.20.0.5	jdk <private-ip>
 ipv4-private-192-after-java-version	page.txt	java version 192.168.1.4	java version <private-ip>
 # 172.32.0.1 is outside 172.16/12, so after jdk it reads as a version and stays.
 keep-jdk-172-32-version	page.txt	jdk 172.32.0.1	=
+keep-sed-i-rooted	page.txt	sed -i /pat/d conf.yaml	=
+keep-ssh-remote-sed-i-rooted	page.txt	ssh db0 sed -i /pat/d conf.yaml	=

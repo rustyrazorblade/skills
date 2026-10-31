@@ -111,6 +111,15 @@ When diagnosing issues, always compare nodes to identify outliers:
 - Verify network latency between nodes
 - Review consistency level vs replication factor
 
+### LWT Latency or Timeouts
+- Check `paxos_variant` first; v1 and v2 have different fixes
+- High CPU with high `MutationStage` pending means Paxos is CPU-bound; more threads make it worse
+- Idle CPU with high disk await (`iostat -x`) means Paxos is disk-bound, common on EBS gp2; check the Paxos cache and chunk cache sizes before thread pools
+- `ClientRequest` `CASWrite` `ContentionHistogram` and `UnfinishedCommit` rising means contended partitions
+- `CASWrite` timeouts with a low p50 point to a few hot partitions, not to the whole cluster
+- With v2, native transport threads in `Object.wait` on `PaxosState` (thread dump) mean hot partitions hold the pool; other tables slow down too
+- For fixes, read: `../../references/general/lwt.md`
+
 ### Node Failures
 - Check gossip status (`nodetool gossipinfo`)
 - Review system logs for errors

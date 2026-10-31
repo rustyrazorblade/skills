@@ -63,6 +63,20 @@ For detailed guidance, read: `../../references/general/vnodes.md`
 - `concurrent_reads` / `concurrent_writes` - thread pool sizing
   - Default is often reasonable, but monitor saturation
   - Increase if threads are consistently saturated with low CPU usage
+  - LWT-heavy: start `concurrent_writes` at 64; the default of 32 is too low on modern hardware. Raise it when CPU is available AND `nodetool tpstats` shows `MutationStage` `Active` at the limit with `Pending` above 0. `Blocked` stays 0 for `MutationStage` (unbounded queue). Do not raise it when CPU is saturated.
+
+### Lightweight Transactions (Cassandra 4.1+)
+
+On local NVMe, Paxos is CPU-bound. On slower disks (EBS gp2) it can be disk-bound; check `iostat -x` first. With Paxos v2 on NVMe, these settings raised the LWT ceiling 32% and cut CPU per write 24% on 8 vCPU nodes. The first three also apply to Paxos v1 (not measured):
+
+- `paxos_cache_size: 1GiB` (default min(1% of heap, 50 MiB)); about 0.5 KB per partition that gets LWTs often
+- `file_cache_enabled: true`, `file_cache_size: 1GiB`
+- `-Dcassandra.memtable.shard.count` at 4 × CPU cores in `jvm-server.options` (Cassandra 5.0+); the default is 1 × cores
+- v2 only: `paxos_contention_max_wait: "p95(rw)*1.8^attempts <= 50ms"`, `paxos_contention_min_delta: "10ms"` for contended partitions. v1 has a fixed 0–100ms contention wait; move to v2 to tune it.
+
+Do not lower `memtable_cleanup_threshold` for LWT workloads; 0.3 cut the ceiling 46%.
+
+For detailed guidance, read: `../../references/general/lwt.md`
 
 ### Memtables
 

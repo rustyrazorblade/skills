@@ -49,6 +49,18 @@ CREATE TABLE keyspace.table (...)
 WITH memtable = 'trie';
 ```
 
+### Shard Count (Cassandra 5.0+)
+
+Trie memtables split each memtable into shards, and each shard has its own write lock. The default shard count is the number of CPU cores. A table with many concurrent writes to few partitions, such as `system.paxos` under LWT load, can queue on these locks. Raise the default with a JVM option:
+
+```
+# jvm-server.options
+# 4 × CPU cores; 32 on an 8-core node
+-Dcassandra.memtable.shard.count=32
+```
+
+This changes every table that uses the default memtable configuration. A named configuration can also set its own count with the `shards` parameter. For the LWT measurements, see [LWT](lwt.md).
+
 ## Monitoring Memtables
 
 ### Check Memtable Statistics

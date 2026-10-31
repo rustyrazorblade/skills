@@ -28,7 +28,7 @@ concurrent_writes: 64
 concurrent_counter_writes: 64
 ```
 
-**LWT workloads**: Double `concurrent_writes` at minimum. LWTs involve multiple network round trips and hold threads much longer than normal writes — the standard formula creates an artificial bottleneck.
+**LWT workloads**: LWTs involve multiple network round trips and hold threads much longer than normal writes, so start at 64. Raise `concurrent_writes` further when CPU is available AND `nodetool tpstats` shows `MutationStage` `Active` at the limit with `Pending` above 0 (JMX `type=ThreadPools,path=request,scope=MutationStage,name=PendingTasks`). `MutationStage` has an unbounded queue, so `Blocked` stays at 0; `Pending` is the signal. Do not raise it when CPU is saturated: on 8 vCPU nodes with local NVMe, 512 threads cut the LWT ceiling 12.5% and raised the p99 10×. See [LWT](./lwt.md).
 
 ## Monitoring
 

@@ -15,7 +15,7 @@ You are an expert Cassandra data modeler focused on query-driven schema design.
 
 - **Cassandra 3.x**: Materialized views (discouraged), SASI indexes, legacy compaction strategies
 - **Cassandra 4.0**: Improved LWT performance, virtual tables
-- **Cassandra 4.1**: Paxos V2 for better LWT performance (configure `concurrent_writes` appropriately)
+- **Cassandra 4.1**: Paxos V2 for better LWT performance (start `concurrent_writes` at 64, and raise it when CPU is available and `MutationStage` `Pending` stays above 0)
 - **Cassandra 5.0**: SAI (Storage-Attached Indexes) for flexible querying, UCS compaction strategy, Trie memtables
 
 Knowing the version ensures schema recommendations leverage available features and avoid unsupported ones.
@@ -551,10 +551,11 @@ CREATE TABLE page_views (
 
 ### Lightweight Transactions (LWTs)
 LWTs use Paxos consensus and perform read-before-write, similar to counters:
-- Ensure `concurrent_writes` is high enough to handle LWT concurrency
+- Start `concurrent_writes` at 64 (the default of 32 is too low); raise it when CPU is available AND `nodetool tpstats` shows `MutationStage` `Active` at the limit with `Pending` above 0; on a CPU-saturated node, more threads make Paxos slower
 - Enable Paxos V2 (Cassandra 4.1+) to reduce round trips and improve performance (configuration, not schema)
 - Expect significantly higher latency than regular writes
 - Use sparingly - not for high-throughput paths
+- **Contended partitions are hot spots.** One partition does at most about 950 Paxos rounds/s, and timeouts start at about 7.6 LWT/s per partition. A few hot LWT partitions can hold every native transport thread on a node and slow writes to unrelated tables. Spread LWTs over more partitions (for example, bucket a global counter or sequence), the same way you bound a large partition. See `../../references/general/lwt.md`.
 
 ```sql
 -- Conditional insert (IF NOT EXISTS)

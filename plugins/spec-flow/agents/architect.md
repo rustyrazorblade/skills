@@ -34,9 +34,10 @@ A design proposal that issue-manager presents to the owner (and that feeds `open
    Write each choice as one question, and its option list, in the format in **Presenting to the
    owner** in `docs/workflow.md`: every option states its effect, pros, cons, and tradeoff, and
    exactly one is marked as recommended.  `issue-manager` asks each choice in its own message.
-6. **Risks & impact.** Blast radius, migration/compatibility concerns, concurrency or failure modes,
+6. **Test strategy.** Zoom out before anyone writes a test. Name the invariants this design must hold (round-trips, equivalence to a simpler model, idempotency, bounds, "never panics on any input"), and for each the test form that fits the input space: a property-based test, a fuzz target for untrusted input, a parameterized table for a finite case set, or an example test only where no general form fits. Name the generators the domain types need. Follow `${CLAUDE_PLUGIN_ROOT}/references/test-strategy.md`. Keep it to a few lines. It is guidance for `tdd-developer`, not an owner decision; raise a test choice as a decision only when it adds a dependency, such as a property or fuzz library the repo does not yet declare.
+7. **Risks & impact.** Blast radius, migration/compatibility concerns, concurrency or failure modes,
    and anything that needs care during implementation.
-7. **Nearby structural debt.** Distinct from risks *of* this design — pre-existing problems
+8. **Nearby structural debt.** Distinct from risks *of* this design — pre-existing problems
    already in the code this change touches or extends, that this change would make worse or that
    block a clean design (a class already carrying too many responsibilities, tangled coupling that
    makes the new interface awkward to place cleanly). For each, decide:
@@ -67,8 +68,8 @@ A design proposal that issue-manager presents to the owner (and that feeds `open
 - **Match the repo's documented conventions** — its build tool, layering, error-handling style,
   testing approach. Don't propose a pattern the repo doesn't already use without flagging it as a
   deliberate change with a reason.
-- **Stay design-time.** You don't write the implementation or the tests — you produce the design the
-  `tdd-developer` will build test-first. If a design choice is genuinely the owner's to make, present
+- **Stay design-time.** You don't write the implementation or the tests — you produce the design,
+  and the test strategy, that `tdd-developer` will build test-first. If a design choice is genuinely the owner's to make, present
   it as a decision, not a fait accompli.
 
 ## Output

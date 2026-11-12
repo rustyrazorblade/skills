@@ -66,13 +66,28 @@ findings** a fix loop consumes. Prefer a few high-confidence findings over a lon
      no-logic delegation) whose failure could only mean the test itself broke.
    - **duplicates another test's coverage** with no additional failure mode exercised.
    The fix is to delete it or replace it with a boundary stub — say which.
-7. **Check test-infrastructure practicality** (perf, not correctness). Flag (rule `test-practicality`)
+7. **Check that the tests generalize.** Read `${CLAUDE_PLUGIN_ROOT}/references/test-strategy.md`
+   (if `$CLAUDE_PLUGIN_ROOT` is unset, locate `references/test-strategy.md` under this plugin's
+   directory). Flag (rule `test-generalization`) a test suite that covers single situations but
+   misses the general shape:
+   - **near-duplicate examples** — three or more tests that differ only in their data, which should
+     be one parameterized table, or one property where an invariant covers them;
+   - **an unchecked invariant** — the change has a clear invariant (a round-trip, an equivalence to
+     a simpler model or to the old code, idempotency, a bound) and only hand-picked examples test it;
+   - **unfuzzed untrusted input** — a parser, decoder, or protocol handler of untrusted bytes or
+     text with no fuzz target and no "never panics on any input" property;
+   - **an unpinned counterexample** — a property or fuzz failure fixed in this diff without the
+     failing input kept as a regression case;
+   - **divergence from the planned strategy** — the design or the implementer's summary names a test
+     strategy, and the tests do not follow it, with no reason given.
+   Do not flag a single example test for a reported bug; that is the right form for it.
+8. **Check test-infrastructure practicality** (perf, not correctness). Flag (rule `test-practicality`)
    avoidable test-suite cost — most importantly **container churn**: a Testcontainers/integration
    test that starts a fresh container **per test** (e.g. restarting Cassandra for every test method)
    where a **shared/reused container** across the class or suite (a static `@Container` / singleton,
    `withReuse(true)`) would give the same coverage far faster. This serves the local-cycle perf goal
    — a caught integration test can land in the developer's inner loop, so its per-run cost must be sane.
-8. **Emit findings.** One finding per genuinely-uncovered surface-aspect, side-effect path,
+9. **Emit findings.** One finding per genuinely-uncovered surface-aspect, side-effect path,
    over-built test, or practicality issue — do not split one into many or spray nitpicks. A behavior
    covered by *any* adequate test is not a gap; a test that catches a real regression is not waste.
 
@@ -93,7 +108,7 @@ findings** a fix loop consumes. Prefer a few high-confidence findings over a lon
 Output EXACTLY this JSON contract and nothing else:
 
 ```json
-{"summary":"…","spec_conformance":"full","tests_ran":"policy","tests_detail":"…","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line or surface","rule":"test-rigor|side-effect-coverage|over-testing|test-practicality","problem":"…","fix":"…"}],"approve":true|false}
+{"summary":"…","spec_conformance":"full","tests_ran":"policy","tests_detail":"…","findings":[{"id":"…","severity":"blocker|major|minor|nit","location":"file:line or surface","rule":"test-rigor|side-effect-coverage|test-generalization|over-testing|test-practicality","problem":"…","fix":"…"}],"approve":true|false}
 ```
 
 - Leave `spec_conformance` as `"full"`, `tests_ran` as `"policy"`, and `tests_detail` as a short
@@ -102,6 +117,9 @@ Output EXACTLY this JSON contract and nothing else:
   to run; never write `none` or `degraded` in this slot.
 - A missing antagonistic case or side-effect assertion on a real surface is **`major`** (withholds
   approval, feeds the fix loop). Set `approve=false` if any blocker/major finding exists.
+- A **`test-generalization`** finding is **`major`** when untrusted input has no fuzz target or
+  property, or when a clear invariant has only hand-picked examples. It is **`minor`** for
+  near-duplicate examples that a table would collapse, and for strategy divergence.
 - An **`over-testing`** or **`test-practicality`** finding is **`minor`** by default — surfaced for
   the owner, does not block. Escalate to **`major`** only when the waste is egregious and objective:
   a substantial fake reconstructing a dependency, or per-test container churn that dominates suite

@@ -774,6 +774,10 @@ impl std::fmt::Display for NoError {
   `skip_bom`) and structure each as **arrange → act → assert**.
 - Doctests in `///` `# Examples` blocks double as compile-checked documentation
   — keep them runnable.
+- **Plan the strategy first.** Prefer a `proptest` property over a list of
+  examples, an `rstest` table over near-duplicate tests, and a `cargo-fuzz`
+  target for any parser or decoder of untrusted bytes. The method lives in
+  `references/test-strategy.md`.
 
 ---
 

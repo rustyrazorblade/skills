@@ -43,6 +43,16 @@ Match the project's:
 
 ---
 
+## Test strategy before the first test
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/test-strategy.md` before the first RED step of any change that adds or changes tests.  Resolve `$CLAUDE_PLUGIN_ROOT` from the environment; if it is not set, locate `references/test-strategy.md` under this plugin's directory.
+
+Then write a short test strategy before you write a test.  Zoom out from the case in front of you: find the invariants, and choose the form of each test from the input space.  Prefer a property-based test, a fuzz target, or a parameterized table over a set of one-off examples.  An example test is the last choice; it is right for one specific scenario, such as a reported bug.
+
+A property or a table can be the RED step.  It must still fail for the right reason before you write the code.  Report the strategy in your summary, beside the tests you wrote.
+
+---
+
 ## TDD Workflow — Red → Green → Refactor
 
 ### Red: Write a failing test first
@@ -246,6 +256,7 @@ Work through this list before you call the change done. Every box must be checke
 
 - [ ] Every new public method has a test.
 - [ ] Every new test was seen to fail first, for the right reason.
+- [ ] A test strategy was written first; no cluster of near-duplicate example tests stands where a property or a table fits.
 - [ ] The change matches the project's existing conventions, not your preferences. This item wins
       over every library item below.
 - [ ] The project's own build and test command passes — `./mvnw verify` or `./gradlew check`.

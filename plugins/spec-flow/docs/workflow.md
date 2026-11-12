@@ -876,7 +876,10 @@ both labels on the same issue (labeling ambiguity is reason enough not to trust 
   use the full guide (see **Developer agent** below). It also reads `references/refactoring-discipline.md` whenever the work is
   behavior-preserving — a refactor, a `type:tech-debt` fix, or its own REFACTOR step — which is
   where the failing-test triage gate and the revert reflex live (see **Refactor circuit breaker**
-  below).
+  below). It reads `references/test-strategy.md` before its first test of any change: it plans the
+  strategy first and prefers properties, fuzz targets, and parameterized tables over one-off
+  examples. `architect` writes that strategy into the design, and `test-rigor-reviewer` checks the
+  tests against it.
 
 **Review panel** — `reviewer`, `code-reviewer`, `security-reviewer`, `test-rigor-reviewer`,
 `observability-reviewer`; the lenses this repo names run in parallel during `/spec-flow:implement`. Their

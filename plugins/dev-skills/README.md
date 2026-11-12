@@ -60,6 +60,7 @@ over `file://`.
 | File | Read by |
 |------|---------|
 | `references/refactoring-discipline.md` | The `refactor` skill. Every language agent reaches it by invoking that skill for behavior-preserving work. |
+| `references/test-strategy.md` | `rust-dev`, `kotlin-dev`, and `java-dev`, before the first test of a change. A copy also ships in `spec-flow`. |
 | `references/prose-style.md` | `prose-review`, as the fallback when a repo has no copy of its own. |
 | `references/rust/style-guide.md` | `rust-dev`, on every task. |
 | `references/rust/nextest.md` | `cargo`. |

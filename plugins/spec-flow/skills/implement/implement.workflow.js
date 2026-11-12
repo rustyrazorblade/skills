@@ -288,7 +288,8 @@ ISSUE: #${issue}
 
 Work the tasks in tasks.md test-first (RED→GREEN→REFACTOR), honoring the repo's documented
 conventions (its CLAUDE.md / CONTRIBUTING / style guide — TDD, SOLID, and whatever hard rules the
-repo documents). Mark each task '- [x]' as you complete it and commit your work on the current
+repo documents). Before the first test, read the "Test strategy" section of
+openspec/changes/${change}/design.md, if it has one, and follow it. Mark each task '- [x]' as you complete it and commit your work on the current
 branch with focused messages. PUSH the branch at checkpoints — after a completed task or a few green cycles, somewhat frequently, not on every commit — so CI runs on the open draft PR while you keep working locally. Never touch main; leave the PR a draft.
 ${testInstruction}
 Return a short summary of what you implemented and the test outcome.

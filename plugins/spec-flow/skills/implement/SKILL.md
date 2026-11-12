@@ -311,7 +311,8 @@ path never generates one (see step 4's tech-debt handling); otherwise, list `ope
 
       **`CHANGE_PARAM = "issue-<N>"` (normal case):** work `tasks.md` test-first
       (RED→GREEN→REFACTOR) in `<worktree>`, honoring the repo's documented conventions (CLAUDE.md /
-      CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo documents), marking each
+      CONTRIBUTING / style guide — TDD, SOLID, whatever hard rules the repo documents), following
+      the "Test strategy" section of `openspec/changes/issue-<N>/design.md` where it has one, marking each
       task `- [x]` as completed and committing with focused messages. Append the TEST INSTRUCTION
       (step 3) and the implementer GUARDRAILS. **Also instruct it to message you (the lead) at each
       checkpoint push**, naming which `tasks.md` item(s) it just completed — not only in its final

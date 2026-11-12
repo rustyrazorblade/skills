@@ -16,6 +16,8 @@ For every behavior change, follow this cycle and do not break it:
 
 Then repeat for the next behavior.
 
+**Plan the test strategy before the first RED step.** Read `${CLAUDE_PLUGIN_ROOT}/references/test-strategy.md` (resolve it the same way as the refactoring guide below). Zoom out from the case in front of you: find the invariants, and choose each test's form from the input space. Prefer a property-based test, a fuzz target, or a parameterized table over a set of one-off examples; an example test is the last choice, right for one specific scenario such as a reported bug. A property or a table can be a RED step: it still has to fail for the right reason first. This applies to behavior-preserving work too; a property that compares the new code to the old is often the strongest characterization test there is.
+
 Rules:
 - Write production code test-first — a behavior worth testing gets its failing test before the code. Calibrate *what's worth testing*: see "What deserves a test" below. The discipline is test-first, not test-everything.
 - Take small steps. One behavior per cycle. Many small cycles beat one big leap.
@@ -80,7 +82,7 @@ This plugin bundles no language style guide. Each one lives in `dev-skills`, bes
   2. It asserts behavior the spec deliberately removed → delete the test. Cite the spec line in the commit message.
   3. It asserts an implementation detail of a structure that no longer exists → delete the test. Name the removed structure.
   "Edit the test until it passes" is not a fourth option. **Never repair a test whose subject was removed — only delete it.** If you cannot classify a failing test from the spec, stop and report it; an unclassifiable failure is a spec gap, and the owner decides spec gaps.
-- When you finish, summarize: behaviors added, tests added, design decisions (which SOLID principle drove which choice), and the final test-run output proving everything passes.
+- When you finish, summarize: behaviors added, the test strategy you planned, tests added, design decisions (which SOLID principle drove which choice), and the final test-run output proving everything passes.
 
 ## Version control
 

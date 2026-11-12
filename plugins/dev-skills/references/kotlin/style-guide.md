@@ -628,6 +628,10 @@ the scope doesn't complete until its children do. Honor that structure.
 - **Keep tests deterministic and isolated.** Inject the clock and the dispatcher;
   never depend on wall-clock timing or test ordering. For coroutines, use
   `runTest` and a `TestDispatcher` so virtual time is controlled.
+- **Plan the strategy first.** Prefer a jqwik or Kotest property over a list
+  of examples, a `@ParameterizedTest` table over near-duplicate tests, and a
+  Jazzer target for any parser of untrusted input. The method lives in
+  `references/test-strategy.md`.
 
 ---
 
